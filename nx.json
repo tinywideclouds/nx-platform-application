@@ -35,5 +35,14 @@
         "watchDepsTargetName": "watch-deps"
       }
     }
-  ]
+  ],
+  "generators": {
+    "@nx/angular:library": {
+      "linter": "eslint",
+      "unitTestRunner": "vitest"
+    },
+    "@nx/angular:component": {
+      "style": "css"
+    }
+  }
 }

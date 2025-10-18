@@ -15,6 +15,9 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
+      "@nx-platform-application/auth-ui": [
+        "libs/platform/auth-ui/src/index.ts"
+      ],
       "@nx-platform-application/sdk-core": [
         "libs/platform/sdk-core/src/index.ts"
       ]
