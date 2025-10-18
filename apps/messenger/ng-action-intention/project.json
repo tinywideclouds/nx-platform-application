@@ -1,0 +1,68 @@
+{
+  "name": "ng-action-intention",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "prefix": "app",
+  "sourceRoot": "apps/messenger/ng-action-intention/src",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/apps/messenger/ng-action-intention",
+        "configFile": "apps/messenger/ng-action-intention/vite.config.ts"
+      },
+      "configurations": {
+        "development": {
+          "mode": "development"
+        },
+        "production": {
+          "mode": "production"
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/vite:dev-server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "ng-action-intention:build",
+        "configFile": "apps/messenger/ng-action-intention/vite.config.ts"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "ng-action-intention:build:development",
+          "hmr": true
+        },
+        "production": {
+          "buildTarget": "ng-action-intention:build:production",
+          "hmr": false
+        }
+      }
+    },
+    "preview": {
+      "executor": "@nx/vite:preview-server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "ng-action-intention:build"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "ng-action-intention:build:development"
+        },
+        "production": {
+          "buildTarget": "ng-action-intention:build:production"
+        }
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "{workspaceRoot}/coverage/apps/messenger/ng-action-intention",
+        "configFile": "apps/messenger/ng-action-intention/vitest.config.ts"
+      }
+    }
+  }
+}
