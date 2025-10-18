@@ -5,14 +5,14 @@
   "scripts": {},
   "private": true,
   "dependencies": {
-    "@angular/common": "~20.3.0",
-    "@angular/compiler": "~20.3.0",
-    "@angular/core": "~20.3.0",
-    "@angular/forms": "~20.3.0",
-    "@angular/platform-browser": "~20.3.0",
-    "@angular/router": "~20.3.0",
-    "rxjs": "~7.8.0",
-    "zone.js": "~0.15.0"
+    "@angular/common": "~20.3.6",
+    "@angular/compiler": "~20.3.6",
+    "@angular/core": "~20.3.6",
+    "@angular/forms": "~20.3.6",
+    "@angular/platform-browser": "~20.3.6",
+    "@angular/router": "~20.3.6",
+    "rxjs": "~7.8.2",
+    "zone.js": "~0.15.1"
   },
   "devDependencies": {
     "@analogjs/vite-plugin-angular": "~1.21.3",
