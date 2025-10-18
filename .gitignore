@@ -45,3 +45,6 @@ Thumbs.db
 
 .vscode
 .idea
+
+vite.config.*.timestamp*
+vitest.config.*.timestamp*
