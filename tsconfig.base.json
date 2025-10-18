@@ -21,6 +21,9 @@
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
       ],
+      "@nx-platform-application/contacts-ui": [
+        "libs/messenger/contacts-ui/src/index.ts"
+      ],
       "@nx-platform-application/protos": ["libs/platform/protos/src/index.ts"],
       "@nx-platform-application/sdk-core": [
         "libs/platform/sdk-core/src/index.ts"
