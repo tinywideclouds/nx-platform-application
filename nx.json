@@ -44,5 +44,12 @@
     "@nx/angular:component": {
       "style": "css"
     }
+  },
+  "targetDefaults": {
+    "@nx/esbuild:esbuild": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
+    }
   }
 }
