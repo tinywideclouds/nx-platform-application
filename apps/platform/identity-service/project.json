@@ -3,13 +3,14 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "apps/platform/identity-service/src",
   "projectType": "application",
+  "tags": ["scope:platform"],
   "targets": {
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "reportsDirectory": "{workspaceRoot}/coverage/apps/platform/identity-service",
-        "configFile": "apps/platform/identity-service/vitest.config.ts"
+        "configFile": "apps/platform/identity-service/vitest.config.mts"
       }
     },
     "build": {
@@ -19,7 +20,7 @@
       "options": {
         "platform": "node",
         "outputPath": "dist/apps/platform/identity-service",
-        "format": ["cjs"],
+        "format": ["esm"],
         "bundle": false,
         "main": "apps/platform/identity-service/src/main.ts",
         "tsConfig": "apps/platform/identity-service/tsconfig.app.json",
@@ -89,6 +90,5 @@
         }
       }
     }
-  },
-  "tags": []
+  }
 }
