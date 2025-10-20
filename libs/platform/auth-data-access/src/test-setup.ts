@@ -6,6 +6,7 @@ import {
   platformBrowserTesting, // Import this instead
 } from '@angular/platform-browser/testing'; // From the correct package
 
+console.log("called test-setup.ts for auth-data-access")
 // Initialize the Angular testing environment.
 getTestBed().initTestEnvironment(
   BrowserTestingModule,

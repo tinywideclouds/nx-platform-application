@@ -44,6 +44,9 @@
       ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
+      ],
+      "@nx-platform-application/platform-auth-data-access": [
+        "libs/platform/auth-data-access/src/index.ts"
       ]
     }
   },

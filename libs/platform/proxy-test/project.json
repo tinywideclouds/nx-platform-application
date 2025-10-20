@@ -1,7 +1,7 @@
 {
-  "name": "auth-ui",
+  "name": "proxy-test",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/platform/auth-ui/src",
+  "sourceRoot": "libs/platform/proxy-test/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:platform"],

@@ -6,6 +6,7 @@ import {
 } from '@angular/common/http/testing';
 import { AuthService } from './auth.service';
 import { User } from '@nx-platform-application/platform-types';
+import { MockAuthService } from './testing/mock-auth.service'; // 1. Import the mock
 
 // --- Mock Data ---
 const mockUser: User = {
@@ -112,5 +113,32 @@ describe('AuthService', () => {
     initReq.flush(mockAuthResponse);
 
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
+  });
+});
+
+//
+// --- THE LOCAL CONTRACT TEST ---
+//
+describe('MockAuthService Contract', () => {
+  // This test's only job is to fail at *compile time*
+  // if the mock's public API drifts from the real service.
+  it('should be assignable to the real AuthService in TestBed', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        // This 'provide' line is the test.
+        // It checks assignability of public APIs,
+        // exactly like a consuming library would.
+        { provide: AuthService, useClass: MockAuthService },
+      ],
+    });
+
+    // We can also inject it to be 100% sure.
+    const service = TestBed.inject(AuthService);
+    expect(service).toBeInstanceOf(MockAuthService);
+  });
+
+  // We must reset the testbed just like in our other tests
+  afterEach(() => {
+    TestBed.resetTestingModule();
   });
 });
