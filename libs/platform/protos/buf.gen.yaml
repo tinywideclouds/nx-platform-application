@@ -1,0 +1,13 @@
+version: v1
+plugins:
+  - plugin: es
+    opt:
+      # This is the correct target. It creates .js and .d.ts files,
+      # which is the standard for consumable TypeScript libraries.
+      - target=js+dts
+      - import_extension=js
+    out: dist/ts
+  - plugin: go
+    opt:
+      - paths=source_relative
+    out: dist/go

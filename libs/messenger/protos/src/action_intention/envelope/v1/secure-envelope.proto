@@ -1,0 +1,32 @@
+// Defines the structure of the SecureEnvelope used for end-to-end
+// encrypted messaging.
+
+syntax = "proto3";
+
+package action_intention.envelope.v1;
+option go_package = "github.com/illmade-knight/go-action-intention-protos/gen/go/sm/v1;sm_v1";
+
+// Represents the secure data packet sent between users via the routing service.
+message SecureEnvelopePb {
+  // The URN of the message sender (e.g., "urn:sm:user:user-a@example.com").
+  string sender_id = 1;
+  // The URN of the message recipient.
+  string recipient_id = 2;
+
+  // A unique identifier for the message.
+  string message_id = 3;
+
+  // The AES-encrypted payload.
+  bytes encrypted_data = 4;
+
+  // The RSA-encrypted AES symmetric key.
+  bytes encrypted_symmetric_key = 5;
+
+  // The signature of the EncryptedData.
+  bytes signature = 6;
+}
+
+// A wrapper message for a list of secure envelopes.
+message SecureEnvelopeListPb {
+  repeated SecureEnvelopePb envelopes = 1;
+}

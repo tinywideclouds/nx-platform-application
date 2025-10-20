@@ -1,8 +1,8 @@
-# ⚠️ Platform Protos (Generator Lib)
+# ⚠️ Messenger Protos (Generator Lib)
 
 This is a "Generator" library, not a standard "Facade" library.
 
-**This library's only purpose is to contain the shared, platform-wide `.proto` definitions (like `URN`) and to generate raw TypeScript and Go code from them.**
+**This library's only purpose is to contain the `.proto` definitions for the Messenger scope and to generate raw TypeScript and Go code from them.**
 
 ---
 
@@ -10,9 +10,9 @@ This is a "Generator" library, not a standard "Facade" library.
 
 Our monorepo architecture forbids importing from this library directly. All generated code is considered an internal implementation detail.
 
-You **must** import from its "buddy" library instead, which provides friendly, idiomatic TypeScript interfaces and mappers:
+You should almost always import from its "buddy" library instead, which provides friendly, idiomatic TypeScript interfaces and mappers:
 
-**`@nx-platform-application/platform-types`**
+**`@nx-messenger-application/messenger-types`**
 
 Our root ESLint configuration (`eslint.config.mjs`) enforces this rule.
 
@@ -23,5 +23,5 @@ Our root ESLint configuration (`eslint.config.mjs`) enforces this rule.
 If you modify any `.proto` files in the `src/` directory, you must regenerate the code by running:
 
 ```bash
-# Assumes the name in project.json is 'protos'
-nx run protos:generate
+# Assumes the name in project.json is 'messenger-protos'
+nx run messenger-protos:generate

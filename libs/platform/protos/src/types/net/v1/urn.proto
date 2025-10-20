@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package types.net.v1;
+
+option go_package = "github.com/illmade-knight/go-platform-protos/gen/go/net/v1;sm_v1";
+
+message UrnPb {
+  string namespace = 1;
+  string entityType = 2;
+  string entityId = 3;
+}

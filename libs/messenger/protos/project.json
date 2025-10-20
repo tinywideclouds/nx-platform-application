@@ -1,9 +1,9 @@
 {
-  "name": "platform-protos",
+  "name": "messenger-protos",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/platform/protos/src",
+  "sourceRoot": "libs/messenger/protos/src",
   "projectType": "library",
-  "tags": ["scope:protos-platform"],
+  "tags": ["scope:protos-messenger"],
   "targets": {
     "generate": {
       "executor": "nx:run-commands",
@@ -12,7 +12,7 @@
           "rimraf dist",
           "buf generate"
         ],
-        "cwd": "libs/platform/protos"
+        "cwd": "libs/messenger/protos"
       },
       "outputs": ["{projectRoot}/dist"]
     }
