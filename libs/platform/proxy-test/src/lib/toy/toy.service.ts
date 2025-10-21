@@ -1,17 +1,14 @@
+// src/lib/toy/toy.service.ts
 import { Injectable } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import { delay } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ToyService {
-  getData(): Promise<string> {
+  getData(): Observable<string> {
     // Introduce a 500ms delay to simulate network latency.
-    // This is what fakeAsync and tick are designed to control.
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve('Success');
-      }, 500);
-    });
+    return of('Success').pipe(delay(500));
   }
 }
-
