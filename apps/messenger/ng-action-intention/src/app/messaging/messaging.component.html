@@ -1,0 +1,27 @@
+<h2>Messaging</h2>
+@if (currentUser(); as user) {
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Welcome, {{ user.alias || user.email }}!</mat-card-title>
+      <mat-card-subtitle
+      >You are authenticated and viewing the protected messaging
+        page.</mat-card-subtitle
+      >
+    </mat-card-header>
+    <mat-card-content>
+      <h3>Authenticated User Data:</h3>
+      <pre>{{ user | json }}</pre>
+    </mat-card-content>
+    <mat-card-actions>
+      <button mat-raised-button color="warn" (click)="logout()">
+        Log Out
+      </button>
+    </mat-card-actions>
+  </mat-card>
+} @else {
+  <!-- Optional: Show a loading spinner or placeholder while the user is null -->
+  <div class="loading-container">
+    <h2>Loading User Data...</h2>
+    <!-- You could put a mat-spinner here -->
+  </div>
+}

@@ -30,7 +30,7 @@
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/action_intention/*"
       ],
-      "@nx-platform-application/auth-ui": [
+      "@nx-platform-application/platform-auth-ui": [
         "libs/platform/auth-ui/src/index.ts"
       ],
       "@nx-platform-application/chat-ui": [
@@ -47,6 +47,9 @@
       ],
       "@nx-platform-application/platform-auth-data-access": [
         "libs/platform/auth-data-access/src/index.ts"
+      ],
+      "@nx-platform-application/platform-auth-data-access/testing": [
+        "libs/platform/auth-data-access/src/testing.ts"
       ]
     }
   },

@@ -1,7 +1,7 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Injectable, signal, Signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { User } from '@nx-platform-application/platform-types';
-import { catchError, of, tap } from 'rxjs';
+import { catchError, Observable, of, tap } from 'rxjs';
 
 /**
  * Interface for the auth status response
@@ -12,10 +12,17 @@ interface AuthStatusResponse {
   token: string;
 }
 
+export abstract class IAuthService {
+  abstract readonly currentUser: Signal<User | null>;
+  abstract readonly isAuthenticated: Signal<boolean>;
+  abstract getJwtToken(): string | null;
+  abstract logout(): Observable<unknown>;
+}
+
 @Injectable({
   providedIn: 'root',
 })
-export class AuthService {
+export class AuthService implements IAuthService{
   private http = inject(HttpClient);
 
   // --- State Signals ---

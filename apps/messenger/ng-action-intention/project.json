@@ -1,67 +1,92 @@
 {
   "name": "ng-action-intention",
-  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "prefix": "app",
   "sourceRoot": "apps/messenger/ng-action-intention/src",
   "tags": [],
   "targets": {
     "build": {
-      "executor": "@nx/vite:build",
+      "executor": "@angular/build:application",
       "outputs": ["{options.outputPath}"],
-      "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/apps/messenger/ng-action-intention",
-        "configFile": "apps/messenger/ng-action-intention/vite.config.ts"
+        "index": "apps/messenger/ng-action-intention/src/index.html",
+        "browser": "apps/messenger/ng-action-intention/src/main.ts",
+        "polyfills": ["zone.js"],
+        "tsConfig": "apps/messenger/ng-action-intention/tsconfig.app.json",
+        "inlineStyleLanguage": "css",
+        "statsJson": true,
+        "assets": [
+          "apps/messenger/ng-action-intention/src/favicon.ico"
+        ],
+        "styles": ["apps/messenger/ng-action-intention/src/styles.css"]
       },
       "configurations": {
-        "development": {
-          "mode": "development"
-        },
         "production": {
-          "mode": "production"
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "500kb",
+              "maximumError": "1mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "4kb",
+              "maximumError": "8kb"
+            }
+          ],
+          "outputHashing": "all"
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        },
+        "mock": {
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/messenger/ng-action-intention/src/environments/environment.ts",
+              "with": "apps/messenger/ng-action-intention/src/environments/environment.mock.ts"
+            }
+          ]
         }
-      }
+      },
+      "defaultConfiguration": "production"
     },
     "serve": {
-      "executor": "@nx/vite:dev-server",
-      "defaultConfiguration": "development",
-      "options": {
-        "buildTarget": "ng-action-intention:build",
-        "configFile": "apps/messenger/ng-action-intention/vite.config.ts"
-      },
+      "executor": "@angular/build:dev-server",
       "configurations": {
-        "development": {
-          "buildTarget": "ng-action-intention:build:development",
-          "hmr": true
-        },
         "production": {
-          "buildTarget": "ng-action-intention:build:production",
-          "hmr": false
-        }
-      }
-    },
-    "preview": {
-      "executor": "@nx/vite:preview-server",
-      "defaultConfiguration": "development",
-      "options": {
-        "buildTarget": "ng-action-intention:build"
-      },
-      "configurations": {
+          "buildTarget": "ng-action-intention:build:production"
+        },
         "development": {
           "buildTarget": "ng-action-intention:build:development"
         },
-        "production": {
-          "buildTarget": "ng-action-intention:build:production"
+        "mock": {
+          "buildTarget": "ng-action-intention:build:mock"
         }
+      },
+      "defaultConfiguration": "development"
+    },
+    "extract-i18n": {
+      "executor": "@angular/build:extract-i18n",
+      "options": {
+        "buildTarget": "ng-action-intention:build"
       }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
     },
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}"
+      ],
       "options": {
-        "reportsDirectory": "{workspaceRoot}/coverage/apps/messenger/ng-action-intention",
-        "configFile": "apps/messenger/ng-action-intention/vitest.config.ts"
+        "reportsDirectory": "../../coverage/apps/messenger/ng-action-intention",
+        "configFile": "apps/messenger/ng-action-intention/vitest.config.mts"
       }
     }
   }

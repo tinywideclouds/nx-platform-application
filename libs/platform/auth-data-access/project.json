@@ -6,6 +6,24 @@
   "projectType": "library",
   "tags": ["scope:platform"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/platform/auth-data-access",
+        "configFile": "libs/platform/auth-data-access/vite.config.mts",
+        "main": "libs/platform/auth-data-access/src/index.ts",
+        "assets": ["libs/platform/auth-data-access/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../coverage/libs/platform/auth-data-access",
+        "configFile": "libs/platform/auth-data-access/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

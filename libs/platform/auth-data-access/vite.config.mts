@@ -8,20 +8,31 @@ export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/platform/auth-data-access',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
-  test: {
-    name: 'auth-data-access',
-    watch: false,
-    globals: true,
-    environment: 'jsdom',
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    reporters: ['default'],
-    coverage: {
-      reportsDirectory: '../../../coverage/libs/platform/auth-data-access',
-      provider: 'v8' as const,
+
+  build: {
+    outDir: '../../dist/platform-types',
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
     },
-  },
+    lib: {
+      entry: 'src/index.ts',
+      name: 'auth-data-access',
+      fileName: 'index',
+      formats: ['es' as const],
+    },
+    rollupOptions: {
+      // Externalize dependencies that should not be bundled into your library.
+      // This is crucial for libraries.
+      external: [
+        '@angular/core',
+        '@angular/common',
+        '@angular/common/http',
+        'rxjs',
+        'vitest', // Must externalize vitest from the mock service
+        /@nx-platform-application\/.*/, // Externalize all other workspace libs
+      ],
+    },
+  }
 }));

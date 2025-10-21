@@ -7,7 +7,7 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 // THIS IS NOW YOUR DEDICATED BUILD CONFIG
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../node_modules/.vite/platform-types',
+  cacheDir: '../../../node_modules/.vite/platform-types',
   plugins: [
     nxViteTsPaths(),
     nxCopyAssetsPlugin(['*.md']),
@@ -20,7 +20,7 @@ export default defineConfig(() => ({
 
   // Configuration for building your library.
   build: {
-    outDir: '../dist/platform-types',
+    outDir: '../../dist/platform-types',
     emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: {

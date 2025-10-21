@@ -5,7 +5,7 @@ import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../node_modules/.vite/platform-types',
+  cacheDir: '../../../node_modules/.vite/platform-types',
   plugins: [
     nxViteTsPaths()
   ],

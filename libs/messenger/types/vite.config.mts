@@ -7,7 +7,7 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 // THIS IS NOW YOUR DEDICATED BUILD CONFIG
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../node_modules/.vite/messenger-types',
+  cacheDir: '../../../node_modules/.vite/messenger-types',
   plugins: [
     nxViteTsPaths(),
     nxCopyAssetsPlugin(['*.md']),

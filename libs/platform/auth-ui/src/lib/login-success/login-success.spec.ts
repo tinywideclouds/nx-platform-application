@@ -4,10 +4,8 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoginSuccessComponent } from './login-success';
 import { User } from '@nx-platform-application/platform-types';
 
-import {
-  AuthService,
-  MockAuthService,
-} from '@nx-platform-application/platform-auth-data-access';
+import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { MockAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
 
 const mockUser: User = {
   id: '1',
