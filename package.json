@@ -2,8 +2,12 @@
   "name": "@nx-platform-application/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
   "private": true,
+  "scripts": {
+    "test:identity": "nx test identity-service --configuration=unit",
+    "test:identity:integration": "nx test identity-service --configuration=integration",
+    "test:identity:all": "nx test identity-service"
+  },
   "dependencies": {
     "@angular/animations": "^20.3.6",
     "@angular/common": "~20.3.6",
@@ -19,10 +23,13 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
+    "pino": "^10.1.0",
+    "pino-http": "^11.0.0",
     "rxjs": "~7.8.2"
   },
   "devDependencies": {

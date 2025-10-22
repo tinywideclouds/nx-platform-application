@@ -3,6 +3,7 @@ import { Firestore } from '@google-cloud/firestore';
 
 import { getUserProfile } from '../firestore.js';
 import { configureGoogleStrategy } from './google.strategy.js';
+import { logger } from '../services/logger.service.js';
 import type { User } from '@nx-platform-application/platform-types';
 
 /**
@@ -16,7 +17,7 @@ import type { User } from '@nx-platform-application/platform-types';
  */
 export function configurePassport(db: Firestore): void {
     // Register the Google strategy
-    passport.use(configureGoogleStrategy(db));
+  passport.use(configureGoogleStrategy(db, logger));
 
     // In the future, you would add other strategies here:
     // passport.use(configureMicrosoftStrategy(db));

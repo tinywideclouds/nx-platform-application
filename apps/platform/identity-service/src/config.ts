@@ -6,16 +6,20 @@ import 'dotenv/config';
  * common typos and making the code self-documenting.
  */
 interface Config {
-    issuer: string;
-    port: number;
-    sessionSecret: string;
-    jwtSecret: string;
-    jwtAudience: string;
-    jwtPrivateKey: string;
-    gcpProjectId: string | undefined;
-    googleClientId: string | undefined;
-    googleClientSecret: string | undefined;
-    internalApiKey: string | undefined;
+  issuer: string;
+  port: number;
+  clientUrl: string;
+  sessionSecret: string;
+  jwtSecret: string;
+  jwtAudience: string;
+  jwtPrivateKey: string;
+  gcpProjectId: string | undefined;
+  googleClientId: string | undefined;
+  googleClientSecret: string | undefined;
+  googleRedirectUrlSuccess: string;
+  googleRedirectUrlFailure: string;
+  internalApiKey: string | undefined;
+  enableRateLimiter: boolean;
 }
 
 // Store the default (insecure) secrets in constants. This makes them easy
@@ -31,16 +35,20 @@ const DEFAULT_JWT_PRIVATE_KEY = 'a-crypto-lib-private-key-from-public-private-pa
  * a single source of truth for configuration.
  */
 export const config: Config = {
-    issuer: process.env.ISSUER || "http://localhost",
-    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
-    sessionSecret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
-    jwtSecret: process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
-    jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY,
-    jwtAudience: process.env.JWT_AUDIENCE || '', // An audience should always be explicitly set
-    gcpProjectId: process.env.GCP_PROJECT_ID,
-    googleClientId: process.env.GOOGLE_CLIENT_ID,
-    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    internalApiKey: process.env.INTERNAL_API_KEY,
+  issuer: process.env.ISSUER || "http://localhost",
+  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+  clientUrl: process.env.CLIENT_URL || 'http://localhost:4200',
+  sessionSecret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
+  jwtSecret: process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
+  jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY,
+  jwtAudience: process.env.JWT_AUDIENCE || '', // An audience should always be explicitly set
+  gcpProjectId: process.env.GCP_PROJECT_ID,
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleRedirectUrlSuccess: process.env.GOOGLE_REDIRECT_URL_SUCCESS || 'http://localhost:4200/login-success',
+  googleRedirectUrlFailure: process.env.GOOGLE_REDIRECT_URL_FAILURE || 'http://localhost:4200/login?error=unauthorized',
+  internalApiKey: process.env.INTERNAL_API_KEY,
+  enableRateLimiter: process.env.ENABLE_RATE_LIMITER ? process.env.ENABLE_RATE_LIMITER === 'true' : true,
 };
 
 // --- Runtime Validation ---
@@ -48,13 +56,16 @@ export const config: Config = {
 // or insecure, providing clear and actionable error messages.
 
 const requiredConfig: Array<keyof Config> = [
-    'gcpProjectId',
-    'googleClientId',
-    'googleClientSecret',
-    'jwtSecret',
-    'jwtAudience',
-    'internalApiKey',
-    'sessionSecret',
+  'gcpProjectId',
+  'googleClientId',
+  'googleClientSecret',
+  'googleRedirectUrlSuccess',
+  'googleRedirectUrlFailure',
+  'jwtSecret',
+  'jwtAudience',
+  'internalApiKey',
+  'sessionSecret',
+  'clientUrl',
 ];
 
 for (const key of requiredConfig) {

@@ -43,6 +43,15 @@
           "extractLicenses": false,
           "sourceMap": true
         },
+        "development-integrated": {
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/messenger/ng-action-intention/src/environments/environment.ts",
+              "with": "apps/messenger/ng-action-intention/src/environments/environment.dev.ts"
+            }
+          ]
+        },
         "mock": {
           "sourceMap": true,
           "fileReplacements": [
@@ -66,9 +75,22 @@
         },
         "mock": {
           "buildTarget": "ng-action-intention:build:mock"
+        },
+        "development-integrated": {
+          "buildTarget": "ng-action-intention:build:development-integrated"
         }
       },
       "defaultConfiguration": "development"
+    },
+    "serve-integrated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": true,
+        "commands": [
+          "nx serve ng-action-intention --configuration=development-integrated",
+          "nx serve identity-service"
+        ]
+      }
     },
     "extract-i18n": {
       "executor": "@angular/build:extract-i18n",

@@ -11,6 +11,15 @@
       "options": {
         "reportsDirectory": "{workspaceRoot}/coverage/apps/platform/identity-service",
         "configFile": "apps/platform/identity-service/vitest.config.mts"
+      },
+      "configurations": {
+        "unit": {
+          "exclude": ["src/**/*.integration.test.ts"]
+        },
+        "integration": {
+          "include": ["src/**/*.integration.test.ts"],
+          "reporters": ["default"]
+        }
       }
     },
     "build": {

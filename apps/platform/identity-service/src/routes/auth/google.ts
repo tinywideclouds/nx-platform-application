@@ -1,14 +1,15 @@
 import express from 'express';
 import passport from 'passport';
+import { config } from '../../config.js';
 
 const router = express.Router();
 
 router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 router.get('/auth/google/callback', passport.authenticate('google', {
-    failureRedirect: 'http://localhost:4200/login?error=unauthorized',
+  failureRedirect: config.googleRedirectUrlFailure, // CHANGED
 }), (_req, res) => {
-    res.redirect('http://localhost:4200/login-success');
+  res.redirect(config.googleRedirectUrlSuccess); // CHANGED
 });
 
 export const googleAuthRoutes = router;
