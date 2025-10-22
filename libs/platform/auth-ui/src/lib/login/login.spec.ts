@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { User } from '@nx-platform-application/platform-types';
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { LoginComponent } from './login';
 
 // --- Mock Data ---
@@ -14,7 +14,7 @@ const mockUser: User = {
 
 describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>;
-  let mockAuthService: Partial<AuthService>;
+  let mockAuthService: Partial<IAuthService>;
   let isAuthenticatedSignal: WritableSignal<boolean>;
   let currentUserSignal: WritableSignal<User | null>;
 
@@ -34,7 +34,7 @@ describe('LoginComponent', () => {
     await TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
-        { provide: AuthService, useValue: mockAuthService },
+        { provide: IAuthService, useValue: mockAuthService },
         provideNoopAnimations(), // Use modern provider for animations
       ],
     }).compileComponents();
@@ -54,7 +54,7 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
 
     // Act
-    const loginButton = fixture.nativeElement.querySelector('a[href="/auth/google"]');
+    const loginButton = fixture.nativeElement.querySelector('a[href="/api/auth/google"]');
     const logoutButton = fixture.nativeElement.querySelector('button');
 
     // Assert

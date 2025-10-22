@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 
 @Component({
   selector: 'aui-login',
@@ -13,7 +13,7 @@ import { AuthService } from '@nx-platform-application/platform-auth-data-access'
 })
 export class LoginComponent {
   // Inject the correct service
-  private authService = inject(AuthService);
+  private authService = inject(IAuthService);
 
   @Input() googleLoginUrl = '/api/auth/google'; // Default to a safe value
 

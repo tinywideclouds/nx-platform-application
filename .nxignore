@@ -1,0 +1,2 @@
+# Ignore generator template files from project graph analysis
+libs/internal-tools/src/generators/**/files

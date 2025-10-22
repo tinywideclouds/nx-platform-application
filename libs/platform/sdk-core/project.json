@@ -4,6 +4,23 @@
   "sourceRoot": "libs/platform/sdk-core/src",
   "projectType": "library",
   "tags": [],
-  "// targets": "to see all targets run: nx show project sdk-core --web",
-  "targets": {}
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/platform/sdk-core",
+        "configFile": "libs/platform/sdk-core/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../coverage/libs/platform/sdk-core",
+        "configFile": "libs/platform/sdk-core/vitest.config.mts"
+      }
+    }
+  }
 }

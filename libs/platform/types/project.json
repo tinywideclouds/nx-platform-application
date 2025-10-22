@@ -6,6 +6,15 @@
   "tags": ["scope:types-platform"],
   "// targets": "to see all targets run: nx show project types --web",
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/platform/types",
+        "configFile": "libs/platform/types/vite.config.mts"
+      }
+    },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],

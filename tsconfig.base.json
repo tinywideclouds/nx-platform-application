@@ -10,46 +10,46 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
-
-    // --- MODERN SETTINGS ---
     "moduleResolution": "bundler",
     "target": "ESNext",
     "module": "esnext",
     "lib": ["es2022", "dom"],
-
     "paths": {
-      "@nx-platform-application/platform-protos": [
-        "libs/platform/protos/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-protos": [
-        "libs/messenger/protos/src/index.ts"
-      ],
-      "@nx-platform-application/platform-protos/*": [
-        "libs/platform/protos/dist/ts/src/types/*"
-      ],
-      "@nx-platform-application/messenger-protos/*": [
-        "libs/messenger/protos/dist/ts/src/action_intention/*"
-      ],
-      "@nx-platform-application/platform-auth-ui": [
-        "libs/platform/auth-ui/src/index.ts"
-      ],
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
       ],
       "@nx-platform-application/contacts-ui": [
         "libs/messenger/contacts-ui/src/index.ts"
       ],
-      "@nx-platform-application/sdk-core": [
-        "libs/platform/sdk-core/src/index.ts"
+      "@nx-platform-application/internal-tools": [
+        "libs/internal-tools/src/index.ts"
       ],
-      "@nx-platform-application/platform-types": [
-        "libs/platform/types/src/index.ts"
+      "@nx-platform-application/messenger-protos": [
+        "libs/messenger/protos/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-protos/*": [
+        "libs/messenger/protos/dist/ts/src/action_intention/*"
       ],
       "@nx-platform-application/platform-auth-data-access": [
         "libs/platform/auth-data-access/src/index.ts"
       ],
       "@nx-platform-application/platform-auth-data-access/testing": [
         "libs/platform/auth-data-access/src/testing.ts"
+      ],
+      "@nx-platform-application/platform-auth-ui": [
+        "libs/platform/auth-ui/src/index.ts"
+      ],
+      "@nx-platform-application/platform-protos": [
+        "libs/platform/protos/src/index.ts"
+      ],
+      "@nx-platform-application/platform-protos/*": [
+        "libs/platform/protos/dist/ts/src/types/*"
+      ],
+      "@nx-platform-application/platform-types": [
+        "libs/platform/types/src/index.ts"
+      ],
+      "@nx-platform-application/sdk-core": [
+        "libs/platform/sdk-core/src/index.ts"
       ]
     }
   },

@@ -1,11 +1,18 @@
 import nx from '@nx/eslint-plugin';
 
 export default [
+  {
+    files: ['**/*.json'],
+    // Override or add rules here
+    rules: {},
+    languageOptions: {
+      parser: await import('jsonc-eslint-parser'),
+    },
+  },
   // 1. Includes Nx's base, TypeScript, and JavaScript flat configs
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
-
   // 2. Default ignores
   {
     ignores: [
@@ -14,7 +21,6 @@ export default [
       '**/vitest.config.*.timestamp*',
     ],
   },
-
   // 3. Main rules block
   {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
@@ -23,7 +29,6 @@ export default [
         'error',
         {
           enforceBuildableLibDependency: true,
-
           /**
            * THE "SPECIAL PERMIT"
            * Allows deep imports ONLY for the two protos libraries and the test helpers in platform-auth-data-access/testing.
@@ -34,7 +39,6 @@ export default [
             '@nx-platform-application/messenger-protos/**',
             '@nx-platform-application/platform-auth-data-access/testing',
           ],
-
           /**
            * THE "GATEKEEPER"
            * These are the architectural zoning rules based on tags.
@@ -49,7 +53,6 @@ export default [
               sourceTag: 'scope:protos-messenger',
               onlyDependOnLibsWithTags: [],
             },
-
             // --- Types Rules ("Buddy System") ---
             {
               sourceTag: 'scope:types-platform',
@@ -62,7 +65,6 @@ export default [
                 'scope:types-platform',
               ],
             },
-
             // --- Existing App/Feature Rules (Updated) ---
             // Platform projects can now depend on platform-types, but NOT protos directly.
             {
@@ -87,7 +89,6 @@ export default [
       ],
     },
   },
-
   // 4. Additional file overrides
   {
     files: [

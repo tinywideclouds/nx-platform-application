@@ -22,7 +22,12 @@
     "src/**/*.spec.js",
     "src/**/*.test.jsx",
     "src/**/*.spec.jsx",
-    "src/lib/testing/**/*.ts" // <-- ADD THIS LINE
+    "src/lib/testing/**/*.ts"
   ],
-  "include": ["src/**/*.ts"]
+
+  // 1. REMOVE THIS LINE:
+  // "include": ["src/**/*.ts"],
+
+  // 2. ADD THIS INSTEAD:
+  "files": ["src/index.ts"]
 }

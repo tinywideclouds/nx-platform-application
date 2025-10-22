@@ -4,7 +4,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoginSuccessComponent } from './login-success';
 import { User } from '@nx-platform-application/platform-types';
 
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { MockAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
 
 const mockUser: User = {
@@ -28,11 +28,11 @@ describe('LoginSuccessComponent', () => {
       providers: [
         provideNoopAnimations(),
         { provide: Router, useValue: mockRouter },
-        { provide: AuthService, useClass: MockAuthService },
+        { provide: IAuthService, useClass: MockAuthService },
       ],
     }).compileComponents();
 
-    mockAuthService = TestBed.inject(AuthService) as unknown as MockAuthService;
+    mockAuthService = TestBed.inject(IAuthService) as unknown as MockAuthService;
     fixture = TestBed.createComponent(LoginSuccessComponent);
   });
 

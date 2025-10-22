@@ -2,10 +2,27 @@
   "name": "auth-ui",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/platform/auth-ui/src",
-  "prefix": "lib",
+  "prefix": "aui",
   "projectType": "library",
   "tags": ["scope:platform"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/platform/auth-ui",
+        "configFile": "libs/platform/auth-ui/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../coverage/libs/platform/auth-ui",
+        "configFile": "libs/platform/auth-ui/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

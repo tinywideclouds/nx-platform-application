@@ -13,7 +13,6 @@
         "outputPath": "dist/apps/messenger/ng-action-intention",
         "index": "apps/messenger/ng-action-intention/src/index.html",
         "browser": "apps/messenger/ng-action-intention/src/main.ts",
-        "polyfills": ["zone.js"],
         "tsConfig": "apps/messenger/ng-action-intention/tsconfig.app.json",
         "inlineStyleLanguage": "css",
         "statsJson": true,
@@ -110,7 +109,7 @@
         "{options.reportsDirectory}"
       ],
       "options": {
-        "reportsDirectory": "../../coverage/apps/messenger/ng-action-intention",
+        "reportsDirectory": "../../../coverage/apps/messenger/ng-action-intention",
         "configFile": "apps/messenger/ng-action-intention/vitest.config.mts"
       }
     }

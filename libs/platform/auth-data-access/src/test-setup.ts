@@ -1,14 +1,25 @@
-import 'zone.js';
-import 'zone.js/testing';
+import '@angular/compiler';
+// Import the setup-snapshots for compatibility instead of setup-zone
+import '@analogjs/vitest-angular/setup-snapshots';
+import {
+  provideZonelessChangeDetection,
+  NgModule
+} from '@angular/core';
 import { getTestBed } from '@angular/core/testing';
 import {
-  BrowserTestingModule, // Import this instead
-  platformBrowserTesting, // Import this instead
-} from '@angular/platform-browser/testing'; // From the correct package
-
-console.log("called test-setup.ts for auth-data-access")
-// Initialize the Angular testing environment.
-getTestBed().initTestEnvironment(
   BrowserTestingModule,
-  platformBrowserTesting(), // Use the modern APIs
+  platformBrowserTesting,
+} from '@angular/platform-browser/testing';
+
+// Create a small NgModule to provide the Zoneless detection
+@NgModule({
+  providers: [provideZonelessChangeDetection()],
+})
+export class ZonelessTestModule {}
+
+console.log("zoneless test")
+
+getTestBed().initTestEnvironment(
+  [BrowserTestingModule, ZonelessTestModule],
+  platformBrowserTesting()
 );
