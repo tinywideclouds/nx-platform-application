@@ -2,6 +2,6 @@
 export const environment = {
   production: false,
   useMocks: false, // <-- Explicitly disable mocks
-  identityServiceUrl: 'http://localhost:3000', // <-- URL for your local identity-service
+  identityServiceUrl: '/api' // Use the proxy
   // Add any other backend URLs here as you add more services
 };

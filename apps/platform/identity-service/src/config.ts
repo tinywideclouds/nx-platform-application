@@ -18,6 +18,7 @@ interface Config {
   googleClientSecret: string | undefined;
   googleRedirectUrlSuccess: string;
   googleRedirectUrlFailure: string;
+  googleAuthCallback: string;
   internalApiKey: string | undefined;
   enableRateLimiter: boolean;
 }
@@ -45,6 +46,7 @@ export const config: Config = {
   gcpProjectId: process.env.GCP_PROJECT_ID,
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleAuthCallback: process.env.GOOGLE_AUTH_CALLBACK || '/api/auth/google/callback',
   googleRedirectUrlSuccess: process.env.GOOGLE_REDIRECT_URL_SUCCESS || 'http://localhost:4200/login-success',
   googleRedirectUrlFailure: process.env.GOOGLE_REDIRECT_URL_FAILURE || 'http://localhost:4200/login?error=unauthorized',
   internalApiKey: process.env.INTERNAL_API_KEY,
@@ -61,6 +63,7 @@ const requiredConfig: Array<keyof Config> = [
   'googleClientSecret',
   'googleRedirectUrlSuccess',
   'googleRedirectUrlFailure',
+  'googleAuthCallback',
   'jwtSecret',
   'jwtAudience',
   'internalApiKey',

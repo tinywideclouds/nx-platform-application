@@ -1,12 +1,10 @@
 import { computed, inject, Injectable, signal, Signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { User } from '@nx-platform-application/platform-types';
-import { catchError, Observable, of, tap } from 'rxjs';
+import { catchError, Observable, of, tap, shareReplay } from 'rxjs';
 
-/**
- * Interface for the auth status response
- */
-interface AuthStatusResponse {
+// This interface correctly defines the flat structure
+export interface AuthStatusResponse {
   authenticated: boolean;
   user: User;
   token: string;
@@ -15,84 +13,58 @@ interface AuthStatusResponse {
 export abstract class IAuthService {
   abstract readonly currentUser: Signal<User | null>;
   abstract readonly isAuthenticated: Signal<boolean>;
+  abstract readonly sessionLoaded$: Observable<AuthStatusResponse | null>;
   abstract getJwtToken(): string | null;
   abstract logout(): Observable<unknown>;
+  abstract checkAuthStatus(): Observable<AuthStatusResponse | null>;
 }
 
 @Injectable({
   providedIn: 'root',
 })
-export class AuthService implements IAuthService{
+export class AuthService implements IAuthService {
   private http = inject(HttpClient);
-
-  // --- State Signals ---
-
-  /**
-   * Private signal holding the current user object.
-   * (Renamed to _currentUser to avoid name collision)
-   */
+  public readonly sessionLoaded$: Observable<AuthStatusResponse | null>;
   private _currentUser = signal<User | null>(null);
-
-  /**
-   * Private signal holding the current JWT.
-   * (Renamed to _jwt for consistency)
-   */
   private _jwt = signal<string | null>(null);
 
-  // --- Public State ---
-
-  /**
-   * Public readonly signal for the current user.
-   */
   public currentUser = this._currentUser.asReadonly();
-
-  /**
-   * Public computed signal to determine if the user is authenticated.
-   * (Computes from the public readonly signal as requested)
-   */
   public isAuthenticated = computed(() => !!this.currentUser());
 
   constructor() {
-    // Check auth status as soon as the service is instantiated
-    this.checkAuthStatus().subscribe();
+    this.sessionLoaded$ = this.checkAuthStatus().pipe(
+      shareReplay(1) // Cache the result for all subscribers
+    );
+    // We subscribe here to trigger the initial call on app load.
+    this.sessionLoaded$.subscribe();
   }
 
-  // --- Public Methods ---
-
-  /**
-   * Calls the backend to check the current session status.
-   * On success, updates the user and JWT signals.
-   */
-  public checkAuthStatus() {
-    return this.http.get<AuthStatusResponse>('/api/auth/status').pipe(
-      tap((response) => this.setAuthState(response.user, response.token)),
-      catchError(() => {
-        // On error (e.g., 401), ensure state is cleared
-        this.clearAuthState();
-        return of(null); // Return a successful observable stream
+  public checkAuthStatus(): Observable<AuthStatusResponse | null> {
+    return this.http.get<AuthStatusResponse>('/api/auth/status', { withCredentials: true }).pipe(
+      tap((response) => {
+        // This logic now correctly handles the flat response
+        if (response && response.authenticated) {
+          this.setAuthState(response.user, response.token);
+        } else {
+          this.clearAuthState();
+        }
       }),
+      catchError(() => {
+        this.clearAuthState();
+        return of(null);
+      })
     );
   }
 
-  /**
-   * Calls the backend to log the user out.
-   * On success, clears the auth state.
-   */
   public logout() {
     return this.http
-      .post('/api/auth/logout', {})
+      .post('/api/auth/logout', {}, { withCredentials: true })
       .pipe(tap(() => this.clearAuthState()));
   }
 
-  /**
-   * Returns the current JWT value.
-   * This is intended for use by an HTTP interceptor.
-   */
   public getJwtToken(): string | null {
     return this._jwt();
   }
-
-  // --- Private Helpers ---
 
   private setAuthState(user: User, token: string) {
     this._currentUser.set(user);

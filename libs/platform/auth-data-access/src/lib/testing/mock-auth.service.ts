@@ -1,6 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { User } from '@nx-platform-application/platform-types';
-import { vi } from 'vitest';
 import { of } from 'rxjs';
 
 /**

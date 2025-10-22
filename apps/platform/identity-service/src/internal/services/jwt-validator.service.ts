@@ -25,7 +25,8 @@ export async function validateJwtConfiguration(): Promise<void> {
         const localJWKSet = createLocalJWKSet(jwks);
 
         // 3. Create a dummy user payload to sign a realistic token.
-        const testUser: AuthenticatedUser = {
+        // NOTE this is NOT placeholder code it is verification code for startup
+        const testUser = {
             id: 'validation-test-sub',
             email: 'test@validation.local',
             alias: 'Validator',

@@ -16,7 +16,7 @@
         Logout
       </button>
     } @else {
-      <a mat-raised-button color="primary" href="/auth/google">
+      <a mat-raised-button color="primary" [href]="googleLoginUrl">
         Login with Google
       </a>
     }

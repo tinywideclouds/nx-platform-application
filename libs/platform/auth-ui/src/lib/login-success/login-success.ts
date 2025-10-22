@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 // 1. Import firstValueFrom for modern promise conversion
 import { firstValueFrom } from 'rxjs';
 
@@ -13,7 +13,7 @@ import { firstValueFrom } from 'rxjs';
   templateUrl: './login-success.html',
 })
 export class LoginSuccessComponent implements OnInit {
-  private authService = inject(AuthService);
+  private authService = inject(IAuthService);
   private router = inject(Router);
 
   public statusMessage = signal('Finalizing login...');

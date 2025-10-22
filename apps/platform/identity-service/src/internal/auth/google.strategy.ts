@@ -12,6 +12,7 @@ import { generateToken } from '../services/jwt.service.js';
  * Configures and returns the Passport.js strategy for Google OAuth 2.0.
  *
  * @param db - The shared Firestore database instance.
+ * @param logger
  * @returns A configured instance of the GoogleStrategy.
  */
 export function configureGoogleStrategy(db: Firestore, logger: Logger): GoogleStrategy {
@@ -27,7 +28,7 @@ export function configureGoogleStrategy(db: Firestore, logger: Logger): GoogleSt
   const googleStrategyOptions = {
     clientID: config.googleClientId,
     clientSecret: config.googleClientSecret,
-    callbackURL: '/auth/google/callback',
+    callbackURL: config.googleAuthCallback,
     passReqToCallback: true,
   } as const;
 

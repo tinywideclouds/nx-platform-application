@@ -15,25 +15,25 @@ import { ensureAuthenticated } from '../../internal/middleware/auth.middleware.j
 export const createUserApiRoutes = (db: Firestore) => {
   const router = express.Router();
 
-  router.get('/api/auth/status', (req, res) => {
+  router.get('/auth/status', (req, res) => {
     if (req.isAuthenticated()) {
       // CHANGED: Use the shared 'User' type for consistency.
       const user = req.user as User;
       const token = generateToken(user, "session-authenticated-token");
-      res.json({ authenticated: true, user: { ...user, token } });
+      res.json({ authenticated: true, user: user, token: token });
     } else {
       res.json({ authenticated: false, user: null });
     }
   });
 
-  router.get('/api/auth/refresh-token', ensureAuthenticated, (req, res) => {
+  router.get('/auth/refresh-token', ensureAuthenticated, (req, res) => {
     // CHANGED: Use the shared 'User' type.
     const user = req.user as User;
     const newInternalToken = generateToken(user, "re-issued-token-placeholder");
     res.json({ token: newInternalToken });
   });
 
-  router.post('/api/auth/logout', (req, res, next) => {
+  router.post('/auth/logout', (req, res, next) => {
     req.logout((err) => {
       if (err) { return next(err); }
       req.session.destroy(() => {
@@ -43,7 +43,7 @@ export const createUserApiRoutes = (db: Firestore) => {
     });
   });
 
-  router.get('/api/users/by-email/:email', internalAuthMiddleware, async (req, res, next) => {
+  router.get('/users/by-email/:email', internalAuthMiddleware, async (req, res, next) => {
     const { email } = req.params;
     if (email == undefined) {
       res.status(400).json({error: 'malformed request no email'});

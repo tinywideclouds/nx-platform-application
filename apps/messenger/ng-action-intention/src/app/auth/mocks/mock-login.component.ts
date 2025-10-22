@@ -58,4 +58,5 @@ export class MockLoginComponent {
   login(user: User): void {
     this.authService.loginAs(user);
   }
+
 }

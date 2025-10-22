@@ -26,9 +26,21 @@ async function startServer() {
 
     // --- DATABASE INITIALIZATION ---
     const db = new Firestore({ projectId: config.gcpProjectId });
-    await db.listCollections(); // A simple way to verify the connection
-    // CHANGED: Replaced console.log with structured logging
-    logger.info({ component: 'Firestore', status: 'connected', projectId: config.gcpProjectId }, 'Firestore connection verified.');
+    try {
+      // This is the first command that actually tries to contact Firestore.
+      await db.listCollections();
+      logger.info({ component: 'Firestore', status: 'connected', projectId: config.gcpProjectId }, 'Firestore connection verified.');
+    } catch (error: unknown) {
+      // Check for the specific gcloud authentication error.
+      if (error instanceof Error && error.message.includes('invalid_grant')) {
+        logger.fatal(
+          { err: error },
+          "Firestore authentication failed. Your local gcloud credentials may have expired. Please run 'gcloud auth application-default login' and try again."
+        );
+      }
+      // Re-throw the error to be caught by the outer block, which will stop the server.
+      throw error;
+    }
 
     // --- CRYPTOGRAPHIC KEY INITIALIZATION ---
     await validateJwtConfiguration();
@@ -85,7 +97,7 @@ async function startServer() {
 
     // --- ROUTE CONFIGURATION ---
     const mainRouter = createMainRouter(db);
-    app.use('/', mainRouter);
+    app.use('/api', mainRouter);
 
     // --- CENTRAL ERROR HANDLING ---
     // This MUST be the last middleware added.
