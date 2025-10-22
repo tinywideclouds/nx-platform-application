@@ -1,0 +1,118 @@
+{
+  "name": "<%= name %>",
+  "$schema": "<%= offsetFromRoot %>node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "prefix": "app",
+  "sourceRoot": "<%= projectRoot %>/src",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@angular/build:application",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/<%= projectRoot %>",
+        "index": "<%= projectRoot %>/src/index.html",
+        "browser": "<%= projectRoot %>/src/main.ts",
+        "polyfills": ["zone.js"],
+        "tsConfig": "<%= projectRoot %>/tsconfig.app.json",
+        "inlineStyleLanguage": "css",
+        "statsJson": true,
+        "assets": [
+          "<%= projectRoot %>/src/favicon.ico"
+        ],
+        "styles": ["<%= projectRoot %>/src/styles.css"]
+      },
+      "configurations": {
+        "production": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "500kb",
+              "maximumError": "1mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "4kb",
+              "maximumError": "8kb"
+            }
+          ],
+          "outputHashing": "all"
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        },
+        "development-integrated": {
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "<%= projectRoot %>/src/environments/environment.ts",
+              "with": "<%= projectRoot %>/src/environments/environment.dev.ts"
+            }
+          ]
+        },
+        "mock": {
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "<%= projectRoot %>/src/environments/environment.ts",
+              "with": "<%= projectRoot %>/src/environments/environment.mock.ts"
+            }
+          ]
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "serve": {
+      "executor": "@angular/build:dev-server",
+      "options": {
+        "proxyConfig": "<%= projectRoot %>/proxy.conf.json"
+      },
+      "configurations": {
+        "production": {
+          "buildTarget": "<%= name %>:build:production"
+        },
+        "development": {
+          "buildTarget": "<%= name %>:build:development"
+        },
+        "mock": {
+          "buildTarget": "<%= name %>:build:mock"
+        },
+        "development-integrated": {
+          "buildTarget": "<%= name %>:build:development-integrated"
+        }
+      },
+      "defaultConfiguration": "development"
+    },
+    "serve-integrated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": true,
+        "commands": [
+          "nx serve <%= name %> --configuration=development-integrated",
+          "nx serve identity-service"
+        ]
+      }
+    },
+    "extract-i18n": {
+      "executor": "@angular/build:extract-i18n",
+      "options": {
+        "buildTarget": "<%= name %>:build"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "<%= offsetFromRoot %>coverage/<%= projectRoot %>",
+        "configFile": "<%= projectRoot %>/vitest.config.mts"
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "internal-tools",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/internal-tools/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/internal-tools",
+        "main": "libs/internal-tools/src/index.ts",
+        "tsConfig": "libs/internal-tools/tsconfig.lib.json",
+        "assets": [
+          "libs/internal-tools/*.md",
+          {
+            "input": "./libs/internal-tools/src",
+            "glob": "**/!(*.ts)",
+            "output": "./src"
+          },
+          {
+            "input": "./libs/internal-tools/src",
+            "glob": "**/*.d.ts",
+            "output": "./src"
+          },
+          {
+            "input": "./libs/internal-tools",
+            "glob": "generators.json",
+            "output": "."
+          },
+          {
+            "input": "./libs/internal-tools",
+            "glob": "executors.json",
+            "output": "."
+          }
+        ]
+      }
+    }
+  }
+}
