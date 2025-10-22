@@ -5,7 +5,7 @@ import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { User } from '@nx-platform-application/platform-types';
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { MessagingComponent } from './messaging.component';
 
 const testUser: User = {
@@ -36,7 +36,7 @@ describe('MessagingComponent (Zoneless + Globals)', () => {
       providers: [
         provideNoopAnimations(),
         { provide: Router, useValue: mockRouter },
-        { provide: AuthService, useValue: mockAuthService },
+        { provide: IAuthService, useValue: mockAuthService },
       ],
     }).compileComponents();
 

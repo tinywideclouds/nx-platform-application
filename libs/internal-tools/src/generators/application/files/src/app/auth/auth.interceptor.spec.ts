@@ -8,7 +8,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { authInterceptor } from './auth.interceptor';
 
 describe('authInterceptor (Zoneless + Globals)', () => {
@@ -27,7 +27,7 @@ describe('authInterceptor (Zoneless + Globals)', () => {
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
-        { provide: AuthService, useValue: mockAuthService },
+        { provide: IAuthService, useValue: mockAuthService },
       ],
     });
 

@@ -1,26 +1,30 @@
 {
-  "name": "sdk-core",
+  "name": "logger",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/platform/sdk-core/src",
+  "sourceRoot": "libs/platform/logger/src",
+  "prefix": "aui",
   "projectType": "library",
-  "tags": [],
+  "tags": ["scope:platform"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/platform/sdk-core",
-        "configFile": "libs/platform/sdk-core/vite.config.mts"
+        "outputPath": "dist/libs/platform/logger",
+        "configFile": "libs/platform/logger/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "../../../coverage/libs/platform/sdk-core",
-        "configFile": "libs/platform/sdk-core/vitest.config.mts"
+        "reportsDirectory": "../../../coverage/libs/platform/logger",
+        "configFile": "libs/platform/logger/vitest.config.mts"
       }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
     }
   }
 }

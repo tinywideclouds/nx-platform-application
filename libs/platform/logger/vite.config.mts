@@ -1,26 +1,27 @@
+// In libs/platform/logger/vite.config.mts
+
 import { defineConfig } from 'vite';
-import dts from 'vite-plugin-dts';
-import * as path from 'path';
+import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
+import * as path from 'path';
+import dts from 'vite-plugin-dts';
 
-// THIS IS NOW YOUR DEDICATED BUILD CONFIG
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/sdk-core',
+  cacheDir: '../../../node_modules/.vite/libs/platform/logger',
   plugins: [
+    angular(),
     nxViteTsPaths(),
     nxCopyAssetsPlugin(['*.md']),
     dts({
       entryRoot: 'src',
       tsconfigPath: path.join(__dirname, 'tsconfig.lib.json'),
-      pathsToAliases: false,
     }),
   ],
 
-  // Configuration for building your library.
   build: {
-    outDir: '../../dist/sdk-core',
+    outDir: '../../../dist/libs/platform/logger',
     emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: {
@@ -28,12 +29,9 @@ export default defineConfig(() => ({
     },
     lib: {
       entry: 'src/index.ts',
-      name: 'sdk-core',
+      name: 'logger',
       fileName: 'index',
       formats: ['es' as const],
-    },
-    rollupOptions: {
-      external: [],
     },
   },
 }));

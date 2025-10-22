@@ -2,6 +2,7 @@
 import { defineConfig } from 'vitest/config';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import {join} from "path";
 
 export default defineConfig({
   root: __dirname,
@@ -16,6 +17,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
     reporters: ['default', 'html'],
+    outputFile: {
+      html: join(__dirname, '<%= offsetFromRoot %>/dist/test-reports/<%= projectRoot %>/index.html'),
+    },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
       reportsDirectory: `<%= offsetFromRoot %>coverage/<%= projectRoot %>`,

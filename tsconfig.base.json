@@ -24,6 +24,7 @@
       "@nx-platform-application/internal-tools": [
         "libs/internal-tools/src/index.ts"
       ],
+      "@nx-platform-application/logger": ["libs/platform/logger/src/index.ts"],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
       ],
@@ -47,9 +48,6 @@
       ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
-      ],
-      "@nx-platform-application/sdk-core": [
-        "libs/platform/sdk-core/src/index.ts"
       ]
     }
   },

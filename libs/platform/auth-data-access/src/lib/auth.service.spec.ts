@@ -6,7 +6,7 @@ import {
 } from '@angular/common/http/testing';
 import { AuthService } from './auth.service';
 import { User } from '@nx-platform-application/platform-types';
-import { MockAuthService } from './testing/mock-auth.service'; // 1. Import the mock
+import { MockAuthService } from './testing/mock-auth.service';
 
 // --- Mock Data ---
 const mockUser: User = {
@@ -39,56 +39,57 @@ describe('AuthService', () => {
   });
 
   afterEach(() => {
-    // 1. Verify that no unhandled requests are pending
     httpTestingController.verify();
-
-    // 2. Reset the TestBed to fix the "Cannot configure" error
     TestBed.resetTestingModule();
   });
 
   it('should be created', () => {
-    const req = httpTestingController.expectOne('/api/auth/status');
-    req.flush('Error', { status: 401, statusText: 'Unauthorized' });
+    // 1. The service is created, but no HTTP call is made. This is correct.
     expect(service).toBeTruthy();
+    // 2. We no longer expect any HTTP call here.
   });
 
-  it('should have correct initial state before auth check completes', () => {
-    // State should be initial (service created, but init request not flushed)
+  it('should have correct initial state', () => {
+    // 1. State should be initial (service created, no calls made)
     expect(service.currentUser()).toBeNull();
-
-    /**
-     * CORRECTED: The initial state should be falsy, not truthy.
-     */
     expect(service.isAuthenticated()).toBeFalsy();
     expect(service.getJwtToken()).toBeNull();
-
-    // Flush the pending request
-    const req = httpTestingController.expectOne('/api/auth/status');
-    req.flush('Error', { status: 401, statusText: 'Unauthorized' });
+    // 2. We no longer expect any HTTP call here.
   });
 
-  it('should checkAuthStatus on init and set state on success', () => {
+  it('should set state on success when sessionLoaded$ is subscribed to', () => {
+    // 1. Subscribe to the observable to trigger the HTTP call
+    service.sessionLoaded$.subscribe();
+
+    // 2. Now, we expect the call
     const req = httpTestingController.expectOne('/api/auth/status');
     expect(req.request.method).toBe('GET');
     req.flush(mockAuthResponse);
 
+    // 3. Assert the state is set
     expect(service.currentUser()).toEqual(mockUser);
     expect(service.isAuthenticated()).toBeTruthy();
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
   });
 
-  it('should checkAuthStatus on init and clear state on failure', () => {
+  it('should clear state on failure when sessionLoaded$ is subscribed to', () => {
+    // 1. Subscribe to the observable to trigger the HTTP call
+    service.sessionLoaded$.subscribe();
+
+    // 2. Now, we expect the call
     const req = httpTestingController.expectOne('/api/auth/status');
     expect(req.request.method).toBe('GET');
     req.flush('Error', { status: 401, statusText: 'Unauthorized' });
 
+    // 3. Assert the state is cleared
     expect(service.currentUser()).toBeNull();
     expect(service.isAuthenticated()).toBeFalsy();
     expect(service.getJwtToken()).toBeNull();
   });
 
   it('should clear state on logout', () => {
-    // 1. Get into logged-in state (and handle constructor call)
+    // 1. Get into logged-in state
+    service.sessionLoaded$.subscribe();
     const initReq = httpTestingController.expectOne('/api/auth/status');
     initReq.flush(mockAuthResponse);
     expect(service.isAuthenticated()).toBeTruthy(); // Verify pre-condition
@@ -108,36 +109,32 @@ describe('AuthService', () => {
   });
 
   it('should return the current token with getJwtToken()', () => {
-    // Get to a logged-in state (and handle constructor call)
+    // 1. Get to a logged-in state
+    service.sessionLoaded$.subscribe();
     const initReq = httpTestingController.expectOne('/api/auth/status');
     initReq.flush(mockAuthResponse);
 
+    // 2. Assert the token is correct
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
   });
 });
 
 //
 // --- THE LOCAL CONTRACT TEST ---
+// (This test was fine and needs no changes)
 //
 describe('MockAuthService Contract', () => {
-  // This test's only job is to fail at *compile time*
-  // if the mock's public API drifts from the real service.
   it('should be assignable to the real AuthService in TestBed', () => {
     TestBed.configureTestingModule({
       providers: [
-        // This 'provide' line is the test.
-        // It checks assignability of public APIs,
-        // exactly like a consuming library would.
         { provide: AuthService, useClass: MockAuthService },
       ],
     });
 
-    // We can also inject it to be 100% sure.
     const service = TestBed.inject(AuthService);
     expect(service).toBeInstanceOf(MockAuthService);
   });
 
-  // We must reset the testbed just like in our other tests
   afterEach(() => {
     TestBed.resetTestingModule();
   });

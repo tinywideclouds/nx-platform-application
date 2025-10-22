@@ -3,6 +3,7 @@
 import { defineConfig } from 'vitest/config';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import {join} from "path";
 
 export default defineConfig({
   root: __dirname,
@@ -22,7 +23,9 @@ export default defineConfig({
     // This is correct and is the key to zoneless testing
     setupFiles: ['src/test-setup.ts'],
     reporters: ['default', 'html'],
-
+    outputFile: {
+      html: join(__dirname, '../../../dist/test-reports/ng-action-intention/index.html'),
+    },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
       reportsDirectory: '../../../coverage/apps/messenger/ng-action-intention',
