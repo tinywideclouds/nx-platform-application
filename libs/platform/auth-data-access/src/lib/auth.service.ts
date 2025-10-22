@@ -35,8 +35,8 @@ export class AuthService implements IAuthService {
     this.sessionLoaded$ = this.checkAuthStatus().pipe(
       shareReplay(1) // Cache the result for all subscribers
     );
-    // We subscribe here to trigger the initial call on app load.
-    this.sessionLoaded$.subscribe();
+    // The subscribe call that was here has been REMOVED.
+    // The APP_INITIALIZER will now trigger this observable.
   }
 
   public checkAuthStatus(): Observable<AuthStatusResponse | null> {

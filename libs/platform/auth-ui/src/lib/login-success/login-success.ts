@@ -5,6 +5,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 // 1. Import firstValueFrom for modern promise conversion
 import { firstValueFrom } from 'rxjs';
+import { Logger } from '@nx-platform-application/logger';
 
 @Component({
   standalone: true,
@@ -15,6 +16,7 @@ import { firstValueFrom } from 'rxjs';
 export class LoginSuccessComponent implements OnInit {
   private authService = inject(IAuthService);
   private router = inject(Router);
+  private logger = inject(Logger);
 
   public statusMessage = signal('Finalizing login...');
 
@@ -40,7 +42,8 @@ export class LoginSuccessComponent implements OnInit {
     } catch (error) {
       // 4. This catch block executes if the promise from firstValueFrom is rejected.
       // This is our "network error" scenario.
-      console.log('Login check failed:', error);
+      // 3. Replace console.log with this.logger.error
+      this.logger.error('Login check failed', error as Error); // <-- This is the change
       this.statusMessage.set('Error connecting to service. Redirecting...');
       this.router.navigate(['/login'], { queryParams: { error: 'auth_failed' } });
     }

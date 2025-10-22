@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { Logger } from '@nx-platform-application/logger';
 
 @Component({
   selector: 'app-messaging',
@@ -14,6 +15,7 @@ import { IAuthService } from '@nx-platform-application/platform-auth-data-access
 export class MessagingComponent {
   private authService = inject(IAuthService);
   private router = inject(Router);
+  private logger = inject(Logger);
 
   // Expose the currentUser signal directly to the template
   public currentUser = this.authService.currentUser;
@@ -22,7 +24,7 @@ export class MessagingComponent {
     // --- 2. ADD THIS DEBUGGING EFFECT ---
     effect(() => {
       const user = this.currentUser(); // Read the signal's value
-      console.log(
+      this.logger.debug(
         `%c[MessagingComponent Effect] currentUser signal changed:`,
         'color: #2ecc71; font-weight: bold;',
         user // Log the new value
