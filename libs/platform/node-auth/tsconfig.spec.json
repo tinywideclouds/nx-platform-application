@@ -5,6 +5,10 @@
     "types": [
       "vitest/globals",
       "vitest/importMeta",
+<<<<<<<< HEAD:libs/platform/node-auth/tsconfig.spec.json
+========
+      "vite/client",
+>>>>>>>> 72ff8b360a9a523651ce0ee410ea3bd92d7902d8:libs/platform/logger/tsconfig.spec.json
       "node",
       "vitest"
     ],
