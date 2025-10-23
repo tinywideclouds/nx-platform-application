@@ -1,10 +1,10 @@
 // libs/platform/auth-ui/vitest.config.mts
 
 /// <reference types='vitest' />
-import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
+import { defineConfig } from 'vite';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
-import {join} from "path";
+import { join } from "path";
 
 export default defineConfig({
   root: __dirname,
@@ -12,11 +12,8 @@ export default defineConfig({
 
   plugins: [
     angular({}),
-
     nxViteTsPaths()
   ],
-
-  // 'resolve.alias' and 'ssr' blocks are removed for a cleaner config.
 
   test: {
     name: 'auth-ui',
@@ -33,4 +30,5 @@ export default defineConfig({
       provider: 'v8',
     },
   },
+
 });

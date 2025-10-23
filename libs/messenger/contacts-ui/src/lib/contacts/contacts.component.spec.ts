@@ -1,3 +1,22 @@
+// Mock the Angular Material modules imported by the component
+
+vi.mock('@angular/material/list', () => ({
+  MatListModule: {},
+}));
+vi.mock('@angular/material/input', () => ({
+  MatInputModule: {},
+}));
+vi.mock('@angular/material/form-field', () => ({
+  MatFormFieldModule: {},
+}));
+vi.mock('@angular/material/button', () => ({
+  MatButtonModule: {},
+}));
+vi.mock('@angular/material/card', () => ({
+  MatCardModule: {},
+}));
+// -----------------------
+
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactsComponent } from './contacts.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -23,7 +42,7 @@ class MockLoggerService {
 }
 
 class MockContactsService {
-  // Use a WritableSignal for testing [cite: 37]
+  // Use a WritableSignal for testing
   contacts: WritableSignal<User[]> = signal<User[]>([]);
   loadContacts = vi.fn();
   addContact = vi.fn();
@@ -44,6 +63,10 @@ describe('ContactsComponent (Zoneless)', () => {
         { provide: ContactsService, useClass: MockContactsService },
         { provide: LoggerService, useClass: MockLoggerService },
       ],
+    }).overrideComponent(ContactsComponent, {
+      set: {
+        imports: []
+      }
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactsComponent);
@@ -61,7 +84,6 @@ describe('ContactsComponent (Zoneless)', () => {
   });
 
   it('should call loadContacts on initialization (ngOnInit)', () => {
-    // [cite: 38]
     // Act
     fixture.detectChanges(); // Triggers ngOnInit
 
@@ -98,7 +120,6 @@ describe('ContactsComponent (Zoneless)', () => {
   });
 
   it('should call addContact on button click with the input value', () => {
-    // [cite: 39]
     // Arrange
     fixture.detectChanges();
     const input = element.querySelector('input') as HTMLInputElement;

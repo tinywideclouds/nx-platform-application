@@ -1,5 +1,13 @@
+vi.mock('@angular/material/button', () => ({
+  MatButtonModule: {}, // Provide a fake module
+}));
+
+vi.mock('@angular/material/card', () => ({
+  MatCardModule: {}, // Provide a fake module
+}));
+
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal, WritableSignal } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, signal, WritableSignal } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { User } from '@nx-platform-application/platform-types';
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
@@ -37,6 +45,14 @@ describe('LoginComponent', () => {
         { provide: IAuthService, useValue: mockAuthService },
         provideNoopAnimations(), // Use modern provider for animations
       ],
+      schemas: [
+        CUSTOM_ELEMENTS_SCHEMA // 2. Add the schema here
+      ]
+
+    }).overrideComponent(LoginComponent, {
+      set: {
+        imports: []
+      }
     }).compileComponents();
 
     fixture = TestBed.createComponent(LoginComponent);

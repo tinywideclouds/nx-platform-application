@@ -4,19 +4,10 @@
     "outDir": "../../../dist/out-tsc",
     "declaration": true,
     "declarationMap": true,
-<<<<<<<< HEAD:libs/platform/node-auth/tsconfig.lib.json
     "inlineSources": true
   },
   "exclude": [
     "src/**/*.spec.ts",
-========
-    "inlineSources": true,
-    "types": []
-  },
-  "exclude": [
-    "src/**/*.spec.ts",
-    "src/test-setup.ts",
->>>>>>>> 72ff8b360a9a523651ce0ee410ea3bd92d7902d8:libs/platform/logger/tsconfig.lib.json
     "jest.config.ts",
     "src/**/*.test.ts",
     "vite.config.ts",
@@ -30,12 +21,8 @@
     "src/**/*.test.jsx",
     "src/**/*.spec.jsx"
   ],
-<<<<<<<< HEAD:libs/platform/node-auth/tsconfig.lib.json
   "include": [
     "src/**/*.ts",
     "src/lib/express.d.ts"
   ]
-========
-  "include": ["src/**/*.ts"]
->>>>>>>> 72ff8b360a9a523651ce0ee410ea3bd92d7902d8:libs/platform/logger/tsconfig.lib.json
 }

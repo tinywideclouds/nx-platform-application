@@ -1,32 +1,27 @@
-// Create this new file: libs/messenger/contacts-ui/vitest.config.mts
-
 /// <reference types='vitest' />
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import {join} from "path";
 
+// THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/contacts-ui',
-
-  plugins: [
-    angular({  }),
-    nxViteTsPaths()
-  ],
-
+  cacheDir: '../../../node_modules/.vite/libs/contacts-data-access',
+  plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'contacts-ui',
+    name: 'contacts-data-access',
+    watch: false,
     globals: true,
     environment: 'jsdom',
+    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     setupFiles: ['src/test-setup.ts'],
     reporters: ['default', 'html'],
     outputFile: {
-      html: join(__dirname, '../../../dist/test-reports/contacts-ui/index.html'),
+      html: join(__dirname, '../../../dist/test-reports/contacts-data-access/index.html'),
     },
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/contacts-ui',
+      reportsDirectory: '../../coverage/libs/contacts-data-access',
       provider: 'v8' as const,
     },
   },

@@ -1,3 +1,7 @@
+vi.mock('@angular/material/progress-spinner', () => ({
+  MatProgressSpinnerModule: {}, // Provide a fake module
+}));
+
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -6,6 +10,7 @@ import { User } from '@nx-platform-application/platform-types';
 
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { MockAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
+import { CUSTOM_ELEMENTS_SCHEMA } from "@angular/core";
 
 const mockUser: User = {
   id: '1',
@@ -30,6 +35,13 @@ describe('LoginSuccessComponent', () => {
         { provide: Router, useValue: mockRouter },
         { provide: IAuthService, useClass: MockAuthService },
       ],
+      schemas: [
+        CUSTOM_ELEMENTS_SCHEMA // 2. Add the schema here
+      ]
+    }).overrideComponent(LoginSuccessComponent, {
+      set: {
+        imports: []
+      }
     }).compileComponents();
 
     mockAuthService = TestBed.inject(IAuthService) as unknown as MockAuthService;

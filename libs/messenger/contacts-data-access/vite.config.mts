@@ -1,28 +1,38 @@
-/// <reference types='vitest' />
+// libs/messenger/contacts-data-access/vite.config.mts
+
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
+import dts from 'vite-plugin-dts'; // 1. Import dts for type definitions
 
 export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/contacts-data-access',
-  plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
-  test: {
-    name: 'contacts-data-access',
-    watch: false,
-    globals: true,
-    environment: 'jsdom',
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    setupFiles: ['src/test-setup.ts'],
-    reporters: ['default'],
-    coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/contacts-data-access',
-      provider: 'v8' as const,
+  plugins: [
+    // 2. Tell the angular plugin to use the lib tsconfig
+    angular({
+      tsconfig: 'tsconfig.lib.json',
+    }),
+    nxViteTsPaths(),
+    nxCopyAssetsPlugin(['*.md']),
+    // 3. Add the dts plugin to generate type files
+    dts({
+      entryRoot: 'src',
+      tsconfigPath: 'tsconfig.lib.json',
+    }),
+  ],
+
+  // 4. ADD THIS BUILD CONFIGURATION
+  build: {
+    outDir: '../../../dist/libs/messenger/contacts-data-access',
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    lib: {
+      entry: 'src/index.ts', // This is the library entry point
+      name: 'contacts-data-access',
+      fileName: 'index',
+      formats: ['es' as const],
     },
   },
 }));
