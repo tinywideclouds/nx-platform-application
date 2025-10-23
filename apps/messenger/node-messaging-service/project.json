@@ -75,7 +75,7 @@
       },
       "configurations": {
         "development": {
-          "buildTarget": "node-messaging-service:build:development",
+          "buildTarget": "node-messaging-service:build:development"
         },
         "production": {
           "buildTarget": "node-messaging-service:build:production"

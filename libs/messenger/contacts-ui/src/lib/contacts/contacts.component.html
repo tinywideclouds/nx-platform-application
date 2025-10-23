@@ -1,0 +1,42 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>Add Contact</mat-card-title>
+  </mat-card-header>
+  <mat-card-content class="add-contact-form">
+    <mat-form-field appearance="outline">
+      <mat-label>Contact Email</mat-label>
+      <input
+        matInput
+        #emailInput
+        placeholder="friend@example.com"
+        (keyup.enter)="onAddContact(emailInput.value); emailInput.value = ''"
+      />
+    </mat-form-field>
+
+    <button
+      mat-raised-button
+      color="primary"
+      (click)="onAddContact(emailInput.value); emailInput.value = ''"
+    >
+      Add
+    </button>
+  </mat-card-content>
+</mat-card>
+
+<mat-card class="contacts-list">
+  <mat-card-header>
+    <mat-card-title>Your Contacts</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    <mat-list role="list">
+      @for (contact of contacts(); track contact.id) {
+        <mat-list-item role="listitem">
+          <span matListItemTitle>{{ contact.alias }}</span>
+          <span matListItemLine>{{ contact.email }}</span>
+        </mat-list-item>
+      } @empty {
+        <mat-list-item>You have no contacts yet.</mat-list-item>
+      }
+    </mat-list>
+  </mat-card-content>
+</mat-card>

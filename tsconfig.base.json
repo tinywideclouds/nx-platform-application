@@ -18,6 +18,12 @@
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
       ],
+      "@nx-platform-application/console-logger": [
+        "libs/platform/console-logger/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-data-access": [
+        "libs/messenger/contacts-data-access/src/index.ts"
+      ],
       "@nx-platform-application/contacts-ui": [
         "libs/messenger/contacts-ui/src/index.ts"
       ],

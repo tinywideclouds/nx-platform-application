@@ -1,1 +1,1 @@
-export * from './lib/contacts-ui/contacts-ui';
+export * from './lib/contacts/contacts.component';
