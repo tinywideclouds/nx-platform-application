@@ -1,10 +1,10 @@
 {
   "name": "ng-action-intention",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "prefix": "app",
   "sourceRoot": "apps/messenger/ng-action-intention/src",
-  "tags": [],
+  "tags": ["scope:messenger"],
   "targets": {
     "build": {
       "executor": "@angular/build:application",
@@ -90,7 +90,8 @@
         "parallel": true,
         "commands": [
           "nx serve ng-action-intention --configuration=development-integrated",
-          "nx serve identity-service"
+          "nx serve identity-service",
+          "wait-on http://localhost:3000/api/health-check && nx serve node-messaging-service"
         ]
       }
     },

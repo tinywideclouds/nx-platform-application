@@ -31,6 +31,9 @@
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/action_intention/*"
       ],
+      "@nx-platform-application/node-auth": [
+        "libs/platform/node-auth/src/index.ts"
+      ],
       "@nx-platform-application/platform-auth-data-access": [
         "libs/platform/auth-data-access/src/index.ts"
       ],
