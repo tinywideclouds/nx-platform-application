@@ -19,7 +19,7 @@
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "../../../coverage/libs/messenger/contacts-data-access",
+        "reportsDirectory": "coverage/libs/messenger/contacts-data-access",
         "configFile": "libs/messenger/contacts-data-access/vitest.config.mts"
       }
     },

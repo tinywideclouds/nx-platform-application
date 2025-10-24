@@ -25,7 +25,6 @@ export default defineConfig(() => ({
 
   // 4. ADD THIS BUILD CONFIGURATION
   build: {
-    outDir: '../../../dist/libs/messenger/contacts-data-access',
     emptyOutDir: true,
     reportCompressedSize: true,
     lib: {

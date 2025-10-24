@@ -1,5 +1,5 @@
 import { Temporal } from '@js-temporal/polyfill';
-import type { RawApplicationState } from '../types/models';
+import type { RawApplicationState } from './models';
 
 /**
  * A simplified manifest returned by `writeFile` as a receipt.

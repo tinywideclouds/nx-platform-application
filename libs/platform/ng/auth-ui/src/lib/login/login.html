@@ -1,0 +1,22 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>Platform Login</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    @if (isAuthenticated()) {
+    <h2>Welcome, {{ currentUser()?.alias }}!</h2>
+    <p>You are already logged in.</p>
+    } @else {
+    <p>Please log in to continue.</p>
+    }
+  </mat-card-content>
+  <mat-card-actions>
+    @if (isAuthenticated()) {
+    <button mat-stroked-button color="warn" (click)="logout()">Logout</button>
+    } @else {
+    <a mat-raised-button color="primary" [href]="googleLoginUrl">
+      Login with Google
+    </a>
+    }
+  </mat-card-actions>
+</mat-card>

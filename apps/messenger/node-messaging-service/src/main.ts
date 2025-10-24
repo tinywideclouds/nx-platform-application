@@ -5,7 +5,7 @@ import express, {
 } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { logger } from './internal/services/logger.js';
+import { logger } from '@nx-platform-application/node-logger';
 import { Firestore } from '@google-cloud/firestore';
 import axios from 'axios';
 

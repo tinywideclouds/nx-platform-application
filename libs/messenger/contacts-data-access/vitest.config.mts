@@ -7,7 +7,7 @@ import {join} from "path";
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/contacts-data-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/contacts-data-access',
   plugins: [angular(), nxViteTsPaths()],
   test: {
     name: 'contacts-data-access',
@@ -18,10 +18,10 @@ export default defineConfig({
     setupFiles: ['src/test-setup.ts'],
     reporters: ['default', 'html'],
     outputFile: {
-      html: join(__dirname, '../../../dist/test-reports/contacts-data-access/index.html'),
+      html: join(__dirname, '../../../dist/test-reports/libs/messengercontacts-data-access/index.html'),
     },
     coverage: {
-      reportsDirectory: '../../coverage/libs/contacts-data-access',
+      reportsDirectory: '../../../coverage/libs/messenger/contacts-data-access',
       provider: 'v8' as const,
     },
   },

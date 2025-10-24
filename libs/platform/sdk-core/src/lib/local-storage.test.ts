@@ -1,7 +1,7 @@
 import { LocalStorage } from './local-storage';
-import { RawApplicationState } from '../types/models';
+import { RawApplicationState } from './models';
 import { Temporal } from '@js-temporal/polyfill';
-import { ISODateTimeString } from '../types/types';
+import { ISODateTimeString } from './types';
 
 // Helper to create a mock raw state for testing
 const createMockRawState = (): RawApplicationState => ({

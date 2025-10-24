@@ -20,7 +20,7 @@
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "configFile": "libs/messenger/types/vitest.config.mts",
-        "reportsDirectory": "../../../coverage/libs/messenger/types"
+        "reportsDirectory": "coverage/libs/messenger/types"
       }
     }
   }

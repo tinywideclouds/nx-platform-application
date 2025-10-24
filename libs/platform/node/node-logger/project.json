@@ -1,0 +1,30 @@
+{
+  "name": "node-logger",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/node/node-logger/src",
+  "prefix": "aui",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/platform/node/node-logger",
+        "configFile": "libs/platform/node/node-logger/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/node/node-logger",
+        "configFile": "libs/platform/node/node-logger/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

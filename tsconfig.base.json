@@ -13,41 +13,43 @@
     "moduleResolution": "bundler",
     "target": "ESNext",
     "module": "esnext",
-    "lib": ["es2022", "dom"],
+    "lib": ["es2022"],
     "paths": {
+      "@nx-platform-application/internal-tools": [
+        "libs/internal-tools/src/index.ts"
+      ],
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
-      ],
-      "@nx-platform-application/console-logger": [
-        "libs/platform/console-logger/src/index.ts"
       ],
       "@nx-platform-application/contacts-data-access": [
         "libs/messenger/contacts-data-access/src/index.ts"
       ],
-      "@nx-platform-application/contacts-ui": [
-        "libs/messenger/contacts-ui/src/index.ts"
-      ],
-      "@nx-platform-application/internal-tools": [
-        "libs/internal-tools/src/index.ts"
-      ],
-      "@nx-platform-application/logger": ["libs/platform/logger/src/index.ts"],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/action_intention/*"
       ],
+      "@nx-platform-application/contacts-ui": [
+        "libs/messenger/contacts-ui/src/index.ts"
+      ],
       "@nx-platform-application/node-auth": [
-        "libs/platform/node-auth/src/index.ts"
+        "libs/platform/node/node-auth/src/index.ts"
+      ],
+      "@nx-platform-application/node-logger": [
+        "libs/platform/node/node-logger/src/index.ts"
+      ],
+      "@nx-platform-application/console-logger": [
+        "libs/platform/ng/console-logger/src/index.ts"
       ],
       "@nx-platform-application/platform-auth-data-access": [
-        "libs/platform/auth-data-access/src/index.ts"
+        "libs/platform/ng/auth-data-access/src/index.ts"
       ],
       "@nx-platform-application/platform-auth-data-access/testing": [
-        "libs/platform/auth-data-access/src/testing.ts"
+        "libs/platform/ng/auth-data-access/src/testing.ts"
       ],
       "@nx-platform-application/platform-auth-ui": [
-        "libs/platform/auth-ui/src/index.ts"
+        "libs/platform/ng/auth-ui/src/index.ts"
       ],
       "@nx-platform-application/platform-protos": [
         "libs/platform/protos/src/index.ts"

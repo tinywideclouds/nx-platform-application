@@ -10,7 +10,7 @@ import {join} from "path";
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/platform/contacts-ui',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/contacts-ui',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.lib.json')
@@ -24,7 +24,6 @@ export default defineConfig(() => ({
   ],
 
   build: {
-    outDir: '../../../dist/libs/platform/contacts-ui',
     emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: {

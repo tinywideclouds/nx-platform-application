@@ -5,6 +5,14 @@
   "projectType": "application",
   "tags": ["scope:messenger"],
   "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "apps/messenger/node-messaging-service/vitest.config.mts",
+        "reportsDirectory": "coverage/apps/messenger/node-messaging-service"
+      }
+    },
     "build": {
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],

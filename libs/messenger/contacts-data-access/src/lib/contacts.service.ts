@@ -4,14 +4,14 @@ import { inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { User } from '@nx-platform-application/platform-types'; // [cite: 11, 23]
 import { catchError, EMPTY, tap } from 'rxjs';
-import { LoggerService } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/console-logger';
 
 @Injectable({
   providedIn: 'root', // [cite: 21]
 })
 export class ContactsService {
   private http = inject(HttpClient);
-  private logger = inject(LoggerService);
+  private logger = inject(Logger);
 
   // --- State ---
   // The single source of truth for the user's contacts list [cite: 14]

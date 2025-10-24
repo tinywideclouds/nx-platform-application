@@ -1,7 +1,8 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "commonjs",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "module": "esnext",
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "importHelpers": true,

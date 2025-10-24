@@ -110,7 +110,7 @@
         "{options.reportsDirectory}"
       ],
       "options": {
-        "reportsDirectory": "../../../coverage/apps/messenger/ng-action-intention",
+        "reportsDirectory": "coverage/apps/messenger/ng-action-intention",
         "configFile": "apps/messenger/ng-action-intention/vitest.config.mts"
       }
     }

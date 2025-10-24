@@ -20,7 +20,7 @@
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "configFile": "libs/platform/types/vitest.config.mts",
-        "reportsDirectory": "../../../coverage/libs/platform/types"
+        "reportsDirectory": "coverage/libs/platform/types"
       }
     }
   }

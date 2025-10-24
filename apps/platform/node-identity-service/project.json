@@ -1,0 +1,103 @@
+{
+  "name": "node-identity-service",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/platform/node-identity-service/src",
+  "projectType": "application",
+  "tags": ["scope:platform"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "{workspaceRoot}/coverage/apps/platform/node-identity-service",
+        "configFile": "apps/platform/node-identity-service/vitest.config.mts"
+      },
+      "configurations": {
+        "unit": {
+          "exclude": ["src/**/*.integration.test.ts"]
+        },
+        "integration": {
+          "include": ["src/**/*.integration.test.ts"],
+          "reporters": ["default"]
+        }
+      }
+    },
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "dist/apps/platform/node-identity-service",
+        "format": ["esm"],
+        "bundle": false,
+        "main": "apps/platform/node-identity-service/src/main.ts",
+        "tsConfig": "apps/platform/node-identity-service/tsconfig.app.json",
+        "assets": ["apps/platform/node-identity-service/src/assets"],
+        "generatePackageJson": true,
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "prune-lockfile": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "executor": "@nx/js:prune-lockfile",
+      "outputs": [
+        "{workspaceRoot}/dist/apps/platform/node-identity-service/package.json",
+        "{workspaceRoot}/dist/apps/platform/node-identity-service/package-lock.json"
+      ],
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "copy-workspace-modules": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "outputs": [
+        "{workspaceRoot}/dist/apps/platform/node-identity-service/workspace_modules"
+      ],
+      "executor": "@nx/js:copy-workspace-modules",
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "prune": {
+      "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
+      "executor": "nx:noop"
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "node-identity-service:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "node-identity-service:build:development"
+        },
+        "production": {
+          "buildTarget": "node-identity-service:build:production"
+        }
+      }
+    }
+  }
+}

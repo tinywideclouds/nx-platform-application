@@ -4,7 +4,7 @@ import {
   HttpTestingController,
 } from '@angular/common/http/testing';
 import { ContactsService } from './contacts.service';
-import { LoggerService } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/console-logger';
 import { User } from '@nx-platform-application/platform-types';
 
 // Mock Logger Service
@@ -24,7 +24,7 @@ const MOCK_USERS: User[] = [
 describe('ContactsService (Zoneless)', () => {
   let service: ContactsService;
   let httpTestingController: HttpTestingController;
-  let logger: LoggerService;
+  let logger: Logger;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -32,14 +32,14 @@ describe('ContactsService (Zoneless)', () => {
       providers: [
         ContactsService,
         // Provide the mock logger
-        { provide: LoggerService, useClass: MockLoggerService },
+        { provide: Logger, useClass: MockLoggerService },
       ],
     });
 
     // Inject the services
     service = TestBed.inject(ContactsService);
     httpTestingController = TestBed.inject(HttpTestingController);
-    logger = TestBed.inject(LoggerService);
+    logger = TestBed.inject(Logger);
   });
 
   afterEach(() => {

@@ -1,6 +1,6 @@
 import { Temporal } from '@js-temporal/polyfill';
 import type { StorageProvider, FileManifest } from './storage-provider';
-import type { RawApplicationState } from '../types/models';
+import type { RawApplicationState } from './models';
 
 export class LocalStorage implements StorageProvider {
   async readFile(path: string): Promise<RawApplicationState> {
