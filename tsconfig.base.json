@@ -57,6 +57,9 @@
       ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
+      ],
+      "@nx-platform-application/sdk-core": [
+        "libs/platform/sdk-core/src/index.ts"
       ]
     }
   },

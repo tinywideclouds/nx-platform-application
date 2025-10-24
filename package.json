@@ -33,6 +33,7 @@
     "rxjs": "~7.8.2"
   },
   "devDependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
     "@analogjs/platform": "^1.21.3",
     "@analogjs/vite-plugin-angular": "~1.21.3",
     "@analogjs/vitest-angular": "~1.21.3",
