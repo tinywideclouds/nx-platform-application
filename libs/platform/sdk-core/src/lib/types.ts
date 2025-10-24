@@ -5,3 +5,13 @@
  * It is still just a string at runtime.
  */
 export type ISODateTimeString = string & { readonly __brand: 'ISODateTimeString' };
+
+export interface PublicKeys {
+  encKey: Uint8Array;
+  sigKey: Uint8Array;
+}
+
+export interface PrivateKeys {
+  encKey: CryptoKey; // The raw private key object
+  sigKey: CryptoKey; // The raw private key object
+}

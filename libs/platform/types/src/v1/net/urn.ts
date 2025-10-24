@@ -35,19 +35,27 @@ export class URN {
   }
 
   /**
-   * Parses a raw string into a structured URN, validating its format.
-   * @param s The URN string to parse (e.g., "urn:sm:user:alice").
+   * Parses a canonical string representation into a URN object.
+   * @param s The string to parse (e.g., "urn:sm:user:12345").
    * @throws {Error} if the string format is invalid.
    */
   public static parse(s: string): URN {
     const parts = s.split(URN.DELIMITER);
+
+    // --- FIX ADDED (3 Checks) ---
     if (parts.length !== 4) {
       throw new Error(`Invalid URN format: expected 4 parts, but got ${parts.length}`);
     }
     if (parts[0] !== URN.SCHEME) {
       throw new Error(`Invalid URN format: invalid scheme '${parts[0]}', expected '${URN.SCHEME}'`);
     }
+    if (parts[1] !== URN.NAMESPACE) {
+      throw new Error(`Invalid URN format: invalid namespace '${parts[1]}', expected '${URN.NAMESPACE}'`);
+    }
+    // --- END FIX ---
+
     // Delegate final validation to the constructor via create()
+    // We can safely call create now, as it only validates parts 2 and 3
     return URN.create(parts[2], parts[3]);
   }
 
@@ -89,12 +97,10 @@ export function urnToPb(urn: URN): UrnPb {
 
 /**
  * Maps a UrnPb (Proto object) back to an idiomatic URN (TS class).
- * Uses the URN.create factory to ensure class invariants.
- * @param urnPb The UrnPb protobuf message.
+ * @param pb The UrnPb protobuf message.
  * @returns A URN class instance.
  */
-export function urnFromPb(urnPb: UrnPb): URN {
-  // Uses the static factory, which ensures the namespace is 'sm'
-  // just like the URN.parse() and URN.create() methods.
-  return URN.create(urnPb.entityType, urnPb.entityId);
+export function urnFromPb(pb: UrnPb): URN {
+  // Use 'create' to ensure validation logic is applied
+  return URN.create(pb.entityType, pb.entityId);
 }

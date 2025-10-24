@@ -1,36 +1,36 @@
-// Defines the message contract for sending push notification requests. [cite: 56]
+// Defines the message contract for sending push notification requests.
 syntax = "proto3";
 
 package action_intention.notification.v1;
-// Specifies the Go package path for the generated code. [cite: 57]
+// Specifies the Go package path for the generated code.
 option go_package = "github.com/illmade-knight/go-action-intention-protos/gen/go/notification/v1;notification_v1"; //[cite: 58]
-// DeviceTokenPb represents a single push notification token for a user's device. [cite: 59]
-message DeviceTokenPb { //[cite: 60]
+// DeviceTokenPb represents a single push notification token for a user's device.
+message DeviceTokenPb {
   // The platform-specific token string from the device.
-  string token = 1; //[cite: 60]
+  string token = 1;
   // The platform identifier, e.g., "ios", "android".
-  string platform = 2; //[cite: 61]
-} //[cite: 62]
+  string platform = 2;
+}
 
 // NotificationRequestPb is the message published by the routing-service and
-// consumed by the notification-service. [cite: 63]
-message NotificationRequestPb { //[cite: 64]
+// consumed by the notification-service.
+message NotificationRequestPb {
   // The URN of the end-user this notification is for.
-  // e.g., "urn:sm:user:user-bob" [cite: 65]
+  // e.g., "urn:sm:user:user-bob"
   string recipient_id = 1;
 
   // A list of all device tokens associated with the recipient.
-  repeated DeviceTokenPb tokens = 2; //[cite: 66]
+  repeated DeviceTokenPb tokens = 2;
 
   // The user-facing content of the notification.
-  message Content { //[cite: 67]
+  message Content {
     string title = 1;
     string body = 2;
     string sound = 3;
-  } //[cite: 68]
+  }
   Content content = 3;
 
   // The non-visible, structured data payload to be delivered to the client application.
-  // This allows the client app to take action, e.g., fetching a specific message. [cite: 69]
+  // This allows the client app to take action, e.g., fetching a specific message.
   map<string, string> data_payload = 4;
 }

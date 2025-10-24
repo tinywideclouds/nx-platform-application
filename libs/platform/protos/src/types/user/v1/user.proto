@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package types.user.v1;
 
-option go_package = "github.com/illmade-knight/go-platform-protos/gen/go/sm/v1;sm_v1";
+option go_package = "github.com/illmade-knight/go-platform-protos/gen/go/user/v1;user_v1";
 // Represents a single contact within a user's address book.
 message UserPb {
   // The contact's document ID from the address_book subcollection.

@@ -74,11 +74,21 @@ export default [
                 'scope:types-platform',
               ],
             },
+            // Contacts projects can depend on platform.
+            {
+              sourceTag: 'scope:contacts',
+              onlyDependOnLibsWithTags: [
+                'scope:contacts',
+                'scope:platform',
+                'scope:types-platform',
+              ],
+            },
             // Messenger projects can depend on its types and platform, but NOT protos directly.
             {
               sourceTag: 'scope:messenger',
               onlyDependOnLibsWithTags: [
                 'scope:messenger',
+                'scope:contacts',
                 'scope:platform',
                 'scope:types-messenger',
                 'scope:types-platform',

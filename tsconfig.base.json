@@ -15,14 +15,29 @@
     "module": "esnext",
     "lib": ["es2022"],
     "paths": {
-      "@nx-platform-application/internal-tools": [
-        "libs/internal-tools/src/index.ts"
+      "@nx-platform-application/chat-data-access": [
+        "libs/messenger/chat-data-access/src/index.ts"
       ],
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
       ],
+      "@nx-platform-application/console-logger": [
+        "libs/platform/ng/console-logger/src/index.ts"
+      ],
       "@nx-platform-application/contacts-data-access": [
-        "libs/messenger/contacts-data-access/src/index.ts"
+        "libs/contacts/contacts-data-access/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-ui": [
+        "libs/contacts/contacts-ui/src/index.ts"
+      ],
+      "@nx-platform-application/crypto-data-access": [
+        "libs/platform/ng/crypto-data-access/src/index.ts"
+      ],
+      "@nx-platform-application/internal-tools": [
+        "libs/internal-tools/src/index.ts"
+      ],
+      "@nx-platform-application/key-data-access": [
+        "libs/platform/ng/key-data-access/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
@@ -30,17 +45,11 @@
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/action_intention/*"
       ],
-      "@nx-platform-application/contacts-ui": [
-        "libs/messenger/contacts-ui/src/index.ts"
-      ],
       "@nx-platform-application/node-auth": [
         "libs/platform/node/node-auth/src/index.ts"
       ],
       "@nx-platform-application/node-logger": [
         "libs/platform/node/node-logger/src/index.ts"
-      ],
-      "@nx-platform-application/console-logger": [
-        "libs/platform/ng/console-logger/src/index.ts"
       ],
       "@nx-platform-application/platform-auth-data-access": [
         "libs/platform/ng/auth-data-access/src/index.ts"
@@ -56,6 +65,9 @@
       ],
       "@nx-platform-application/platform-protos/*": [
         "libs/platform/protos/dist/ts/src/types/*"
+      ],
+      "@nx-platform-application/platform-storage": [
+        "libs/platform/ng/storage/src/index.ts"
       ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"

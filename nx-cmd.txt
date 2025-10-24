@@ -1,0 +1,14 @@
+nx run-many --target-test
+nx show project platform-protos --web
+nx run messenger-protos:generate
+nx g @nx/workspace:remove
+nx g @nx/workspace:move --project=node-contacts-service --destination=apps/contacts/node-contacts-service
+
+## full path for directory *including* lib name
+nx g @nx/angular:library --name=chat-data-access --directory=libs/messenger/chat-data-access --tags="scope:messenger"
+
+nx g @nx/angular:library --name=key-data-access --directory=libs/platform/ng/key-data-access --tags="scope:platform"
+
+nx g @nx/angular:library --name=crypto-data-access --directory=libs/platform/ng/crypto-data-access --tags="scope:platform"
+
+nx g @nx/angular:library --name=platform-storage --directory=libs/platform/ng/storage --tags="scope:platform"

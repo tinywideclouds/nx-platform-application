@@ -1,0 +1,94 @@
+{
+  "name": "node-contacts-service",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/contacts/node-contacts-service/src",
+  "projectType": "application",
+  "tags": ["scope:contacts"],
+  "targets": {
+    "build": {
+      "test": {
+        "executor": "@nx/vite:test",
+        "outputs": ["{options.reportsDirectory}"],
+        "options": {
+          "configFile": "apps/contacts/node-contacts-service/vitest.config.mts",
+          "reportsDirectory": "coverage/apps/contacts/node-contacts-service"
+        }
+      },
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "dist/apps/contacts/node-contacts-service",
+        "format": ["cjs"],
+        "bundle": false,
+        "main": "apps/contacts/node-contacts-service/src/main.ts",
+        "tsConfig": "apps/contacts/node-contacts-service/tsconfig.app.json",
+        "assets": ["apps/contacts/node-contacts-service/src/assets"],
+        "generatePackageJson": true,
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "prune-lockfile": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "executor": "@nx/js:prune-lockfile",
+      "outputs": [
+        "{workspaceRoot}/dist/apps/contacts/node-contacts-service/package.json",
+        "{workspaceRoot}/dist/apps/contacts/node-contacts-service/package-lock.json"
+      ],
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "copy-workspace-modules": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "outputs": [
+        "{workspaceRoot}/dist/apps/contacts/node-contacts-service/workspace_modules"
+      ],
+      "executor": "@nx/js:copy-workspace-modules",
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "prune": {
+      "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
+      "executor": "nx:noop"
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "node-contacts-service:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "node-contacts-service:build:development"
+        },
+        "production": {
+          "buildTarget": "node-contacts-service:build:production"
+        }
+      }
+    }
+  }
+}

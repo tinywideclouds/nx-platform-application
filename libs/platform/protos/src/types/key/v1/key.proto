@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package types.key.v1;
+
+// This option should match the go_package option in your other .proto files,
+// like urn.proto. It tells the Go generator where to output the .go file.
+option go_package = "github.com/illmade-knight/go-platform-protos/gen/go/key/v1;key_v1";
+
+// PublicKeysPb is the on-the-wire message containing a user's public keys.
+// This is the message that will be serialized and stored by the go-key-service.
+message PublicKeysPb {
+  // The public encryption key (e.g., Curve25519) as a base64-encoded string.
+  string encKey = 1;
+
+  // The public signature key (e.g., Ed25519) as a base64-encoded string.
+  string sigKey = 2;
+}
