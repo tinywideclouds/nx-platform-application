@@ -14,3 +14,7 @@ nx g @nx/angular:library --name=crypto-data-access --directory=libs/platform/ng/
 nx g @nx/angular:library --name=platform-storage --directory=libs/platform/ng/storage --tags="scope:platform"
 
 nx g @nx/workspace:move --project=chat-data-access --destination=libs/ng/chat-state
+
+
+
+nx g @nx/angular:library --name=chat-live-data --directory=libs/messenger/chat-live-data --tags="scope:messenger"

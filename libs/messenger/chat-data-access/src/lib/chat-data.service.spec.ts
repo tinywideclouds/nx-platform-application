@@ -10,40 +10,48 @@ import { URN } from '@nx-platform-application/platform-types';
 import { ChatDataService } from './chat-data.service';
 
 // --- Mock messenger-types ---
+// Mock all the helpers this service uses
 vi.mock('@nx-platform-application/messenger-types', async () => ({
   serializeEnvelopeToJson: vi.fn(),
   deserializeJsonToEnvelopes: vi.fn(),
+  deserializeJsonToDigest: vi.fn(),
 }));
 
 import {
   SecureEnvelope,
+  EncryptedDigest,
   serializeEnvelopeToJson,
   deserializeJsonToEnvelopes,
+  deserializeJsonToDigest,
 } from '@nx-platform-application/messenger-types';
 // --- End Mock ---
 
 
 // --- Mock Data ---
-const mockSmartEnvelope: SecureEnvelope = {
-  senderId: URN.parse('urn:sm:user:123'),
-  recipientId: URN.parse('urn:sm:user:456'),
-  messageId: 'msg-123',
-  encryptedData: new Uint8Array([1]),
-  encryptedSymmetricKey: new Uint8Array([2]),
-  signature: new Uint8Array([3]),
+const mockSmartEnvelope: SecureEnvelope = { /* ... valid SecureEnvelope ... */ } as any;
+const mockEncryptedDigest: EncryptedDigest = {
+  items: [
+    { conversationUrn: URN.parse('urn:sm:user:sender1'), encryptedSnippet: new Uint8Array([1, 1]) },
+  ],
 };
+const mockConversationUrn = URN.parse('urn:sm:user:chatpartner');
 
-const mockUser = URN.parse('urn:sm:user:456');
-const mockJsonString = '{"senderId":"urn:sm:user:123"}';
-const mockJsonResponse = { envelopes: [{ senderId: 'urn:sm:user:123' }] };
+// Payloads for API interaction
+const mockJsonStringToSend = '{"senderId":"urn:sm:user:123"}';
+const mockCountResponse = { hasNewMessages: true };
+const mockDigestJsonResponse = { items: [{ conversationUrn: 'urn:sm:user:sender1', encryptedSnippet: 'AQE=' }] }; // Example raw JSON
+const mockHistoryJsonResponse = { envelopes: [{ senderId: 'urn:sm:user:123' }] }; // Example raw JSON
+const baseApiUrl = '/api/messages';
 
 describe('ChatDataService', () => {
   let service: ChatDataService;
   let httpMock: HttpTestingController;
 
-  // Define URLs
-  const sendUrl = '/api/messages/send';
-  const receiveUrl = `/api/messages/receive/${mockUser.toString()}`;
+  // Define URLs based on the final API design
+  const sendUrl = `${baseApiUrl}/send`;
+  const countUrl = `${baseApiUrl}/count`;
+  const digestUrl = `${baseApiUrl}/digest`;
+  const historyUrl = `${baseApiUrl}/history/${mockConversationUrn.toString()}`;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -53,61 +61,89 @@ describe('ChatDataService', () => {
     service = TestBed.inject(ChatDataService);
     httpMock = TestBed.inject(HttpTestingController);
 
-    // Reset mocks
+    // Reset mocks before each test
     vi.clearAllMocks();
 
-    // Setup mock implementations
-    (serializeEnvelopeToJson as Mock).mockReturnValue(mockJsonString);
+    // Setup mock implementations for serializers/deserializers
+    (serializeEnvelopeToJson as Mock).mockReturnValue(mockJsonStringToSend);
     (deserializeJsonToEnvelopes as Mock).mockReturnValue([mockSmartEnvelope]);
+    (deserializeJsonToDigest as Mock).mockReturnValue(mockEncryptedDigest);
   });
 
   afterEach(() => {
-    httpMock.verify();
+    httpMock.verify(); // Ensures no outstanding HTTP requests
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
-  describe('fetchMessages', () => {
-    // Corrected test with async/await
-    it('should GET, deserialize, and return smart envelopes', async () => {
-      // 1. Get a promise *before* flushing
-      const promise = firstValueFrom(service.fetchMessages());
-
-      // 2. Expect the HTTP call and flush
-      const req = httpMock.expectOne(receiveUrl);
-      expect(req.request.method).toBe('GET');
-      req.flush(mockJsonResponse);
-
-      // 3. Await the promise
-      const envelopes = await promise;
-
-      // 4. Run assertions
-      expect(envelopes).toEqual([mockSmartEnvelope]);
-      expect(deserializeJsonToEnvelopes).toHaveBeenCalledWith(mockJsonResponse);
-    });
-  });
-
   describe('postMessage', () => {
-    // Corrected test with async/await
-    it('should serialize and POST a JSON string', async () => {
-      // 1. Get a promise *before* flushing
+    it('should serialize the envelope and POST the JSON string', async () => {
       const promise = firstValueFrom(service.postMessage(mockSmartEnvelope));
 
-      // 2. Verify the serializer was called
+      // Verify the serializer was called
       expect(serializeEnvelopeToJson).toHaveBeenCalledWith(mockSmartEnvelope);
 
-      // 3. Expect the HTTP call and flush
+      // Verify the HTTP call
       const req = httpMock.expectOne(sendUrl);
       expect(req.request.method).toBe('POST');
       expect(req.request.headers.get('Content-Type')).toBe('application/json');
-      expect(req.request.body).toBe(mockJsonString);
-
+      expect(req.request.body).toBe(mockJsonStringToSend); // Check body is the string
       req.flush(null, { status: 201, statusText: 'Created' });
 
-      // 4. Await the promise to ensure it completes
-      await promise;
+      await promise; // Ensure completion
+    });
+  });
+
+  describe('checkForNewMessages', () => {
+    it('should GET the count endpoint and return the boolean response', async () => {
+      const promise = firstValueFrom(service.checkForNewMessages());
+
+      // Verify the HTTP call
+      const req = httpMock.expectOne(countUrl);
+      expect(req.request.method).toBe('GET');
+      req.flush(mockCountResponse); // Return the mock JSON
+
+      // Verify the result
+      const result = await promise;
+      expect(result).toEqual(mockCountResponse);
+    });
+  });
+
+  describe('fetchMessageDigest', () => {
+    it('should GET the digest endpoint and deserialize the JSON response', async () => {
+      const promise = firstValueFrom(service.fetchMessageDigest());
+
+      // Verify the HTTP call
+      const req = httpMock.expectOne(digestUrl);
+      expect(req.request.method).toBe('GET');
+      req.flush(mockDigestJsonResponse); // Return the raw JSON
+
+      // Verify the result
+      const result = await promise;
+      // Check that the raw JSON was passed to the deserializer
+      expect(deserializeJsonToDigest).toHaveBeenCalledWith(mockDigestJsonResponse);
+      // Check that the final result is the "smart" digest model
+      expect(result).toEqual(mockEncryptedDigest);
+    });
+  });
+
+  describe('fetchConversationHistory', () => {
+    it('should GET the history endpoint and deserialize the JSON response', async () => {
+      const promise = firstValueFrom(service.fetchConversationHistory(mockConversationUrn));
+
+      // Verify the HTTP call
+      const req = httpMock.expectOne(historyUrl);
+      expect(req.request.method).toBe('GET');
+      req.flush(mockHistoryJsonResponse); // Return the raw JSON
+
+      // Verify the result
+      const result = await promise;
+      // Check that the raw JSON was passed to the deserializer
+      expect(deserializeJsonToEnvelopes).toHaveBeenCalledWith(mockHistoryJsonResponse);
+      // Check that the final result is the array of "smart" envelope models
+      expect(result).toEqual([mockSmartEnvelope]);
     });
   });
 });

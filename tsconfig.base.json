@@ -18,6 +18,9 @@
       "@nx-platform-application/chat-data-access": [
         "libs/messenger/chat-data-access/src/index.ts"
       ],
+      "@nx-platform-application/chat-live-data": [
+        "libs/messenger/chat-live-data/src/index.ts"
+      ],
       "@nx-platform-application/chat-state": [
         "libs/messenger/chat-state/src/index.ts"
       ],

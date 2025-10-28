@@ -1,77 +1,102 @@
-# **Chat Data Access Library**
+# 🧠 libs/messenger/chat-state
 
-This library provides the primary high-level service for handling all end-to-end encrypted chat functionality.
+This library acts as the central orchestrator and state manager for the messenger feature.
 
-## **Purpose**
+## 🎯 Purpose
 
-The ChatService is the central "smart facade" or "orchestrator" for all chat operations. It is responsible for coordinating multiple platform-level services to perform complex actions like sending an encrypted message or polling for new messages.
+The `ChatService` within this library serves as the "brains" of the chat system. Its responsibilities include:
 
-It acts as the single point of entry for any UI component that needs to interact with the chat system.
+1.  **State Management:** Holding the application state for chat, primarily:
+  * The list of active conversations (`activeConversations`).
+  * The messages for the currently selected conversation (`messages`).
+  * (Internal state like the currently selected conversation).
+2.  **Orchestration:** Coordinating interactions between the UI, the platform services (Auth, Keys, Crypto), the historical data service (`chat-data-access`), and the real-time data service (`chat-live-data`).
+3.  **Business Logic:** Implementing core chat workflows like sending messages, loading conversation history, and processing incoming messages (including decryption and verification).
+4.  **Live/Fallback Handling:** Managing the transition between receiving live updates via WebSocket and falling back to HTTP polling when the connection is lost.
 
-## **Architecture & Dependencies**
+---
 
-This service perfectly demonstrates the "facade" pattern. It **does not** contain any raw cryptographic or storage logic itself. Instead, it injects and coordinates other single-purpose services:
+## 🚀 Public API
 
-1. **AuthService (from @.../platform-auth-data-access):**
+### `ChatService`
 
-- Used to get the current user's ID (string) for loading their private keys and identifying them as the sender.
+Provided in `root`.
 
-2. **KeyService (from @.../key-data-access):**
+#### **Signals (Read-Only State)**
 
-- Used to fetch the _public_ keys (PublicKeys object) of _other_ users (recipients) from the remote server.
+* **`activeConversations: Signal<ConversationSummary[]>`**: A signal emitting an array representing the user's conversation list, typically showing the latest message snippet (or a placeholder if decryption isn't possible from the digest) and timestamp.
+* **`messages: Signal<DecryptedMessage[]>`**: A signal emitting an array of fully decrypted and verified messages for the *currently selected* conversation.
 
-3. **CryptoService (from @.../crypto-data-access):**
+#### **Methods (Actions)**
 
-- **This is the most important dependency.** It is the _only_ service ChatService uses for any cryptographic operation.
-- Used to load the current user's _private_ keys (PrivateKeys object) from local storage.
-- Used to perform all high-level crypto actions: encryptForRecipient, decryptData, signData, and verifySender.
+* **`loadInitialDigest(): Promise<void>`**: Fetches the encrypted digest of all conversations using `chat-data-access`. It attempts to display conversation summaries in the `activeConversations` signal. *Note: Due to limitations in the digest data structure, snippets may show as placeholders.*
+* **`selectConversation(urn: URN): Promise<void>`**: Sets the currently active conversation. It fetches the full message history for that URN using `chat-data-access`, decrypts the messages, and updates the `messages` signal.
+* **`sendMessage(recipientURN: URN, plaintext: string): Promise<void>`**: Encrypts and signs the plaintext message for the recipient, posts it to the backend via `chat-data-access`, and optimistically updates the local `messages` and `activeConversations` signals.
 
-4. **HttpClient (from @angular/common/http):**
+---
 
-- Used to POST new encrypted messages (transport envelopes) to the backend API (/api/messages).
-- Used to GET all new messages from the backend API.
+## ✨ Key Features
 
-5. **ContactsService (from @.../contacts-data-access):**
+* **Real-time Updates:** Subscribes to `chat-live-data` to receive new messages pushed from the server.
+* **Decryption & Verification:** Uses `CryptoService` and `KeyService` to decrypt incoming messages and verify sender signatures.
+* **Polling Fallback:** Monitors the connection status from `chat-live-data`. If the WebSocket disconnects, it automatically initiates periodic polling of the message digest via `chat-data-access` until the connection is restored.
+* **Stateful:** Provides reactive state via Angular Signals for easy integration with UI components.
 
-- (Dependency is injected, but not currently used in sendMessage or pollMessages. It would be used for displaying a contact list in the UI).
+---
 
-## **Public API**
+## Example Usage (Component)
 
-### **messages (Signal)**
+```typescript
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { ChatService, ConversationSummary } from '@nx-platform-application/chat-state';
+import { DecryptedMessage } from '@nx-platform-application/chat-state'; // Assuming models are exported
+import { URN } from '@nx-platform-application/platform-types';
 
-A read-only signal containing the array of decrypted messages.
+@Component({
+  selector: 'app-chat-view',
+  template: `
+    <div class="conversations">
+      <h2>Conversations</h2>
+      <ul>
+        @for(convo of chatService.activeConversations(); track convo.conversationUrn) {
+          <li (click)="select(convo.conversationUrn)">
+            {{ convo.conversationUrn.toString() }}: {{ convo.latestSnippet }}
+          </li>
+        }
+      </ul>
+    </div>
+    <div class="messages">
+      <h2>Messages</h2>
+      <ul>
+         @for(message of chatService.messages(); track message.timestamp) {
+          <li>{{ message.from }}: {{ message.content }}</li>
+         }
+      </ul>
+      <input [(ngModel)]="newMessage" />
+      <button (click)="send()" [disabled]="!selectedUrn()">Send</button>
+    </div>
+  `,
+  // ... imports etc
+})
+export class ChatViewComponent implements OnInit {
+  protected chatService = inject(ChatService);
+  protected newMessage = '';
+  protected selectedUrn = signal<URN | null>(null);
 
-public readonly messages \= signal\<DecryptedMessage\[\]\>(\[\]);
+  async ngOnInit(): Promise<void> {
+    await this.chatService.loadInitialDigest();
+  }
 
-### **sendMessage()**
+  async select(urn: URN): Promise<void> {
+    this.selectedUrn.set(urn);
+    await this.chatService.selectConversation(urn);
+  }
 
-Orchestrates the entire process of sending a secure message.
-
-async sendMessage(recipientUrn: string, plaintext: string): Promise\<void\>
-
-**Workflow:**
-
-1. Gets the current user's ID string from AuthService.
-2. Gets the recipient's PublicKeys (Uint8Arrays) from KeyService.
-3. Loads the user's PrivateKeys (CryptoKeys) from CryptoService.
-4. Asks CryptoService to encryptForRecipient (using the recipient's public key) and signData (using the user's private key).
-5. Converts the resulting byte arrays to Base64.
-6. POSTs the complete TransportEnvelope to /api/messages.
-
-### **pollMessages()**
-
-Orchestrates the process of fetching, verifying, and decrypting all new messages.
-
-async pollMessages(): Promise\<void\>
-
-**Workflow:**
-
-1. GETs an array of TransportEnvelopes from /api/messages.
-2. Loads the user's PrivateKeys from CryptoService.
-3. For each envelope:  
-   a. Gets the sender's PublicKeys from KeyService.  
-   b. Converts all Base64 fields back to Uint8Arrays.  
-   c. Asks CryptoService to verifySender.  
-   d. If valid, asks CryptoService to decryptData.  
-   e. Converts the decrypted bytes to a string.
-4. Updates the messages signal with the new array of DecryptedMessage objects.
+  async send(): Promise<void> {
+    const recipient = this.selectedUrn();
+    if (recipient && this.newMessage) {
+      await this.chatService.sendMessage(recipient, this.newMessage);
+      this.newMessage = '';
+    }
+  }
+}

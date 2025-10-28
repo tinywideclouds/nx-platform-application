@@ -19,7 +19,7 @@ import {
   secureEnvelopeToProto,
   secureEnvelopeFromProto,
   serializeEnvelopeToJson,       // <-- Import new public API
-  deserializeJsonToEnvelopes,    // <-- Import new public API
+  deserializeJsonToEnvelopes, deserializeJsonToEnvelope,    // <-- Import new public API
 } from './envelope';
 // base64ToBytes is no longer imported
 
@@ -141,5 +141,38 @@ describe('envelope serializers (Public API)', () => {
 
     // 2. Verify it returned the correctly mapped smart object
     expect(result).toEqual([mockEnvelope]);
+  });
+
+  /**
+   * Test 6: JSON Object -> Smart Object (Single)
+   */
+  it('should deserialize a single JSON object into a smart envelope', () => {
+    // This is the raw JSON object from a WebSocket
+    const mockRawJson = {
+      senderId: 'urn:sm:user:sender-alice',
+      recipientId: 'urn:sm:user:receiver-bob',
+      messageId: 'msg-123-abc',
+      encryptedData: 'AQID', // "AQID" is Base64 for [1, 2, 3]
+      encryptedSymmetricKey: 'BAUG', // "BAUG" is Base64 for [4, 5, 6]
+      signature: 'BwgJ', // "BwgJ" is Base64 for [7, 8, 9]
+    };
+
+    // Arrange: Mock 'fromJson' to return the singular proto object
+    // (mockProtoPb is already defined in your spec file)
+    (fromJson as Mock).mockReturnValue(mockProtoPb);
+
+    // Act: Call the new function
+    const result = deserializeJsonToEnvelope(mockRawJson);
+
+    // Assert:
+    // 1. Verify 'fromJson' was called correctly
+    expect(fromJson).toHaveBeenCalledWith(
+      SecureEnvelopePbSchema, // <-- Singular schema
+      mockRawJson
+    );
+
+    // 2. Verify the result matches the expected smart envelope
+    // (mockEnvelope is already defined in your spec file)
+    expect(result).toEqual(mockEnvelope);
   });
 });

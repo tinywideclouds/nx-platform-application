@@ -6,6 +6,23 @@
   "projectType": "library",
   "tags": ["scope:messenger"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/ng/chat-data-access",
+        "configFile": "libs/messenger/ng/chat-data-access/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/messenger/chat-data-access",
+        "configFile": "libs/messenger/chat-data-access/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

@@ -1,1 +1,1 @@
-export * from './lib/chat-data-access/chat-data-access';
+export * from './lib/chat-data.service';

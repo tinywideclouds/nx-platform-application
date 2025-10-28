@@ -1,0 +1,92 @@
+name: "Publish Generated Go Types"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "libs/messenger/protos/**"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: "Generate and Publish Go Types"
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- Steps 1-5 remain the same ---
+      - name: "Checkout source repo (Nx)"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Set up Buf"
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: "Generate Go stubs"
+        run: buf generate
+
+      - name: "Checkout destination repo (go-action-intention-protos)"
+        uses: actions/checkout@v4
+        with:
+          repository: "illmade-knight/go-action-intention-protos"
+          path: "go-protos-repo"
+          ssh-key: ${{ secrets.GO_PROTOS_DEPLOY_KEY }}
+
+      - name: "Sync generated files to destination repo"
+        run: |
+          rsync -av --delete \
+            dist/go/ \
+            go-protos-repo/
+
+      # --- NEW STEP 6a: Commit Changes Locally ---
+      - name: "Check for and Commit Changes (Locally)"
+        id: commit_changes # Give this step an ID to reference its outputs
+        run: |
+          cd go-protos-repo
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check for changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes detected. Nothing to commit."
+            # Set an output variable to indicate no changes
+            echo "changes_detected=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Changes detected, creating commit locally..."
+          git add .
+          SOURCE_SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          COMMIT_MSG="chore(generated): Sync types from nx-repo commit ${SOURCE_SHA_SHORT}"
+          git commit -m "$COMMIT_MSG"
+
+          # Create the tag locally
+          TAG="v0.0.0-$(date -u +'%Y%m%d%H%M%S')-${SOURCE_SHA_SHORT}"
+          git tag $TAG
+
+          # Set output variables for use in later steps
+          echo "changes_detected=true" >> $GITHUB_OUTPUT
+          echo "commit_message=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+
+      # --- NEW STEP 6b: Push Changes (Only on GitHub) ---
+      - name: "Push Commit and Tag (Only on GitHub Actions)"
+        # Only run if changes were detected AND we are in the real GitHub Actions environment
+        if: steps.commit_changes.outputs.changes_detected == 'true' && env.GITHUB_ACTIONS == 'true'
+        run: |
+          cd go-protos-repo
+          echo "Pushing commit to main..."
+          git push origin main
+          echo "Pushing tag ${{ steps.commit_changes.outputs.tag_name }}..."
+          git push origin ${{ steps.commit_changes.outputs.tag_name }}
+
+      # --- NEW STEP 6c: Local Test Confirmation ---
+      - name: "Local Test Confirmation (No Push)"
+        # Only run if changes were detected AND we are NOT in the real GitHub Actions environment
+        if: steps.commit_changes.outputs.changes_detected == 'true' && env.GITHUB_ACTIONS != 'true'
+        run: |
+          echo "--- LOCAL TEST: Changes were detected and committed locally. ---"
+          echo "--- Would have pushed commit: '${{ steps.commit_changes.outputs.commit_message }}' ---"
+          echo "--- Would have pushed tag: ${{ steps.commit_changes.outputs.tag_name }} ---"
+          echo "--- You can inspect the changes in the ./go-protos-repo directory. ---"

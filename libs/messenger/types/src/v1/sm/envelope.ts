@@ -40,8 +40,7 @@ export function secureEnvelopeToProto(envelope: SecureEnvelope): SecureEnvelopeP
 }
 
 /**
- * Maps the "dumb" Protobuf message (with string URNs)
- * to the "smart" SecureEnvelope interface.
+ * Maps the "dumb" Protobuf message to the "smart" interface.
  * (This is now an internal helper)
  */
 export function secureEnvelopeFromProto(protoEnvelope: SecureEnvelopePb): SecureEnvelope {
@@ -82,9 +81,24 @@ export function serializeEnvelopeToJson(envelope: SecureEnvelope): string {
  */
 export function deserializeJsonToEnvelopes(json: any): SecureEnvelope[] {
   // 1. Parse the raw JSON into a Proto *List* object
-  // We assume the http.get<any>() gives us the parsed JSON object
   const protoList = fromJson(SecureEnvelopeListPbSchema, json);
 
-  // 2. Map the proto envelopes to smart envelopes
+  // 2. Map each proto item in the list to a smart item
   return protoList.envelopes.map(secureEnvelopeFromProto);
+}
+
+/**
+ * PUBLIC API: (*** NEW FUNCTION ***)
+ * Deserializes a single JSON object (matching SecureEnvelopePb schema)
+ * into a "smart" SecureEnvelope object.
+ *
+ * This is for single WebSocket messages.
+ * The 'json' param is the raw object, NOT a string.
+ */
+export function deserializeJsonToEnvelope(json: any): SecureEnvelope {
+  // 1. Parse raw JSON object into Proto object
+  const protoEnvelope = fromJson(SecureEnvelopePbSchema, json);
+
+  // 2. Map Proto object to Smart object
+  return secureEnvelopeFromProto(protoEnvelope);
 }

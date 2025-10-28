@@ -1,224 +1,329 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClient } from '@angular/common/http';
-import { signal, WritableSignal } from '@angular/core';
-import { of } from 'rxjs';
-
-import { Mock } from 'vitest';
+import { signal } from '@angular/core';
+import { Subject, BehaviorSubject, of } from 'rxjs';
+import { URN } from '@nx-platform-application/platform-types';
+import {
+  EncryptedDigest,
+  SecureEnvelope,
+  EncryptedDigestItem,
+} from '@nx-platform-application/messenger-types';
 
 // --- Service Under Test ---
-import { ChatService } from './chat.service';
+import { ChatService, ConversationSummary } from './chat.service';
+
+// --- View Models ---
+import { DecryptedMessage } from './models/decrypted-message.model';
 
 // --- Mocks for Dependencies ---
 import { AuthService } from '@nx-platform-application/platform-auth-data-access';
-import { ContactsService } from '@nx-platform-application/contacts-data-access';
-import {
-  KeyService,
-  PublicKeys,
-} from '@nx-platform-application/key-data-access';
+import { KeyService } from '@nx-platform-application/key-data-access';
 import { CryptoService } from '@nx-platform-application/crypto-data-access';
+import { ChatDataService } from '@nx-platform-application/chat-data-access';
 import {
-  PrivateKeys,
-  EncryptedPayload,
-} from '@nx-platform-application/sdk-core';
-import { User, URN } from '@nx-platform-application/platform-types'; // 1. IMPORT URN
-import { DecryptedMessage } from './models/decrypted-message.model';
+  ChatLiveDataService,
+  ConnectionStatus,
+} from '@nx-platform-application/chat-live-data';
 
-// --- Mock Fixtures (camelCase) ---
-
-const mockEncPrivateKey = {
-  type: 'private',
-  algorithm: { name: 'RSA-OAEP' },
-} as CryptoKey;
-const mockSignPrivateKey = {
-  type: 'private',
-  algorithm: { name: 'RSA-PSS' },
-} as CryptoKey;
-
-const mockEncPublicKeyBytes = new Uint8Array([1, 2, 3, 4]);
-const mockSignPublicKeyBytes = new Uint8Array([5, 6, 7, 8]);
-
-// --- Mock Users ---
-const mockUser: User = {
-  id: 'urn:sm:user:me',
-  alias: 'Me',
-  email: 'me@me.com',
-};
-const mockRecipient: User = {
-  id: 'urn:sm:user:friend',
-  alias: 'Friend',
-  email: 'friend@me.com',
-};
-
-// 2. CREATE URN OBJECTS FOR TESTING
-// const mockUserUrn = URN.parse(mockUser.id);
+// --- Mock Fixtures ---
+const mockUser = { id: 'urn:sm:user:me', alias: 'Me' };
+const mockRecipient = { id: 'urn:sm:user:friend', alias: 'Friend' };
 const mockRecipientUrn = URN.parse(mockRecipient.id);
 
-// --- Mock Key Payloads ---
-const mockRecipientPublicKeys: PublicKeys = {
-  encKey: mockEncPublicKeyBytes,
-  sigKey: mockSignPublicKeyBytes,
-};
-const mockMyPrivateKeys: PrivateKeys = {
-  encKey: mockEncPrivateKey,
-  sigKey: mockSignPrivateKey,
+const mockMyKeys = { encKey: 'my-enc-key', sigKey: 'my-sig-key' };
+const mockRecipientKeys = {
+  encKey: new Uint8Array([1]),
+  sigKey: new Uint8Array([2]),
 };
 
-// --- Mock Crypto Payloads ---
-const mockEncryptedKey = new Uint8Array([1, 1, 1]);
-const mockEncryptedData = new Uint8Array([2, 2, 2]);
-const mockSignature = new Uint8Array([3, 3, 3]);
-const mockDecryptedText = 'DECRYPTED_PLAINTEXT';
-const mockDecryptedBytes = new TextEncoder().encode(mockDecryptedText);
-
-// Base64 versions for transport
-const mockEncryptedKeyB64 = 'AQEB';
-const mockEncryptedDataB64 = 'AgIC';
-const mockSignatureB64 = 'AwMD';
-
-const mockEnvelope = {
-  from: mockRecipient.id,
-  to: mockUser.id,
-  timestamp: new Date().toISOString(),
-  encryptedSymmetricKey: mockEncryptedKeyB64,
-  encryptedData: mockEncryptedDataB64,
-  signature: mockSignatureB64,
+const mockEncryptedDigestItem: EncryptedDigestItem = {
+  conversationUrn: mockRecipientUrn,
+  encryptedSnippet: new Uint8Array([1, 2, 3]),
+};
+const mockEncryptedDigest: EncryptedDigest = {
+  items: [mockEncryptedDigestItem],
 };
 
-const mockEncryptedPayload: EncryptedPayload = {
-  encryptedSymmetricKey: mockEncryptedKey,
-  encryptedData: mockEncryptedData,
+const mockEnvelope: SecureEnvelope = {
+  senderId: mockRecipientUrn,
+  recipientId: URN.parse(mockUser.id),
+  messageId: 'msg-1',
+  encryptedSymmetricKey: new Uint8Array([7, 8, 9]),
+  encryptedData: new Uint8Array([10, 11, 12]),
+  signature: new Uint8Array([13, 14, 15]),
 };
 
-describe('ChatService (Refactored)', () => {
+const mockDecryptedMessage = 'Hello live';
+
+// ==========================================================
+// FIRST TEST SUITE - TESTING THE SERVICE AS A WHOLE
+// ==========================================================
+describe('ChatService (Zoneless)', () => {
   let service: ChatService;
 
-  // --- Mocks for Injected Services ---
-  let mockHttpClient: { post: Mock; get: Mock };
-  // (FIX 1: Change the type from WritableSignal to Mock)
-  let mockAuthService: { currentUser: Mock<() => User | null> };
-  let mockContactsService: { contacts: WritableSignal<User[]> };
-  let mockKeyService: { getKey: Mock };
+  // Mocks for dependencies
+  let mockAuthService: { currentUser: () => any };
+  let mockKeyService: { getKey: ReturnType<typeof vi.fn> };
   let mockCryptoService: {
-    loadMyKeys: Mock;
-    encryptForRecipient: Mock;
-    signData: Mock;
-    verifySender: Mock;
-    decryptData: Mock;
+    loadMyKeys: ReturnType<typeof vi.fn>;
+    decryptData: ReturnType<typeof vi.fn>;
+    verifySender: ReturnType<typeof vi.fn>;
+    encryptForRecipient: ReturnType<typeof vi.fn>;
+    signData: ReturnType<typeof vi.fn>;
+  };
+  let mockChatDataService: {
+    fetchMessageDigest: ReturnType<typeof vi.fn>;
+    fetchConversationHistory: ReturnType<typeof vi.fn>;
+    postMessage: ReturnType<typeof vi.fn>;
+  };
+  let mockChatLiveService: {
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>; // Added disconnect for completeness
+    incomingMessage$: Subject<SecureEnvelope>;
+    status$: BehaviorSubject<ConnectionStatus>;
   };
 
   beforeEach(() => {
-    mockHttpClient = {
-      post: vi.fn(() => of({})),
-      get: vi.fn(() => of([mockEnvelope])),
-    };
+    vi.useFakeTimers();
+
+    // --- Mock Implementations (All robust) ---
     mockAuthService = {
-      // (FIX 2: Change the value from a real signal to a spy)
-      currentUser: vi.fn(() => mockUser),
-    };
-    mockContactsService = {
-      contacts: signal<User[]>([mockRecipient]),
+      currentUser: vi.fn().mockImplementation(() => mockUser),
     };
     mockKeyService = {
-      getKey: vi.fn().mockResolvedValue(mockRecipientPublicKeys),
+      getKey: vi.fn().mockImplementation(() => Promise.resolve(mockRecipientKeys)),
     };
     mockCryptoService = {
-      loadMyKeys: vi.fn().mockResolvedValue(mockMyPrivateKeys),
-      encryptForRecipient: vi.fn().mockResolvedValue(mockEncryptedPayload),
-      signData: vi.fn().mockResolvedValue(mockSignature),
-      verifySender: vi.fn().mockResolvedValue(true),
-      decryptData: vi.fn().mockResolvedValue(mockDecryptedBytes),
+      loadMyKeys: vi.fn().mockImplementation(() => Promise.resolve(mockMyKeys)),
+      decryptData: vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(new TextEncoder().encode(mockDecryptedMessage))
+        ),
+      verifySender: vi.fn().mockImplementation(() => Promise.resolve(true)),
+      encryptForRecipient: vi.fn().mockImplementation(() =>
+        Promise.resolve({
+          encryptedSymmetricKey: new Uint8Array([1]),
+          encryptedData: new Uint8Array([2]),
+        })
+      ),
+      signData: vi
+        .fn()
+        .mockImplementation(() => Promise.resolve(new Uint8Array([3]))),
+    };
+    mockChatDataService = {
+      fetchMessageDigest: vi
+        .fn()
+        .mockImplementation(() => of(mockEncryptedDigest)),
+      fetchConversationHistory: vi
+        .fn()
+        .mockImplementation(() => of([mockEnvelope])),
+      postMessage: vi.fn().mockImplementation(() => of(undefined)),
+    };
+    mockChatLiveService = {
+      connect: vi.fn(),
+      disconnect: vi.fn(), // Added disconnect mock
+      incomingMessage$: new Subject<SecureEnvelope>(),
+      status$: new BehaviorSubject<ConnectionStatus>('connecting'),
     };
 
     TestBed.configureTestingModule({
       providers: [
         ChatService,
-        { provide: HttpClient, useValue: mockHttpClient },
         { provide: AuthService, useValue: mockAuthService },
-        { provide: ContactsService, useValue: mockContactsService },
         { provide: KeyService, useValue: mockKeyService },
         { provide: CryptoService, useValue: mockCryptoService },
+        { provide: ChatDataService, useValue: mockChatDataService },
+        { provide: ChatLiveDataService, useValue: mockChatLiveService },
       ],
     });
 
-    TestBed.runInInjectionContext(() => {
-      service = TestBed.inject(ChatService);
-    });
+    service = TestBed.inject(ChatService);
   });
 
-  it('should be created', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  // --- Tests for the main service flows ---
+  it('should be created and connect to live service', () => {
     expect(service).toBeTruthy();
-    expect(service.messages()).toEqual([]);
+    expect(mockChatLiveService.connect).toHaveBeenCalled();
   });
 
-  describe('sendMessage()', () => {
-    it('should correctly orchestrate all services to send a message', async () => {
-      const plaintext = 'Hello there!';
-      const plaintextBytes = new TextEncoder().encode(plaintext);
+  it('should loadInitialDigest and update activeConversations', async () => {
+    await service.loadInitialDigest();
+    expect(service.activeConversations().length).toBe(1);
+    expect(service.activeConversations()[0].latestSnippet).toBe(
+      '[Encrypted Message]'
+    );
+  });
 
-      await service.sendMessage(mockRecipient.id, plaintext);
+  it('should selectConversation and update messages', async () => {
+    await service.selectConversation(mockRecipientUrn);
+    expect(service.messages().length).toBe(1);
+    expect(service.messages()[0].content).toBe(mockDecryptedMessage);
+  });
 
-      // 1. Verify orchestration
-      // (This assertion will now pass)
-      expect(mockAuthService.currentUser).toHaveBeenCalled();
-      // 3. VERIFY URN FIX
-      expect(mockKeyService.getKey).toHaveBeenCalledWith(mockRecipientUrn);
-      // (Correct: cryptoService still expects a string)
-      expect(mockCryptoService.loadMyKeys).toHaveBeenCalledWith(mockUser.id);
+  // --- Simplified Live Message Test (Uses Spy) ---
+  it('should process a live message and update signals', async () => {
+    await service.selectConversation(mockRecipientUrn);
+    expect(service.messages().length).toBe(1);
 
-      // 2. Verify crypto calls
-      expect(mockCryptoService.encryptForRecipient).toHaveBeenCalledWith(
-        mockRecipientPublicKeys.encKey,
-        plaintextBytes
-      );
-      expect(mockCryptoService.signData).toHaveBeenCalledWith(
-        mockMyPrivateKeys.sigKey,
-        mockEncryptedData
-      );
+    const mockDecryptedResult: DecryptedMessage = {
+      from: mockEnvelope.senderId.toString(),
+      to: mockEnvelope.recipientId.toString(),
+      content: mockDecryptedMessage,
+      timestamp: new Date(),
+    };
 
-      // 3. Verify HTTP POST call
-      expect(mockHttpClient.post).toHaveBeenCalledWith(
-        '/api/messages',
-        expect.objectContaining({
-          from: mockUser.id,
-          to: mockRecipient.id,
-        })
-      );
+    // SPY directly on decryptEnvelopes for this test
+    const decryptSpy = vi
+      .spyOn(service as any, 'decryptEnvelopes')
+      .mockResolvedValue([mockDecryptedResult]);
+
+    mockChatLiveService.incomingMessage$.next(mockEnvelope);
+    await vi.runAllTicks(); // Wait for all microtasks
+
+    expect(decryptSpy).toHaveBeenCalledWith([mockEnvelope]);
+    const messages = service.messages();
+    expect(messages.length).toBe(2); // Should pass now
+    expect(messages[1]).toEqual(mockDecryptedResult);
+    expect(service.activeConversations()[0].latestSnippet).toBe(mockDecryptedMessage);
+  });
+
+  // --- Fallback Test ---
+  it('should start polling on disconnect and stop on connect', async () => {
+    mockChatLiveService.status$.next('disconnected');
+    vi.advanceTimersByTime(0);
+    await vi.runAllTicks();
+    expect(mockChatDataService.fetchMessageDigest).toHaveBeenCalledTimes(1);
+
+    mockChatLiveService.status$.next('connected');
+    await vi.runAllTicks();
+    expect(mockChatDataService.fetchMessageDigest).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(15000);
+    await vi.runAllTicks();
+    expect(mockChatDataService.fetchMessageDigest).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+// ==========================================================
+// SECOND TEST SUITE - FOCUSED ON decryptEnvelopes HELPER
+// ==========================================================
+describe('ChatService - decryptEnvelopes Helper', () => {
+  let service: ChatService;
+  // Mocks relevant ONLY to decryptEnvelopes
+  let mockAuthService: { currentUser: () => any };
+  let mockKeyService: { getKey: ReturnType<typeof vi.fn> };
+  let mockCryptoService: {
+    loadMyKeys: ReturnType<typeof vi.fn>;
+    decryptData: ReturnType<typeof vi.fn>;
+    verifySender: ReturnType<typeof vi.fn>;
+  };
+  // Mock for the unused ChatLiveDataService
+  let mockChatLiveService: {
+    connect: ReturnType<typeof vi.fn>; // <-- THE FIX: Add connect
+    disconnect: ReturnType<typeof vi.fn>;
+    incomingMessage$: Subject<SecureEnvelope>;
+    status$: BehaviorSubject<ConnectionStatus>;
+  };
+
+
+  beforeEach(() => {
+    // --- Mock Implementations (Robust) ---
+    mockAuthService = {
+      currentUser: vi.fn().mockImplementation(() => mockUser),
+    };
+    mockKeyService = {
+      getKey: vi.fn().mockImplementation(() => Promise.resolve(mockRecipientKeys)),
+    };
+    mockCryptoService = {
+      loadMyKeys: vi.fn().mockImplementation(() => Promise.resolve(mockMyKeys)),
+      decryptData: vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(new TextEncoder().encode(mockDecryptedMessage))
+        ),
+      verifySender: vi.fn().mockImplementation(() => Promise.resolve(true)),
+    };
+    // --- Dummy mock for ChatLiveDataService ---
+    mockChatLiveService = {
+      connect: vi.fn(), // <-- THE FIX: Provide the connect method
+      disconnect: vi.fn(),
+      incomingMessage$: new Subject<SecureEnvelope>(),
+      status$: new BehaviorSubject<ConnectionStatus>('connecting'),
+    };
+
+
+    TestBed.configureTestingModule({
+      providers: [
+        ChatService,
+        // Provide only the necessary mocks for this helper
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: KeyService, useValue: mockKeyService },
+        { provide: CryptoService, useValue: mockCryptoService },
+        // --- Provide dummy mocks for unused dependencies ---
+        { provide: ChatDataService, useValue: {} }, // Keep {} for ChatDataService
+        { provide: ChatLiveDataService, useValue: mockChatLiveService }, // <-- Use the updated mock
+      ],
     });
+
+    service = TestBed.inject(ChatService);
   });
 
-  describe('pollMessages()', () => {
-    it('should orchestrate all services to poll and decrypt messages', async () => {
-      await service.pollMessages();
-
-      // 1. Verify orchestration
-      expect(mockHttpClient.get).toHaveBeenCalledWith('/api/messages');
-      // (This call will also work now)
-      expect(mockAuthService.currentUser).toHaveBeenCalled();
-      // (Correct: cryptoService still expects a string)
-      expect(mockCryptoService.loadMyKeys).toHaveBeenCalledWith(mockUser.id);
-      // 3. VERIFY URN FIX
-      expect(mockKeyService.getKey).toHaveBeenCalledWith(mockRecipientUrn);
-
-      // 2. Verify crypto calls
-      expect(mockCryptoService.verifySender).toHaveBeenCalledWith(
-        mockRecipientPublicKeys.sigKey,
-        mockSignature,
-        mockEncryptedData
-      );
-      expect(mockCryptoService.decryptData).toHaveBeenCalledWith(
-        mockMyPrivateKeys.encKey,
-        mockEncryptedKey,
-        mockEncryptedData
-      );
-
-      // 3. Verify signal is updated
-      const expectedMessage: DecryptedMessage = {
-        from: mockRecipient.id,
-        to: mockUser.id,
-        content: mockDecryptedText,
-        timestamp: new Date(mockEnvelope.timestamp),
-      };
-      expect(service.messages()).toEqual([expectedMessage]);
-    });
+  afterEach(() => {
+    vi.clearAllMocks();
   });
+
+  // --- Tests focused only on decryptEnvelopes ---
+  it('should correctly decrypt a valid envelope', async () => {
+    const validEnvelope = { ...mockEnvelope };
+    const result = await (service as any).decryptEnvelopes([validEnvelope]);
+    expect(result.length).toBe(1);
+    expect(result[0].content).toBe(mockDecryptedMessage);
+    expect(mockCryptoService.verifySender).toHaveBeenCalled();
+    expect(mockCryptoService.decryptData).toHaveBeenCalled();
+  });
+
+  it('should return an empty array if signature verification fails', async () => {
+    mockCryptoService.verifySender.mockImplementation(() => Promise.resolve(false));
+    const invalidEnvelope = { ...mockEnvelope };
+    const result = await (service as any).decryptEnvelopes([invalidEnvelope]);
+    expect(result.length).toBe(0);
+    expect(mockCryptoService.verifySender).toHaveBeenCalled();
+    expect(mockCryptoService.decryptData).not.toHaveBeenCalled();
+  });
+
+  it('should return an empty array and handle errors during decryption', async () => {
+    const decryptError = new Error('Decryption failed');
+    mockCryptoService.decryptData.mockImplementation(() => Promise.reject(decryptError));
+    const errorEnvelope = { ...mockEnvelope };
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* lint */ });
+
+    const result = await (service as any).decryptEnvelopes([errorEnvelope]);
+    expect(result.length).toBe(0);
+    expect(mockCryptoService.verifySender).toHaveBeenCalled();
+    expect(mockCryptoService.decryptData).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to decrypt message'), decryptError);
+    errorSpy.mockRestore();
+  });
+
+  it('should handle errors when fetching sender keys', async () => {
+    const getKeyError = new Error('Keys not found');
+    mockKeyService.getKey.mockImplementation(() => Promise.reject(getKeyError));
+    const errorEnvelope = { ...mockEnvelope };
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* lint */ });
+
+    const result = await (service as any).decryptEnvelopes([errorEnvelope]);
+    expect(result.length).toBe(0);
+    expect(mockKeyService.getKey).toHaveBeenCalled();
+    expect(mockCryptoService.verifySender).not.toHaveBeenCalled();
+    expect(mockCryptoService.decryptData).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to decrypt message'), getKeyError);
+    errorSpy.mockRestore();
+  });
+
 });

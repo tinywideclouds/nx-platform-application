@@ -7,6 +7,7 @@ package action_intention.envelope.v1;
 option go_package = "github.com/illmade-knight/go-action-intention-protos/gen/go/sm/v1;sm_v1";
 
 // Represents the secure data packet sent between users via the routing service.
+// all the id fields are actually urns but we just call them id
 message SecureEnvelopePb {
   // The URN of the message sender (e.g., "urn:sm:user:user-a@example.com").
   string sender_id = 1;
@@ -16,14 +17,21 @@ message SecureEnvelopePb {
   // A unique identifier for the message.
   string message_id = 3;
 
+  // A unique identifier for the conversation.
+  string conversation_id = 4;
+
   // The AES-encrypted payload.
-  bytes encrypted_data = 4;
+  bytes encrypted_data = 5;
+
+  // An AES-encrypted snippet of the full payload
+  bytes encrypted_snippet = 6;
 
   // The RSA-encrypted AES symmetric key.
-  bytes encrypted_symmetric_key = 5;
+  bytes encrypted_symmetric_key = 7;
 
   // The signature of the EncryptedData.
-  bytes signature = 6;
+  bytes signature = 8;
+
 }
 
 // A wrapper message for a list of secure envelopes.
