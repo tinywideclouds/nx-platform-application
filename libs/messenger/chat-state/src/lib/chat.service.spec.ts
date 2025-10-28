@@ -11,7 +11,10 @@ import { ChatService } from './chat.service';
 // --- Mocks for Dependencies ---
 import { AuthService } from '@nx-platform-application/platform-auth-data-access';
 import { ContactsService } from '@nx-platform-application/contacts-data-access';
-import { KeyService, PublicKeys } from '@nx-platform-application/key-data-access';
+import {
+  KeyService,
+  PublicKeys,
+} from '@nx-platform-application/key-data-access';
 import { CryptoService } from '@nx-platform-application/crypto-data-access';
 import {
   PrivateKeys,
@@ -219,4 +222,3 @@ describe('ChatService (Refactored)', () => {
     });
   });
 });
-

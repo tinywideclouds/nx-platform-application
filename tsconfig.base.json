@@ -18,6 +18,9 @@
       "@nx-platform-application/chat-data-access": [
         "libs/messenger/chat-data-access/src/index.ts"
       ],
+      "@nx-platform-application/chat-state": [
+        "libs/messenger/chat-state/src/index.ts"
+      ],
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
       ],
@@ -44,6 +47,9 @@
       ],
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/action_intention/*"
+      ],
+      "@nx-platform-application/messenger-types": [
+        "libs/messenger/types/src/index.ts"
       ],
       "@nx-platform-application/node-auth": [
         "libs/platform/node/node-auth/src/index.ts"

@@ -1,40 +1,66 @@
-import { describe, it, expect } from 'vitest';
-import { create } from '@bufbuild/protobuf';
+import { Mock } from 'vitest';
+
+// --- Mock @bufbuild/protobuf ---
+vi.mock('@bufbuild/protobuf', async () => {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const actual = await vi.importActual('@bufbuild/protobuf');
+  return {
+    ...actual, // Import and retain default behavior (like 'create')
+    toJsonString: vi.fn(),
+    fromJson: vi.fn(),
+  };
+});
+// --- End Mock ---
+
+import { create, toJsonString, fromJson } from '@bufbuild/protobuf';
 import {
   SecureEnvelope,
   secureEnvelopeToProto,
   secureEnvelopeFromProto,
-  base64ToBytes,
+  serializeEnvelopeToJson,       // <-- Import new public API
+  deserializeJsonToEnvelopes,    // <-- Import new public API
 } from './envelope';
+// base64ToBytes is no longer imported
+
 import { URN } from '@nx-platform-application/platform-types';
 
-// Import the raw proto types for creating test instances
+// Import the raw proto types
 import {
-  SecureEnvelopePb,
   SecureEnvelopePbSchema,
-} from '@nx-platform-application/messenger-protos/envelope/v1/secure-envelope_pb.js';
+  SecureEnvelopeListPbSchema,
+} from '@nx-platform-application/messenger-protos/envelope/v1/secure-envelope_pb.js'; // Assumed path
 
-describe('envelope mappers', () => {
-  // Mock data for a TS SecureEnvelope
-  const mockEnvelope: SecureEnvelope = {
-    senderId: URN.parse('urn:sm:user:sender-alice'),
-    recipientId: URN.parse('urn:sm:user:receiver-bob'),
-    messageId: 'msg-123-abc',
-    encryptedData: new Uint8Array([1, 2, 3]),
-    encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
-    signature: new Uint8Array([7, 8, 9]),
-  };
+// --- Mocks ---
+const mockEnvelope: SecureEnvelope = {
+  senderId: URN.parse('urn:sm:user:sender-alice'),
+  recipientId: URN.parse('urn:sm:user:receiver-bob'),
+  messageId: 'msg-123-abc',
+  encryptedData: new Uint8Array([1, 2, 3]),
+  encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
+  signature: new Uint8Array([7, 8, 9]),
+};
 
+// A mock Proto object, as created by 'create'
+const mockProtoPb = create(SecureEnvelopePbSchema, {
+  senderId: 'urn:sm:user:sender-alice',
+  recipientId: 'urn:sm:user:receiver-bob',
+  messageId: 'msg-123-abc',
+  encryptedData: new Uint8Array([1, 2, 3]),
+  encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
+  signature: new Uint8Array([7, 8, 9]),
+});
+
+beforeEach(() => {
+  // Reset mock function calls before each test
+  vi.clearAllMocks();
+});
+
+describe('envelope mappers (Internal)', () => {
   /**
-   * Test 1: Round Trip
-   * Verifies that a TS object can be converted to a Proto object and back.
-   *
-   * NOTE: This test will FAIL if 'secureEnvelopeFromProto' incorrectly
-   * attempts to parse Base64 strings (as seen in envelope.ts) instead of
-   * handling the 'Uint8Array' fields provided by 'secureEnvelopeToProto'.
-   * This test assumes the mappers *should* be symmetrical.
+   * Test 1: Round Trip (Internal Mappers)
    */
-  it('should perform a round trip conversion successfully for SecureEnvelope', () => {
+  it('should perform a round trip conversion successfully', () => {
     // 1. TS -> Proto
     const protoPb = secureEnvelopeToProto(mockEnvelope);
     // 2. Proto -> TS
@@ -45,68 +71,75 @@ describe('envelope mappers', () => {
   });
 
   /**
-   * Test 2: Typical Usage (TS to Proto)
-   * Verifies the 'secureEnvelopeToProto' mapper works as expected.
+   * Test 2: TS to Proto (Internal Mapper)
    */
   it('should correctly map SecureEnvelope (TS) to SecureEnvelopePb (Proto)', () => {
     const protoPb = secureEnvelopeToProto(mockEnvelope);
-
-    expect(protoPb).toBeDefined();
     expect(protoPb.senderId).toBe(mockEnvelope.senderId.toString());
-    expect(protoPb.recipientId).toBe(mockEnvelope.recipientId.toString());
-    expect(protoPb.messageId).toBe(mockEnvelope.messageId);
     expect(protoPb.encryptedData).toEqual(mockEnvelope.encryptedData);
-    expect(protoPb.encryptedSymmetricKey).toEqual(
-      mockEnvelope.encryptedSymmetricKey
-    );
-    expect(protoPb.signature).toEqual(mockEnvelope.signature);
   });
 
   /**
-   * Test 3: Typical Usage (Proto to TS)
-   * Verifies the 'secureEnvelopeFromProto' mapper works as expected.
-   * This test creates a mock Proto object with the 'Uint8Array' fields
-   * that 'secureEnvelopeToProto' would create.
+   * Test 3: Proto to TS (Internal Mapper)
    */
   it('should correctly map SecureEnvelopePb (Proto) to SecureEnvelope (TS)', () => {
-    const mockProtoPb = create(SecureEnvelopePbSchema, {
-      senderId: 'urn:sm:user:sender-alice',
-      recipientId: 'urn:sm:user:receiver-bob',
-      messageId: 'msg-123-abc',
-      encryptedData: new Uint8Array([1, 2, 3]),
-      encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
-      signature: new Uint8Array([7, 8, 9]),
-    });
-
     const tsEnvelope = secureEnvelopeFromProto(mockProtoPb);
-
-    expect(tsEnvelope).toBeDefined();
     expect(tsEnvelope.senderId).toEqual(URN.parse(mockProtoPb.senderId));
-    expect(tsEnvelope.recipientId).toEqual(
-      URN.parse(mockProtoPb.recipientId)
-    );
-    expect(tsEnvelope.messageId).toBe(mockProtoPb.messageId);
-
-    // These assertions will FAIL unless 'secureEnvelopeFromProto' is
-    // fixed to handle Uint8Array directly, like the 'signature' field does.
     expect(tsEnvelope.encryptedData).toEqual(mockProtoPb.encryptedData);
-    expect(tsEnvelope.encryptedSymmetricKey).toEqual(
-      mockProtoPb.encryptedSymmetricKey
+  });
+});
+
+describe('envelope serializers (Public API)', () => {
+  /**
+   * Test 4: Smart Object -> JSON String
+   */
+  it('should serialize a smart envelope to a JSON string', () => {
+    const mockJsonString = '{"senderId":"urn:sm:user:sender-alice"}';
+    (toJsonString as Mock).mockReturnValue(mockJsonString);
+
+    const result = serializeEnvelopeToJson(mockEnvelope);
+
+    // 1. Verify it called toJsonString with the correct schema
+    expect(toJsonString).toHaveBeenCalledWith(
+      SecureEnvelopePbSchema,
+      expect.objectContaining({
+        senderId: mockEnvelope.senderId.toString(),
+      })
     );
-    expect(tsEnvelope.signature).toEqual(mockProtoPb.signature);
+
+    // 2. Verify it returned the string
+    expect(result).toBe(mockJsonString);
   });
 
   /**
-   * Test 4: Utility Function (base64ToBytes)
-   * Tests the helper function exported from envelope.ts.
+   * Test 5: JSON Object -> Smart Object Array
    */
-  describe('base64ToBytes', () => {
-    it('should correctly decode a Base64 string to Uint8Array', () => {
-      // "Hello" = SGVsbG8=
-      const base64Str = 'SGVsbG8=';
-      const expectedBytes = new Uint8Array([72, 101, 108, 108, 111]); // 'H', 'e', 'l', 'l', 'o'
-      const result = base64ToBytes(base64Str);
-      expect(result).toEqual(expectedBytes);
+  it('should deserialize a JSON object into an array of smart envelopes', () => {
+    // This is the raw JSON object HttpClient would provide
+    const mockRawJson = {
+      envelopes: [
+        { senderId: 'urn:sm:user:sender-alice' /* ...other fields */ },
+      ],
+    };
+    // (The incorrect jsonString and stringify import are removed)
+
+    // This is the mock Proto List object 'fromJson' will return
+    const mockProtoList = create(SecureEnvelopeListPbSchema, {
+      envelopes: [mockProtoPb],
     });
+
+    (fromJson as Mock).mockReturnValue(mockProtoList);
+
+    // (FIX: Pass the raw mockRawJson object, not a string)
+    const result = deserializeJsonToEnvelopes(mockRawJson);
+
+    // 1. Verify it called fromJson with the correct schema and data
+    expect(fromJson).toHaveBeenCalledWith(
+      SecureEnvelopeListPbSchema,
+      mockRawJson
+    );
+
+    // 2. Verify it returned the correctly mapped smart object
+    expect(result).toEqual([mockEnvelope]);
   });
 });

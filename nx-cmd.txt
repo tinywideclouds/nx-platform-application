@@ -12,3 +12,5 @@ nx g @nx/angular:library --name=key-data-access --directory=libs/platform/ng/key
 nx g @nx/angular:library --name=crypto-data-access --directory=libs/platform/ng/crypto-data-access --tags="scope:platform"
 
 nx g @nx/angular:library --name=platform-storage --directory=libs/platform/ng/storage --tags="scope:platform"
+
+nx g @nx/workspace:move --project=chat-data-access --destination=libs/ng/chat-state
