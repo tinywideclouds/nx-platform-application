@@ -52,3 +52,5 @@ vitest.config.*.timestamp*
 /apps/platform/node-identity-service/util/
 
 **/.env
+/foo_rsa
+/foo_rsa.pub
