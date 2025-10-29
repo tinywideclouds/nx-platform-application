@@ -115,10 +115,17 @@ jobs:
           echo "commit_message=$COMMIT_MSG" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG" >> $GITHUB_OUTPUT
 
+      # --- NEW DEBUG STEP ---
+      - name: "DEBUG: Inspect commit_changes outputs"
+        run: |
+          echo "Value of steps.commit_changes.outputs.changes_detected: '${{ steps.commit_changes.outputs.changes_detected }}'"
+          echo "Value of env.GITHUB_ACTIONS: '${{ env.GITHUB_ACTIONS }}'"
+          echo "Full condition evaluation: ${{ steps.commit_changes.outputs.changes_detected == 'true' && env.GITHUB_ACTIONS == 'true' }}"
+
       # --- NEW STEP 6b: Push Changes (Only on GitHub) ---
       - name: "Push Commit and Tag (Only on GitHub Actions)"
         # Only run if changes were detected AND we are in the real GitHub Actions environment
-        if: steps.commit_changes.outputs.changes_detected == 'true' && env.GITHUB_ACTIONS == 'true'
+        if: steps.commit_changes.outputs.changes_detected == 'true'
         run: |
           cd go-protos-repo
           echo "Pushing commit to main..."
