@@ -6,7 +6,8 @@
   "scripts": {
     "test:identity": "nx test identity-service --configuration=unit",
     "test:identity:integration": "nx test identity-service --configuration=integration",
-    "test:identity:all": "nx test identity-service"
+    "test:identity:all": "nx test identity-service",
+    "test:workflow:go-publish": "act.exe push -W .github/workflows/publish-go-types.yml -s MESSENGER_PROTOS_APP_ID=dummy -s MESSENGER_PROTOS_APP_PRIVATE_KEY=dummy"
   },
   "dependencies": {
     "@angular/animations": "20.3.7",
