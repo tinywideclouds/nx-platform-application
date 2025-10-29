@@ -14,17 +14,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # --- Steps 1-5 remain the same ---
       - name: "Checkout source repo (Nx)"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Keep Go setup (needed for protoc-gen-go)
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # Or your project's Go version
+
+      # Install Buf CLI
       - name: "Set up Buf"
         uses: bufbuild/buf-setup-action@v1
 
+      # Install ONLY protoc and Go plugins
+      - name: "Install Protoc and Go Plugins"
+        run: |
+          echo "Installing protobuf-compiler (protoc)..."
+          sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+          echo "Installing Go plugins..."
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest # Keep this if you use gRPC
+
+          # REMOVED npm install for es plugin
+
+          echo "Verifying installations..."
+          protoc --version
+          protoc-gen-go --version
+
+      # Generate ONLY Go stubs
       - name: "Generate Go stubs"
-        run: buf generate
+        run: |
+          echo "Changing directory to libs/messenger/protos..."
+          cd libs/messenger/protos
+          echo "Generating ONLY Go types from current directory (./)..."
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          # Add the --only flag to target just the 'go' plugin from buf.gen.yaml
+          buf generate --template buf.gen.go.yaml
 
       - name: "Checkout destination repo (go-action-intention-protos)"
         uses: actions/checkout@v4
@@ -33,10 +62,23 @@ jobs:
           path: "go-protos-repo"
           ssh-key: ${{ secrets.GO_PROTOS_DEPLOY_KEY }}
 
+      - name: "Install rsync"
+        run: |
+          echo "Installing rsync..."
+          sudo apt-get update && sudo apt-get install -y rsync
+
+#      - name: "DEBUG: Find generated output"
+#        run: |
+#          echo "Searching for the 'dist/go' directory starting from the workspace root..."
+#          # Use 'find' to locate the directory, searching the whole mapped volume
+#          find /mnt -name go -type d -path '*/dist/go' 2>/dev/null || echo "Could not find dist/go"
+#          echo "Listing libs/messenger/protos:"
+#          ls -la /mnt/c/Users/tim/Documents/Dev/nx-platform-application/libs/messenger/protos/
+
       - name: "Sync generated files to destination repo"
         run: |
           rsync -av --delete \
-            dist/go/ \
+            libs/messenger/protos/dist/go/ \
             go-protos-repo/
 
       # --- NEW STEP 6a: Commit Changes Locally ---
