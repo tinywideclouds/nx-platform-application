@@ -19,6 +19,14 @@ jobs:
         with:
           fetch-depth: 0
 
+       # 2. Generate GitHub App Installation Token
+      - name: Generate Token
+        id: generate_token # Give step an ID to reference its output
+        uses: actions/create-github-app-token@v1 # Use the token generation action
+        with:
+          app-id: ${{ secrets.MESSENGER_PROTOS_APP_ID }}
+          private-key: ${{ secrets.MESSENGER_PROTOS_APP_PRIVATE_KEY }}
+
       # Keep Go setup (needed for protoc-gen-go)
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -29,7 +37,7 @@ jobs:
       - name: "Set up Buf"
         uses: bufbuild/buf-setup-action@v1
 
-      # Install ONLY protoc and Go plugins
+      # Install protoc and Go plugins
       - name: "Install Protoc and Go Plugins"
         run: |
           echo "Installing protobuf-compiler (protoc)..."
@@ -45,12 +53,12 @@ jobs:
           protoc --version
           protoc-gen-go --version
 
-      # Generate ONLY Go stubs
+      # Generate Go stubs
       - name: "Generate Go stubs"
         run: |
           echo "Changing directory to libs/messenger/protos..."
           cd libs/messenger/protos
-          echo "Generating ONLY Go types from current directory (./)..."
+          echo "Generating Go types from current directory (./)..."
           export PATH="$PATH:$(go env GOPATH)/bin"
           # Add the --only flag to target just the 'go' plugin from buf.gen.yaml
           buf generate --template buf.gen.go.yaml
@@ -58,22 +66,15 @@ jobs:
       - name: "Checkout destination repo (go-action-intention-protos)"
         uses: actions/checkout@v4
         with:
-          repository: "illmade-knight/go-action-intention-protos"
+          repository: "tinywideclouds/go-action-intention-protos"
           path: "go-protos-repo"
-          ssh-key: ${{ secrets.GO_PROTOS_DEPLOY_KEY }}
+          # Use the token generated in the 'generate_token' step
+          token: ${{ steps.generate_token.outputs.token }}
 
       - name: "Install rsync"
         run: |
           echo "Installing rsync..."
           sudo apt-get update && sudo apt-get install -y rsync
-
-#      - name: "DEBUG: Find generated output"
-#        run: |
-#          echo "Searching for the 'dist/go' directory starting from the workspace root..."
-#          # Use 'find' to locate the directory, searching the whole mapped volume
-#          find /mnt -name go -type d -path '*/dist/go' 2>/dev/null || echo "Could not find dist/go"
-#          echo "Listing libs/messenger/protos:"
-#          ls -la /mnt/c/Users/tim/Documents/Dev/nx-platform-application/libs/messenger/protos/
 
       - name: "Sync generated files to destination repo"
         run: |
