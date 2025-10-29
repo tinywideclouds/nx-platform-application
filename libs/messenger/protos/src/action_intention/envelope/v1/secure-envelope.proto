@@ -17,20 +17,22 @@ message SecureEnvelopePb {
   // A unique identifier for the message.
   string message_id = 3;
 
+  string group_id = 4;
+
   // A unique identifier for the conversation.
-  string conversation_id = 4;
+  string conversation_id = 5;
 
   // The AES-encrypted payload.
-  bytes encrypted_data = 5;
+  bytes encrypted_data = 6;
 
   // An AES-encrypted snippet of the full payload
-  bytes encrypted_snippet = 6;
+  bytes encrypted_snippet = 7;
 
   // The RSA-encrypted AES symmetric key.
-  bytes encrypted_symmetric_key = 7;
+  bytes encrypted_symmetric_key = 8;
 
   // The signature of the EncryptedData.
-  bytes signature = 8;
+  bytes signature = 9;
 
 }
 
