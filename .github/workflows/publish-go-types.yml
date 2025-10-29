@@ -21,11 +21,14 @@ jobs:
 
        # 2. Generate GitHub App Installation Token
       - name: Generate Token
-        id: generate_token # Give step an ID to reference its output
-        uses: actions/create-github-app-token@v1 # Use the token generation action
+        id: generate_token
+        uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.MESSENGER_PROTOS_APP_ID }}
           private-key: ${{ secrets.MESSENGER_PROTOS_APP_PRIVATE_KEY }}
+          # Explicitly tell the action which installation to use:
+          owner: tinywideclouds # The owner of the destination repo
+          repositories: go-action-intention-protos # The name of the destination repo
 
       # Keep Go setup (needed for protoc-gen-go)
       - name: Set up Go
