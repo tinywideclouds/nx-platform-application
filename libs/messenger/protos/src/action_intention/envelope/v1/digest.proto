@@ -17,6 +17,9 @@ message EncryptedDigestItemPb {
   // but be very careful not to leak sensitive information.
   // For example, a timestamp of the latest message might be acceptable.
   // string latest_timestamp = 4; // Example, if needed and safe.
+
+  // a switch to check github workflows - comment or uncomment to activate workflow
+  bytes change_field = 4;
 }
 
 // A wrapper message for a list of encrypted digest items.

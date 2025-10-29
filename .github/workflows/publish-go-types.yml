@@ -85,7 +85,6 @@ jobs:
             libs/messenger/protos/dist/go/ \
             go-protos-repo/
 
-      # --- NEW STEP 6a: Commit Changes Locally ---
       - name: "Check for and Commit Changes (Locally)"
         id: commit_changes # Give this step an ID to reference its outputs
         run: |
