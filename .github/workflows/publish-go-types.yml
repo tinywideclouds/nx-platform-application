@@ -119,7 +119,7 @@ jobs:
       - name: "DEBUG: Inspect commit_changes outputs"
         run: |
           echo "Value of steps.commit_changes.outputs.changes_detected: '${{ steps.commit_changes.outputs.changes_detected }}'"
-          echo "Value of env.GITHUB_ACTIONS: '${{ env.GITHUB_ACTIONS }}'"
+          echo "Value of env.GITHUB_ACTIONS: '${{ env.CI }}'"
           echo "Full condition evaluation: ${{ steps.commit_changes.outputs.changes_detected == 'true' && env.GITHUB_ACTIONS == 'true' }}"
 
       # --- NEW STEP 6b: Push Changes (Only on GitHub) ---
@@ -128,8 +128,13 @@ jobs:
         if: steps.commit_changes.outputs.changes_detected == 'true'
         run: |
           cd go-protos-repo
+
+          echo "Verifying remote origin URL:"
+          git remote -v
+
           echo "Pushing commit to main..."
           git push origin main
+
           echo "Pushing tag ${{ steps.commit_changes.outputs.tag_name }}..."
           git push origin ${{ steps.commit_changes.outputs.tag_name }}
 
