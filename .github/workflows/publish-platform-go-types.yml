@@ -1,0 +1,193 @@
+name: "Publish Generated Go Types"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "libs/platform/protos/**"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: "Generate and Publish Go Types"
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- NEW DEBUG STEP ---
+      - name: "DEBUG: Check App ID Secret Value"
+        run: |
+          echo "Value for app-id from env context: >>>${{ env.PLATFORM_PROTOS_APP_ID }}<<<"
+          echo "Value for act from env context: >>>${{ env.ACT }}<<<"
+
+      - name: "Checkout source repo (Nx)"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 1a. Generate GitHub App Installation Token from env
+      - name: Generate Token
+        if: env.ACT == 'true'
+        id: generate_token_local
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ env.PLATFORM_PROTOS_APP_ID }}
+          private-key: ${{ env.PLATFORM_PROTOS_APP_PRIVATE_KEY }}
+          # Explicitly tell the action which installation to use:
+          owner: tinywideclouds # The owner of the destination repo
+          repositories: gen-platform # The name of the destination repo
+
+      # --- STEP 2a: Checkout DESTINATION Repo ---
+      - name: "Checkout destination repo (gen-platform)"
+        if: env.ACT == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: "tinywideclouds/gen-platform"
+          path: "go-protos-repo"
+          token: ${{ steps.generate_token_local.outputs.token }}
+          persist-credentials: true
+
+      # 1b. Generate GitHub App Installation Token
+      - name: Generate Token
+        if: env.ACT != 'true'
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          # Change: Access the variables from the GitHub Secrets store
+          app-id: ${{ secrets.PLATFORM_PROTOS_APP_ID }}
+          private-key: ${{ secrets.PLATFORM_PROTOS_APP_PRIVATE_KEY }}
+          owner: tinywideclouds # Confirmed organization name
+          repositories: gen-platform # Confirmed destination repo name
+
+      # --- STEP 2: Checkout DESTINATION Repo ---
+      - name: "Checkout destination repo (gen-platform)"
+        if: env.ACT != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: "tinywideclouds/gen-platform"
+          path: "go-protos-repo"
+          token: ${{ steps.generate_token.outputs.token }}
+          persist-credentials: true
+
+      # --- NEW DEBUG STEP ---
+      - name: "DEBUG: Check origin URL"
+        run: |
+          echo "Checking remote origin URL inside ./go-protos-repo"
+          cd go-protos-repo
+          git remote -v
+          cd .. # Go back to workspace root for next step
+
+      # Keep Go setup (needed for protoc-gen-go)
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # Or your project's Go version
+
+      # Install Buf CLI
+      - name: "Set up Buf"
+        uses: bufbuild/buf-setup-action@v1
+
+      # Install protoc and Go plugins
+      - name: "Install Protoc and Go Plugins"
+        run: |
+          echo "Installing protobuf-compiler (protoc)..."
+          sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+          echo "Installing Go plugins..."
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest # Keep this if you use gRPC
+
+          echo "Verifying installations..."
+          protoc --version
+          protoc-gen-go --version
+
+      # Generate Go stubs
+      - name: "Generate Go stubs"
+        run: |
+          echo "Changing directory to libs/platform/protos..."
+          cd libs/platform/protos
+          echo "Generating Go types from current directory (./)..."
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          # Add the --only flag to target just the 'go' plugin from buf.gen.yaml
+          buf generate --template buf.gen.go.yaml
+
+      - name: "Install rsync"
+        run: |
+          echo "Installing rsync..."
+          sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: "Sync generated files to destination repo"
+        run: |
+          # 💡 IMPORTANT: Add --exclude '.git' to prevent deleting the repo metadata
+          rsync -av --delete --exclude '.git' --exclude 'go.mod' --exclude 'README.md' \
+          libs/platform/protos/dist/go/ \
+          go-protos-repo/
+
+      # Use the checked-out destination path
+      - name: "Update Go Module Dependencies"
+        working-directory: go-protos-repo
+        run: |
+          echo "Running go mod tidy in the destination repo..."
+          go mod tidy
+
+      - name: "Check for and Commit Changes (Locally)"
+        id: commit_changes # Give this step an ID to reference its outputs
+        run: |
+          cd go-protos-repo
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check for changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes detected. Nothing to commit."
+            # Set an output variable to indicate no changes
+            echo "changes_detected=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Changes detected, creating commit locally..."
+          git add .
+          SOURCE_SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          COMMIT_MSG="chore(generated): Sync types from nx-repo commit ${SOURCE_SHA_SHORT}"
+          git commit -m "$COMMIT_MSG"
+
+          # Create the tag locally
+          TAG="v0.0.0-$(date -u +'%Y%m%d%H%M%S')-${SOURCE_SHA_SHORT}"
+          git tag $TAG
+
+          # Set output variables for use in later steps
+          echo "changes_detected=true" >> $GITHUB_OUTPUT
+          echo "commit_message=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+
+      # --- NEW DEBUG STEP ---
+      - name: "DEBUG: Inspect commit_changes outputs"
+        run: |
+          echo "Value of steps.commit_changes.outputs.changes_detected: '${{ steps.commit_changes.outputs.changes_detected }}'"
+
+      # --- NEW STEP 6b: Push Changes (Only on GitHub) ---
+      - name: "Push Commit and Tag (Only on GitHub Actions)"
+        # Only run if changes were detected AND we are in the real GitHub Actions environment
+        if: steps.commit_changes.outputs.changes_detected == 'true' && env.ACT != 'true'
+
+        run: |
+          cd go-protos-repo
+
+          echo "Verifying remote origin URL:"
+          git remote -v
+
+          echo "Pushing commit to main..."
+          git push origin main
+
+          echo "Pushing tag ${{ steps.commit_changes.outputs.tag_name }}..."
+          git push origin ${{ steps.commit_changes.outputs.tag_name }}
+
+      # --- NEW STEP 6c: Local Test Confirmation ---
+      - name: "Local Test Confirmation (No Push)"
+        # Only run if changes were detected AND we are NOT in the real GitHub Actions environment
+        if: steps.commit_changes.outputs.changes_detected == 'true' && env.ACT== 'true'
+        run: |
+          echo "--- LOCAL TEST: Changes were detected and committed locally. ---"
+          echo "--- Would have pushed commit: '${{ steps.commit_changes.outputs.commit_message }}' ---"
+          echo "--- Would have pushed tag: ${{ steps.commit_changes.outputs.tag_name }} ---"
+          echo "--- You can inspect the changes in the ./go-protos-repo directory. ---"

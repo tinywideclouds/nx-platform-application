@@ -1,0 +1,35 @@
+// Defines the *minimal* structure of the SecureEnvelope used for
+// end-to-end encrypted messaging.
+// This is the ONLY data the "dumb" router will see.
+
+syntax = "proto3";
+
+package action_intention.envelope.v1;
+option go_package = "github.com/tinywideclouds/gen-platform/go/sm/v1;sm_v1";
+
+// Represents the "sealed" data packet.
+// All identifying metadata has been removed and placed *inside*
+// the encrypted_data blob, per the "Sealed Sender" model.
+message SecureEnvelopePb {
+  // The URN of the message recipient. This is the *only* routing
+  // information the router needs.
+  string recipient_id = 1;
+
+  // The AES-encrypted payload. This blob now contains the senderId,
+  // sentTimestamp, typeId, and the type-specific payloadBytes.
+  bytes encrypted_data = 2;
+
+  // The RSA-encrypted AES symmetric key.
+  bytes encrypted_symmetric_key = 3;
+
+  // The signature of the encrypted_data, created with the
+  // sender's *signing key*. This is mission-critical for the
+  // recipient to verify the sender's authenticity.
+  bytes signature = 4;
+}
+
+// A wrapper message for a list of secure envelopes.
+// This is what the client will receive when it polls for messages.
+message SecureEnvelopeListPb {
+  repeated SecureEnvelopePb envelopes = 1;
+}

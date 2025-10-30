@@ -3,14 +3,17 @@ syntax = "proto3";
 
 package types.user.v1;
 
-option go_package = "github.com/illmade-knight/go-platform-protos/gen/go/user/v1;user_v1";
+option go_package = "github.com/tinywideclouds/gen-platform/go/user/v1;user_v1";
 // Represents a single contact within a user's address book.
 message UserPb {
   // The contact's document ID from the address_book subcollection.
   string id = 1;
   // The contact's display name.
   string alias = 2;
-
+  // A real name field
+  string name  = 3;
   // The contact's primary email address.
-  string email = 3;
+  string email = 4;
+  // We like structured UIDS
+  string urn = 5;
 }

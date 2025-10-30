@@ -2,9 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import {
   Crypto,
   PrivateKeys,
-  PublicKeys,
   EncryptedPayload,
 } from '@nx-platform-application/sdk-core';
+import {
+  PublicKeys,
+} from '@nx-platform-application/platform-types';
 // We inject the 'IndexedDb' interface from platform-storage
 import {
   StorageProvider,

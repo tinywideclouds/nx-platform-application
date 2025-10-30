@@ -3,10 +3,9 @@ import {
   HttpClientTestingModule,
   HttpTestingController,
 } from '@angular/common/http/testing';
-import { URN } from '@nx-platform-application/platform-types';
+import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 
 import { KeyService } from './key.service';
-import { PublicKeys } from './public-keys.model';
 
 describe('KeyService', () => {
   let service: KeyService;

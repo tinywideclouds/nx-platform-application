@@ -1,8 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { URN } from '@nx-platform-application/platform-types';
+import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 import { firstValueFrom, map } from 'rxjs';
-import { PublicKeys } from './public-keys.model';
 
 @Injectable({
   providedIn: 'root',

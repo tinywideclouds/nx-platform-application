@@ -15,6 +15,8 @@ nx g @nx/angular:library --name=platform-storage --directory=libs/platform/ng/st
 
 nx g @nx/workspace:move --project=chat-data-access --destination=libs/ng/chat-state
 
+nx g @nx/angular:library --name=secure-key-access --directory=libs/messenger/secure-key-access --tags="scope:messenger"
+
 
 
 nx g @nx/angular:library --name=chat-live-data --directory=libs/messenger/chat-live-data --tags="scope:messenger"

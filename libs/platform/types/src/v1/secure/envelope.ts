@@ -1,26 +1,24 @@
 import { create, toJsonString, fromJson } from "@bufbuild/protobuf";
+import { URN } from '../net/urn';
 
-// --- Protobuf Imports (This is the *only* file allowed to do this) ---
+// --- Protobuf Imports (This is the *only* file allowed to do this) ---\
 import {
   SecureEnvelopePb,
   SecureEnvelopePbSchema,
-  SecureEnvelopeListPb,
   SecureEnvelopeListPbSchema,
-} from '@nx-platform-application/messenger-protos/envelope/v1/secure-envelope_pb.js'; // Assumed path
+} from '@nx-platform-application/platform-protos/secure/v1/envelope_pb';
 
-import { URN } from '@nx-platform-application/platform-types'
-
-// --- Smart Interface ---
+// --- Smart Interface (Refactored) ---
+// This interface is now minimal and matches the new .proto contract.
+// senderId, messageId, etc., are all GONE.
 export interface SecureEnvelope {
-  senderId: URN
-  recipientId: URN
-  messageId: string
-  encryptedSymmetricKey: Uint8Array
-  encryptedData: Uint8Array
-  signature: Uint8Array
+  recipientId: URN;
+  encryptedSymmetricKey: Uint8Array;
+  encryptedData: Uint8Array;
+  signature: Uint8Array;
 }
 
-// --- Mappers (Smart <-> Proto) ---
+// --- Mappers (Smart <-> Proto) [Refactored] ---
 
 /**
  * Maps the "smart" SecureEnvelope interface (with URN objects)
@@ -29,9 +27,8 @@ export interface SecureEnvelope {
  */
 export function secureEnvelopeToProto(envelope: SecureEnvelope): SecureEnvelopePb {
   return create(SecureEnvelopePbSchema, {
-    senderId: envelope.senderId.toString(),
+    // SENDER_ID and MESSAGE_ID removed
     recipientId: envelope.recipientId.toString(),
-    messageId: envelope.messageId,
     // These are already Uint8Array, pass them through
     encryptedSymmetricKey: envelope.encryptedSymmetricKey,
     encryptedData: envelope.encryptedData,
@@ -40,24 +37,23 @@ export function secureEnvelopeToProto(envelope: SecureEnvelope): SecureEnvelopeP
 }
 
 /**
- * Maps the "dumb" Protobuf message to the "smart" interface.
+ * Maps the "dumb" Protobuf message back to the "smart"
+ * SecureEnvelope interface.
  * (This is now an internal helper)
  */
-export function secureEnvelopeFromProto(protoEnvelope: SecureEnvelopePb): SecureEnvelope {
+export function secureEnvelopeFromProto(envelopePb: SecureEnvelopePb): SecureEnvelope {
   return {
-    senderId: URN.parse(protoEnvelope.senderId),
-    recipientId: URN.parse(protoEnvelope.recipientId),
-    messageId: protoEnvelope.messageId,
-
-    // These fields are already Uint8Array, pass them through directly.
-    encryptedSymmetricKey: protoEnvelope.encryptedSymmetricKey,
-    encryptedData: protoEnvelope.encryptedData,
-    signature: protoEnvelope.signature,
+    // SENDER_ID and MESSAGE_ID removed
+    recipientId: URN.parse(envelopePb.recipientId),
+    encryptedSymmetricKey: envelopePb.encryptedSymmetricKey,
+    encryptedData: envelopePb.encryptedData,
+    signature: envelopePb.signature,
   };
 }
 
-
-// --- NEW PUBLIC SERIALIZERS (Smart <-> String/JSON) ---
+// --- Public Serializers / Deserializers (Unchanged) ---
+// These functions work as-is, but now operate on the
+// new, simpler SecureEnvelope type.
 
 /**
  * PUBLIC API:
@@ -75,9 +71,6 @@ export function serializeEnvelopeToJson(envelope: SecureEnvelope): string {
  * PUBLIC API:
  * Deserializes a JSON response (as an object) into an array of
  * "smart" SecureEnvelope objects.
- *
- * The 'json' param is the raw object, NOT a string.
- * HttpClient will do the JSON.parse automatically.
  */
 export function deserializeJsonToEnvelopes(json: any): SecureEnvelope[] {
   // 1. Parse the raw JSON into a Proto *List* object
@@ -88,17 +81,14 @@ export function deserializeJsonToEnvelopes(json: any): SecureEnvelope[] {
 }
 
 /**
- * PUBLIC API: (*** NEW FUNCTION ***)
+ * PUBLIC API:
  * Deserializes a single JSON object (matching SecureEnvelopePb schema)
  * into a "smart" SecureEnvelope object.
- *
- * This is for single WebSocket messages.
- * The 'json' param is the raw object, NOT a string.
  */
 export function deserializeJsonToEnvelope(json: any): SecureEnvelope {
-  // 1. Parse raw JSON object into Proto object
+  // 1. Parse the raw JSON into a Proto *object*
   const protoEnvelope = fromJson(SecureEnvelopePbSchema, json);
 
-  // 2. Map Proto object to Smart object
+  // 2. Map proto object to smart object
   return secureEnvelopeFromProto(protoEnvelope);
 }

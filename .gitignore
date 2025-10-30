@@ -54,4 +54,5 @@ vitest.config.*.timestamp*
 **/.env
 /foo_rsa
 /foo_rsa.pub
-/.github/.secrets
+/.github/secrets/messenger/.secrets
+/.github/secrets/platform/.secrets

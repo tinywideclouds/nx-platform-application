@@ -7,11 +7,9 @@ import { URN } from '@nx-platform-application/platform-types';
 // It imports the "smart" models and the serialization helpers
 import {
   SecureEnvelope,
-  EncryptedDigest,
   serializeEnvelopeToJson,
   deserializeJsonToEnvelopes,
-  deserializeJsonToDigest,
-} from '@nx-platform-application/messenger-types';
+} from '@nx-platform-application/platform-types';
 
 @Injectable({
   providedIn: 'root',
