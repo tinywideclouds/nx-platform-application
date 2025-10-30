@@ -119,10 +119,17 @@ jobs:
       - name: "Sync generated files to destination repo"
         run: |
           # 💡 IMPORTANT: Add --exclude '.git' to prevent deleting the repo metadata
-          rsync -av --delete --exclude '.git' \
+          rsync -av --delete --exclude '.git' --exclude 'go.mod' --exclude 'README.md' \
           libs/messenger/protos/dist/go/ \
           go-protos-repo/
-#
+
+      # Use the checked-out destination path
+      - name: "Update Go Module Dependencies"
+        working-directory: go-protos-repo
+        run: |
+          echo "Running go mod tidy in the destination repo..."
+          go mod tidy
+
       - name: "Check for and Commit Changes (Locally)"
         id: commit_changes # Give this step an ID to reference its outputs
         run: |
