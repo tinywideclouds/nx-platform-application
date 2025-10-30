@@ -15,5 +15,5 @@ message UserPb {
   // The contact's primary email address.
   string email = 4;
   // We like structured UIDS
-  string urn = 5;
+//  string urn = 5;
 }

@@ -1,4 +1,4 @@
-name: "Publish Generated Go Types"
+name: "Publish Platform Go Types"
 
 on:
   push:
