@@ -1,0 +1,38 @@
+// File: types/routing/v1/queue.proto
+
+syntax = "proto3";
+
+// The package name mirrors your directory structure.
+package src.types.routing.v1;
+
+// This is the crucial part for Go.
+// This tells the Go protoc-plugin to place the generated file in
+// this Go package. You'll need to adjust this path to match
+// your 'gen-platform' module's structure.
+option go_package = "github.com/tinywideclouds/gen-platform/go/types/routing/v1;routing_v1";
+
+// --- How Imports Work ---
+// Because your "proto root" is the 'types/' directory, the
+// import path is just the relative path from that root.
+// This will correctly find 'types/secure/v1/envelope.proto'.
+import "src/types/secure/v1/envelope.proto";
+
+
+// QueuedMessagePb is the "Wrapper Message".
+// It safely combines the router's internal queue ID with the
+// dumb, untouched envelope.
+message QueuedMessagePb {
+  // The router-generated, internal-only queue ID (e.g., a UUID).
+  // This is the handle the client will use for the ACK.
+  string id = 1;
+
+  // The original, unmodified, dumb "sealed" envelope.
+  // We are importing this type from the 'secure' package.
+  src.types.secure.v1.SecureEnvelopePb envelope = 2;
+}
+
+// QueuedMessageListPb is the payload returned by the 'GET /api/messages'
+// endpoint. It's just a list of the wrapper messages.
+message QueuedMessageListPb {
+  repeated QueuedMessagePb messages = 1;
+}

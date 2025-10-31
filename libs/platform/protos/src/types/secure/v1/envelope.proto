@@ -4,8 +4,8 @@
 
 syntax = "proto3";
 
-package action_intention.envelope.v1;
-option go_package = "github.com/tinywideclouds/gen-platform/go/sm/v1;sm_v1";
+package src.types.secure.v1;
+option go_package = "github.com/tinywideclouds/gen-platform/go/types/secure/v1;secure_v1";
 
 // Represents the "sealed" data packet.
 // All identifying metadata has been removed and placed *inside*

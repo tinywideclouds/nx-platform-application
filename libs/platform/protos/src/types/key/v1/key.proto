@@ -1,8 +1,8 @@
 // Defines the message contract for the KeyService.
 syntax = "proto3";
 
-package action_intention.keys.v1;
-option go_package = "github.com/tinywideclouds/gen-platform/go/keys/v1;keys_v1";
+package src.types.keys.v1;
+option go_package = "github.com/tinywideclouds/gen-platform/go/types/keys/v1;keys_v1";
 
 // PublicKeysPb represents the set of public keys for a user.
 // This message is returned by the /api/keys/{userId} endpoint.
