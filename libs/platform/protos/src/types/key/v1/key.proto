@@ -2,7 +2,7 @@
 syntax = "proto3";
 
 package src.types.keys.v1;
-option go_package = "go/types/keys/v1;keys_v1";
+option go_package = "github.com/tinywideclouds/gen-platform/go/types/keys/v1;keys_v1";
 
 // PublicKeysPb represents the set of public keys for a user.
 // This message is returned by the /api/keys/{userId} endpoint.

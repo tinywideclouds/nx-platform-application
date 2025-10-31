@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package src.types.net.v1;
 
-option go_package = "go/types/net/v1;net_v1";
+option go_package = "github.com/tinywideclouds/gen-platform/go/types/net/v1;net_v1";
 
 message UrnPb {
   string namespace = 1;

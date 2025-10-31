@@ -7,8 +7,8 @@
     "test:identity": "nx test identity-service --configuration=unit",
     "test:identity:integration": "nx test identity-service --configuration=integration",
     "test:identity:all": "nx test identity-service",
-    "test:messenger-workflow:go-publish": "act.exe push -W .github/workflows/publish-messenger-go-types.yml -s MESSENGER_PROTOS_APP_ID=dummy -s MESSENGER_PROTOS_APP_PRIVATE_KEY=dummy",
-    "test:platform-workflow:go-publish": "act.exe push -W .github/workflows/publish-platform-go-types.yml -s PLATFORM_PROTOS_APP_ID=dummy -s PLATFORM_PROTOS_APP_PRIVATE_KEY=dummy"
+    "test:messenger-workflow:go-publish": "act.exe push -W .github/workflows/publish-messenger-go-types.yml --env-file .github/secrets/messenger/.secrets",
+    "test:platform-workflow:go-publish": "act.exe push -W .github/workflows/publish-platform-go-types.yml --env-file .github/secrets/platform/.secrets"
   },
   "dependencies": {
     "@angular/animations": "20.3.7",

@@ -2,5 +2,5 @@ version: v1
 plugins:
   - plugin: go
     opt:
-      - paths=source_relative
+      - module=github.com/tinywideclouds/gen-platform
     out: dist/go
