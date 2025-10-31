@@ -5,7 +5,7 @@
 syntax = "proto3";
 
 package src.types.secure.v1;
-option go_package = "github.com/tinywideclouds/gen-platform/go/types/secure/v1;secure_v1";
+option go_package = "go/types/secure/v1;secure_v1";
 
 // Represents the "sealed" data packet.
 // All identifying metadata has been removed and placed *inside*

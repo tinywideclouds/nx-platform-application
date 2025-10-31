@@ -9,7 +9,7 @@ package src.types.routing.v1;
 // This tells the Go protoc-plugin to place the generated file in
 // this Go package. You'll need to adjust this path to match
 // your 'gen-platform' module's structure.
-option go_package = "github.com/tinywideclouds/gen-platform/go/types/routing/v1;routing_v1";
+option go_package = "go/types/routing/v1;routing_v1";
 
 // --- How Imports Work ---
 // Because your "proto root" is the 'types/' directory, the
