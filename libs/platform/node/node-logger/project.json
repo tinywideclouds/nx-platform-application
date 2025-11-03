@@ -7,12 +7,17 @@
   "tags": ["scope:platform"],
   "targets": {
     "build": {
-      "executor": "@nx/vite:build",
+      "executor": "@nx/js:tsc",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
+        "main": "libs/platform/node/node-logger/src/index.ts",
         "outputPath": "dist/libs/platform/node/node-logger",
-        "configFile": "libs/platform/node/node-logger/vite.config.mts"
+        "tsConfig": "libs/platform/node/node-logger/tsconfig.lib.json",
+        "assets": [
+          "libs/platform/node/node-logger/README.md",
+          "libs/platform/node/node-logger/package.json"
+        ]
       }
     },
     "test": {

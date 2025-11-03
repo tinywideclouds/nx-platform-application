@@ -10,7 +10,7 @@ export const createMainRouter = (db: Firestore) => {
 
   // Mount the routers on the main router
   router.use(healthCheckRouter);
-  router.use(jwksRouter);
+  // router.use(jwksRouter);
   router.use(googleAuthRoutes);
 
   router.use(createUserApiRoutes(db));

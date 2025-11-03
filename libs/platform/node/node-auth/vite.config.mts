@@ -10,7 +10,7 @@ export default defineConfig(() => ({
   cacheDir: '../../../../node_modules/.vite/libs/platform/node/node-auth',
   plugins: [
     nxViteTsPaths(),
-    nxCopyAssetsPlugin(['*.md']),
+    nxCopyAssetsPlugin(['*.md', 'package.json']),
     dts({
       entryRoot: 'src',
       tsconfigPath: 'tsconfig.lib.json',

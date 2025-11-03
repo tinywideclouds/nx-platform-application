@@ -1,0 +1,12 @@
+{
+  "name": "@nx-platform-application/node-logger",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "module": "./index.js",
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

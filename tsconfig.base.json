@@ -15,6 +15,9 @@
     "module": "esnext",
     "lib": ["es2022"],
     "paths": {
+      "@nx-platform-application/auth-flow-test": [
+        "libs/messenger/auth-flow-test/src/index.ts"
+      ],
       "@nx-platform-application/chat-data-access": [
         "libs/messenger/chat-data-access/src/index.ts"
       ],

@@ -1,0 +1,20 @@
+{
+  "name": "auth-flow-test",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/auth-flow-test/src",
+  "projectType": "library",
+  "tags": ["scope:messenger"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/messenger/auth-flow-test",
+        "tsConfig": "libs/messenger/auth-flow-test/tsconfig.lib.json",
+        "packageJson": "libs/messenger/auth-flow-test/package.json",
+        "main": "libs/messenger/auth-flow-test/src/index.ts",
+        "assets": ["libs/messenger/auth-flow-test/*.md"]
+      }
+    }
+  }
+}

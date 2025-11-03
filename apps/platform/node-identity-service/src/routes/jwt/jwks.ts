@@ -47,19 +47,26 @@ router.get('/.well-known/jwks.json', async (_req, res) => {
   res.json(jwksCache);
 });
 
-router.get('/.well-known/oauth-authorization-server', async (_req, res) => {
+router.get('/.well-known/oauth-authorization-server', async (req, res) => {
   console.log('trying');
-  const issuer = config.issuer + ':' + config.port;
-  // Build the metadata object dynamically from the internal configuration.
+
+  // --- THIS IS THE FIX ---
+  // 1. Get the protocol (http)
+  const protocol = req.protocol;
+  // 2. Get the host from the request header (e.g., 'localhost:3000' or 'host.docker.internal:3000')
+  const host = req.get('host');
+  // 3. Build the dynamic issuer URL
+  const issuer = `${protocol}://${host}`;
+
+  // Build the metadata object dynamically from the request.
   const metadata = {
-    // 1. Get the issuer directly from the application config.
+    // 1. Use the dynamic issuer URL
     issuer: issuer,
 
-    // 2. Construct the JWKS URI using the issuer base URL.
+    // 2. Construct the JWKS URI using the dynamic issuer URL.
     jwks_uri: `${issuer}/.well-known/jwks.json`,
 
-    // 3. Get the supported algorithm directly from the signOptions.
-    //    If you ever support more, they will be here.
+    // 3. Get the supported algorithm (this is still static)
     id_token_signing_alg_values_supported: [signOptions.algorithm],
   };
 

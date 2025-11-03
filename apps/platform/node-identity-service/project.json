@@ -30,7 +30,7 @@
         "platform": "node",
         "outputPath": "dist/apps/platform/node-identity-service",
         "format": ["esm"],
-        "bundle": false,
+        "bundle": true,
         "main": "apps/platform/node-identity-service/src/main.ts",
         "tsConfig": "apps/platform/node-identity-service/tsconfig.app.json",
         "assets": ["apps/platform/node-identity-service/src/assets"],
@@ -43,7 +43,8 @@
         }
       },
       "configurations": {
-        "development": {},
+        "development": {
+        },
         "production": {
           "esbuildOptions": {
             "sourcemap": false,
@@ -85,7 +86,7 @@
       "continuous": true,
       "executor": "@nx/js:node",
       "defaultConfiguration": "development",
-      "dependsOn": ["build"],
+      "dependsOn": [],
       "options": {
         "buildTarget": "node-identity-service:build",
         "runBuildTargetDependencies": false

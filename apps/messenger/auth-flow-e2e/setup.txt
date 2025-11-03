@@ -1,0 +1,5 @@
+to get docker access to the ghcr.io we need to do the following:
+
+gh auth refresh -s read:packages
+
+gh auth token | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin

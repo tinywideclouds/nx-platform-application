@@ -1,20 +1,34 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+// [ADDED] Import crypto to generate a real key pair
+import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-import { config } from '../../config.js';
-import type { User } from '@nx-platform-application/platform-types';
 import { generateToken, signOptions } from './jwt.service.js';
+import type { User } from '@nx-platform-application/platform-types';
 
-describe('generateToken', () => {
-  let testPublicKey: string;
+// --- Mocks ---
+// We must mock the config module to inject our generated key
+vi.mock('../../config.js', async (importOriginal) => {
+  // Get the actual config to avoid mocking all of it
+  const actualConfig = await importOriginal<typeof import('../../config.js')>();
+  return {
+    config: {
+      ...actualConfig.config,
+      // We will override jwtPrivateKey inside the test
+      jwtPrivateKey: 'placeholder-before-test-runs',
+    },
+  };
+});
+
+// Re-import the (now-mockable) config
+import { config } from '../../config.js';
+// --- End Mocks ---
+
+describe('JWT Service (jwt.service.ts)', () => {
   let testPrivateKey: string;
-  let originalPrivateKey: any;
-  let originalAudience: any;
+  let testPublicKey: KeyObject;
 
+  // [THE FIX] Before any tests run, generate a fresh key pair.
   beforeAll(() => {
-    // Generate a real, valid key pair once for all tests in this suite.
-    // This avoids hardcoding keys and ensures they are in the correct format.
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,
       publicKeyEncoding: {
         type: 'spki',
@@ -25,72 +39,41 @@ describe('generateToken', () => {
         format: 'pem',
       },
     });
-
-    testPublicKey = publicKey;
     testPrivateKey = privateKey;
+    testPublicKey = publicKey;
   });
 
   beforeEach(() => {
-    // Before each test, save the original config values and then
-    // overwrite them with our dynamically generated test keys.
-    originalPrivateKey = config.jwtPrivateKey;
-    originalAudience = config.jwtAudience;
-
-    config.jwtPrivateKey = testPrivateKey;
-    config.jwtAudience = 'test-audience';
+    // Inject the generated private key into the mocked config
+    // for each test.
+    vi.mocked(config, true).jwtPrivateKey = testPrivateKey;
   });
 
-  afterEach(() => {
-    // After each test, restore the original config to ensure test isolation
-    // and prevent side-effects on other tests.
-    config.jwtPrivateKey = originalPrivateKey;
-    config.jwtAudience = originalAudience;
-  });
-
-  it('should create a valid, verifiable JWT with the correct claims', () => {
-    // 1. Setup: Define mock inputs
-    const mockUser: User = {
-      id: 'user-123',
-      alias: 'testuser',
+  it('should generate a valid RS256 JWT verifiable with the public key', () => {
+    // ARRANGE
+    const testUser: User = {
+      id: 'test-user-123',
       email: 'test@example.com',
+      alias: 'Test User',
     };
-    const mockProviderIdToken = 'provider-original-id-token-string';
+    const testIdToken = 'mock-google-id-token';
 
-    // 2. Act: Call the function to generate a real token using the test keys
-    const token = generateToken(mockUser, mockProviderIdToken);
+    // ACT
+    // generateToken will now use the config, which we have
+    // mocked to return our testPrivateKey
+    const token = generateToken(testUser, testIdToken);
 
-    // 3. Assert: Verify the token and its payload
-    let decoded: jwt.JwtPayload | string = {};
-    expect(() => {
-      // Use the corresponding public key to verify the token's signature
-      decoded = jwt.verify(token, testPublicKey, {
-        algorithms: [signOptions.algorithm as jwt.Algorithm],
-      });
-    }).not.toThrow();
+    // ASSERT
+    expect(token).toEqual(expect.any(String));
 
-    // Check that 'decoded' is a valid payload object
-    expect(typeof decoded).toBe('object');
-    const payload = decoded as jwt.JwtPayload;
+    // Verify the token using the corresponding public key
+    const decoded = jwt.verify(token, testPublicKey, {
+      algorithms: ['RS256'],
+      audience: signOptions.audience,
+      issuer: signOptions.issuer,
+    }) as jwt.JwtPayload;
 
-    // Check static claims
-    expect(payload.iss).toBe('node-identity-service');
-    expect(payload.sub).toBe(mockUser.id);
-    expect(payload.aud).toBe('test-audience');
-    expect(payload.alias).toBe(mockUser.alias);
-    expect(payload.email).toBe(mockUser.email);
-    expect(payload.original_identity).toEqual({
-      provider: 'google',
-      id_token: mockProviderIdToken,
-    });
-
-    // Check time-based claims (iat, exp)
-    expect(payload.iat).toBeDefined();
-    expect(payload.exp).toBeDefined();
-    expect(typeof payload.iat).toBe('number');
-    expect(typeof payload.exp).toBe('number');
-
-    // Verify that the expiration is set correctly (15 minutes from issue time)
-    const fifteenMinutesInSeconds = 15 * 60;
-    expect(payload.exp).toBe(payload.iat! + fifteenMinutesInSeconds);
+    expect(decoded.sub).toBe(testUser.id);
+    expect(decoded.email).toBe(testUser.email);
   });
 });

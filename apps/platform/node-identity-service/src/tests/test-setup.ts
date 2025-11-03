@@ -1,3 +1,5 @@
+// src/tests/test-setup.ts
+
 import express from 'express';
 import session from 'express-session';
 import passport from 'passport';
@@ -6,18 +8,77 @@ import cors from 'cors';
 import { Firestore } from '@google-cloud/firestore';
 import { GenericContainer } from 'testcontainers';
 import { FirestoreStore } from '@google-cloud/connect-firestore';
-import { configurePassport } from '../internal/auth/passport.config';
-import { createMainRouter } from '../routes';
+// --- 1. IMPORT crypto and vitest ---
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { vi } from 'vitest';
+
+// --- 2. REMOVE server-side imports from the top level ---
+// These must be imported *inside* the function after the cache is reset.
+// import { configurePassport } from '../internal/auth/passport.config';
+// import { createMainRouter } from '../routes';
 
 /**
  * Creates and starts a server instance for integration testing.
  * It replicates the setup from `main.ts` but uses the Firestore emulator
  * and listens on an ephemeral port.
  *
- * @returns An object containing the Express app instance and a function to stop the server.
+ * @returns An object containing the Express app instance, a function to stop the server,
+ * and the test configuration used.
  */
 export async function startTestServer() {
-  // Define the Firestore emulator container
+  // --- 3. GENERATE test config and keys ---
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  const testConfig = {
+    INTERNAL_API_KEY: randomBytes(16).toString('hex'),
+    JWT_PRIVATE_KEY: privateKey,
+    SESSION_SECRET: 'a-fixed-secret-for-testing',
+    E2E_TEST_SECRET: 'a-fixed-e2e-secret-for-testing',
+    // Add other required env vars for the config validation
+    GCP_PROJECT_ID: 'test-project',
+    GOOGLE_CLIENT_ID: 'test-google-id',
+    GOOGLE_CLIENT_SECRET: 'test-google-secret',
+    GOOGLE_REDIRECT_URL_SUCCESS: 'http://test-success',
+    GOOGLE_REDIRECT_URL_FAILURE: 'http://test-failure',
+    GOOGLE_AUTH_CALLBACK: '/test-callback',
+    JWT_SECRET: 'a-real-jwt-secret',
+    JWT_AUDIENCE: 'test-audience',
+    CLIENT_URL: 'http://test-client',
+  };
+
+  // --- 4. SET environment variables *before* any server imports ---
+  process.env.INTERNAL_API_KEY = testConfig.INTERNAL_API_KEY;
+  process.env.JWT_PRIVATE_KEY = testConfig.JWT_PRIVATE_KEY;
+  process.env.SESSION_SECRET = testConfig.SESSION_SECRET;
+  process.env.E2E_TEST_SECRET = testConfig.E2E_TEST_SECRET;
+  process.env.GCP_PROJECT_ID = testConfig.GCP_PROJECT_ID;
+  process.env.GOOGLE_CLIENT_ID = testConfig.GOOGLE_CLIENT_ID;
+  process.env.GOOGLE_CLIENT_SECRET = testConfig.GOOGLE_CLIENT_SECRET;
+  process.env.GOOGLE_REDIRECT_URL_SUCCESS =
+    testConfig.GOOGLE_REDIRECT_URL_SUCCESS;
+  process.env.GOOGLE_REDIRECT_URL_FAILURE =
+    testConfig.GOOGLE_REDIRECT_URL_FAILURE;
+  process.env.GOOGLE_AUTH_CALLBACK = testConfig.GOOGLE_AUTH_CALLBACK;
+  process.env.JWT_SECRET = testConfig.JWT_SECRET;
+  process.env.JWT_AUDIENCE = testConfig.JWT_AUDIENCE;
+  process.env.CLIENT_URL = testConfig.CLIENT_URL;
+
+  // --- 5. THE FIX: Reset the module cache ---
+  // This clears the cached config.ts (and all other server modules).
+  vi.resetModules();
+
+  // --- 6. IMPORT server modules *after* cache reset ---
+  // Now, when these are imported, they will re-load config.ts,
+  // which will read the new process.env values.
+  const { configurePassport } = await import(
+    '../internal/auth/passport.config'
+    );
+  const { createMainRouter } = await import('../routes');
+
+  // --- 7. Continue with server/emulator setup ---
   const container = new GenericContainer(
     'gcr.io/google.com/cloudsdktool/cloud-sdk:emulators'
   )
@@ -32,10 +93,7 @@ export async function startTestServer() {
       '0.0.0.0:8080',
     ]);
 
-  // Start the container before the server
   const firestoreContainer = await container.start();
-
-  // Set the environment variable for the Firestore client
   process.env.FIRESTORE_EMULATOR_HOST = `${firestoreContainer.getHost()}:${firestoreContainer.getMappedPort(
     8080
   )}`;
@@ -43,20 +101,17 @@ export async function startTestServer() {
   const db = new Firestore({ projectId: 'test-project' });
   const app = express();
 
-  // --- REPLICATE MIDDLEWARE SETUP FROM main.ts ---
   app.use(cors({ origin: 'http://localhost:4200', credentials: true }));
 
   const firestoreSessionStore = new FirestoreStore({
     dataset: db,
-    // Use a dedicated collection for test sessions to keep them separate.
     kind: 'express-sessions-test',
   });
 
   app.use(
     session({
       store: firestoreSessionStore,
-      // Use a static, known secret for predictable behavior in tests.
-      secret: 'a-fixed-secret-for-testing',
+      secret: testConfig.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
     })
@@ -64,17 +119,12 @@ export async function startTestServer() {
 
   app.use(passport.initialize());
   app.use(passport.session());
-  configurePassport(db);
+  configurePassport(db); // This now uses the correctly loaded config
 
-  // This is correct and matches main.ts
-  const mainRouter = createMainRouter(db);
+  const mainRouter = createMainRouter(db); // This also uses the correct config
   app.use('/api', mainRouter);
 
-  // --- CREATE AND START THE HTTP SERVER ---
   const server = http.createServer(app);
-
-  // Listen on port 0, which tells the OS to assign a random, available port.
-  // This is crucial for preventing port conflicts when running tests in parallel.
   server.listen(0);
 
   return {
@@ -86,9 +136,16 @@ export async function startTestServer() {
           resolve();
         });
       });
-      // Stop the Docker container after the server is closed
       await firestoreContainer.stop();
       delete process.env.FIRESTORE_EMULATOR_HOST;
+
+      // Clean up all test env variables
+      const keys = Object.keys(testConfig) as Array<keyof typeof testConfig>;
+      for (const key of keys) {
+        delete process.env[key];
+      }
     },
+    // --- 8. Return the config for tests to use ---
+    testConfig,
   };
 }
