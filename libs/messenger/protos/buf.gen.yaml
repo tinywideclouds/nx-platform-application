@@ -1,5 +1,10 @@
 version: v1
 plugins:
+  - plugin: es
+    opt:
+      - target=js+dts
+      - import_extension=js
+    out: dist/ts
   - plugin: go
     opt:
       - paths=source_relative

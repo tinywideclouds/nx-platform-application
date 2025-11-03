@@ -1,0 +1,30 @@
+// File: libs/messenger/protos/src/types/messenger/v1/payload.proto
+
+syntax = "proto3";
+
+// Package name mirrors the directory structure from the 'src/' root
+package src.types.messenger.v1;
+
+// Go package option for the backend generator
+// (You'll want to adjust 'gen-messenger' to match your Go repo)
+option go_package = "github.com/tinywideclouds/gen-messenger/go/types/messenger/v1;messenger_v1";
+
+// EncryptedMessagePayloadPb defines the *inner* payload that is
+// encrypted and placed inside the SecureEnvelope's 'encrypted_data' field.
+//
+// This is the "sealed" part of the "Sealed Sender" model.
+message EncryptedMessagePayloadPb {
+  // The URN of the *sender*.
+  string sender_id = 1;
+
+  // The ISO 8601 timestamp of when the message was sent (by the sender).
+  string sent_timestamp = 2;
+
+  // The URN that identifies the *type* of the payloadBytes.
+  // e.g., "urn:sm:type:text-message", "urn:sm:type:reaction"
+  string type_id = 3;
+
+  // The raw, type-specific payload.
+  // (e.g., for a text message, this would be the UTF-8 bytes of the string).
+  bytes payload_bytes = 4;
+}

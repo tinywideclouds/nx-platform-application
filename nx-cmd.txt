@@ -17,6 +17,14 @@ nx g @nx/workspace:move --project=chat-data-access --destination=libs/ng/chat-st
 
 nx g @nx/angular:library --name=secure-key-access --directory=libs/messenger/secure-key-access --tags="scope:messenger"
 
-
-
 nx g @nx/angular:library --name=chat-live-data --directory=libs/messenger/chat-live-data --tags="scope:messenger"
+
+nx g @nx/workspace:move --project=sealed-sender --destination=libs/messenger/messenger-crypto-access
+
+nx g @nx/workspace:move --project=chat-live --destination=libs/messenger/chat-send-access
+
+nx g @nx/angular:library --name=chat-send-access --directory=libs/messenger/chat-send-access --tags="scope:messenger"
+
+
+nx g @nx/angular:application --name=auth-flow-e2e --directory=apps/messenger/auth-flow-e2e --tags="scope:messenger"
+

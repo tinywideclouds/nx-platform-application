@@ -2,7 +2,11 @@ import {
   PublicKeysPbSchema,
   PublicKeysPb,
 } from '@nx-platform-application/platform-protos/key/v1/key_pb';
-import { create, fromJson } from '@bufbuild/protobuf'; // <-- IMPORT 'fromJson'
+import { create, fromJson } from '@bufbuild/protobuf';
+
+// --- Base64 Helper ---
+const b64Encode = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode.apply(null, Array.from(bytes)));
 
 /**
  * The "smart" public-facing interface for the KeyService.
@@ -33,16 +37,29 @@ export function publicKeysFromProto(pk: PublicKeysPb): PublicKeys {
 }
 
 /**
- * PUBLIC API:
+ * PUBLIC API: (Read)
  * Deserializes a JSON response object (matching PublicKeysPb schema)
  * into a "smart" PublicKeys object.
- *
- * Services will import and call THIS function.
  */
-export function deserializeJsonToPublicKeys(json: any): PublicKeys {
+export function deserializeJsonToPublicKeys(json: unknown): PublicKeys {
   // 1. Parse raw JSON object into Proto object
-  const protoPb = fromJson(PublicKeysPbSchema, json);
+  // We cast to `any` here as it's the expected type for `fromJson`.
+  const protoPb = fromJson(PublicKeysPbSchema, json as any);
 
   // 2. Map Proto object to Smart interface
   return publicKeysFromProto(protoPb);
+}
+
+/**
+ * PUBLIC API: (Write)
+ * Serializes a "smart" PublicKeys object into a JSON-safe object
+ * (with Base64 strings) ready for a POST body.
+ */
+export function serializePublicKeysToJson(
+  keys: PublicKeys
+): Record<string, string> {
+  return {
+    encKey: b64Encode(keys.encKey),
+    sigKey: b64Encode(keys.sigKey),
+  };
 }

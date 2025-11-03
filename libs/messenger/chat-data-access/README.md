@@ -1,75 +1,62 @@
-# Messenger Chat Data Access Library (`chat-data-access`)
+# 📖 @nx-platform-application/chat-data-access
 
-This library provides the low-level data access service responsible for communicating with the backend chat API endpoints. It acts as the bridge between the application's internal "smart" models and the JSON-over-HTTP transport layer defined by the backend.
+This library provides the core data access layer for the Messenger. It was refactored in **Work Package 2** to align with the "Poke-then-Pull" architecture of the `go-routing-service`.
 
-## Purpose
+It replaces the old, stateful "history" and "digest" protocols with the new, stateless "queue" protocol.
 
-This is the **"dumb" data access layer** for the chat feature. Its sole responsibility is to handle HTTP requests (`GET`, `POST`) related to chat messages and digests.
+## 🏛️ Architecture: Command Query Separation (CQS)
 
-Crucially, this library adheres to the project's architecture rules:
-* It **does not** contain any complex business logic or state management (that belongs in `chat-state`).
-* It **does not** interact directly with Protobuf definitions or schemas (that is handled exclusively by `messenger-types`).
+This library is split into two distinct services, following a strict Command Query Separation (CQS) model:
 
-It consumes `HttpClient` and the serialization/deserialization helper functions provided by the `messenger-types` library to translate between the application's internal `SecureEnvelope` / `EncryptedDigest` models and the JSON payloads sent/received over HTTP.
+1.  **`ChatDataService` (The "Query" Service):** Responsible for *pulling* data from the message queue and acknowledging receipt.
+2.  **`ChatSendService` (The "Command" Service):** Responsible for *pushing* new messages to the send endpoint.
 
-## Public API
+---
 
-This library exports one root-provided Angular service:
+## 1. ChatDataService (The "Query" API)
 
-### `ChatDataService`
+This service implements the "Pull" part of the "Poke-then-Pull" flow. Its only job is to get message batches and acknowledge them.
 
-Inject this service to interact with the chat backend via HTTP.
+### Public API
 
-**Methods:**
+**`getMessageBatch(limit: number = 50): Observable<QueuedMessage[]>`**
 
-* `postMessage(envelope: SecureEnvelope): Observable<void>`
-  * **Description:** Sends a single, fully formed "smart" `SecureEnvelope` to the backend.
-  * **Action:** Internally calls `serializeEnvelopeToJson` (from `messenger-types`) and POSTs the resulting JSON string to `/api/messages/send`.
-  * **Endpoint:** `POST /api/messages/send`
+* **Endpoint:** `GET /api/messages`
+* **Action:** Fetches the next available batch of messages from the user's queue.
+* **Facade:** It uses the `deserializeJsonToQueuedMessages` helper (from `@nx-platform-application/platform-types`) to map the raw JSON response into an array of "smart" `QueuedMessage` objects.
 
-* `checkForNewMessages(): Observable<{ hasNewMessages: boolean }>`
-  * **Description:** Performs a lightweight check to see if the currently authenticated user (identified by JWT) has any new messages waiting.
-  * **Action:** Sends a GET request and returns a simple boolean indicator.
-  * **Endpoint:** `GET /api/messages/count` (or similar)
+**`acknowledge(messageIds: string[]): Observable<void>`**
 
-* `fetchMessageDigest(): Observable<EncryptedDigest>`
-  * **Description:** Fetches the encrypted message digest for the authenticated user (identified by JWT). The digest contains information about conversations with unread messages.
-  * **Action:** Sends a GET request, receives a JSON object, and uses `deserializeJsonToDigest` (from `messenger-types`) to map it to the "smart" `EncryptedDigest` model.
-  * **Endpoint:** `GET /api/messages/digest`
+* **Endpoint:** `POST /api/messages/ack`
+* **Action:** Acknowledges receipt of one or more messages by their IDs. This follows the "Paginate-Save-Ack-Delete" flow, signaling to the `go-routing-service` that the client has successfully persisted the messages and they can be deleted from the queue.
+* **Body:** `{ "messageIds": ["id-1", "id-2", ...] }`
 
-* `fetchConversationHistory(conversationUrn: URN): Observable<SecureEnvelope[]>`
-  * **Description:** Fetches the full, encrypted message history for a specific conversation (identified by its URN, which could be a user or a group).
-  * **Action:** Sends a GET request, receives a JSON object (representing a list of envelopes), and uses `deserializeJsonToEnvelopes` (from `messenger-types`) to map it to an array of "smart" `SecureEnvelope` models.
-  * **Endpoint:** `GET /api/messages/history/{conversationUrn}`
+---
 
-## Usage
+## 2. ChatSendService (The "Command" API)
 
-Inject `ChatDataService` into your "smart" service layer (e.g., `ChatService` in `chat-state`) to perform data operations.
+This service implements the "Send" logic. Its only job is to post a new, fully formed envelope.
 
-```typescript
-import { inject } from '@angular/core';
-import { ChatDataService } from '@nx-platform-application/messenger-chat-data-access'; // Assumed path
-import { SecureEnvelope, URN } from '@nx-platform-application/messenger-types';
+### Public API
 
-// ... inside a service (e.g., ChatService in chat-state)
+**`sendMessage(envelope: SecureEnvelope): Observable<void>`**
 
-private chatDataService = inject(ChatDataService);
+* **Endpoint:** `POST /api/send`
+* **Action:** Sends a new, end-to-end encrypted `SecureEnvelope` to the routing service for ingestion.
+* **Facade:** It uses the `serializeEnvelopeToJson` helper (from `@nx-platform-application/platform-types`) to convert the "smart" `SecureEnvelope` object into a JSON string, which is sent as the raw request body.
+* **Response:** Expects a `202 Accepted`.
 
-async send(envelope: SecureEnvelope) {
-  await firstValueFrom(this.chatDataService.postMessage(envelope));
-}
+---
 
-async check() {
-  const result = await firstValueFrom(this.chatDataService.checkForNewMessages());
-  console.log('Has new messages:', result.hasNewMessages);
-}
+## ⛔ Removed Functionality
 
-async loadDigest() {
-  const digest = await firstValueFrom(this.chatDataService.fetchMessageDigest());
-  // ... process digest.items
-}
+As part of the WP2 refactor, the following legacy methods (and their stateful "history" logic) have been **deleted** from this library:
 
-async loadHistory(contactUrn: URN) {
-  const history = await firstValueFrom(this.chatDataService.fetchConversationHistory(contactUrn));
-  // ... process history (SecureEnvelope[])
-}
+* `postMessage()` (Superseded by `ChatSendService.sendMessage()`)
+* `checkForNewMessages()`
+* `fetchMessageDigest()`
+* `fetchConversationHistory()`
+
+## Running unit tests
+
+Run `nx test chat-data-access` to execute the unit tests for this library.

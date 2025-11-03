@@ -1,126 +1,51 @@
-# 💬 libs/messenger/chat-live-data
+# 📖 @nx-platform-application/chat-live-data
 
-This library handles the real-time, persistent connection for the chat system.
+This library provides the **"Trigger Plane"** for the Messenger application. It is the client-side implementation of the "Poke" in the "Poke-then-Pull" architecture.
 
-## 🎯 Purpose
+Its **sole responsibility** is to maintain a persistent WebSocket connection to the `go-routing-service`'s `/connect` endpoint for presence and to listen for "poke" notifications.
 
-The `ChatLiveDataService` is a "headless" service. Its **only** responsibility is to:
-1.  Establish and maintain a WebSocket connection.
-2.  Receive JSON-string messages from the socket.
-3.  Parse the JSON string and use the `messenger-types` library to deserialize it into a `SecureEnvelope`.
-4.  Expose the incoming `SecureEnvelope` objects on a public observable.
-5.  Expose the connection status on a public observable.
+## 🏛️ Architecture & Purpose
 
-This library **does not** contain any business logic. It does not know how to decrypt envelopes, manage application state, or handle connection fallbacks. That logic is the responsibility of the consumer (e.g., `chat-state`).
+This service was refactored in **Work Package 3** to be a "dumb" trigger, not a "data" service.
 
----
+* **It Does NOT Receive Data:** The backend does **not** send message data over this WebSocket. It only sends a content-less "poke" to signal that new messages are available.
+* **It Only Triggers:** The `incomingMessage$` observable is now an `Observable<void>`. When it fires, it is a signal for the application's state layer (e.g., `chat-state`) to call the "Pull" service (`ChatDataService.getMessageBatch()`).
 
-## 🚀 Public API
+## Primary API
 
 ### `ChatLiveDataService`
 
-Provided in `root`.
+An `@Injectable` Angular service that provides the following public API:
 
-#### **`connect(url?: string): void`**
-Establishes the connection to the WebSocket. If a `url` is not provided, it uses the hardcoded default.
+**`connect(jwtToken: string): void`**
 
-#### **`disconnect(): void`**
-Closes the WebSocket connection.
+* **Endpoint:** `wss://.../connect`
+* **Action:** Initiates the WebSocket connection.
+* **Authentication:** It passes the user's `jwtToken` as the WebSocket `protocol` to authenticate the connection.
+* **Resilience:** Automatically handles connection drops with an exponential backoff retry policy, managed by `rxjs/defer` and `retry`.
 
-#### **`incomingMessage$: Observable<SecureEnvelope>`**
-This is the primary output. It emits a `SecureEnvelope` for *any* message that arrives over the WebSocket, including chat messages, "is-typing" events, read receipts, etc.
+**`disconnect(): void`**
 
-The service itself does not inspect the content; it only deserializes and forwards the envelope.
+* **Action:** Imperatively closes the WebSocket connection and cleans up the RxJS subscription.
 
-#### **`status$: Observable<ConnectionStatus>`**
-Emits the current state of the WebSocket connection. `ConnectionStatus` is one of:
-* `'disconnected'`
-* `'connecting'`
-* `'connected'`
-* `'error'`
+**`status$: Observable<ConnectionStatus>`**
 
-This stream is crucial for consumers like `chat-state` to orchestrate UI and fallback logic (e.g., switching to HTTP polling).
+* **Type:** `Observable<'disconnected' | 'connecting' | 'connected' | 'error'>`
+* **Action:** An observable stream that allows the UI to monitor the real-time status of the WebSocket connection.
 
----
+**`incomingMessage$: Observable<void>`**
 
-## Example Usage
+* **Type:** `Observable<void>`
+* **Action:** This is the "poke" trigger. It emits `void` whenever *any* message is received from the WebSocket, signaling that new data is ready to be pulled.
 
-This is how the `chat-state` library would typically consume this service:
+## ⛔ Removed Functionality
 
-```typescript
-import { Injectable, OnDestroy, inject } from '@angular/core';
-import { ChatLiveDataService, ConnectionStatus } from '@nx-platform-application/chat-live-data';
-import { ChatDataAccessService } from '@nx-platform-application/chat-data-access';
-import { SecureEnvelope } from '@nx-platform-application/messenger-types';
-import { Subject, Subscription, timer, switchMap, tap, catchError, EMPTY } from 'rxjs';
+As part of the WP3 refactor, all logic related to data handling was **deleted**:
 
-@Injectable({ providedIn: 'root' })
-export class ChatStateService implements OnDestroy {
-  private live = inject(ChatLiveDataService);
-  private http = inject(ChatDataAccessService); // For fallback
+* The service no longer imports `SecureEnvelope` or `deserializeJsonToEnvelope`.
+* The `incomingMessage$` subject no longer emits `SecureEnvelope` objects.
+* All `JSON.parse` and deserialization logic has been removed from the RxJS pipeline.
 
-  private subs = new Subscription();
-  private isPolling = false;
+## Running unit tests
 
-  constructor() {
-    this.connect();
-  }
-
-  connect(): void {
-    // 1. Subscribe to incoming messages
-    this.subs.add(
-      this.live.incomingMessage$.subscribe((envelope) => {
-        this.decryptAndProcessEnvelope(envelope);
-      })
-    );
-
-    // 2. Subscribe to status to manage fallbacks
-    this.subs.add(
-      this.live.status$.subscribe((status) => {
-        this.handleConnectionStatus(status);
-      })
-    );
-
-    // 3. Initiate the connection
-    this.live.connect();
-  }
-
-  private handleConnectionStatus(status: ConnectionStatus): void {
-    if (status === 'connected') {
-      this.isPolling = false;
-    }
-    
-    // If we get an error or disconnect, start HTTP polling
-    if ((status === 'error' || status === 'disconnected') && !this.isPolling) {
-      this.isPolling = true;
-      this.startHttpPolling();
-    }
-  }
-
-  private startHttpPolling(): void {
-    // Poll every 10 seconds, but only while 'isPolling' is true
-    timer(0, 10000).pipe(
-      tap(() => {
-        if (!this.isPolling) throw new Error('Stop polling');
-      }),
-      switchMap(() => this.http.fetchNewMessagesSince(this.getLastMessageTimestamp())),
-      catchError(() => {
-        // Stop the timer
-        return EMPTY;
-      })
-    ).subscribe(messages => {
-      // Process polled messages...
-    });
-  }
-
-  private decryptAndProcessEnvelope(envelope: SecureEnvelope): void {
-    // ... decryption logic ...
-    // ... logic to check if it's a 'typing' event or 'message' ...
-    // ... update state ...
-  }
-
-  ngOnDestroy(): void {
-    this.subs.unsubscribe();
-    this.live.disconnect();
-  }
-}
+Run `nx test chat-live-data` to execute the unit tests for this library.
