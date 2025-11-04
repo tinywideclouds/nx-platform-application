@@ -28,7 +28,6 @@ export default defineConfig(() => ({
     reportCompressedSize: true,
     lib: {
       entry: 'src/index.ts', // This is the library entry point
-      name: 'contacts-data-access',
       fileName: 'index',
       formats: ['es' as const],
     },
