@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 
-// --- Imports from platform-types ---
-// We now import the "queue" facade from WP1
 import {
   QueuedMessage,
   deserializeJsonToQueuedMessages,

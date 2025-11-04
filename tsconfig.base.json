@@ -21,7 +21,7 @@
       "@nx-platform-application/chat-live-data": [
         "libs/messenger/chat-live-data/src/index.ts"
       ],
-      "@nx-platform-application/chat-send-access": [
+      "@nx-platform-application/chat-storage": [
         "libs/messenger/chat-storage/src/index.ts"
       ],
       "@nx-platform-application/chat-state": [
@@ -45,7 +45,10 @@
       "@nx-platform-application/key-data-access": [
         "libs/platform/ng/key-data-access/src/index.ts"
       ],
-      "@nx-platform-application/key-v2-access": [
+      "@nx-platform-application/messenger-crypto-access": [
+        "libs/messenger/messenger-crypto-access/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-key-access": [
         "libs/messenger/messenger-key-access/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
@@ -83,9 +86,6 @@
       ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
-      ],
-      "@nx-platform-application/sealed-sender": [
-        "libs/messenger/sealed-sender/src/index.ts"
       ]
     }
   },

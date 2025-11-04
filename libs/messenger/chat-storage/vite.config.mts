@@ -8,8 +8,21 @@ export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/chat-storage',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      name: 'chat-storage',
+      fileName: (format: any) => `index.${format}.js`,
+      formats: ['es' as const],
+    },
+    // You also must externalize your dependencies
+    rollupOptions: {
+      external: [
+        '@angular/core',
+        '@angular/common/http',
+        'rxjs',
+        '@nx-platform-application/console-logger'
+      ],
+    },
+  },
 }));

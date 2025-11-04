@@ -2,7 +2,6 @@
 
 import { Injectable, inject } from '@angular/core';
 
-// --- Platform Imports (Generic Tools) ---
 import {
   StorageProvider,
   IndexedDb,
@@ -13,8 +12,7 @@ import {
   SecureEnvelope,
 } from '@nx-platform-application/platform-types';
 
-// --- Messenger-Specific Imports ---
-import { SecureKeyService } from '@nx-platform-application/key-v2-access';
+import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 import {
   EncryptedMessagePayload,
   serializePayloadToProtoBytes,
@@ -76,8 +74,8 @@ export class MessengerCryptoService {
 
     // 2. Extract public keys for the network
     const [encPubKeyRaw, sigPubKeyRaw] = await Promise.all([
-      this.crypto.exportKey('spki', encKeyPair.publicKey),
-      this.crypto.exportKey('spki', sigKeyPair.publicKey),
+      crypto.subtle.exportKey('spki', encKeyPair.publicKey),
+      crypto.subtle.exportKey('spki', sigKeyPair.publicKey),
     ]);
 
     const publicKeys: PublicKeys = {

@@ -11,8 +11,8 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/ng/chat-storage",
-        "configFile": "libs/messenger/ng/chat-storage/vite.config.mts"
+        "outputPath": "dist/libs/messenger/chat-storage",
+        "configFile": "libs/messenger/chat-storage/vite.config.mts"
       }
     },
     "test": {

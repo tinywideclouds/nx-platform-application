@@ -6,10 +6,24 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-data-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-state',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      name: 'chat-state',
+      fileName: (format: any) => `index.${format}.js`,
+      formats: ['es' as const],
+    },
+    // You also must externalize your dependencies
+    rollupOptions: {
+      external: [
+        '@angular/core',
+        '@angular/common/http',
+        'rxjs',
+        '@nx-platform-application/chat-live-data',
+        '@nx-platform-application/chat-data-access'
+      ],
+    },
+  },
 }));

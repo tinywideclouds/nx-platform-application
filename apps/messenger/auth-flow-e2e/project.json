@@ -18,9 +18,9 @@
           "npx nx serve node-identity-service",
           "npx wait-on http://localhost:3000/api/health-check && docker run --rm --network=host -e IDENTITY_SERVICE_URL=http://host.docker.internal:3000 -e JWT_SECRET -e GCP_PROJECT_ID -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/adc.json -v \"C:\\Users\\tim\\AppData\\Roaming\\gcloud\\application_default_credentials.json\":/tmp/adc.json ghcr.io/tinywideclouds/go-key-service:latest",
           "npx wait-on http://localhost:3000/api/health-check && docker run --rm --network=host -e IDENTITY_SERVICE_URL=http://host.docker.internal:3000 -e GCP_PROJECT_ID -e API_PORT=8082 -e WEBSOCKET_PORT=8083 -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/adc.json -v \"C:\\Users\\tim\\AppData\\Roaming\\gcloud\\application_default_credentials.json\":/tmp/adc.json ghcr.io/tinywideclouds/go-routing-service:latest",
-          "npx wait-on http://localhost:3000/api/health-check http-get://localhost:8081/readyz && npx vitest run --config ./libs/messenger/chat-state/vitest.config.mts"
+          "npx wait-on http://localhost:3000/api/health-check http-get://localhost:8082/readyz && npx vitest run --config ./apps/messenger/auth-flow-e2e/vitest.config.mts"
         ],
-        "parallel": true
+        "parallel": false
       }
     },
     "lint": {

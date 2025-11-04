@@ -10,7 +10,7 @@ export default defineConfig({
   cacheDir: '../../../node_modules/.vite/apps/messenger/auth-flow-e2e',
   plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'chat-data-access',
+    name: 'auth-flow-e2e',
     watch: false,
     globals: true,
     environment: 'jsdom',

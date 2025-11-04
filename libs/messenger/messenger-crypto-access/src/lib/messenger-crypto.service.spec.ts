@@ -3,7 +3,9 @@
 import { TestBed } from '@angular/core/testing';
 import { Mock, Mocked } from 'vitest';
 
-// --- Platform Imports (to be mocked) ---
+// 1. Import webcrypto from Node
+import { webcrypto } from 'node:crypto';
+
 import { IndexedDb } from '@nx-platform-application/platform-storage';
 import {
   URN,
@@ -12,17 +14,16 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
-// --- Messenger-Specific Imports (to be mocked) ---
-// We *do not* import SecureKeyService from here.
-
 import {
   EncryptedMessagePayload,
 } from '@nx-platform-application/messenger-types';
 
-// --- Local Imports (to be mocked/tested) ---
 import { Crypto } from './crypto';
 import { PrivateKeys } from './types';
 import { MessengerCryptoService } from './messenger-crypto.service';
+
+// 2. Stub the global 'crypto' with the REAL Node.js implementation
+vi.stubGlobal('crypto', webcrypto);
 
 // --- LINT FIX: MOCK THE LAZY-LOADED MODULE ---
 // Create a manual mock object for the service's API
@@ -31,9 +32,7 @@ const mockSecureKeyService = {
   getKey: vi.fn(),
 };
 
-// Mock the *entire module* that the linter is complaining about.
-// When the spec file (or the service file *under test*) tries to
-// import SecureKeyService, it will get this mock instead.
+// Mock the *entire module*
 vi.mock('@nx-platform-application/key-v2-access', () => ({
   SecureKeyService: vi.fn(() => mockSecureKeyService),
 }));
@@ -46,7 +45,7 @@ vi.mock('./crypto', () => ({
   Crypto: vi.fn(() => ({
     generateEncryptionKeys: vi.fn(),
     generateSigningKeys: vi.fn(),
-    exportKey: vi.fn(), // <--- Fix: Explicitly mock exportKey
+    // We no longer mock 'exportKey' here, as it's not on the Crypto class
     encrypt: vi.fn(),
     decrypt: vi.fn(),
     sign: vi.fn(),
@@ -54,13 +53,15 @@ vi.mock('./crypto', () => ({
   })),
 }));
 vi.mock('@nx-platform-application/platform-storage');
-vi.stubGlobal('crypto', { subtle: { importKey: vi.fn(), exportKey: vi.fn() } });
+
+// 3. REMOVE the old, problematic partial stub
+// vi.stubGlobal('crypto', { subtle: { importKey: vi.fn(), exportKey: vi.fn() } });
 
 describe('MessengerCryptoService', () => {
   let service: MessengerCryptoService;
   let mockCrypto: Mocked<Crypto>;
   let mockStorage: Mocked<IndexedDb>;
-  let mockSubtle: Mocked<SubtleCrypto>;
+  let mockSubtle: Mocked<SubtleCrypto>; // This will now be the real object
   let mockSerialize: Mock;
   let mockDeserialize: Mock;
 
@@ -110,9 +111,8 @@ describe('MessengerCryptoService', () => {
 
   beforeEach(async () => {
     // --- LINT FIX: Import the *mocked* service ---
-    // This import is now safe because vi.mock has replaced it.
     const { SecureKeyService } = await import(
-      '@nx-platform-application/key-v2-access'
+      '@nx-platform-application/messenger-key-access'
       );
 
     // Get other mocked instances
@@ -124,27 +124,38 @@ describe('MessengerCryptoService', () => {
 
     mockCrypto = new Crypto() as Mocked<Crypto>;
     mockStorage = new IndexedDb() as Mocked<IndexedDb>;
+
+    // 4. This now gets the REAL crypto.subtle object
     mockSubtle = crypto.subtle as Mocked<SubtleCrypto>;
+
     mockSerialize = msgTypes.serializePayloadToProtoBytes as Mock;
     mockDeserialize = msgTypes.deserializeProtoBytesToPayload as Mock;
 
     // Reset all mocks
-    vi.clearAllMocks();
-    mockSecureKeyService.storeKeys.mockResolvedValue(undefined);
-    mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys);
-    mockCrypto.generateEncryptionKeys.mockResolvedValue(mockEncKeyPair);
-    mockCrypto.generateSigningKeys.mockResolvedValue(mockSigKeyPair);
-    mockCrypto.exportKey
+    vi.clearAllMocks(); // This is safe now
+
+    // 5. SPY ON and MOCK the methods from the real object
+    vi.spyOn(mockSubtle, 'importKey').mockResolvedValue(mockSigPublicKey);
+    vi.spyOn(mockSubtle, 'exportKey')
       .mockResolvedValueOnce(mockEncKeyRaw.buffer)
       .mockResolvedValueOnce(mockSigKeyRaw.buffer);
+
+    // --- Configure all other mocks ---
+    mockSecureKeyService.storeKeys.mockResolvedValue(undefined);
+    mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys);
+
+    mockCrypto.generateEncryptionKeys.mockResolvedValue(mockEncKeyPair);
+    mockCrypto.generateSigningKeys.mockResolvedValue(mockSigKeyPair);
+
     mockStorage.saveKeyPair.mockResolvedValue(undefined);
     mockStorage.loadKeyPair.mockResolvedValue(null);
+
     mockSerialize.mockReturnValue(mockInnerPayloadBytes);
     mockDeserialize.mockReturnValue(mockInnerPayload);
+
     mockCrypto.encrypt.mockResolvedValue(mockEncryptedPayload);
     mockCrypto.sign.mockResolvedValue(mockSignature);
     mockCrypto.decrypt.mockResolvedValue(mockInnerPayloadBytes);
-    mockSubtle.importKey.mockResolvedValue(mockSigPublicKey);
     mockCrypto.verify.mockResolvedValue(true);
 
     TestBed.configureTestingModule({
@@ -153,8 +164,6 @@ describe('MessengerCryptoService', () => {
         { provide: Crypto, useValue: mockCrypto },
         { provide: IndexedDb, useValue: mockStorage },
         // --- LINT FIX: Provide the *mocked* service ---
-        // We use the imported mock class as the token, and
-        // the mock object as the value.
         { provide: SecureKeyService, useValue: mockSecureKeyService },
       ],
     });
@@ -171,10 +180,22 @@ describe('MessengerCryptoService', () => {
   describe('generateAndStoreKeys', () => {
     it('should generate, save locally, and upload keys', async () => {
       const result = await service.generateAndStoreKeys(mockUserUrn);
+
+      // Check that the real crypto.subtle.exportKey was called
+      expect(mockSubtle.exportKey).toHaveBeenCalledTimes(2);
+      expect(mockSubtle.exportKey).toHaveBeenCalledWith('spki', mockEncKeyPair.publicKey);
+      expect(mockSubtle.exportKey).toHaveBeenCalledWith('spki', mockSigKeyPair.publicKey);
+
+      // Check local storage
+      expect(mockStorage.saveKeyPair).toHaveBeenCalledTimes(2);
+
+      // Check remote upload
       expect(mockSecureKeyService.storeKeys).toHaveBeenCalledWith(
         mockUserUrn,
         mockPublicKeys
       );
+
+      // Check result
       expect(result.publicKeys).toEqual(mockPublicKeys);
     });
   });
@@ -204,6 +225,7 @@ describe('MessengerCryptoService', () => {
         mockPublicKeys
       );
       expect(mockSerialize).toHaveBeenCalledWith(mockInnerPayload);
+      expect(mockSubtle.importKey).toHaveBeenCalled(); // Check importKey was called
       expect(mockCrypto.encrypt).toHaveBeenCalled();
       expect(mockCrypto.sign).toHaveBeenCalled();
       expect(result).toEqual(mockEnvelope);
@@ -221,6 +243,7 @@ describe('MessengerCryptoService', () => {
       expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(
         mockInnerPayload.senderId
       );
+      expect(mockSubtle.importKey).toHaveBeenCalled(); // Check importKey was called
       expect(mockCrypto.verify).toHaveBeenCalled();
       expect(result).toEqual(mockInnerPayload);
     });

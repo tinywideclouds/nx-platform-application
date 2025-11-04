@@ -11,8 +11,8 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/ng/messenger-key-access",
-        "configFile": "libs/messenger/ng/messenger-key-access/vite.config.mts"
+        "outputPath": "dist/libs/messenger/messenger-key-access",
+        "configFile": "libs/messenger/messenger-key-access/vite.config.mts"
       }
     },
     "test": {

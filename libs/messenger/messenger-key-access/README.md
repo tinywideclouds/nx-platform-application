@@ -1,4 +1,4 @@
-# 📖 @nx-platform-application/key-v2-access
+# 📖 @nx-platform-application/messenger-key-access
 
 This library provides the `SecureKeyService`, a critical component for the "Poke-then-Pull" architecture. It is the _only_ service in the Angular application responsible for communicating with the V2 `go-key-service` backend.
 
@@ -39,4 +39,4 @@ An `@Injectable` Angular service that provides the following public methods:
 
 ## Running unit tests
 
-Run `nx test key-v2-access` to execute the unit tests for this library.
+Run `nx test messenger-key-access` to execute the unit tests for this library.

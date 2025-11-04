@@ -7,7 +7,7 @@ import {
   WritableSignal,
   Injector,
 } from '@angular/core';
-import { URN } from '@nx-platform-application/platform-types';
+import {ISODateTimeString, URN, User} from '@nx-platform-application/platform-types';
 import {
   Subject,
   filter,
@@ -25,45 +25,50 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-access'; // WP1
+} from '@nx-platform-application/messenger-crypto-access';
 import {
   ChatDataService,
   ChatSendService,
-} from '@nx-platform-application/chat-data-access'; // WP2
+} from '@nx-platform-application/chat-data-access';
 import {
   ChatLiveDataService,
-} from '@nx-platform-application/chat-live-data'; // WP3
+} from '@nx-platform-application/chat-live-data';
 import {
   ChatStorageService,
   DecryptedMessage,
   ConversationSummary,
-} from '@nx-platform-application/chat-storage'; // WP4.1
+} from '@nx-platform-application/chat-storage';
+import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 
-// --- NEW Facade Imports ---
+// --- Facade Imports ---
+import {
+  QueuedMessage,
+} from '@nx-platform-application/platform-types';
+
 import {
   EncryptedMessagePayload,
-  QueuedMessage,
-  SecureEnvelope,
-} from '@nx-platform-application/platform-types';
+} from '@nx-platform-application/messenger-types';
+import {Temporal} from "@js-temporal/polyfill";
 
 @Injectable({
   providedIn: 'root',
 })
 export class ChatService implements OnDestroy {
   // --- Injected Dependencies ---
-  private readonly injector = inject(Injector);
   private readonly logger = inject(Logger);
   private readonly authService = inject(AuthService);
-  private readonly cryptoService = inject(MessengerCryptoService); // WP1
-  private readonly dataService = inject(ChatDataService); // WP2
-  private readonly sendService = inject(ChatSendService); // WP2
-  private readonly liveService = inject(ChatLiveDataService); // WP3
-  private readonly storageService = inject(ChatStorageService); // WP4.1
+  private readonly cryptoService = inject(MessengerCryptoService);
+  private readonly dataService = inject(ChatDataService);
+  private readonly sendService = inject(ChatSendService);
+  private readonly liveService = inject(ChatLiveDataService);
+  private readonly storageService = inject(ChatStorageService);
+  private readonly keyService = inject(SecureKeyService);
 
   // --- Private State ---
   private readonly destroy$ = new Subject<void>();
   private myKeys = signal<PrivateKeys | null>(null);
-  private isPolling = signal(false); // Lock to prevent concurrent pulls
+  private isPolling = signal(false);
+  private currentUserCache = signal<User | null>(null);
 
   // --- Public State (Signals) ---
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
@@ -77,35 +82,33 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * The main startup sequence for the application.
+   * CORE LIFECYCLE: Handles initialization and async setup.
    */
   private async init(): Promise<void> {
     try {
-      // 1. Wait for user to be authenticated
-      const currentUser = await firstValueFrom(
-        this.authService.currentUser$.pipe(filter((u) => u != null))
+      await firstValueFrom(
+        this.authService.sessionLoaded$.pipe(filter((session) => !!session))
       );
+      const currentUser = this.authService.currentUser();
       if (!currentUser) throw new Error('Authentication failed.');
 
-      const authToken = await this.authService.getAuthToken();
+      this.currentUserCache.set(currentUser);
 
-      // 2. Load local history from DB (WP4.1)
+      const authToken = this.authService.getJwtToken();
       const summaries = await this.storageService.loadConversationSummaries();
       this.activeConversations.set(summaries);
 
-      // 3. Load crypto keys from DB (WP1)
-      const keys = await this.cryptoService.loadMyKeys(currentUser.id);
+      // URN.parse must be called here for the string ID
+      const senderUrn = URN.parse(currentUser.id);
+      const keys = await this.cryptoService.loadMyKeys(senderUrn);
+
       if (!keys) {
         this.logger.warn('No crypto keys found. User may need to generate them.');
-        // In a real app, we'd trigger an onboarding flow
       } else {
         this.myKeys.set(keys);
       }
 
-      // 4. Connect to the "Poke" service (WP3)
-      this.liveService.connect(authToken);
-
-      // 5. Start the orchestration listeners
+      this.liveService.connect(authToken!);
       this.handleConnectionStatus();
       this.initLiveSubscriptions();
     } catch (error) {
@@ -114,11 +117,9 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * Listens to the WebSocket status to trigger the "Pull" loop
-   * and a fallback poller.
+   * LISTENER: Triggers initial pull and sets up fallback poller.
    */
   private handleConnectionStatus(): void {
-    // A. Trigger "Pull" on successful connection
     this.liveService.status$
       .pipe(
         filter((status) => status === 'connected'),
@@ -129,7 +130,6 @@ export class ChatService implements OnDestroy {
         this.fetchAndProcessMessages();
       });
 
-    // B. Fallback 15-second poller
     interval(15_000)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -139,8 +139,7 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * Listens for the "Poke" from the WebSocket to trigger
-   * the "Pull" loop.
+   * LISTENER: Triggers pull on explicit server notification ("poke").
    */
   private initLiveSubscriptions(): void {
     this.liveService.incomingMessage$
@@ -152,22 +151,22 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * This is the "PULL" loop.
-   * Fetches, decrypts, saves, and acknowledges messages.
+   * CORE LOGIC: Fetches, decrypts, saves, and acknowledges messages.
    */
   public async fetchAndProcessMessages(batchLimit = 50): Promise<void> {
-    if (this.isPolling()) return; // Prevent concurrent pulls
+    if (this.isPolling()) return;
     this.isPolling.set(true);
 
     const myKeys = this.myKeys();
-    if (!myKeys) {
-      this.logger.warn('Cannot process messages: crypto keys not loaded.');
+    const currentUser = this.currentUserCache();
+
+    if (!myKeys || !currentUser) {
+      this.logger.warn('Cannot process messages: crypto keys or user not loaded.');
       this.isPolling.set(false);
       return;
     }
 
     try {
-      // 1. Get Message Batch (WP2)
       const queuedMessages = await firstValueFrom(
         this.dataService.getMessageBatch(batchLimit)
       );
@@ -182,38 +181,34 @@ export class ChatService implements OnDestroy {
       const processedIds: string[] = [];
       const newMessages: DecryptedMessage[] = [];
 
-      // 2. Loop & Decrypt (WP1)
       for (const msg of queuedMessages) {
         try {
           const decrypted = await this.cryptoService.verifyAndDecrypt(
             msg.envelope,
             myKeys
           );
-          // 3. Convert to local model & Save (WP4.1)
-          const newMsg = this.mapPayloadToDecrypted(msg, decrypted);
+
+          const newMsg = this.mapPayloadToDecrypted(msg, decrypted, currentUser);
           await this.storageService.saveMessage(newMsg);
+
           newMessages.push(newMsg);
           processedIds.push(msg.id);
         } catch (error) {
           this.logger.error('Failed to decrypt/verify message', error, msg);
-          // We still ACK a bad message to remove it from the queue
           processedIds.push(msg.id);
         }
       }
 
-      // 4. Update UI Signals
       this.upsertMessages(newMessages);
 
-      // 5. Acknowledge (WP2)
       await firstValueFrom(this.dataService.acknowledge(processedIds));
 
-      // 6. Recurse if queue is full
       if (queuedMessages.length === batchLimit) {
         this.logger.info('Queue was full, pulling next batch immediately.');
-        this.isPolling.set(false); // Unlock for recursion
+        this.isPolling.set(false);
         this.fetchAndProcessMessages(batchLimit);
       } else {
-        this.isPolling.set(false); // Done
+        this.isPolling.set(false);
       }
     } catch (error) {
       this.logger.error('Failed to fetch/process messages', error);
@@ -222,58 +217,54 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * This is the "SEND" flow.
-   * Encrypts, sends, and optimistically saves the message.
+   * CORE LOGIC: Encrypts, sends, and optimistically saves the message.
    */
   public async sendMessage(
     recipientUrn: URN,
     plaintext: string
   ): Promise<void> {
     const myKeys = this.myKeys();
-    const currentUser = this.authService.currentUser();
+    const currentUser = this.currentUserCache();
+
     if (!myKeys || !currentUser) {
       this.logger.error('Cannot send: keys or user not loaded.');
       return;
     }
 
     try {
-      // 1. Create Inner Payload (from WP1/Payload Proto)
+      // 1. Create Inner Payload (FIX: Parse string ID to URN)
       const payload: EncryptedMessagePayload = {
-        senderId: currentUser.id,
-        sentTimestamp: new Date().toISOString(),
+        senderId: URN.parse(currentUser.id),
+        sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
         typeId: URN.parse('urn:sm:type:text'),
         payloadBytes: new TextEncoder().encode(plaintext),
       };
 
-      // 2. Encrypt & Sign (WP1)
-      // TODO: We need to get recipient keys. For now, assume we have them.
-      // This is a placeholder for a 'contact' service.
-      const recipientKeys = await firstValueFrom(of(null)); // Placeholder
-      if (!recipientKeys) {
-        this.logger.error('Recipient keys not found.');
-        return;
-      }
+      // 2. Fetch Recipient Keys
+      const recipientKeys = await this.keyService.getKey(recipientUrn);
 
+      // 3. Encrypt & Sign (WP1)
       const envelope = await this.cryptoService.encryptAndSign(
         payload,
         recipientUrn,
         myKeys,
-        recipientKeys // Needs real implementation
+        recipientKeys
       );
 
-      // 3. Send (WP2)
+      // 4. Send (WP2)
       await firstValueFrom(this.sendService.sendMessage(envelope));
 
-      // 4. Optimistic Local Save (WP4.1)
+      // 5. Optimistic Local Save (WP4.1)
       const optimisticMsg: DecryptedMessage = {
-        messageId: `local-${crypto.randomUUID()}`, // Temporary local ID
-        senderId: currentUser.id,
+        messageId: `local-${crypto.randomUUID()}`,
+        senderId: URN.parse(currentUser.id), // FIX: Parse string ID to URN
         recipientId: recipientUrn,
         sentTimestamp: payload.sentTimestamp,
         typeId: payload.typeId,
         payloadBytes: payload.payloadBytes,
         status: 'sent',
-        conversationUrn: this.getConversationUrn(currentUser.id, recipientUrn),
+        // FIX: Pass URN.parse(currentUser.id) to getConversationUrn
+        conversationUrn: this.getConversationUrn(URN.parse(currentUser.id), recipientUrn, currentUser),
       };
       await this.storageService.saveMessage(optimisticMsg);
       this.upsertMessages([optimisticMsg]);
@@ -283,20 +274,18 @@ export class ChatService implements OnDestroy {
     }
   }
 
-  // --- Utility & Teardown ---
+  // --- Utility Methods ---
 
   private upsertMessages(messages: DecryptedMessage[]): void {
-    // This logic would be more complex in a real app,
-    // handling summaries, sorting, etc.
     this.messages.update((current) => [...current, ...messages]);
     // TODO: Update activeConversations signal
   }
 
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
-    payload: EncryptedMessagePayload
+    payload: EncryptedMessagePayload,
+    me: User
   ): DecryptedMessage {
-    const me = this.authService.currentUser()!;
     return {
       messageId: qMsg.id,
       senderId: payload.senderId,
@@ -307,17 +296,19 @@ export class ChatService implements OnDestroy {
       status: 'received',
       conversationUrn: this.getConversationUrn(
         payload.senderId,
-        qMsg.envelope.recipientId
+        qMsg.envelope.recipientId,
+        me
       ),
     };
   }
 
-  private getConversationUrn(urn1: URN, urn2: URN): URN {
-    // Simple utility to get a consistent convo URN
-    const me = this.authService.currentUser()!;
+  private getConversationUrn(urn1: URN, urn2: URN, me: User): URN {
     return urn1.toString() === me.id.toString() ? urn2 : urn1;
   }
 
+  /**
+   * LIFECYCLE: Cleans up subscriptions and WebSocket connection.
+   */
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();

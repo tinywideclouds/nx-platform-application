@@ -11,8 +11,8 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/ng/messenger-crypto-access",
-        "configFile": "libs/messenger/ng/messenger-crypto-access/vite.config.mts"
+        "outputPath": "dist/libs/messenger/messenger-crypto-access",
+        "configFile": "libs/messenger/messenger-crypto-access/vite.config.mts"
       }
     },
     "test": {

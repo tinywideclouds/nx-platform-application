@@ -6,31 +6,29 @@
   "projectType": "library",
   "tags": ["scope:messenger"],
   "targets": {
-    "targets": {
-      "build": {
-        "executor": "@nx/vite:build",
-        "outputs": [
-          "{options.outputPath}"
-        ],
-        "defaultConfiguration": "production",
-        "options": {
-          "outputPath": "dist/libs/messenger/chat-live-data",
-          "configFile": "libs/messenger/chat-live-data/vite.config.mts"
-        }
-      },
-      "test": {
-        "executor": "@nx/vite:test",
-        "outputs": [
-          "{options.reportsDirectory}"
-        ],
-        "options": {
-          "reportsDirectory": "coverage/libs/messenger/chat-live-data",
-          "configFile": "libs/messenger/chat-live-data/vitest.config.mts"
-        }
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/chat-live-data",
+        "configFile": "libs/messenger/chat-live-data/vite.config.mts"
       }
     },
-    "lint": {
-      "executor": "@nx/eslint:lint"
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/messenger/chat-live-data",
+        "configFile": "libs/messenger/chat-live-data/vitest.config.mts"
+      }
     }
+  },
+  "lint": {
+    "executor": "@nx/eslint:lint"
   }
 }
