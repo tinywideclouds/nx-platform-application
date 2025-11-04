@@ -15,9 +15,6 @@
     "module": "esnext",
     "lib": ["es2022"],
     "paths": {
-      "@nx-platform-application/auth-flow-test": [
-        "libs/messenger/auth-flow-test/src/index.ts"
-      ],
       "@nx-platform-application/chat-data-access": [
         "libs/messenger/chat-data-access/src/index.ts"
       ],
@@ -42,9 +39,6 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
-      "@nx-platform-application/crypto-data-access": [
-        "libs/platform/ng/crypto-data-access/src/index.ts"
-      ],
       "@nx-platform-application/internal-tools": [
         "libs/internal-tools/src/index.ts"
       ],
@@ -52,7 +46,7 @@
         "libs/platform/ng/key-data-access/src/index.ts"
       ],
       "@nx-platform-application/key-v2-access": [
-        "libs/messenger/key-v2-access/src/index.ts"
+        "libs/messenger/messenger-key-access/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
@@ -89,9 +83,6 @@
       ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
-      ],
-      "@nx-platform-application/sdk-core": [
-        "libs/platform/sdk-core/src/index.ts"
       ],
       "@nx-platform-application/sealed-sender": [
         "libs/messenger/sealed-sender/src/index.ts"

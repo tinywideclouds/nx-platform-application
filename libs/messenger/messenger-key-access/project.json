@@ -1,7 +1,7 @@
 {
-  "name": "key-v2-access",
+  "name": "messenger-key-access",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/key-v2-access/src",
+  "sourceRoot": "libs/messenger/messenger-key-access/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:messenger"],
@@ -11,16 +11,16 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/ng/key-v2-access",
-        "configFile": "libs/messenger/ng/key-v2-access/vite.config.mts"
+        "outputPath": "dist/libs/messenger/ng/messenger-key-access",
+        "configFile": "libs/messenger/ng/messenger-key-access/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/key-v2-access",
-        "configFile": "libs/messenger/key-v2-access/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/messenger-key-access",
+        "configFile": "libs/messenger/messenger-key-access/vitest.config.mts"
       }
     },
     "lint": {
@@ -28,4 +28,3 @@
     }
   }
 }
-

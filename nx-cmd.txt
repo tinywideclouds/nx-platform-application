@@ -28,3 +28,7 @@ nx g @nx/angular:library --name=chat-send-access --directory=libs/messenger/chat
 
 nx g @nx/node:library --name=auth-flow-test --directory=libs/messenger/auth-flow-test --tags="scope:messenger"
 
+
+nx g @nx/workspace:move --project=key-v2-access --destination=libs/messenger/messenger-key-access
+
+

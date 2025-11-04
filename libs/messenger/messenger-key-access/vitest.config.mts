@@ -7,10 +7,10 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/crypto-data-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/messenger-key-access',
   plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'crypto-data-access',
+    name: 'messenger-key-access',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -20,11 +20,11 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/platform/ng/crypto-data-access/index.html'
+        '../../../dist/test-reports/libs/messenger/messenger-key-access/index.html'
       ),
     },
     coverage: {
-      reportsDirectory: '../../../../coverage/libs/platform/ng/crypto-data-access',
+      reportsDirectory: '../../../coverage/libs/messenger/messenger-key-access',
       provider: 'v8' as const,
     },
   },
