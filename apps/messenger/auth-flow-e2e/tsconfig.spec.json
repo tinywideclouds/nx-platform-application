@@ -1,0 +1,29 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../../dist/out-tsc",
+    "module": "esnext", 
+    "target": "es2020",
+    "moduleResolution": "node",
+    "types": [
+      "vitest/globals",
+      "node",
+      "jasmine",
+      "@angular/compiler",
+      "@angular/core/testing"
+    ]
+  },
+  "files": [],
+  "include": [
+    // Include all test files in the 'src' directory
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.jsx",
+    // Include the configuration file itself
+    "vitest.config.mts",
+    // Ensure the angular testing files are included
+    "src/test-setup.ts" // Assuming you have a test-setup file for Angular/Vitest
+  ],
+  "exclude": ["node_modules"]
+}

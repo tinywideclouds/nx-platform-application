@@ -3,7 +3,7 @@ import { URN } from '@nx-platform-application/platform-types';
 
 // --- Import ALL the services we've built ---
 import { ChatService } from '@nx-platform-application/chat-state';
-import { AuthService } from '@nx-platform-application/auth-data-access';
+import { AuthService } from '@nx-platform-application/platform-auth-data-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import {
   ChatDataService,

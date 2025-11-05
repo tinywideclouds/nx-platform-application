@@ -8,7 +8,11 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/apps/messenger/auth-flow-e2e',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.spec.json'), 
+    }),
+    nxViteTsPaths()],
   test: {
     name: 'auth-flow-e2e',
     watch: false,
