@@ -14,6 +14,10 @@
     "target": "ESNext",
     "module": "esnext",
     "lib": ["es2022"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
     "paths": {
       "@nx-platform-application/chat-data-access": [
         "libs/messenger/chat-data-access/src/index.ts"
