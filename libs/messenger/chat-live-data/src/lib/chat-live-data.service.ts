@@ -13,6 +13,7 @@ import {
   defer,
 } from 'rxjs';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
+import { WSS_URL_TOKEN } from './live-data.config'; 
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -25,7 +26,7 @@ export type ConnectionStatus =
 })
 export class ChatLiveDataService implements OnDestroy {
   private readonly logger = inject(Logger);
-  private readonly WSS_URL = 'wss://api.example.com/connect';
+  private readonly baseApiUrl = inject(WSS_URL_TOKEN, {optional: true}) ?? 'api/connect';
 
   private socket$?: WebSocketSubject<unknown>;
   private subscription?: Subscription;
@@ -50,14 +51,25 @@ export class ChatLiveDataService implements OnDestroy {
     this.statusSubject.next('connecting');
 
     const stream$ = defer(() => {
+      // --- DEBUGGING: Log the connection attempt ---
+      this.logger.info(`WSS: defer() called, creating WebSocket to: ${this.baseApiUrl}`);
+      // --- END DEBUGGING ---
       this.socket$ = webSocket({
-        url: this.WSS_URL,
+        url: this.baseApiUrl,
         protocol: [jwtToken],
         openObserver: {
-          next: () => this.statusSubject.next('connected'),
+          next: () => {
+            // --- DEBUGGING: Log the successful opening ---
+            this.logger.debug('WSS: Connection OPENED.');
+            // --- END DEBUGGING ---
+            this.statusSubject.next('connected')
+          },
         },
         closeObserver: {
-          next: () => {
+          next: (closeEvent) => {
+            // --- DEBUGGING: Log the close event ---
+            this.logger.debug(`WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`);
+            // --- END DEBUGGING ---
             if (this.statusSubject.value !== 'disconnected') {
               this.statusSubject.next('disconnected');
             }
@@ -110,7 +122,6 @@ export class ChatLiveDataService implements OnDestroy {
   }
 
   public disconnect(): void {
-    // --- THIS IS THE FIX ---
     // We must call .complete() on the socket subject itself.
     // This imperatively closes the connection and will trigger
     // our mock's .close() spy.

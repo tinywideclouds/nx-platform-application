@@ -20,6 +20,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default', 'html'],
+    setupFiles: ['src/test-setup.ts'],
     outputFile: {
       html: join(
         __dirname,

@@ -4,7 +4,11 @@
  * exists. The tests cover key generation, hybrid encryption/decryption, and
  * digital signing/verification.
  */
-import { Crypto } from './crypto';
+ 
+// --- START OF FIX ---
+// Import the correct class name
+import { CryptoEngine } from './crypto';
+// --- END OF FIX ---
 
 // The test environment (Node.js) does not have a global 'crypto' object
 // that matches the browser's Web Crypto API.
@@ -13,12 +17,15 @@ import { Crypto } from './crypto';
 import { webcrypto } from 'node:crypto';
 vi.stubGlobal('crypto', webcrypto);
 
-describe('Crypto', () => {
-    let cryptoInstance: Crypto;
+// --- START OF FIX ---
+// Update the describe block to match the class name
+describe('CryptoEngine', () => {
+  let cryptoInstance: CryptoEngine; // Use the correct type
 
-    beforeEach(() => {
-        cryptoInstance = new Crypto();
-    });
+  beforeEach(() => {
+    cryptoInstance = new CryptoEngine(); // Instantiate the correct class
+  });
+// --- END OF FIX ---
 
     // Test Case 1: Key Generation (No changes needed)
     test('should generate a valid RSA key pair for encryption and signing', async () => {

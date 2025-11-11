@@ -11,6 +11,7 @@ import {
   deserializeJsonToPublicKeys,
   serializePublicKeysToJson, // <-- ADDED
 } from '@nx-platform-application/platform-types';
+import { KEY_SERVICE_URL } from './key-access.config';
 
 /**
  * App-specific KeyService for the "Sealed Sender" model.
@@ -28,6 +29,7 @@ export class SecureKeyService {
   private http = inject(HttpClient);
   private keyCache = new Map<string, PublicKeys>();
 
+  private readonly baseApiUrl = inject(KEY_SERVICE_URL, {optional: true}) ?? 'api/v2/keys';
   /**
    * (Read)
    * Fetches public keys for a user, using a local cache.
@@ -79,6 +81,6 @@ export class SecureKeyService {
   }
 
   private buildUrl(userUrnString: string): string {
-    return `/api/v2/keys/${userUrnString}`;
+    return `${this.baseApiUrl}/${userUrnString}`;
   }
 }

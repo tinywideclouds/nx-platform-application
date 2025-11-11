@@ -1,3 +1,6 @@
+// --- FILE: libs/messenger/chat-state/vite.config.mts ---
+// (REFACTORED - FULL CODE)
+
 /// <reference types='vitest' />
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
@@ -18,11 +21,25 @@ export default defineConfig(() => ({
     // You also must externalize your dependencies
     rollupOptions: {
       external: [
+        // Angular and RxJS
         '@angular/core',
-        '@angular/common/http',
+        '@angular/common',
         'rxjs',
+
+        // Polyfills
+        '@js-temporal/polyfill',
+
+        // Other @nx-platform-application libs
+        '@nx-platform-application/platform-types',
+        '@nx-platform-application/console-logger',
+        '@nx-platform-application/platform-auth-data-access',
+        '@nx-platform-application/messenger-crypto-access',
+        '@nx-platform-application/chat-storage',
+        '@nx-platform-application/messenger-key-access',
+        '@nx-platform-application/key-cache-access',
         '@nx-platform-application/chat-live-data',
-        '@nx-platform-application/chat-data-access'
+        '@nx-platform-application/chat-data-access',
+        '@nx-platform-application/messenger-types',
       ],
     },
   },

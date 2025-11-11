@@ -33,7 +33,7 @@ export async function validateJwtConfiguration(logger: Logger): Promise<void> {
     };
 
     // 4. Sign a token using the actual production function.
-    const testToken = generateToken(testUser, 'dummy-provider-token');
+    const testToken = await generateToken(testUser, 'dummy-provider-token');
 
     // 5. Verify the token using the JWKS.
     await jwtVerify(testToken, localJWKSet);

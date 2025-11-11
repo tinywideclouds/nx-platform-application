@@ -1,60 +1,62 @@
+// --- FILE: libs/platform/ng/storage/src/lib/indexed-db.service.ts ---
+// (FULL CODE)
+
 import { Injectable } from '@angular/core';
 import Dexie, { Table } from 'dexie';
-import { KeyPairRecord } from './models';
+import { JwkRecord } from './models';
 import { StorageProvider } from "./interfaces"
 
 @Injectable({ providedIn: 'root' })
-export class IndexedDb extends Dexie implements StorageProvider {
-  private keyPairs!: Table<KeyPairRecord, string>;
+export class IndexedDbStore extends Dexie implements StorageProvider {
+  /**
+   * A generic table for storing JsonWebKeys.
+   */
+  private jwks!: Table<JwkRecord, string>;
 
   constructor() {
     super('ActionIntentionDB');
+    
+    // We increment the version to 2 to introduce the new 'jwks' table
+    // and remove the old 'keyPairs' table.
     this.version(1).stores({
       keyPairs: 'id',
       appStates: 'id',
     });
+    
+    this.version(2).stores({
+      jwks: 'id', // The new generic table
+      appStates: 'id', // This one remains
+      keyPairs: null, // This deletes the old table
+    });
+
+    this.jwks = this.table('jwks');
   }
 
-  // --- Key-Specific Methods ---
+  // --- "Dumb" JWK-Specific Methods ---
 
-  async saveKeyPair(userId: string, keyPair: CryptoKeyPair): Promise<void> {
-    const publicKey = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
-    const privateKey = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
-    await this.keyPairs.put({ id: userId, publicKey, privateKey });
+  /**
+   * Saves a single JsonWebKey by its ID.
+   * @param id A unique ID for this key.
+   * @param key The JsonWebKey to store.
+   */
+  async saveJwk(id: string, key: JsonWebKey): Promise<void> {
+    await this.jwks.put({ id, key });
   }
 
-  async loadKeyPair(userId: string): Promise<CryptoKeyPair | null> {
-    const record = await this.keyPairs.get(userId);
-    if (!record) return null;
-
-    try {
-      // Re-import the encryption key pair
-      // Note: The original file had RSA-OAEP for both, which is likely correct
-      // if the 'signing' key is also used for encryption/decryption.
-      // If you have separate signing keys (e.g., RSA-PSS), you'll need
-      // to store the algorithm type and adjust this import.
-      const publicKey = await crypto.subtle.importKey(
-        'jwk',
-        record.publicKey,
-        { name: 'RSA-OAEP', hash: 'SHA-256' },
-        true,
-        ['encrypt']
-      );
-      const privateKey = await crypto.subtle.importKey(
-        'jwk',
-        record.privateKey,
-        { name: 'RSA-OAEP', hash: 'SHA-256' },
-        true,
-        ['decrypt']
-      );
-      return { publicKey, privateKey };
-    } catch (e) {
-      console.error('Failed to import keys from IndexedDB:', e);
-      return null;
-    }
+  /**
+   * Loads a single JsonWebKey by its ID.
+   * @param id The unique ID of the key to load.
+   */
+  async loadJwk(id: string): Promise<JsonWebKey | null> {
+    const record = await this.jwks.get(id);
+    return record ? record.key : null;
   }
 
-  async deleteKeyPair(userId: string): Promise<void> {
-    await this.keyPairs.delete(userId);
+  /**
+   * Deletes a single JsonWebKey by its ID.
+   * @param id The unique ID of the key to delete.
+   */
+  async deleteJwk(id: string): Promise<void> {
+    await this.jwks.delete(id);
   }
 }

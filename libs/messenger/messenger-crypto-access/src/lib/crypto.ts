@@ -12,7 +12,7 @@ export interface EncryptedPayload {
 /**
  * A class that encapsulates cryptographic operations using the Web Crypto API.
  */
-export class Crypto {
+export class CryptoEngine {
   // Parameters for RSA-OAEP key generation (for encryption).
   private rsaOaepKeyGenParams: RsaHashedKeyGenParams = {
     name: 'RSA-OAEP',

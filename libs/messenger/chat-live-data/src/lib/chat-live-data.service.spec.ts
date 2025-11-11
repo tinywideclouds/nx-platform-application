@@ -5,6 +5,7 @@ import {
 } from './chat-live-data.service';
 import { Logger } from '@nx-platform-application/console-logger';
 import { vi } from 'vitest';
+import { WSS_URL_TOKEN } from './live-data.config';
 
 // --- Mock WebSocket (Updated) ---
 const RealWebSocket = global.WebSocket;
@@ -83,6 +84,7 @@ describe('ChatLiveDataService (Refactored)', () => {
       providers: [
         ChatLiveDataService,
         { provide: Logger, useValue: mockLogger },
+        { provide: WSS_URL_TOKEN, useValue: mockUrl },
       ],
     });
 

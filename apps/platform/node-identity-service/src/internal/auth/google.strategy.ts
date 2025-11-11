@@ -68,7 +68,7 @@ export function configureGoogleStrategy(
           { userId: user.id, email, provider: 'google' },
           'User authorized successfully.'
         );
-        const internalToken = generateToken(user, idToken);
+        const internalToken = await generateToken(user, idToken);
         const userWithToken = { ...user, token: internalToken };
         return done(null, userWithToken);
       } else {

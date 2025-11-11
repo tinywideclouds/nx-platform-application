@@ -25,11 +25,11 @@
       "@nx-platform-application/chat-live-data": [
         "libs/messenger/chat-live-data/src/index.ts"
       ],
-      "@nx-platform-application/chat-storage": [
-        "libs/messenger/chat-storage/src/index.ts"
-      ],
       "@nx-platform-application/chat-state": [
         "libs/messenger/chat-state/src/index.ts"
+      ],
+      "@nx-platform-application/chat-storage": [
+        "libs/messenger/chat-storage/src/index.ts"
       ],
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
@@ -45,6 +45,9 @@
       ],
       "@nx-platform-application/internal-tools": [
         "libs/internal-tools/src/index.ts"
+      ],
+      "@nx-platform-application/key-cache-access": [
+        "libs/messenger/key-cache-access/src/index.ts"
       ],
       "@nx-platform-application/key-data-access": [
         "libs/platform/ng/key-data-access/src/index.ts"

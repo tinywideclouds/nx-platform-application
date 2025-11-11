@@ -6,6 +6,7 @@ import {
   QueuedMessage,
   deserializeJsonToQueuedMessages,
 } from '@nx-platform-application/platform-types';
+import { ROUTING_SERVICE_URL } from './chat-data.config';
 
 /**
  * REFACTORED: Chat Data Service (The "Query" / "Pull" Service)
@@ -21,7 +22,8 @@ import {
 })
 export class ChatDataService {
   private readonly http = inject(HttpClient);
-  private readonly baseApiUrl = '/api/messages';
+
+  private readonly baseApiUrl = inject(ROUTING_SERVICE_URL, {optional: true}) ?? '/api';
 
   /**
    * Fetches the next available batch of queued messages for the user.
@@ -30,7 +32,7 @@ export class ChatDataService {
    * Endpoint: GET /api/messages
    */
   getMessageBatch(limit: number = 50): Observable<QueuedMessage[]> {
-    const url = this.baseApiUrl;
+    const url = `${this.baseApiUrl}/messages`;;
     const params = { limit: limit.toString() };
 
     // We expect a raw JSON object matching QueuedMessageListPb

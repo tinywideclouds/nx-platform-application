@@ -28,7 +28,7 @@ router.post(
   // 2. Add middleware to parse the JSON body
   json(),
   // 3. Handle the request
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     // We can cast the body, but we must validate it.
     const body = req.body as GenerateTokenRequest;
 
@@ -54,7 +54,7 @@ router.post(
       // Use the *real* production token service to generate the token
       // We use a placeholder for the "providerToken" as it's not
       // critical for the token's signature.
-      const token = generateToken(mockUser, 'e2e-provider-token-placeholder');
+      const token = await generateToken(mockUser, 'e2e-provider-token-placeholder');
 
       logger.info(
         { userId: mockUser.id, email: mockUser.email },

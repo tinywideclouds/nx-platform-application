@@ -25,10 +25,10 @@ nx g @nx/workspace:move --project=chat-live --destination=libs/messenger/chat-se
 
 nx g @nx/angular:library --name=chat-send-access --directory=libs/messenger/chat-send-access --tags="scope:messenger"
 
-
 nx g @nx/node:library --name=auth-flow-test --directory=libs/messenger/auth-flow-test --tags="scope:messenger"
 
-
 nx g @nx/workspace:move --project=key-v2-access --destination=libs/messenger/messenger-key-access
+
+nx g @nx/angular:library --name=key-cache-access --directory=libs/messenger/key-cache-access --tags="scope:messenger"
 
 

@@ -1,5 +1,27 @@
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import { URN, PublicKeys, ISODateTimeString } from '@nx-platform-application/platform-types';
 
+/**
+ * Defines the shape of a key record in IndexedDB.
+ * We store the URN as a string (primary key) and the
+ * keys as a JSON-safe object (base64 strings).
+ */
+export interface PublicKeyRecord {
+  urn: string;
+  keys: Record<string, string>;
+  timestamp: ISODateTimeString;
+}
+// This is the shape of the data as it will be in Dexie
+// We convert URNs to strings for storage.
+export interface MessageRecord {
+  messageId: string;
+  senderId: string;
+  recipientId: string;
+  sentTimestamp: ISODateTimeString;
+  typeId: string;
+  payloadBytes: Uint8Array;
+  status: 'pending' | 'sent' | 'received';
+  conversationUrn: string;
+}
 /**
  * The "smart" model for a fully decrypted and verified message.
  * This is the object that will be stored in IndexedDb and

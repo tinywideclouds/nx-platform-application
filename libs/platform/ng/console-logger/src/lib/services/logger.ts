@@ -9,6 +9,10 @@ import { Injectable } from '@angular/core';
   providedIn: 'root',
 })
 export class Logger {
+  public debug(message: string, ...optionalParams: unknown[]): void {
+    console.debug(message, ...optionalParams);
+  } 
+
   public info(message: string, ...optionalParams: unknown[]): void {
     console.info(message, ...optionalParams);
   }

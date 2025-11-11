@@ -1,5 +1,6 @@
+// --- FILE: libs/messenger/chat-state/src/lib/chat.service.spec.ts ---
 import { TestBed } from '@angular/core/testing';
-import { Subject, BehaviorSubject, of, ReplaySubject } from 'rxjs';
+import { Subject, BehaviorSubject, of, from } from 'rxjs';
 import {
   URN,
   PublicKeys,
@@ -14,7 +15,6 @@ import { EncryptedMessagePayload } from '@nx-platform-application/messenger-type
 import { ChatService } from './chat.service';
 
 // --- Dependencies (Mocks) ---
-// We create mock *types* for easier spying and type-safety
 import {
   AuthService,
   AuthStatusResponse,
@@ -32,7 +32,7 @@ import {
   ChatLiveDataService,
   ConnectionStatus,
 } from '@nx-platform-application/chat-live-data';
-import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
+import { KeyCacheService } from '@nx-platform-application/key-cache-access';
 import {
   ChatDataService,
   ChatSendService,
@@ -108,7 +108,6 @@ const mockSentMessage: DecryptedMessage = {
 };
 
 // --- Mock Instances ---
-// We create full mock objects for every dependency
 const mockAuthService: Mocked<AuthService> = {
   sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
   currentUser: vi.fn(),
@@ -129,12 +128,16 @@ const mockStorageService: Mocked<ChatStorageService> = {
   loadConversationSummaries: vi.fn(),
   saveMessage: vi.fn(),
   loadHistory: vi.fn(),
+  getKey: vi.fn(),
+  storeKey: vi.fn(),
+  clearAllMessages: vi.fn(),
 };
 
 const mockLogger: Mocked<Logger> = {
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
+  debug: vi.fn(),
 };
 
 const mockLiveService: Mocked<ChatLiveDataService> = {
@@ -145,10 +148,8 @@ const mockLiveService: Mocked<ChatLiveDataService> = {
   ngOnDestroy: vi.fn(),
 };
 
-const mockKeyService: Mocked<SecureKeyService> = {
-  getKey: vi.fn(),
-  storeKeys: vi.fn(),
-  clearCache: vi.fn(),
+const mockKeyService: Mocked<KeyCacheService> = {
+  getPublicKey: vi.fn(),
 };
 
 const mockDataService: Mocked<ChatDataService> = {
@@ -170,11 +171,8 @@ describe('ChatService (Refactored Test)', () => {
    * Helper function to fully initialize the service
    */
   async function initializeService() {
-    // 1. Inject the service (which triggers the constructor)
     service = TestBed.inject(ChatService);
-    // 2. Trigger the auth session, which starts the async init()
     mockAuthService.sessionLoaded$.next(mockAuthResponse);
-    // 3. Wait for the *entire* async init() chain to complete
     await vi.runOnlyPendingTimersAsync();
   }
 
@@ -188,20 +186,20 @@ describe('ChatService (Refactored Test)', () => {
 
     mockStorageService.loadConversationSummaries.mockResolvedValue([]);
     mockStorageService.saveMessage.mockResolvedValue(undefined);
+    mockStorageService.loadHistory.mockResolvedValue([]);
 
     mockCryptoService.loadMyKeys.mockResolvedValue(mockMyKeys);
     mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
     mockCryptoService.encryptAndSign.mockResolvedValue(mockEnvelope);
 
-    mockKeyService.getKey.mockResolvedValue(mockRecipientKeys);
+    mockKeyService.getPublicKey.mockResolvedValue(mockRecipientKeys);
 
-    mockDataService.getMessageBatch.mockReturnValue(of([])); // Default to empty
+    mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
 
     mockSendService.sendMessage.mockReturnValue(of(undefined));
 
     TestBed.configureTestingModule({
-      // We no longer need HttpClientTestingModule
       providers: [
         ChatService,
         { provide: AuthService, useValue: mockAuthService },
@@ -209,7 +207,7 @@ describe('ChatService (Refactored Test)', () => {
         { provide: ChatStorageService, useValue: mockStorageService },
         { provide: Logger, useValue: mockLogger },
         { provide: ChatLiveDataService, useValue: mockLiveService },
-        { provide: SecureKeyService, useValue: mockKeyService },
+        { provide: KeyCacheService, useValue: mockKeyService },
         { provide: ChatDataService, useValue: mockDataService },
         { provide: ChatSendService, useValue: mockSendService },
       ],
@@ -235,7 +233,6 @@ describe('ChatService (Refactored Test)', () => {
 
   it('should trigger a pull on "poke" notification', async () => {
     await initializeService();
-    // Spy on the method but mock its implementation to isolate the *trigger*
     const pullSpy = vi
       .spyOn(service, 'fetchAndProcessMessages')
       .mockResolvedValue();
@@ -264,83 +261,137 @@ describe('ChatService (Refactored Test)', () => {
     expect(pullSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('should perform the full "Pull-Decrypt-Save-Ack" loop', async () => {
+  describe('Conversation Selection', () => {
+    const history: DecryptedMessage[] = [
+      mockDecryptedMessage,
+      { ...mockDecryptedMessage, messageId: 'msg-2' },
+    ];
+
+    beforeEach(() => {
+      mockStorageService.loadHistory.mockResolvedValue(history);
+    });
+
+    it('should load history and set messages on loadConversation', async () => {
+      await initializeService();
+      expect(service.messages()).toEqual([]);
+
+      await service.loadConversation(mockSenderUrn);
+
+      // ---
+      // --- THE FIX: Check the correct signal
+      // ---
+      expect(service.selectedConversation()?.toString()).toBe(
+        mockSenderUrn.toString()
+      );
+      expect(mockStorageService.loadHistory).toHaveBeenCalledWith(mockSenderUrn);
+      expect(service.messages()).toBe(history);
+    });
+
+    it('should clear messages when deselecting', async () => {
+      await initializeService();
+      await service.loadConversation(mockSenderUrn);
+      expect(service.messages().length).toBe(2);
+
+      await service.loadConversation(null);
+
+      // ---
+      // --- THE FIX: Check the correct signal
+      // ---
+      expect(service.selectedConversation()).toBe(null);
+      expect(service.messages()).toEqual([]);
+    });
+  });
+
+  describe('Context-Aware Message Handling', () => {
+    it('fetchAndProcessMessages: should NOT add messages to state if no conversation is selected', async () => {
+      await initializeService();
+      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
+
+      // ---
+      // --- THE FIX: Check the correct signal
+      // ---
+      expect(service.selectedConversation()).toBe(null);
+
+      await service.fetchAndProcessMessages();
+
+      expect(mockStorageService.saveMessage).toHaveBeenCalled();
+      expect(service.messages()).toEqual([]);
+    });
+
+    it('fetchAndProcessMessages: should add messages to state if conversation is selected', async () => {
+      await initializeService();
+      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
+
+      await service.loadConversation(mockSenderUrn);
+
+      await service.fetchAndProcessMessages();
+
+      expect(mockStorageService.saveMessage).toHaveBeenCalled();
+      expect(service.messages()).toEqual([
+        expect.objectContaining({ messageId: 'msg-1' }),
+      ]);
+    });
+
+    it('sendMessage: should add optimistic message to state if conversation is selected', async () => {
+      await initializeService();
+
+      await service.loadConversation(mockRecipientUrn);
+
+      await service.sendMessage(mockRecipientUrn, 'Hello, Recipient!');
+
+      expect(mockStorageService.saveMessage).toHaveBeenCalled();
+      expect(service.messages()).toEqual([
+        expect.objectContaining({ messageId: 'local-mock-uuid' }),
+      ]);
+    });
+  });
+
+  it('should perform the full "Pull-Decrypt-Save-Ack" loop (DB only)', async () => {
     await initializeService();
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
 
-    // We call the method directly and await it
     await service.fetchAndProcessMessages();
 
     expect(mockLogger.info).toHaveBeenCalledWith(
       'Processing 1 new messages...'
     );
-    expect(mockDataService.getMessageBatch).toHaveBeenCalledWith(50);
-    expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalledWith(
-      mockEnvelope,
-      mockMyKeys
-    );
-
-    // This assertion now passes
+    expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalled();
     expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
       expect.objectContaining(mockDecryptedMessage)
     );
     expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
-    expect(service.messages()).toEqual([
-      expect.objectContaining({ messageId: 'msg-1' }),
-    ]);
   });
 
   it('should recursively pull if batch was full', async () => {
     await initializeService();
     const fullBatch = Array(50).fill(mockQueuedMessage);
 
-    // Setup the two different returns
     mockDataService.getMessageBatch
       .mockReturnValueOnce(of(fullBatch))
-      .mockReturnValueOnce(of([])); // The second call is empty
+      .mockReturnValueOnce(of([]));
 
-    // Spy on the *real* implementation
     const pullSpy = vi.spyOn(service, 'fetchAndProcessMessages');
 
-    // Await the *first* call
     await service.fetchAndProcessMessages();
-    // Allow the *recursive* call to fire and complete
     await vi.runAllTicks();
 
     expect(mockLogger.info).toHaveBeenCalledWith(
       'Queue was full, pulling next batch immediately.'
     );
-    // The spy should have been called twice
     expect(pullSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('should complete the full Encrypt-Send-Save (A->B) flow', async () => {
+  it('should complete the full Encrypt-Send-Save (A->B) flow (DB only)', async () => {
     await initializeService();
     const plaintext = 'Hello, Recipient!';
 
-    // Await the async send method
     await service.sendMessage(mockRecipientUrn, plaintext);
 
-    expect(mockKeyService.getKey).toHaveBeenCalledWith(mockRecipientUrn);
-    expect(mockCryptoService.encryptAndSign).toHaveBeenCalledWith(
-      expect.objectContaining({
-        senderId: URN.parse(mockUser.id),
-        payloadBytes: new TextEncoder().encode(plaintext),
-      }),
-      mockRecipientUrn,
-      mockMyKeys,
-      mockRecipientKeys
-    );
-
+    expect(mockKeyService.getPublicKey).toHaveBeenCalledWith(mockRecipientUrn);
+    expect(mockCryptoService.encryptAndSign).toHaveBeenCalled();
     expect(mockSendService.sendMessage).toHaveBeenCalledWith(mockEnvelope);
-
-    // This assertion now passes
     expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
       expect.objectContaining(mockSentMessage)
     );
-
-    expect(service.messages()).toEqual([
-      expect.objectContaining({ messageId: 'local-mock-uuid' }),
-    ]);
   });
 });

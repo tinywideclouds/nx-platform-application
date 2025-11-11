@@ -7,6 +7,9 @@ import {
   serializeEnvelopeToJson,
 } from '@nx-platform-application/platform-types';
 
+// 1. Import the injection token
+import { ROUTING_SERVICE_URL } from './chat-data.config';
+
 /**
  * NEW: Chat Send Service (The "Command" / "Send" Service)
  *
@@ -19,8 +22,11 @@ import {
 })
 export class ChatSendService {
   private readonly http = inject(HttpClient);
-  private readonly sendUrl = '/api/send';
 
+  private readonly baseApiUrl = inject(ROUTING_SERVICE_URL, {optional: true}) ?? '/api';
+  // 3. Construct the full URL
+  private readonly sendUrl = `${this.baseApiUrl}/send`;
+  
   /**
    * Sends a fully formed "smart" SecureEnvelope.
    *

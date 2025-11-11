@@ -1,0 +1,31 @@
+{
+  "name": "key-cache-access",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/key-cache-access/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger"],
+  "targets": {
+  
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/key-cache-access",
+        "configFile": "libs/messenger/key-cache-access/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/messenger/key-cache-access",
+        "configFile": "libs/messenger/key-cache-access/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

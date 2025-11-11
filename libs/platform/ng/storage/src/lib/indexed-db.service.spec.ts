@@ -1,24 +1,25 @@
+// --- FILE: libs/platform/ng/storage/src/lib/indexed-db.service.spec.ts ---
+// (FULL CODE)
+
 import { TestBed } from '@angular/core/testing';
-import { IndexedDb } from './indexed-db.service'; // Import the service
+import { IndexedDbStore } from './indexed-db.service'; 
+import { JwkRecord } from './models';
 
 // --- Mock Fixtures ---
-const mockPublicKey = { type: 'public' } as CryptoKey;
-const mockPrivateKey = { type: 'private' } as CryptoKey;
-const mockKeyPair = { publicKey: mockPublicKey, privateKey: mockPrivateKey };
-
-const mockPublicKeyJwk = { kty: 'RSA', alg: 'RSA-OAEP-256', e: 'AQAB', n: '...' };
-const mockPrivateKeyJwk = { kty: 'RSA', alg: 'RSA-OAEP-256', e: 'AQAB', n: '...', d: '...' };
+const mockJwk: JsonWebKey = {
+  kty: 'RSA',
+  alg: 'RSA-OAEP-256',
+  key_ops: ['encrypt'],
+  e: 'AQAB',
+  n: '...',
+};
+const mockRecord: JwkRecord = {
+  id: 'test-key-1',
+  key: mockJwk,
+};
 
 // --- Global Mocks ---
-
-// Mock the entire Web Crypto API
-const mockCrypto = {
-  subtle: {
-    exportKey: vi.fn(),
-    importKey: vi.fn(),
-  },
-};
-vi.stubGlobal('crypto', mockCrypto);
+// We no longer mock 'crypto'
 
 // Mock the methods of a Dexie table
 const mockDexieTable = {
@@ -27,92 +28,48 @@ const mockDexieTable = {
   delete: vi.fn(),
 };
 
-describe('IndexedDb (Key Storage)', () => {
-  let service: IndexedDb;
+describe('IndexedDbStore (Dumb Storage)', () => {
+  let service: IndexedDbStore;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [IndexedDb],
+      providers: [IndexedDbStore],
     });
-    service = TestBed.inject(IndexedDb);
+    service = TestBed.inject(IndexedDbStore);
 
     // Reset mocks before each test
     vi.resetAllMocks();
 
     // Intercept the real Dexie table and replace it with our mock
-    // This targets the 'keyPairs' table defined in the service constructor
-    (service as any).keyPairs = mockDexieTable;
+    (service as any).jwks = mockDexieTable;
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
-  describe('saveKeyPair', () => {
-    it('should export keys to JWK format and save them', async () => {
-      // Arrange
-      mockCrypto.subtle.exportKey.mockImplementation(async (format, key) => {
-        if (format !== 'jwk') throw new Error('Wrong format');
-        if (key === mockPublicKey) return mockPublicKeyJwk;
-        if (key === mockPrivateKey) return mockPrivateKeyJwk;
-        throw new Error('Unexpected key');
-      });
-
+  describe('saveJwk', () => {
+    it('should save the key record directly to the table', async () => {
       // Act
-      await service.saveKeyPair('test-user-1', mockKeyPair);
+      await service.saveJwk(mockRecord.id, mockRecord.key);
 
       // Assert
-      expect(mockCrypto.subtle.exportKey).toHaveBeenCalledTimes(2);
-      expect(mockCrypto.subtle.exportKey).toHaveBeenCalledWith('jwk', mockPublicKey);
-      expect(mockCrypto.subtle.exportKey).toHaveBeenCalledWith('jwk', mockPrivateKey);
-
       expect(mockDexieTable.put).toHaveBeenCalledTimes(1);
-      expect(mockDexieTable.put).toHaveBeenCalledWith({
-        id: 'test-user-1',
-        publicKey: mockPublicKeyJwk,
-        privateKey: mockPrivateKeyJwk,
-      });
+      expect(mockDexieTable.put).toHaveBeenCalledWith(mockRecord);
     });
   });
 
-  describe('loadKeyPair', () => {
-    it('should return a re-imported CryptoKeyPair if found', async () => {
+  describe('loadJwk', () => {
+    it('should return the JWK if found', async () => {
       // Arrange
-      const mockRecord = {
-        id: 'test-user-2',
-        publicKey: mockPublicKeyJwk,
-        privateKey: mockPrivateKeyJwk,
-      };
       mockDexieTable.get.mockResolvedValue(mockRecord);
 
-      mockCrypto.subtle.importKey.mockImplementation(async (format, keyJwk) => {
-        if (format !== 'jwk') throw new Error('Wrong format');
-        if (keyJwk === mockPublicKeyJwk) return mockPublicKey;
-        if (keyJwk === mockPrivateKeyJwk) return mockPrivateKey;
-        throw new Error('Unexpected key JWK');
-      });
-
       // Act
-      const result = await service.loadKeyPair('test-user-2');
+      const result = await service.loadJwk(mockRecord.id);
 
       // Assert
-      expect(mockDexieTable.get).toHaveBeenCalledWith('test-user-2');
-      expect(mockCrypto.subtle.importKey).toHaveBeenCalledTimes(2);
-      expect(mockCrypto.subtle.importKey).toHaveBeenCalledWith(
-        'jwk',
-        mockPublicKeyJwk,
-        { name: 'RSA-OAEP', hash: 'SHA-256' },
-        true,
-        ['encrypt']
-      );
-      expect(mockCrypto.subtle.importKey).toHaveBeenCalledWith(
-        'jwk',
-        mockPrivateKeyJwk,
-        { name: 'RSA-OAEP', hash: 'SHA-256' },
-        true,
-        ['decrypt']
-      );
-      expect(result).toEqual(mockKeyPair);
+      expect(mockDexieTable.get).toHaveBeenCalledWith(mockRecord.id);
+      expect(result).toBe(mockJwk);
     });
 
     it('should return null if no record is found', async () => {
@@ -120,46 +77,17 @@ describe('IndexedDb (Key Storage)', () => {
       mockDexieTable.get.mockResolvedValue(null);
 
       // Act
-      const result = await service.loadKeyPair('non-existent-user');
+      const result = await service.loadJwk('non-existent-user');
 
       // Assert
       expect(result).toBeNull();
-      expect(mockCrypto.subtle.importKey).not.toHaveBeenCalled();
-    });
-
-    it('should return null and log an error if key import fails', async () => {
-      // Arrange
-      // This is the corrected line:
-      const mockRecord = {
-        id: 'bad-key',
-        publicKey: mockPublicKeyJwk,
-        privateKey: mockPrivateKeyJwk,
-      };
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-        // non empty for linter
-      });
-      mockDexieTable.get.mockResolvedValue(mockRecord);
-      mockCrypto.subtle.importKey.mockRejectedValue(new Error('Import failed'));
-
-      // Act
-      const result = await service.loadKeyPair('bad-key');
-
-      // Assert
-      expect(result).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to import keys from IndexedDB:',
-        expect.any(Error)
-      );
-
-      // Cleanup spy
-      consoleErrorSpy.mockRestore();
     });
   });
 
-  describe('deleteKeyPair', () => {
+  describe('deleteJwk', () => {
     it('should call the delete method on the table', async () => {
       // Act
-      await service.deleteKeyPair('user-to-delete');
+      await service.deleteJwk('user-to-delete');
 
       // Assert
       expect(mockDexieTable.delete).toHaveBeenCalledWith('user-to-delete');

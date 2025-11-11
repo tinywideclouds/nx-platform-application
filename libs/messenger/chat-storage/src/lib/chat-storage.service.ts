@@ -1,40 +1,56 @@
 import { Injectable, inject } from '@angular/core';
-import { IndexedDb } from '@nx-platform-application/platform-storage';
+import { Temporal } from '@js-temporal/polyfill';
+import { IndexedDbStore } from '@nx-platform-application/platform-storage';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import {
   DecryptedMessage,
   ConversationSummary,
 } from './chat-storage.models';
-
-// This is the shape of the data as it will be in Dexie
-// We convert URNs to strings for storage.
-interface MessageRecord {
-  messageId: string;
-  senderId: string;
-  recipientId: string;
-  sentTimestamp: ISODateTimeString;
-  typeId: string;
-  payloadBytes: Uint8Array;
-  status: 'pending' | 'sent' | 'received';
-  conversationUrn: string;
-}
+import { MessageRecord, PublicKeyRecord } from './chat-storage.models';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ChatStorageService {
-  private readonly db = inject(IndexedDb);
+  private readonly db = inject(IndexedDbStore);
 
   constructor() {
     // --- Extend the Dexie schema from platform-storage ---
     // This uses Dexie's "addons" capability to add a new table
-    // to the existing 'ActionIntentionDB' defined in IndexedDb.
-    this.db.version(2).stores({
+    // to the existing 'ActionIntentionDB' defined in IndexedDbStore.
+    this.db.version(3).stores({
       messages:
         '++messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
+      publicKeys: '&urn, timestamp', // '&urn' means 'urn' is the primary key
     });
   }
 
+  /**
+   * Stores or updates a public key record in the cache.
+   * @param urn The URN of the user (as a string)
+   * @param keys The JSON-safe public keys
+   * @param timestamp The timestamp of when it was fetched
+   */
+  async storeKey(
+    urn: string,
+    keys: Record<string, string>,
+    timestamp: ISODateTimeString
+  ): Promise<void> {
+    const record: PublicKeyRecord = { urn, keys, timestamp };
+    await this.db.table('publicKeys').put(record);
+  }
+
+  /**
+   * Retrieves a single public key record from the cache.
+   * @param urn The URN of the user (as a string)
+   */
+  async getKey(urn: string): Promise<PublicKeyRecord | undefined> {
+    return this.db.table('publicKeys').get(urn);
+  }
+
+  async clearAllMessages(): Promise<void> {
+    await this.db.table('messages').clear();
+  }
   /**
    * Saves a single decrypted message to IndexedDb.
    */

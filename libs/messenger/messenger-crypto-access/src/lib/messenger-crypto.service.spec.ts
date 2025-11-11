@@ -1,93 +1,103 @@
 // --- File: libs/messenger/crypto-access/src/messenger-crypto.service.spec.ts ---
+// (FULL CODE - Refactored for "Dumb" Storage)
 
 import { TestBed } from '@angular/core/testing';
 import { Mock, Mocked } from 'vitest';
-
-// 1. Import webcrypto from Node
 import { webcrypto } from 'node:crypto';
 
-import { IndexedDb } from '@nx-platform-application/platform-storage';
+// --- (FIX) Import the correct "dumb" storage service ---
+import { IndexedDbStore } from '@nx-platform-application/platform-storage';
 import {
   URN,
   PublicKeys,
   SecureEnvelope,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-
-import {
-  EncryptedMessagePayload,
-} from '@nx-platform-application/messenger-types';
-
-import { Crypto } from './crypto';
+import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
+import { CryptoEngine } from './crypto';
 import { PrivateKeys } from './types';
 import { MessengerCryptoService } from './messenger-crypto.service';
+import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 
-// 2. Stub the global 'crypto' with the REAL Node.js implementation
 vi.stubGlobal('crypto', webcrypto);
 
-// --- LINT FIX: MOCK THE LAZY-LOADED MODULE ---
-// Create a manual mock object for the service's API
+// --- Mock external dependencies ---
 const mockSecureKeyService = {
   storeKeys: vi.fn(),
   getKey: vi.fn(),
 };
-
-// Mock the *entire module*
-vi.mock('@nx-platform-application/key-v2-access', () => ({
+vi.mock('@nx-platform-application/messenger-key-access', () => ({
   SecureKeyService: vi.fn(() => mockSecureKeyService),
 }));
-// --- END FIX ---
-
 vi.mock('@nx-platform-application/messenger-types');
 
-// Explicitly mock the Crypto class and all its methods
+// --- Mock internal dependencies ---
 vi.mock('./crypto', () => ({
-  Crypto: vi.fn(() => ({
+  CryptoEngine: vi.fn(() => ({
     generateEncryptionKeys: vi.fn(),
     generateSigningKeys: vi.fn(),
-    // We no longer mock 'exportKey' here, as it's not on the Crypto class
     encrypt: vi.fn(),
     decrypt: vi.fn(),
     sign: vi.fn(),
     verify: vi.fn(),
   })),
 }));
-vi.mock('@nx-platform-application/platform-storage');
-
-// 3. REMOVE the old, problematic partial stub
-// vi.stubGlobal('crypto', { subtle: { importKey: vi.fn(), exportKey: vi.fn() } });
+// --- (FIX) Mock the "dumb" storage module ---
+vi.mock('@nx-platform-application/platform-storage', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  return {
+    ...actual,
+    IndexedDbStore: vi.fn(() => ({
+      saveJwk: vi.fn(),
+      loadJwk: vi.fn(),
+      deleteJwk: vi.fn(),
+    })),
+  };
+});
 
 describe('MessengerCryptoService', () => {
   let service: MessengerCryptoService;
-  let mockCrypto: Mocked<Crypto>;
-  let mockStorage: Mocked<IndexedDb>;
-  let mockSubtle: Mocked<SubtleCrypto>; // This will now be the real object
+  let mockCrypto: Mocked<CryptoEngine>;
+  let mockStorage: Mocked<IndexedDbStore>;
+  let mockSubtle: Mocked<SubtleCrypto>;
   let mockSerialize: Mock;
   let mockDeserialize: Mock;
 
-  // --- Fixtures (remain unchanged) ---
+  // --- Fixtures ---
   const mockUserUrn = URN.parse('urn:sm:user:test-user');
   const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
   const mockEncKeyUrn = 'messenger:urn:sm:user:test-user:key:encryption';
   const mockSigKeyUrn = 'messenger:urn:sm:user:test-user:key:signing';
+
+  // Key Pairs
   const mockEncKeyPair = {
-    publicKey: { type: 'public' },
-    privateKey: { type: 'private' },
-  } as CryptoKeyPair;
+    publicKey: { type: 'public', alg: 'RSA-OAEP' },
+    privateKey: { type: 'private', alg: 'RSA-OAEP' },
+  } as any;
   const mockSigKeyPair = {
-    publicKey: { type: 'public' },
-    privateKey: { type: 'private' },
-  } as CryptoKeyPair;
+    publicKey: { type: 'public', alg: 'RSA-PSS' },
+    privateKey: { type: 'private', alg: 'RSA-PSS' },
+  } as any;
+  
+  // Private Keys (as objects)
+  const mockPrivateKeys: PrivateKeys = {
+    encKey: mockEncKeyPair.privateKey,
+    sigKey: mockSigKeyPair.privateKey,
+  };
+  
+  // Public Keys (as raw bytes)
   const mockEncKeyRaw = new Uint8Array([1, 2, 3]);
   const mockSigKeyRaw = new Uint8Array([4, 5, 6]);
   const mockPublicKeys: PublicKeys = {
     encKey: mockEncKeyRaw,
     sigKey: mockSigKeyRaw,
   };
-  const mockPrivateKeys: PrivateKeys = {
-    encKey: mockEncKeyPair.privateKey,
-    sigKey: mockSigKeyPair.privateKey,
-  };
+
+  // --- (NEW) JWK Fixtures for private keys ---
+  const mockEncPrivKeyJwk: JsonWebKey = { kty: 'RSA', alg: 'RSA-OAEP-256', key_ops: ['decrypt'] };
+  const mockSigPrivKeyJwk: JsonWebKey = { kty: 'RSA', alg: 'RSA-PSS', key_ops: ['sign'] };
+  
+  // Other Fixtures
   const mockInnerPayload: EncryptedMessagePayload = {
     senderId: mockUserUrn,
     sentTimestamp: new Date().toISOString() as ISODateTimeString,
@@ -110,35 +120,32 @@ describe('MessengerCryptoService', () => {
   // --- End Fixtures ---
 
   beforeEach(async () => {
-    // --- LINT FIX: Import the *mocked* service ---
-    const { SecureKeyService } = await import(
-      '@nx-platform-application/messenger-key-access'
-      );
-
-    // Get other mocked instances
-    const { Crypto } = await import('./crypto');
-    const { IndexedDb } = await import(
+    // Get mocked instances
+    const { CryptoEngine } = await import('./crypto');
+    const { IndexedDbStore } = await import(
       '@nx-platform-application/platform-storage'
-      );
+    );
     const msgTypes = await import('@nx-platform-application/messenger-types');
 
-    mockCrypto = new Crypto() as Mocked<Crypto>;
-    mockStorage = new IndexedDb() as Mocked<IndexedDb>;
-
-    // 4. This now gets the REAL crypto.subtle object
+    mockCrypto = new CryptoEngine() as Mocked<CryptoEngine>;
+    mockStorage = new IndexedDbStore() as Mocked<IndexedDbStore>;
     mockSubtle = crypto.subtle as Mocked<SubtleCrypto>;
-
     mockSerialize = msgTypes.serializePayloadToProtoBytes as Mock;
     mockDeserialize = msgTypes.deserializeProtoBytesToPayload as Mock;
 
-    // Reset all mocks
-    vi.clearAllMocks(); // This is safe now
+    vi.clearAllMocks();
 
-    // 5. SPY ON and MOCK the methods from the real object
+    // SPY ON and MOCK the methods from the real object
     vi.spyOn(mockSubtle, 'importKey').mockResolvedValue(mockSigPublicKey);
     vi.spyOn(mockSubtle, 'exportKey')
-      .mockResolvedValueOnce(mockEncKeyRaw.buffer)
-      .mockResolvedValueOnce(mockSigKeyRaw.buffer);
+      // Mocks for generateAndStoreKeys (2 public, 2 private)
+      .mockImplementation(async (format: string, key: CryptoKey) => {
+        if (format === 'spki' && key.alg === 'RSA-OAEP') return mockEncKeyRaw.buffer;
+        if (format === 'spki' && key.alg === 'RSA-PSS') return mockSigKeyRaw.buffer;
+        if (format === 'jwk' && key.alg === 'RSA-OAEP') return mockEncPrivKeyJwk;
+        if (format === 'jwk' && key.alg === 'RSA-PSS') return mockSigPrivKeyJwk;
+        throw new Error('Unexpected exportKey call');
+      });
 
     // --- Configure all other mocks ---
     mockSecureKeyService.storeKeys.mockResolvedValue(undefined);
@@ -147,8 +154,9 @@ describe('MessengerCryptoService', () => {
     mockCrypto.generateEncryptionKeys.mockResolvedValue(mockEncKeyPair);
     mockCrypto.generateSigningKeys.mockResolvedValue(mockSigKeyPair);
 
-    mockStorage.saveKeyPair.mockResolvedValue(undefined);
-    mockStorage.loadKeyPair.mockResolvedValue(null);
+    // (FIX) Mock the new "dumb" storage methods
+    mockStorage.saveJwk.mockResolvedValue(undefined);
+    mockStorage.loadJwk.mockResolvedValue(null);
 
     mockSerialize.mockReturnValue(mockInnerPayloadBytes);
     mockDeserialize.mockReturnValue(mockInnerPayload);
@@ -161,9 +169,9 @@ describe('MessengerCryptoService', () => {
     TestBed.configureTestingModule({
       providers: [
         MessengerCryptoService,
-        { provide: Crypto, useValue: mockCrypto },
-        { provide: IndexedDb, useValue: mockStorage },
-        // --- LINT FIX: Provide the *mocked* service ---
+        { provide: CryptoEngine, useValue: mockCrypto },
+        // (FIX) Provide the correct "dumb" store
+        { provide: IndexedDbStore, useValue: mockStorage },
         { provide: SecureKeyService, useValue: mockSecureKeyService },
       ],
     });
@@ -171,53 +179,92 @@ describe('MessengerCryptoService', () => {
     service = TestBed.inject(MessengerCryptoService);
   });
 
-  // --- All tests remain exactly the same ---
-
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
   describe('generateAndStoreKeys', () => {
-    it('should generate, save locally, and upload keys', async () => {
+    it('should generate, save locally (as JWK), and upload keys', async () => {
       const result = await service.generateAndStoreKeys(mockUserUrn);
 
-      // Check that the real crypto.subtle.exportKey was called
-      expect(mockSubtle.exportKey).toHaveBeenCalledTimes(2);
+      // Check that crypto.subtle.exportKey was called (2 spki, 2 jwk)
+      expect(mockSubtle.exportKey).toHaveBeenCalledTimes(4);
       expect(mockSubtle.exportKey).toHaveBeenCalledWith('spki', mockEncKeyPair.publicKey);
       expect(mockSubtle.exportKey).toHaveBeenCalledWith('spki', mockSigKeyPair.publicKey);
+      expect(mockSubtle.exportKey).toHaveBeenCalledWith('jwk', mockEncKeyPair.privateKey);
+      expect(mockSubtle.exportKey).toHaveBeenCalledWith('jwk', mockSigKeyPair.privateKey);
 
-      // Check local storage
-      expect(mockStorage.saveKeyPair).toHaveBeenCalledTimes(2);
+      // (FIX) Check "dumb" local storage
+      expect(mockStorage.saveJwk).toHaveBeenCalledTimes(2);
+      expect(mockStorage.saveJwk).toHaveBeenCalledWith(mockEncKeyUrn, mockEncPrivKeyJwk);
+      expect(mockStorage.saveJwk).toHaveBeenCalledWith(mockSigKeyUrn, mockSigPrivKeyJwk);
 
       // Check remote upload
       expect(mockSecureKeyService.storeKeys).toHaveBeenCalledWith(
         mockUserUrn,
         mockPublicKeys
       );
-
       // Check result
       expect(result.publicKeys).toEqual(mockPublicKeys);
     });
   });
 
   describe('loadMyKeys', () => {
-    it('should load both keys from storage and return private keys', async () => {
-      mockStorage.loadKeyPair
-        .mockResolvedValueOnce(mockEncKeyPair)
-        .mockResolvedValueOnce(mockSigKeyPair);
+    it('should load JWKs from storage and import them', async () => {
+      // (FIX) Mock loadJwk to return the private key JWKs
+      mockStorage.loadJwk
+        .mockResolvedValueOnce(mockEncPrivKeyJwk)
+        .mockResolvedValueOnce(mockSigPrivKeyJwk);
+        
+      // (FIX) Mock importKey to return the CryptoKey objects
+      vi.spyOn(mockSubtle, 'importKey')
+        .mockImplementation(async (format, key, alg) => {
+          if (format === 'jwk' && (alg as any).name === 'RSA-OAEP') return mockEncKeyPair.privateKey;
+          if (format === 'jwk' && (alg as any).name === 'RSA-PSS') return mockSigKeyPair.privateKey;
+          throw new Error('Unexpected importKey call');
+        });
+
       const result = await service.loadMyKeys(mockUserUrn);
+      
+      // Check that we loaded from storage
+      expect(mockStorage.loadJwk).toHaveBeenCalledTimes(2);
+      expect(mockStorage.loadJwk).toHaveBeenCalledWith(mockEncKeyUrn);
+      expect(mockStorage.loadJwk).toHaveBeenCalledWith(mockSigKeyUrn);
+      
+      // Check that we imported the keys
+      expect(mockSubtle.importKey).toHaveBeenCalledTimes(2);
+      expect(mockSubtle.importKey).toHaveBeenCalledWith(
+        'jwk', 
+        mockEncPrivKeyJwk, 
+        { name: 'RSA-OAEP', hash: 'SHA-256' }, 
+        true, 
+        mockEncPrivKeyJwk.key_ops
+      );
+      expect(mockSubtle.importKey).toHaveBeenCalledWith(
+        'jwk', 
+        mockSigPrivKeyJwk, 
+        { name: 'RSA-PSS', hash: 'SHA-256' }, 
+        true, 
+        mockSigPrivKeyJwk.key_ops
+      );
+      
+      // Check final result
       expect(result).toEqual(mockPrivateKeys);
     });
 
-    it('should return null if keys are missing', async () => {
-      mockStorage.loadKeyPair.mockResolvedValue(null);
+    it('should return null if keys are missing from storage', async () => {
+      mockStorage.loadJwk.mockResolvedValue(null);
       const result = await service.loadMyKeys(mockUserUrn);
       expect(result).toBeNull();
+      expect(mockSubtle.importKey).not.toHaveBeenCalled();
     });
   });
 
   describe('encryptAndSign', () => {
     it('should serialize, encrypt, sign, and build an envelope', async () => {
+      // (This test is mostly unchanged, just verifying importKey)
+      vi.spyOn(mockSubtle, 'importKey').mockResolvedValue(mockEncKeyPair.publicKey);
+      
       const result = await service.encryptAndSign(
         mockInnerPayload,
         mockRecipientUrn,
@@ -225,7 +272,13 @@ describe('MessengerCryptoService', () => {
         mockPublicKeys
       );
       expect(mockSerialize).toHaveBeenCalledWith(mockInnerPayload);
-      expect(mockSubtle.importKey).toHaveBeenCalled(); // Check importKey was called
+      expect(mockSubtle.importKey).toHaveBeenCalledWith(
+        'spki',
+        mockPublicKeys.encKey,
+        { name: 'RSA-OAEP', hash: 'SHA-256' },
+        true,
+        ['encrypt']
+      );
       expect(mockCrypto.encrypt).toHaveBeenCalled();
       expect(mockCrypto.sign).toHaveBeenCalled();
       expect(result).toEqual(mockEnvelope);
@@ -234,6 +287,9 @@ describe('MessengerCryptoService', () => {
 
   describe('verifyAndDecrypt', () => {
     it('should orchestrate decryption, deserialization, key fetching, and verification', async () => {
+      // (This test is mostly unchanged, just verifying importKey)
+      vi.spyOn(mockSubtle, 'importKey').mockResolvedValue(mockSigPublicKey);
+
       const result = await service.verifyAndDecrypt(
         mockEnvelope,
         mockPrivateKeys
@@ -243,7 +299,13 @@ describe('MessengerCryptoService', () => {
       expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(
         mockInnerPayload.senderId
       );
-      expect(mockSubtle.importKey).toHaveBeenCalled(); // Check importKey was called
+      expect(mockSubtle.importKey).toHaveBeenCalledWith(
+        'spki',
+        mockPublicKeys.sigKey,
+        { name: 'RSA-PSS', hash: 'SHA-256' },
+        true,
+        ['verify']
+      );
       expect(mockCrypto.verify).toHaveBeenCalled();
       expect(result).toEqual(mockInnerPayload);
     });

@@ -125,6 +125,8 @@ try {
       throw new Error(
         'Missing required testing variable: E2E_TEST_SECRET. This is required for non-production environments.'
       );
+    } else {
+      console.warn("[WARNING] E2E_TEST_SECRET is set. Ensure this is only used in testing environments.", config.e2eTestSecret);
     }
   }
 } catch (error) {

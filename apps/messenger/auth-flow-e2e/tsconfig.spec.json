@@ -8,7 +8,6 @@
     "types": [
       "vitest/globals",
       "node",
-      "jasmine",
       "@angular/compiler",
       "@angular/core/testing"
     ]

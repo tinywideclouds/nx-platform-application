@@ -1,10 +1,11 @@
 // --- File: libs/messenger/crypto-access/src/messenger-crypto.service.ts ---
+// (FULL CODE - Refactored for "Dumb" Storage)
 
 import { Injectable, inject } from '@angular/core';
 
 import {
   StorageProvider,
-  IndexedDb,
+  IndexedDbStore,
 } from '@nx-platform-application/platform-storage';
 import {
   URN,
@@ -20,7 +21,7 @@ import {
 } from '@nx-platform-application/messenger-types';
 
 // --- Local Imports ---
-import { Crypto } from './crypto';
+import { CryptoEngine } from './crypto';
 import { PrivateKeys } from './types';
 
 // --- WebCrypto Import Parameters ---
@@ -33,35 +34,20 @@ const rsaPssImportParams: RsaHashedImportParams = {
   hash: 'SHA-256',
 };
 
-/**
- * The "Crypto Engine" for the Messenger.
- *
- * This service is the orchestrator for all crypto operations.
- * - Injects the raw Crypto helper for WebCrypto functions.
- * - Injects the SecureKeyService for *remote* key fetching/storing.
- * - Injects the IndexedDb service for *local* key storage.
- *
- * It is responsible for:
- * 1. Generating, storing (local+remote), and loading our *own* keys.
- * 2. Encrypting/signing outgoing messages (Sealed Sender).
- * 3. Decrypting/verifying incoming messages (Sealed Sender).
- */
 @Injectable({
   providedIn: 'root',
 })
 export class MessengerCryptoService {
-  private crypto = inject(Crypto);
-  private storage: StorageProvider = inject(IndexedDb);
+  private crypto = inject(CryptoEngine);
+  // StorageProvider is now the "dumb" JWK store
+  private storage: StorageProvider = inject(IndexedDbStore);
   private keyService = inject(SecureKeyService);
 
   // --- 1. KEY MANAGEMENT (Our Own Keys) ---
 
   /**
    * Generates and stores a user's full key set.
-   * 1. Generates an Encryption key pair (RSA-OAEP).
-   * 2. Generates a Signing key pair (RSA-PSS).
-   * 3. Saves *both* to IndexedDB.
-   * 4. Uploads *public keys* to the v2 key-service.
+   * (Refactored to use saveJwk)
    */
   public async generateAndStoreKeys(
     userUrn: URN
@@ -72,10 +58,19 @@ export class MessengerCryptoService {
       this.crypto.generateSigningKeys(),
     ]);
 
-    // 2. Extract public keys for the network
-    const [encPubKeyRaw, sigPubKeyRaw] = await Promise.all([
+    // 2. Extract public keys (for network) and private keys (for storage)
+    const [
+      encPubKeyRaw, 
+      sigPubKeyRaw, 
+      encPrivKeyJwk, 
+      sigPrivKeyJwk
+    ] = await Promise.all([
+      // Public keys for network (SPKI)
       crypto.subtle.exportKey('spki', encKeyPair.publicKey),
       crypto.subtle.exportKey('spki', sigKeyPair.publicKey),
+      // Private keys for local storage (JWK)
+      crypto.subtle.exportKey('jwk', encKeyPair.privateKey),
+      crypto.subtle.exportKey('jwk', sigKeyPair.privateKey),
     ]);
 
     const publicKeys: PublicKeys = {
@@ -88,13 +83,13 @@ export class MessengerCryptoService {
       sigKey: sigKeyPair.privateKey,
     };
 
-    // 3. Save *private* keys to IndexedDB
+    // 3. Save *private* key JWKs to IndexedDB using the new "dumb" method
     await Promise.all([
-      this.storage.saveKeyPair(this.getEncKeyUrn(userUrn), encKeyPair),
-      this.storage.saveKeyPair(this.getSigKeyUrn(userUrn), sigKeyPair),
+      this.storage.saveJwk(this.getEncKeyUrn(userUrn), encPrivKeyJwk),
+      this.storage.saveJwk(this.getSigKeyUrn(userUrn), sigPrivKeyJwk),
     ]);
 
-    // 4. *** THIS IS THE WP1.3 CHANGE: Upload public keys ***
+    // 4. Upload public keys
     await this.keyService.storeKeys(userUrn, publicKeys);
 
     return { privateKeys, publicKeys };
@@ -102,30 +97,53 @@ export class MessengerCryptoService {
 
   /**
    * Loads our private keys from IndexedDB.
-   * Used on app startup to hydrate the crypto state.
+   * (Refactored to use loadJwk and perform import)
    */
   public async loadMyKeys(userUrn: URN): Promise<PrivateKeys | null> {
-    const [encKeyPair, sigKeyPair] = await Promise.all([
-      this.storage.loadKeyPair(this.getEncKeyUrn(userUrn)),
-      this.storage.loadKeyPair(this.getSigKeyUrn(userUrn)),
+    // 1. Load the raw JWKs from storage
+    const [encKeyJwk, sigKeyJwk] = await Promise.all([
+      this.storage.loadJwk(this.getEncKeyUrn(userUrn)),
+      this.storage.loadJwk(this.getSigKeyUrn(userUrn)),
     ]);
 
-    if (!encKeyPair || !sigKeyPair) {
+    if (!encKeyJwk || !sigKeyJwk) {
       return null;
     }
 
-    return {
-      encKey: encKeyPair.privateKey,
-      sigKey: sigKeyPair.privateKey,
-    };
+    // 2. Import the keys *here*, using the correct algorithms
+    // This fixes the "Unsupported key usage" error
+    try {
+      const [encKey, sigKey] = await Promise.all([
+        // Import the Encryption key
+        crypto.subtle.importKey(
+          'jwk',
+          encKeyJwk,
+          rsaOaepImportParams, // Use 'RSA-OAEP'
+          true,
+          encKeyJwk.key_ops as KeyUsage[]
+        ),
+        // Import the Signing key
+        crypto.subtle.importKey(
+          'jwk',
+          sigKeyJwk,
+          rsaPssImportParams, // Use 'RSA-PSS'
+          true,
+          sigKeyJwk.key_ops as KeyUsage[]
+        ),
+      ]);
+
+      return {
+        encKey: encKey,
+        sigKey: sigKey,
+      };
+    } catch (e) {
+      console.error('Failed to import keys from storage:', e);
+      return null;
+    }
   }
 
   // --- 2. OUTGOING (Encrypt & Sign) ---
-
-  /**
-   * Implements the "Sealed Sender" model.
-   * Encrypts a payload for a recipient and signs it with our private key.
-   */
+  // (This method is unchanged, it was already correct)
   public async encryptAndSign(
     payload: EncryptedMessagePayload,
     recipientId: URN,
@@ -163,11 +181,7 @@ export class MessengerCryptoService {
   }
 
   // --- 3. INCOMING (Verify & Decrypt) ---
-
-  /**
-   * Implements the "Sealed Sender" model.
-   * Verifies the sender's signature *before* decrypting the payload.
-   */
+  // (This method is unchanged, it was already correct)
   public async verifyAndDecrypt(
     envelope: SecureEnvelope,
     myPrivateKeys: PrivateKeys

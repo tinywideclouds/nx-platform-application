@@ -15,21 +15,21 @@ import { ensureAuthenticated } from '../../internal/middleware/auth.middleware.j
 export const createUserApiRoutes = (db: Firestore) => {
   const router = express.Router();
 
-  router.get('/auth/status', (req, res) => {
+  router.get('/auth/status', async (req, res) => {
     if (req.isAuthenticated()) {
       // CHANGED: Use the shared 'User' type for consistency.
       const user = req.user as User;
-      const token = generateToken(user, 'session-authenticated-token');
+      const token = await generateToken(user, 'session-authenticated-token');
       res.json({ authenticated: true, user: user, token: token });
     } else {
       res.json({ authenticated: false, user: null });
     }
   });
 
-  router.get('/auth/refresh-token', ensureAuthenticated, (req, res) => {
+  router.get('/auth/refresh-token', ensureAuthenticated, async (req, res) => {
     // CHANGED: Use the shared 'User' type.
     const user = req.user as User;
-    const newInternalToken = generateToken(user, 're-issued-token-placeholder');
+    const newInternalToken = await generateToken(user, 're-issued-token-placeholder');
     res.json({ token: newInternalToken });
   });
 
