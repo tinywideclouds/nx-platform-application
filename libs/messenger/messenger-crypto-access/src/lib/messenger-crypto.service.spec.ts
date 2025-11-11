@@ -6,7 +6,7 @@ import { Mock, Mocked } from 'vitest';
 import { webcrypto } from 'node:crypto';
 
 // --- (FIX) Import the correct "dumb" storage service ---
-import { IndexedDbStore } from '@nx-platform-application/platform-storage';
+import { WebKeyDbStore } from '@nx-platform-application/web-key-storage';
 import {
   URN,
   PublicKeys,
@@ -43,11 +43,11 @@ vi.mock('./crypto', () => ({
   })),
 }));
 // --- (FIX) Mock the "dumb" storage module ---
-vi.mock('@nx-platform-application/platform-storage', async (importOriginal) => {
+vi.mock('@nx-platform-application/web-key-storage', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
     ...actual,
-    IndexedDbStore: vi.fn(() => ({
+    WebKeyDbStore: vi.fn(() => ({
       saveJwk: vi.fn(),
       loadJwk: vi.fn(),
       deleteJwk: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock('@nx-platform-application/platform-storage', async (importOriginal) => {
 describe('MessengerCryptoService', () => {
   let service: MessengerCryptoService;
   let mockCrypto: Mocked<CryptoEngine>;
-  let mockStorage: Mocked<IndexedDbStore>;
+  let mockStorage: Mocked<WebKeyDbStore>;
   let mockSubtle: Mocked<SubtleCrypto>;
   let mockSerialize: Mock;
   let mockDeserialize: Mock;
@@ -122,13 +122,13 @@ describe('MessengerCryptoService', () => {
   beforeEach(async () => {
     // Get mocked instances
     const { CryptoEngine } = await import('./crypto');
-    const { IndexedDbStore } = await import(
-      '@nx-platform-application/platform-storage'
+    const { WebKeyDbStore } = await import(
+      '@nx-platform-application/web-key-storage'
     );
     const msgTypes = await import('@nx-platform-application/messenger-types');
 
     mockCrypto = new CryptoEngine() as Mocked<CryptoEngine>;
-    mockStorage = new IndexedDbStore() as Mocked<IndexedDbStore>;
+    mockStorage = new WebKeyDbStore() as Mocked<WebKeyDbStore>;
     mockSubtle = crypto.subtle as Mocked<SubtleCrypto>;
     mockSerialize = msgTypes.serializePayloadToProtoBytes as Mock;
     mockDeserialize = msgTypes.deserializeProtoBytesToPayload as Mock;
@@ -171,7 +171,7 @@ describe('MessengerCryptoService', () => {
         MessengerCryptoService,
         { provide: CryptoEngine, useValue: mockCrypto },
         // (FIX) Provide the correct "dumb" store
-        { provide: IndexedDbStore, useValue: mockStorage },
+        { provide: WebKeyDbStore, useValue: mockStorage },
         { provide: SecureKeyService, useValue: mockSecureKeyService },
       ],
     });

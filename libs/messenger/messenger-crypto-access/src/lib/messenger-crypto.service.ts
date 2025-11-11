@@ -4,9 +4,9 @@
 import { Injectable, inject } from '@angular/core';
 
 import {
-  StorageProvider,
-  IndexedDbStore,
-} from '@nx-platform-application/platform-storage';
+  WebKeyStorageProvider,
+  WebKeyDbStore,
+} from '@nx-platform-application/web-key-storage';
 import {
   URN,
   PublicKeys,
@@ -40,7 +40,7 @@ const rsaPssImportParams: RsaHashedImportParams = {
 export class MessengerCryptoService {
   private crypto = inject(CryptoEngine);
   // StorageProvider is now the "dumb" JWK store
-  private storage: StorageProvider = inject(IndexedDbStore);
+  private storage: WebKeyStorageProvider = inject(WebKeyDbStore);
   private keyService = inject(SecureKeyService);
 
   // --- 1. KEY MANAGEMENT (Our Own Keys) ---

@@ -4,25 +4,19 @@
 import { Injectable } from '@angular/core';
 import Dexie, { Table } from 'dexie';
 import { JwkRecord } from './models';
-import { StorageProvider } from "./interfaces"
+import { WebKeyStorageProvider } from './interfaces';
+import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
 
 @Injectable({ providedIn: 'root' })
-export class IndexedDbStore extends Dexie implements StorageProvider {
+export class WebKeyDbStore extends PlatformDexieService implements WebKeyStorageProvider {
   /**
    * A generic table for storing JsonWebKeys.
    */
   private jwks!: Table<JwkRecord, string>;
 
   constructor() {
-    super('ActionIntentionDB');
-    
-    // We increment the version to 2 to introduce the new 'jwks' table
-    // and remove the old 'keyPairs' table.
-    this.version(1).stores({
-      keyPairs: 'id',
-      appStates: 'id',
-    });
-    
+    super();
+
     this.version(2).stores({
       jwks: 'id', // The new generic table
       appStates: 'id', // This one remains

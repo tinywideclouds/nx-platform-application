@@ -1,28 +1,27 @@
 {
-  "name": "platform-storage",
+  "name": "platform-dexie-storage",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/platform/ng/storage/src",
+  "sourceRoot": "libs/platform/ng/dexie-storage/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:platform"],
   "targets": {
-
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/libs/platform/ng/storage",
-        "configFile": "libs/platform/ng/storage/vite.config.mts",
-        "main": "libs/platform/ng/storage/src/index.ts",
-        "assets": ["libs/platform/ng/storage/*.md"]
+        "outputPath": "dist/libs/platform/ng/dexie-storage",
+        "configFile": "libs/platform/ng/dexie-storage/vite.config.mts",
+        "main": "libs/platform/ng/dexie-storage/src/index.ts",
+        "assets": ["libs/platform/ng/dexie-storage/*.md"]
       }
     },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/platform/ng/storage",
-        "configFile": "libs/platform/ng/storage/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/platform/ng/dexie-storage",
+        "configFile": "libs/platform/ng/dexie-storage/vitest.config.mts"
       }
     },
     "lint": {

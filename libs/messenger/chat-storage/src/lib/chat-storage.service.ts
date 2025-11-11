@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
-import { IndexedDbStore } from '@nx-platform-application/platform-storage';
+import { WebKeyDbStore } from '@nx-platform-application/web-key-storage';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import {
   DecryptedMessage,
@@ -12,12 +12,12 @@ import { MessageRecord, PublicKeyRecord } from './chat-storage.models';
   providedIn: 'root',
 })
 export class ChatStorageService {
-  private readonly db = inject(IndexedDbStore);
+  private readonly db = inject(WebKeyDbStore);
 
   constructor() {
-    // --- Extend the Dexie schema from platform-storage ---
+    // --- Extend the Dexie schema from web-key-storage ---
     // This uses Dexie's "addons" capability to add a new table
-    // to the existing 'ActionIntentionDB' defined in IndexedDbStore.
+    // to the existing 'ActionIntentionDB' defined in WebKeyDbStore.
     this.db.version(3).stores({
       messages:
         '++messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
@@ -25,12 +25,6 @@ export class ChatStorageService {
     });
   }
 
-  /**
-   * Stores or updates a public key record in the cache.
-   * @param urn The URN of the user (as a string)
-   * @param keys The JSON-safe public keys
-   * @param timestamp The timestamp of when it was fetched
-   */
   async storeKey(
     urn: string,
     keys: Record<string, string>,
@@ -40,12 +34,9 @@ export class ChatStorageService {
     await this.db.table('publicKeys').put(record);
   }
 
-  /**
-   * Retrieves a single public key record from the cache.
-   * @param urn The URN of the user (as a string)
-   */
-  async getKey(urn: string): Promise<PublicKeyRecord | undefined> {
-    return this.db.table('publicKeys').get(urn);
+  async getKey(urn: string): Promise<PublicKeyRecord | null> {
+    const record = await this.db.table('publicKeys').get(urn);
+    return record || null;
   }
 
   async clearAllMessages(): Promise<void> {

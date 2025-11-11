@@ -4,7 +4,7 @@
 /**
  * A generic interface for storing and retrieving JWKs.
  */
-export interface StorageProvider {
+export interface WebKeyStorageProvider {
   /**
    * Saves a single JsonWebKey by its ID.
    * @param id A unique ID for this key.

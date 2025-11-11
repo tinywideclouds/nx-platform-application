@@ -4,7 +4,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Temporal } from '@js-temporal/polyfill';
 import { vi } from 'vitest';
-import { IndexedDbStore } from '@nx-platform-application/platform-storage';
+import { WebKeyDbStore } from '@nx-platform-application/web-key-storage';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import { ChatStorageService } from './chat-storage.service';
 import { DecryptedMessage, PublicKeyRecord } from './chat-storage.models';
@@ -13,7 +13,7 @@ import { DecryptedMessage, PublicKeyRecord } from './chat-storage.models';
 const mockDbTable = {
   clear: vi.fn(),
   put: vi.fn(),
-  get: vi.fn(), // <-- ADDED
+  get: vi.fn(),
   where: vi.fn(() => mockDbTable),
   equals: vi.fn(() => mockDbTable),
   sortBy: vi.fn(),
@@ -31,8 +31,8 @@ const mockIndexedDb = {
   table: vi.fn(() => mockDbTable),
 };
 
-vi.mock('@nx-platform-application/platform-storage', () => ({
-  IndexedDbStore: vi.fn(() => mockIndexedDb),
+vi.mock('@nx-platform-application/web-key-storage', () => ({
+  WebKeyDbStore: vi.fn(() => mockIndexedDb),
 }));
 // --- End Mocks ---
 
@@ -78,7 +78,7 @@ describe('ChatStorageService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatStorageService,
-        { provide: IndexedDbStore, useValue: mockIndexedDb },
+        { provide: WebKeyDbStore, useValue: mockIndexedDb },
       ],
     });
 

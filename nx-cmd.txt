@@ -31,4 +31,8 @@ nx g @nx/workspace:move --project=key-v2-access --destination=libs/messenger/mes
 
 nx g @nx/angular:library --name=key-cache-access --directory=libs/messenger/key-cache-access --tags="scope:messenger"
 
+nx g @nx/workspace:move --project=platform-storage --destination=libs/platform/web-key-storage 
+
+nx g @nx/angular:library --name=platform-dexie-storage --directory=libs/platform/ng/dexie-storage --tags="scope:platform"
+
 

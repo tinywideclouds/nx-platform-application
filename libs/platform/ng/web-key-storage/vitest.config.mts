@@ -7,10 +7,10 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/platform/storage',
+  cacheDir: '../../../../node_modules/.vite/libs/platform/ng/web-key-storage',
   plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'platform-storage',
+    name: 'platform-web-key-storage',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -20,11 +20,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/platform/ng/platform/storage/index.html'
+        '../../../../dist/test-reports/platform/ng/platform/web-key-storage/ng/index.html'
       ),
     },
     coverage: {
-      reportsDirectory: '../../../../coverage/libs/platform/ng/platform/storage',
+      reportsDirectory:
+        '../../../../coverage/libs/platform/ng/platform/web-key-storage/ng',
       provider: 'v8' as const,
     },
   },

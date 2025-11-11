@@ -49,9 +49,6 @@
       "@nx-platform-application/key-cache-access": [
         "libs/messenger/key-cache-access/src/index.ts"
       ],
-      "@nx-platform-application/key-data-access": [
-        "libs/platform/ng/key-data-access/src/index.ts"
-      ],
       "@nx-platform-application/messenger-crypto-access": [
         "libs/messenger/messenger-crypto-access/src/index.ts"
       ],
@@ -82,17 +79,20 @@
       "@nx-platform-application/platform-auth-ui": [
         "libs/platform/ng/auth-ui/src/index.ts"
       ],
+      "@nx-platform-application/platform-dexie-storage": [
+        "libs/platform/ng/dexie-storage/src/index.ts"
+      ],
       "@nx-platform-application/platform-protos": [
         "libs/platform/protos/src/index.ts"
       ],
       "@nx-platform-application/platform-protos/*": [
         "libs/platform/protos/dist/ts/src/types/*"
       ],
-      "@nx-platform-application/platform-storage": [
-        "libs/platform/ng/storage/src/index.ts"
-      ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
+      ],
+      "@nx-platform-application/web-key-storage": [
+        "libs/platform/ng/web-key-storage/src/index.ts"
       ]
     }
   },

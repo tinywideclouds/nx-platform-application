@@ -1,8 +1,8 @@
-// --- FILE: libs/platform/ng/storage/src/lib/indexed-db.service.spec.ts ---
-// (FULL CODE)
+// --- FILE: libs/platform/ng/storage/src/lib/webkey-db.service.spec.ts ---
+// (FIXED)
 
 import { TestBed } from '@angular/core/testing';
-import { IndexedDbStore } from './indexed-db.service'; 
+import { WebKeyDbStore } from './webkey-db.service';
 import { JwkRecord } from './models';
 
 // --- Mock Fixtures ---
@@ -19,7 +19,6 @@ const mockRecord: JwkRecord = {
 };
 
 // --- Global Mocks ---
-// We no longer mock 'crypto'
 
 // Mock the methods of a Dexie table
 const mockDexieTable = {
@@ -28,20 +27,37 @@ const mockDexieTable = {
   delete: vi.fn(),
 };
 
-describe('IndexedDbStore (Dumb Storage)', () => {
-  let service: IndexedDbStore;
+vi.mock('@nx-platform-application/platform-dexie-storage', () => {
+  // Create a mock class constructor
+  const MockPlatformDexieService = vi.fn(function (this: any) {
+    // Mock the methods called by our service's constructor
+    this.version = vi.fn(() => ({
+      stores: vi.fn(),
+    }));
+    // Make `this.table('jwks')` return our mock table
+    this.table = vi.fn((tableName: string) => {
+      if (tableName === 'jwks') {
+        return mockDexieTable;
+      }
+      return {}; // Return empty object for other tables
+    });
+  });
+  return { PlatformDexieService: MockPlatformDexieService };
+});
+
+describe('WebKeyDbStore (Dumb Storage)', () => {
+  let service: WebKeyDbStore;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [IndexedDbStore],
+      providers: [WebKeyDbStore],
     });
-    service = TestBed.inject(IndexedDbStore);
 
     // Reset mocks before each test
     vi.resetAllMocks();
 
-    // Intercept the real Dexie table and replace it with our mock
-    (service as any).jwks = mockDexieTable;
+    service = TestBed.inject(WebKeyDbStore);
+
   });
 
   it('should be created', () => {

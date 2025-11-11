@@ -12,9 +12,9 @@ This service is intentionally kept separate from application-state storage to ma
 
 This library exports:
 
-* `IndexedDb`: The root-provided Angular service.
-* `StorageProvider`: The interface the service implements.
-* `KeyPairRecord`: The data model for a stored key pair (using `JsonWebKey` format).
+- `IndexedDb`: The root-provided Angular service.
+- `StorageProvider`: The interface the service implements.
+- `KeyPairRecord`: The data model for a stored key pair (using `JsonWebKey` format).
 
 ## Usage
 
@@ -50,3 +50,4 @@ async loadKeys(userId: string) {
 async deleteKeys(userId: string) {
   await this.storage.deleteKeyPair(userId);
 }
+```
