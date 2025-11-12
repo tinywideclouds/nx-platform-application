@@ -49,7 +49,7 @@ export class ChatDataService {
    * Endpoint: POST /api/messages/ack
    */
   acknowledge(messageIds: string[]): Observable<void> {
-    const url = `${this.baseApiUrl}/ack`;
+    const url = `${this.baseApiUrl}/messages/ack`;
     const body = { messageIds };
 
     // Expects a 204 No Content

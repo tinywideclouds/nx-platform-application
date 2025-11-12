@@ -37,7 +37,7 @@ import { TestClient } from './test-helpers';
 
 const identityUrl = 'http://localhost:3000/api/auth';
 const authUrl = 'http://localhost:3000/api/auth';
-const keyUrl = 'http://localhost:8081/api/keys';
+const keyUrl = 'http://localhost:8081/keys';
 const wssUrl = 'ws://localhost:8083/connect';
 
 export const routingUrl = 'http://localhost:8082/api';

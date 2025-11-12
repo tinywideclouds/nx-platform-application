@@ -58,13 +58,13 @@ describe('E2E: Service Health Checks', () => {
   });
 
   // --- 🩺 Phase 1: Identity Service Health (Port 3000) ---
-  it.skip('[Phase 1] should connect to the identity-service (port 3000) health check', async () => {
+  it('[Phase 1] should connect to the identity-service (port 3000) health check', async () => {
     const healthUrl = 'http://localhost:3000/api/health-check';
     const response = await fetch(healthUrl);
     expect(response.ok, 'Identity /health-check failed').toBe(true);
   }, 10000);
 
-  it.skip('[Phase 1] should get a valid 200 from the /e2e-token endpoint', async () => {
+  it('[Phase 1] should get a valid 200 from the /e2e-token endpoint', async () => {
     const headers = {
       'Content-Type': 'application/json',
       'x-e2e-secret-key': E2E_SECRET,
@@ -85,15 +85,15 @@ describe('E2E: Service Health Checks', () => {
   }, 10000);
 
   // --- 🔑 Phase 2: Key Service Health (Port 8081) ---
-  it.skip('[Phase 2] should connect to the key-service (port 8081) /readyz check', async () => {
+  it('[Phase 2] should connect to the key-service (port 8081) /readyz check', async () => {
     const readyUrl = 'http://localhost:8081/readyz';
     const response = await fetch(readyUrl);
     expect(response.ok, 'Key-service /readyz failed').toBe(true);
   }, 10000);
 
-  it.skip('[Phase 2] should store and retrieve keys from the go-key-service (port 8081)', async () => {
+  it('[Phase 2] should store and retrieve keys from the go-key-service (port 8081)', async () => {
     const mockKeys = { encKey: 'AQID', sigKey: 'BAUG' };
-    const storeUrl = `http://localhost:8081/api/v2/keys/${URN_B.toString()}`;
+    const storeUrl = `http://localhost:8081/keys/${URN_B.toString()}`;
 
     // Store
     const storeResponse = await fetch(storeUrl, {
@@ -114,14 +114,14 @@ describe('E2E: Service Health Checks', () => {
   }, 10000);
 
   // --- 📡 Phase 3: Routing Service Health (Ports 8082 & 8083) ---
-  it.skip('[Phase 3] should connect to the routing-api (port 8082) /readyz check', async () => {
+  it('[Phase 3] should connect to the routing-api (port 8082) /readyz check', async () => {
     const readyUrl = 'http://localhost:8082/readyz';
     const response = await fetch(readyUrl);
     expect(response.ok, 'Routing-api /readyz failed').toBe(true);
   }, 10000);
 
   // --- ✨ Phase 4: Angular Service Health ---
-  it.skip('[Phase 4] should connect the Angular SecureKeyService (port 8081)', async () => {
+  it('[Phase 4] should connect the Angular SecureKeyService (port 8081)', async () => {
     // 1. Seed Client B's keys
     TestBed.resetTestingModule();
     // ➡️ **Change 2:** Explicitly pass options, setting `generateKeys: true`
@@ -148,7 +148,7 @@ describe('E2E: Service Health Checks', () => {
     // clientA.chatService.ngOnDestroy(); // chatService is null, this would error
   }, 10000);
 
-  it.skip('[Phase 4] should connect the Angular ChatLiveDataService (port 8083)', async () => {
+  it('[Phase 4] should connect the Angular ChatLiveDataService (port 8083)', async () => {
     TestBed.resetTestingModule();
     // ➡️ **Change 4:** Pass options object
     const clientA = await createTestClient(URN_A, tokenA, {
@@ -162,7 +162,7 @@ describe('E2E: Service Health Checks', () => {
     clientA.chatService.ngOnDestroy(); // Manual cleanup
   }, 10000);
 
-  it.skip('[Phase 4] should connect the Angular ChatDataService (port 8082)', async () => {
+  it('[Phase 4] should connect the Angular ChatDataService (port 8082)', async () => {
     TestBed.resetTestingModule();
     // ➡️ **Change 5:** Pass options object
     const clientA = await createTestClient(URN_A, tokenA, {
