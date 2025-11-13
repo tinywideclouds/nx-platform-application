@@ -1,0 +1,8 @@
+/* libs/contacts/contacts-ui/src/lib/contacts-page/contacts-page.component.scss */
+
+/* Container components often have minimal or no styles of their own.
+  All styling is encapsulated in the child components.
+*/
+:host {
+  display: block;
+}

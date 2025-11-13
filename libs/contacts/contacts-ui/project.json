@@ -13,6 +13,14 @@
       "options": {
         "outputPath": "dist/libs/contacts/contacts-ui",
         "configFile": "libs/contacts/contacts-ui/vite.config.mts"
+      },
+      "configurations": {
+        "production": {
+          "mode": "production"
+        },
+        "development": {
+          "mode": "development"
+        }
       }
     },
     "test": {

@@ -1,0 +1,1 @@
+nx g @nx/angular:component contact-avatar --project=contacts-ui --changeDetection=OnPush --export

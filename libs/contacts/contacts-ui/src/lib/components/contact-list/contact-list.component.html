@@ -1,0 +1,17 @@
+<div class="flex flex-col">
+  @if (contacts.length > 0) {
+    @for (contact of contacts; track contact.id) {
+      <lib-contact-list-item
+        [contact]="contact"
+        (select)="onSelect($event)"
+      />
+    }
+  } @else {
+    <div
+      class="p-4 text-center text-gray-500"
+      data-testid="empty-list"
+    >
+      No contacts found.
+    </div>
+  }
+</div>

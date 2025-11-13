@@ -1,0 +1,10 @@
+/* libs/contacts/contacts-ui/src/lib/contact-list-item/contact-list-item.component.scss */
+
+:host {
+  /*
+   * Ensures the component takes up the full width
+   * of its container (e.g., when in a list),
+   * allowing the hover effect to span the entire row.
+   */
+  display: block;
+}

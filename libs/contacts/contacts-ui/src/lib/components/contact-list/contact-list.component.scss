@@ -1,0 +1,9 @@
+/* libs/contacts/contacts-ui/src/lib/contact-list/contact-list.component.scss */
+
+:host {
+  /**
+   * Ensures the component takes up the full width
+   * of its parent container.
+   */
+  display: block;
+}
