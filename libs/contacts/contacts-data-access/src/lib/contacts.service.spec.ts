@@ -1,131 +1,140 @@
 import { TestBed } from '@angular/core/testing';
-import {
-  HttpClientTestingModule,
-  HttpTestingController,
-} from '@angular/common/http/testing';
-import { ContactsService } from './contacts.service';
-import { Logger } from '@nx-platform-application/console-logger';
-import { User } from '@nx-platform-application/platform-types';
+import { vi } from 'vitest';
+import { ContactsStorageService } from './contacts.service';
+import { ContactsDatabase } from './db/contacts.database';
+import { Contact } from './models/contacts';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
-// Mock Logger Service
-// This is the standard Angular way to mock a dependent service.
-class MockLoggerService {
-  info = vi.fn();
-  error = vi.fn();
-  warn = vi.fn();
-}
+// --- Mocks ---
+const { mockDbTable, mockContactsDb } = vi.hoisted(() => {
+  const tableMock = {
+    // Standard CRUD
+    put: vi.fn(),
+    update: vi.fn(),
+    get: vi.fn(),
+    delete: vi.fn(),
+    bulkPut: vi.fn(),
+    
+    // Querying
+    orderBy: vi.fn(() => tableMock),
+    where: vi.fn(() => tableMock),
+    equals: vi.fn(() => tableMock),
+    toArray: vi.fn(),
+    first: vi.fn(),
+  };
 
-// Mock User Data
-const MOCK_USERS: User[] = [
-  { id: '1', email: 'user1@example.com', alias: 'User One' },
-  { id: '2', email: 'user2@example.com', alias: 'User Two' },
-];
+  return {
+    mockDbTable: tableMock,
+    mockContactsDb: {
+      contacts: tableMock,
+      // Mock transaction to immediately execute the callback
+      transaction: vi.fn(async (_mode, _tables, callback) => await callback()),
+    },
+  };
+});
 
-describe('ContactsService (Zoneless)', () => {
-  let service: ContactsService;
-  let httpTestingController: HttpTestingController;
-  let logger: Logger;
+// --- Fixtures ---
+const mockContact: Contact = {
+  id: 'user-123',
+  alias: 'johndoe',
+  email: 'john@example.com',
+  firstName: 'John',
+  surname: 'Doe',
+  phoneNumbers: ['+15550199'],
+  emailAddresses: ['john@example.com', 'work@example.com'],
+  serviceContacts: {
+    messenger: {
+      id: 'msg-uuid-1',
+      alias: 'jd_messenger',
+      lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString
+    },
+  }
+};
+
+describe('ContactsStorageService', () => {
+  let service: ContactsStorageService;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule], // Import the testing module for HttpClient
       providers: [
-        ContactsService,
-        // Provide the mock logger
-        { provide: Logger, useClass: MockLoggerService },
+        ContactsStorageService,
+        // Clean Architecture: Inject the mock object instead of the real DB class
+        { provide: ContactsDatabase, useValue: mockContactsDb },
       ],
     });
 
-    // Inject the services
-    service = TestBed.inject(ContactsService);
-    httpTestingController = TestBed.inject(HttpTestingController);
-    logger = TestBed.inject(Logger);
+    service = TestBed.inject(ContactsStorageService);
+
+    // Default mock returns
+    mockDbTable.get.mockResolvedValue(mockContact);
+    mockDbTable.first.mockResolvedValue(mockContact);
+    mockDbTable.toArray.mockResolvedValue([mockContact]);
   });
 
-  afterEach(() => {
-    // Verify that no unhandled requests are pending after each test
-    httpTestingController.verify();
+  it('should be created', () => {
+    expect(service).toBeTruthy();
   });
 
-  it('should load contacts on initialization', () => {
-    // 1. Expect the initial GET request (from the constructor)
-    const req = httpTestingController.expectOne('/api/contacts');
-    expect(req.request.method).toBe('GET');
+  describe('CRUD Operations', () => {
+    it('should save a contact', async () => {
+      await service.saveContact(mockContact);
+      expect(mockContactsDb.contacts.put).toHaveBeenCalledWith(mockContact);
+    });
 
-    // 2. Respond with mock data
-    req.flush(MOCK_USERS);
+    it('should get a contact by ID', async () => {
+      const result = await service.getContact('user-123');
+      expect(mockContactsDb.contacts.get).toHaveBeenCalledWith('user-123');
+      expect(result).toEqual(mockContact);
+    });
 
-    // 3. Verify the signal was updated
-    expect(service.contacts()).toEqual(MOCK_USERS);
-    // 4. Verify the logger was called
-    expect(logger.info).toHaveBeenCalledWith(
-      `[ContactsService] Loaded 2 contacts.`
-    );
+    it('should update a contact', async () => {
+      const changes = { alias: 'New Alias' };
+      await service.updateContact('user-123', changes);
+      expect(mockContactsDb.contacts.update).toHaveBeenCalledWith('user-123', changes);
+    });
+
+    it('should delete a contact', async () => {
+      await service.deleteContact('user-123');
+      expect(mockContactsDb.contacts.delete).toHaveBeenCalledWith('user-123');
+    });
   });
 
-  it('should handle errors during initial load', () => {
-    // 1. Expect the initial GET request
-    const req = httpTestingController.expectOne('/api/contacts');
-    expect(req.request.method).toBe('GET');
+  describe('Search Operations', () => {
+    it('should find by email using the multi-entry index', async () => {
+      const searchEmail = 'work@example.com';
+      const result = await service.findByEmail(searchEmail);
 
-    // 2. Respond with an error
-    req.flush('Error', { status: 500, statusText: 'Server Error' });
+      // Verify it used the index on 'emailAddresses'
+      expect(mockDbTable.where).toHaveBeenCalledWith('emailAddresses');
+      expect(mockDbTable.equals).toHaveBeenCalledWith(searchEmail);
+      expect(result).toEqual(mockContact);
+    });
 
-    // 3. Verify the signal remains empty and the error was logged
-    expect(service.contacts()).toEqual([]);
-    expect(logger.error).toHaveBeenCalled();
+    it('should find by phone using the multi-entry index', async () => {
+      const searchPhone = '+15550199';
+      const result = await service.findByPhone(searchPhone);
+
+      // Verify it used the index on 'phoneNumbers'
+      expect(mockDbTable.where).toHaveBeenCalledWith('phoneNumbers');
+      expect(mockDbTable.equals).toHaveBeenCalledWith(searchPhone);
+      expect(result).toEqual(mockContact);
+    });
   });
 
-  it('should add a contact and then reload the list', () => {
-    // 1. Flush the initial load from the constructor first
-    httpTestingController.expectOne('/api/contacts').flush(MOCK_USERS);
-    expect(service.contacts()).toEqual(MOCK_USERS); // Initial state
+  describe('Bulk Operations', () => {
+    it('should perform bulk upsert within a transaction', async () => {
+      const batch = [mockContact];
+      await service.bulkUpsert(batch);
 
-    // 2. Call addContact
-    const newUserEmail = 'new@example.com';
-    const NEW_USER: User = { id: '3', email: newUserEmail, alias: 'New User' };
-    service.addContact(newUserEmail);
-
-    // 3. Expect the POST request
-    const postReq = httpTestingController.expectOne('/api/contacts');
-    expect(postReq.request.method).toBe('POST');
-    expect(postReq.request.body).toEqual({ email: newUserEmail });
-    postReq.flush(NEW_USER);
-
-    // 4. Expect the *new* GET request (from the automatic reload)
-    const getReq = httpTestingController.expectOne('/api/contacts');
-    expect(getReq.request.method).toBe('GET');
-
-    // 5. Respond with the new, full list
-    const UPDATED_LIST = [...MOCK_USERS, NEW_USER];
-    getReq.flush(UPDATED_LIST);
-
-    // 6. Verify the signal has the complete new list
-    expect(service.contacts()).toEqual(UPDATED_LIST);
-    expect(logger.info).toHaveBeenCalledWith(
-      `[ContactsService] Successfully added contact: ${newUserEmail}`
-    );
-    expect(logger.info).toHaveBeenCalledWith(
-      `[ContactsService] Loaded 3 contacts.`
-    );
+      expect(mockContactsDb.transaction).toHaveBeenCalled();
+      expect(mockContactsDb.contacts.bulkPut).toHaveBeenCalledWith(batch);
+    });
   });
-
-  it('should handle errors during addContact', () => {
-    // 1. Flush the initial load
-    httpTestingController.expectOne('/api/contacts').flush(MOCK_USERS);
-
-    // 2. Call addContact with an email that will fail
-    service.addContact('fail@example.com');
-
-    // 3. Expect the POST and respond with an error
-    const postReq = httpTestingController.expectOne('/api/contacts');
-    postReq.flush('Error', { status: 404, statusText: 'Not Found' });
-
-    // 4. Verify no new GET request was made (because the POST failed)
-    httpTestingController.expectNone('/api/contacts');
-
-    // 5. Verify the signal is unchanged and the error was logged
-    expect(service.contacts()).toEqual(MOCK_USERS);
-    expect(logger.error).toHaveBeenCalled();
-  });
+  
+  // Note: liveQuery logic relies on Dexie's observable implementation. 
+  // In unit tests with mocks, we primarily verify the query construction 
+  // (orderBy, where) inside the CRUD tests or by inspecting the calls 
+  // made when accessing the observable if needed.
 });

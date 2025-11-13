@@ -1,71 +1,78 @@
-import { inject, Injectable, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { User } from '@nx-platform-application/platform-types';
-import { catchError, EMPTY, tap } from 'rxjs';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Injectable, inject } from '@angular/core';
+import { liveQuery } from 'dexie';
+import { ContactsDatabase } from './db/contacts.database';
+import { Contact } from './models/contacts';
 
 @Injectable({
-  providedIn: 'root', // [cite: 21]
+  providedIn: 'root',
 })
-export class ContactsService {
-  private http = inject(HttpClient);
-  private logger = inject(Logger);
-
-  // --- State ---
-  // The single source of truth for the user's contacts list [cite: 14]
-  public readonly contacts = signal<User[]>([]); // [cite: 22, 32]
-
-  constructor() {
-    // Load contacts immediately when the service is first instantiated
-    this.loadContacts();
-  }
-
-  // --- Public Methods ---
+export class ContactsStorageService {
+  // Inject the domain-specific database
+  private readonly db = inject(ContactsDatabase);
 
   /**
-   * Fetches the user's contacts from the API and updates the contacts signal [cite: 33]
+   * Live stream of all contacts, ordered alphabetically by alias.
    */
-  public loadContacts(): void {
-    this.http
-      .get<User[]>('/api/contacts') // [cite: 8, 33]
-      .pipe(
-        tap((users) => {
-          this.contacts.set(users); // Update the signal on success
-          this.logger.info(
-            `[ContactsService] Loaded ${users.length} contacts.`
-          );
-        }),
-        catchError((err) => {
-          this.logger.error('[ContactsService] Failed to load contacts', err);
-          return EMPTY;
-        })
-      )
-      .subscribe();
+  readonly contacts$ = liveQuery(() =>
+    this.db.contacts.orderBy('alias').toArray()
+  );
+
+  /**
+   * Live stream of favorite contacts.
+   * Note: Dexie boolean indexes work seamlessly with true/false.
+   */
+  readonly favorites$ = liveQuery(() =>
+    this.db.contacts.where('isFavorite').equals(true as any).toArray()
+  );
+
+  /**
+   * Create or Update a contact.
+   * We use 'put' which acts as an upsert.
+   */
+  async saveContact(contact: Contact): Promise<void> {
+    await this.db.contacts.put(contact);
   }
 
   /**
-   * Adds a new contact by email.
-   * On success, this re-fetches the entire contact list to ensure
-   * the state is consistent with the server. [cite: 34, 35]
-   * @param email The email of the contact to add
+   * Updates specific fields of a contact without overwriting the whole record.
    */
-  public addContact(email: string): void {
-    this.http
-      .post<User>('/api/contacts', { email }) // [cite: 9, 34]
-      .pipe(
-        tap((newUser) => {
-          this.logger.info(
-            `[ContactsService] Successfully added contact: ${newUser.email}`
-          );
-          // On success, reload the full list from the server [cite: 35]
-          this.loadContacts();
-        }),
-        catchError((err) => {
-          this.logger.error('[ContactsService] Failed to add contact', err);
-          // We could add a user-facing error signal here if needed
-          return EMPTY;
-        })
-      )
-      .subscribe();
+  async updateContact(id: string, changes: Partial<Contact>): Promise<void> {
+    await this.db.contacts.update(id, changes);
+  }
+
+  async getContact(id: string): Promise<Contact | undefined> {
+    return this.db.contacts.get(id);
+  }
+
+  async deleteContact(id: string): Promise<void> {
+    await this.db.contacts.delete(id);
+  }
+
+  /**
+   * Finds a contact by ANY of their associated email addresses.
+   * Leverages the multi-entry index '*emailAddresses'.
+   */
+  async findByEmail(email: string): Promise<Contact | undefined> {
+    // 'emailAddresses' is a multi-entry index, so this query searches
+    // inside the arrays of all contacts.
+    return this.db.contacts.where('emailAddresses').equals(email).first();
+  }
+
+  /**
+   * Finds a contact by ANY of their associated phone numbers.
+   * Leverages the multi-entry index '*phoneNumbers'.
+   */
+  async findByPhone(phone: string): Promise<Contact | undefined> {
+    return this.db.contacts.where('phoneNumbers').equals(phone).first();
+  }
+
+  /**
+   * Bulk operation for syncing lists from a server.
+   * Uses a transaction to ensure all-or-nothing safety.
+   */
+  async bulkUpsert(contacts: Contact[]): Promise<void> {
+    await this.db.transaction('rw', this.db.contacts, async () => {
+      await this.db.contacts.bulkPut(contacts);
+    });
   }
 }

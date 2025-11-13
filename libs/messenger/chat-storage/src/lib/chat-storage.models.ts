@@ -1,4 +1,4 @@
-import { URN, PublicKeys, ISODateTimeString } from '@nx-platform-application/platform-types';
+import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
 
 /**
  * Defines the shape of a key record in IndexedDB.

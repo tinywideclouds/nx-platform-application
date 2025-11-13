@@ -1,69 +1,71 @@
-// --- FILE: libs/platform-dexie-storage/src/lib/platform-dexie.store.spec.ts ---
-
 import { TestBed } from '@angular/core/testing';
 import { PlatformDexieService } from './dexie.service';
 import { vi } from 'vitest';
 
-// --- Global Mocks ---
-// Mock the methods of a Dexie table
-const mockDexieTable = {
-  get: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-};
+// 1. HOISTING: Define mocks outside
+const { mockDexieTable, mockDexieVersion } = vi.hoisted(() => ({
+  mockDexieTable: {
+    get: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    clear: vi.fn(),
+  },
+  mockDexieVersion: {
+    stores: vi.fn(),
+  },
+}));
 
-// ---
-// --- Mock Dexie as a class
-// ---
+// 2. MOCKING: Support both default and named imports
 vi.mock('dexie', () => {
-  // 1. Create a mock class that your service can extend
-  const MockDexie = vi.fn(function (this: any, name: string) {
-    // 2. Mock the methods that are called in the super() constructor
-    //    so that `this.version(1).stores(...)` and `this.table('appState')`
-    //    do not crash.
-    this.version = vi.fn(() => ({
-      stores: vi.fn(),
-    }));
+  const MockDexieClass = vi.fn(function (this: any, dbName: string) {
+    this.name = dbName;
+    this.version = vi.fn(() => mockDexieVersion);
     this.table = vi.fn(() => mockDexieTable);
   });
 
   return {
-    default: MockDexie, // 3. Export the mock class as the default
-    Table: vi.fn(), // Export the Table type
+    default: MockDexieClass,
+    Dexie: MockDexieClass,
+    Table: vi.fn(),
   };
 });
 
-describe('PlatformDexieService (Base)', () => {
-  let store: PlatformDexieService;
+// 3. CONCRETE IMPLEMENTATION
+class TestDatabase extends PlatformDexieService {
+  constructor() {
+    super('TestDB');
+  }
+}
+
+describe('PlatformDexieService (Abstract Base)', () => {
+  let db: TestDatabase;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({
-      providers: [PlatformDexieService],
-    });
-    
-    // Reset mocks before each test
-    vi.resetAllMocks();
-    store = TestBed.inject(PlatformDexieService);
-
+    vi.clearAllMocks();
+    TestBed.configureTestingModule({});
+    db = new TestDatabase();
   });
 
-  it('should be created', () => {
-    expect(store).toBeTruthy();
-    // This will now pass, proving 'store' is the correct instance
-    expect(store).toBeInstanceOf(PlatformDexieService); 
+  it('should initialize with the correct database name', () => {
+    expect(db).toBeTruthy();
+    expect((db as any).name).toBe('TestDB');
   });
 
-  // Renamed describe block to match the method
+  it('should initialize the default appState table', () => {
+    expect(mockDexieVersion.stores).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appState: '&id',
+      })
+    );
+    expect(db.appState).toBe(mockDexieTable);
+  });
+
   describe('setVersion', () => {
-    it('should save the record directly to the appState table', async () => {
-      // Act
-      await store.setVersion('1.0.0'); // This will now work
-
-      // Assert
-      expect(mockDexieTable.put).toHaveBeenCalledTimes(1);
+    it('should save the record to the appState table', async () => {
+      await db.setVersion('1.2.3');
       expect(mockDexieTable.put).toHaveBeenCalledWith({
         id: 'version',
-        value: '1.0.0',
+        value: '1.2.3',
       });
     });
   });

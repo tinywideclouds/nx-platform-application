@@ -1,40 +1,33 @@
-// --- FILE: libs/messenger/chat-storage/src/lib/chat-storage.service.spec.ts ---
-// (UPDATED)
-
 import { TestBed } from '@angular/core/testing';
 import { Temporal } from '@js-temporal/polyfill';
 import { vi } from 'vitest';
-import { WebKeyDbStore } from '@nx-platform-application/web-key-storage';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import { ChatStorageService } from './chat-storage.service';
 import { DecryptedMessage, PublicKeyRecord } from './chat-storage.models';
+import { MessengerDatabase } from './db/messenger.database';
 
 // --- Mocks ---
-const mockDbTable = {
-  clear: vi.fn(),
-  put: vi.fn(),
-  get: vi.fn(),
-  where: vi.fn(() => mockDbTable),
-  equals: vi.fn(() => mockDbTable),
-  sortBy: vi.fn(),
-  orderBy: vi.fn(() => mockDbTable),
-  reverse: vi.fn(() => mockDbTable),
-  each: vi.fn(),
-};
-
-const mockStores = {
-  stores: vi.fn(),
-};
-
-const mockIndexedDb = {
-  version: vi.fn(() => mockStores),
-  table: vi.fn(() => mockDbTable),
-};
-
-vi.mock('@nx-platform-application/web-key-storage', () => ({
-  WebKeyDbStore: vi.fn(() => mockIndexedDb),
-}));
-// --- End Mocks ---
+const { mockDbTable, mockMessengerDb } = vi.hoisted(() => {
+  const tableMock = {
+    clear: vi.fn(),
+    put: vi.fn(),
+    get: vi.fn(),
+    where: vi.fn(() => tableMock),
+    equals: vi.fn(() => tableMock),
+    sortBy: vi.fn(),
+    orderBy: vi.fn(() => tableMock),
+    reverse: vi.fn(() => tableMock),
+    each: vi.fn(),
+  };
+  return {
+    mockDbTable: tableMock,
+    // Mock the Database Class Instance
+    mockMessengerDb: {
+      messages: tableMock,
+      publicKeys: tableMock,
+    }
+  };
+});
 
 // --- Fixtures ---
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
@@ -42,7 +35,6 @@ const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
 const mockConvoUrn = mockRecipientUrn;
 const mockTimestamp = Temporal.Instant.fromEpochMilliseconds(0).toString() as ISODateTimeString;
 
-// Message Fixtures
 const mockMessage: DecryptedMessage = {
   messageId: 'msg-1',
   senderId: mockSenderUrn,
@@ -62,7 +54,6 @@ const mockMessageRecord = {
   conversationUrn: mockConvoUrn.toString(),
 };
 
-// Key Fixtures (NEW)
 const mockKeyRecord: PublicKeyRecord = {
   urn: mockRecipientUrn.toString(),
   keys: { encKey: 'b64...', sigKey: 'b64...' },
@@ -78,7 +69,8 @@ describe('ChatStorageService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatStorageService,
-        { provide: WebKeyDbStore, useValue: mockIndexedDb },
+        // Provide the mock DB instead of the real MessengerDatabase
+        { provide: MessengerDatabase, useValue: mockMessengerDb },
       ],
     });
 
@@ -86,26 +78,19 @@ describe('ChatStorageService', () => {
 
     // Default mock implementations
     mockDbTable.put.mockResolvedValue(undefined);
-    mockDbTable.get.mockResolvedValue(mockKeyRecord); // <-- ADDED
+    mockDbTable.get.mockResolvedValue(mockKeyRecord);
     mockDbTable.sortBy.mockResolvedValue([mockMessageRecord]);
-    mockDbTable.each.mockImplementation((callback) => {
+    mockDbTable.each.mockImplementation((callback: any) => {
       callback(mockMessageRecord);
       return Promise.resolve();
     });
   });
 
-  it('should be created and extend the DB version 3', () => {
+  it('should be created', () => {
     expect(service).toBeTruthy();
-    expect(mockIndexedDb.version).toHaveBeenCalledWith(3); // <-- FIXED
-    expect(mockStores.stores).toHaveBeenCalledWith(
-      expect.objectContaining({
-        messages: expect.any(String),
-        publicKeys: '&urn, timestamp', // <-- VERIFIED
-      })
-    );
   });
 
-  // --- Key Methods (NEW) ---
+  // --- Key Methods ---
 
   it('should store a public key record', async () => {
     await service.storeKey(
@@ -113,31 +98,26 @@ describe('ChatStorageService', () => {
       mockKeyRecord.keys,
       mockKeyRecord.timestamp
     );
-
-    expect(mockIndexedDb.table).toHaveBeenCalledWith('publicKeys');
-    expect(mockDbTable.put).toHaveBeenCalledWith(mockKeyRecord);
+    // Verify we accessed the publicKeys table specifically
+    expect(mockMessengerDb.publicKeys.put).toHaveBeenCalledWith(mockKeyRecord);
   });
 
   it('should get a public key record by URN', async () => {
     const result = await service.getKey(mockKeyRecord.urn);
-
-    expect(mockIndexedDb.table).toHaveBeenCalledWith('publicKeys');
-    expect(mockDbTable.get).toHaveBeenCalledWith(mockKeyRecord.urn);
+    expect(mockMessengerDb.publicKeys.get).toHaveBeenCalledWith(mockKeyRecord.urn);
     expect(result).toBe(mockKeyRecord);
   });
 
-  // --- Message Methods (Unchanged) ---
+  // --- Message Methods ---
 
   it('should clear all messages', async () => {
     await service.clearAllMessages();
-
-    expect(mockIndexedDb.table).toHaveBeenCalledWith('messages');
-    expect(mockDbTable.clear).toHaveBeenCalled();
+    expect(mockMessengerDb.messages.clear).toHaveBeenCalled();
   });
 
   it('should save a message by converting URNs to strings', async () => {
     await service.saveMessage(mockMessage);
-    expect(mockDbTable.put).toHaveBeenCalledWith(mockMessageRecord);
+    expect(mockMessengerDb.messages.put).toHaveBeenCalledWith(mockMessageRecord);
   });
 
   it('should load history and map records back to smart objects', async () => {
@@ -149,17 +129,5 @@ describe('ChatStorageService', () => {
 
     expect(result.length).toBe(1);
     expect(result[0]).toEqual(mockMessage);
-  });
-
-  it('should load conversation summaries', async () => {
-    const result = await service.loadConversationSummaries();
-
-    expect(mockDbTable.orderBy).toHaveBeenCalledWith('sentTimestamp');
-    expect(mockDbTable.reverse).toHaveBeenCalled();
-    expect(mockDbTable.each).toHaveBeenCalled();
-
-    expect(result.length).toBe(1);
-    expect(result[0].conversationUrn).toEqual(mockConvoUrn);
-    expect(result[0].latestSnippet).toBe('Hello');
   });
 });

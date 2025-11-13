@@ -35,4 +35,7 @@ nx g @nx/workspace:move --project=platform-storage --destination=libs/platform/w
 
 nx g @nx/angular:library --name=platform-dexie-storage --directory=libs/platform/ng/dexie-storage --tags="scope:platform"
 
+//try this out on the next angular lib creation and see how it does
+nx g @angular-eslint/schematics:library contacts-ui --tags="scope:contacts"  --standalone  --changeDetection=OnPush
+
 
