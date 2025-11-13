@@ -11,8 +11,8 @@ describe('AppComponent (Harness)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      // Import the component-under-test and the testing module for routing
       imports: [AppComponent, RouterTestingModule],
+      // No providers needed, handled in test-setup.ts
     }).compileComponents();
 
     fixture = TestBed.createComponent(AppComponent);
@@ -20,32 +20,36 @@ describe('AppComponent (Harness)', () => {
     fixture.detectChanges();
   });
 
+  // --- This test passes ---
   it('should create the app', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
+  // --- This test passes ---
   it('should have a router-outlet', () => {
     const outlet = el.querySelector('router-outlet');
     expect(outlet).toBeTruthy();
   });
 
+  // --- THIS TEST IS NOW FIXED ---
   it('should have a navigation link to "Messenger"', () => {
-    // Find the element by its text and check its 'href'
     const link = fixture.debugElement
       .queryAll(By.css('a'))
       .find((a) => a.nativeElement.textContent?.includes('Messenger'));
 
     expect(link).toBeTruthy();
-    // The RouterTestingModule updates the href to be '/messenger'
-    expect(link?.properties['href']).toBe('/messenger');
+    // Check the 'attributes' not the 'properties'
+    expect(link?.attributes['href']).toBe('/messenger');
   });
 
+  // --- THIS TEST IS NOW FIXED ---
   it('should have a navigation link to "All Contacts"', () => {
     const link = fixture.debugElement
       .queryAll(By.css('a'))
       .find((a) => a.nativeElement.textContent?.includes('All Contacts'));
 
     expect(link).toBeTruthy();
-    expect(link?.properties['href']).toBe('/all-contacts');
+    // Check the 'attributes' not the 'properties'
+    expect(link?.attributes['href']).toBe('/all-contacts');
   });
 });

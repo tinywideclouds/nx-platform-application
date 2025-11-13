@@ -69,6 +69,18 @@ describe('ContactsPageComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should have a strongly-typed contacts signal', () => {
+    // This test proves the fix.
+    // If the type from the service was `unknown`, this line
+    // would fail to compile, as `Signal<unknown>` is not
+    // assignable to `Signal<Contact[]>`.
+    const contactsSignal: Signal<Contact[]> = component.contacts;
+    
+    // This assertion is almost redundant, the test is
+    // that this file *compiles*.
+    expect(contactsSignal).toBeDefined();
+  });
+
   it('should get contacts from the service and pass them to the list', () => {
     // Run change detection to trigger `toSignal`
     fixture.detectChanges();

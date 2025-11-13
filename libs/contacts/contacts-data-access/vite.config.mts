@@ -27,9 +27,30 @@ export default defineConfig(() => ({
     emptyOutDir: true,
     reportCompressedSize: true,
     lib: {
-      entry: 'src/index.ts', // This is the library entry point
+      entry: 'src/index.ts',
       fileName: 'index',
       formats: ['es' as const],
+    },
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      // This tells Vite: "Don't bundle these. Assume the consumer (the App) provides them."
+      external: [
+        // Frameworks
+        '@angular/core',
+        '@angular/common',
+        'rxjs',
+        'rxjs/operators',
+        
+        // Third Party
+        'dexie', 
+        '@js-temporal/polyfill', 
+
+        // Internal Nx Libs (Only the ones we actually use!)
+        '@nx-platform-application/platform-types',
+        '@nx-platform-application/platform-dexie-storage',
+      ],
     },
   },
 }));

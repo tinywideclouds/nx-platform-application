@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';
+import { Observable, from } from 'rxjs';
 import { ContactsDatabase } from './db/contacts.database';
 import { Contact } from './models/contacts';
 
@@ -13,16 +14,19 @@ export class ContactsStorageService {
   /**
    * Live stream of all contacts, ordered alphabetically by alias.
    */
-  readonly contacts$ = liveQuery(() =>
-    this.db.contacts.orderBy('alias').toArray()
+  readonly contacts$: Observable<Contact[]> = from(
+    liveQuery(() => this.db.contacts.orderBy('alias').toArray())
   );
 
   /**
    * Live stream of favorite contacts.
    * Note: Dexie boolean indexes work seamlessly with true/false.
    */
-  readonly favorites$ = liveQuery(() =>
-    this.db.contacts.where('isFavorite').equals(true as any).toArray()
+  readonly favorites$: Observable<Contact[]> = from(
+    liveQuery(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.db.contacts.where('isFavorite').equals(true as any).toArray()
+    )
   );
 
   /**

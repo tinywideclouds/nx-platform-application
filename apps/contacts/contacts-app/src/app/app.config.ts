@@ -1,15 +1,17 @@
-// apps/contacts-app/src/app/app.config.ts
-
-import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import {
+  ApplicationConfig,
+  provideZonelessChangeDetection,
+  isDevMode,
+  APP_INITIALIZER,
+} from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { APP_ROUTES } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    // Enable zoneless change detection
-    provideZoneChangeDetection({ eventCoalescing: true }),
+    // CHANGE: This enables true zoneless mode
+    provideZonelessChangeDetection(),
 
-    // Provide the application routes
     provideRouter(APP_ROUTES),
   ],
 };

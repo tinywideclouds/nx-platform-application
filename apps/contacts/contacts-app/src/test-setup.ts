@@ -1,19 +1,23 @@
-// apps/contacts-app/src/test-setup.ts
-
-import 'vitest-dom/extend-expect';
+import '@angular/compiler';
+// Import the setup-snapshots for compatibility instead of setup-zone
+import '@analogjs/vitest-angular/setup-snapshots';
+import {
+  provideZonelessChangeDetection,
+  NgModule
+} from '@angular/core';
 import { getTestBed } from '@angular/core/testing';
 import {
-  BrowserDynamicTestingModule,
-  platformBrowserDynamicTesting,
-} from '@angular/platform-browser-dynamic/testing';
+  BrowserTestingModule,
+  platformBrowserTesting,
+} from '@angular/platform-browser/testing';
 
-// Initialize the Angular testing environment.
+// Create a small NgModule to provide the Zoneless detection
+@NgModule({
+  providers: [provideZonelessChangeDetection()],
+})
+export class ZonelessTestModule {}
+
 getTestBed().initTestEnvironment(
-  BrowserDynamicTestingModule,
-  platformBrowserDynamicTesting(),
-  {
-    // We are running in a zoneless application, so we must
-    // set teardown to false.
-    teardown: { destroyAfterEach: false },
-  }
+  [BrowserTestingModule, ZonelessTestModule],
+  platformBrowserTesting()
 );

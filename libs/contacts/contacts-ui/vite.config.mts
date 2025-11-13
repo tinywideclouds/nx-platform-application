@@ -1,39 +1,54 @@
-// In libs/platform/contacts-ui/vite.config.mts
-
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
-import * as path from 'path';
 import dts from 'vite-plugin-dts';
-import { join } from 'path';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/contacts-ui',
+  cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-ui',
   plugins: [
     angular({
-      tsconfig: join(__dirname, 'tsconfig.lib.json'),
+      tsconfig: 'tsconfig.lib.json',
     }),
     nxViteTsPaths(),
     nxCopyAssetsPlugin(['*.md']),
     dts({
       entryRoot: 'src',
-      tsconfigPath: path.join(__dirname, 'tsconfig.lib.json'),
+      tsconfigPath: 'tsconfig.lib.json',
     }),
   ],
 
   build: {
     emptyOutDir: true,
     reportCompressedSize: true,
+    lib: {
+      entry: 'src/index.ts',
+      fileName: 'index',
+      formats: ['es' as const],
+    },
     commonjsOptions: {
       transformMixedEsModules: true,
     },
-    lib: {
-      entry: 'src/index.ts',
-      name: 'contacts-ui',
-      fileName: 'index',
-      formats: ['es' as const],
+    rollupOptions: {
+      // EXTERNALIZE DEPENDENCIES
+      external: [
+        // 1. Angular & RxJS Framework
+        '@angular/core',
+        '@angular/common',
+        '@angular/router', // UI lib uses RouterLink
+        '@angular/forms',  // If you use forms later
+        'rxjs',
+        'rxjs/operators',
+
+        // 2. Internal Dependencies
+        // CRITICAL: Do not bundle the data access layer. 
+        // Let the App provide the singleton instance.
+        '@nx-platform-application/contacts-data-access',
+        
+        // 3. Shared Types (if used directly in components)
+        '@nx-platform-application/platform-types',
+      ],
     },
   },
 }));

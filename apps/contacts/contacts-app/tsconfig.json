@@ -10,7 +10,6 @@
     "isolatedModules": true,
     "emitDecoratorMetadata": false,
     "module": "preserve",
-    // --- ADD THIS LIB ARRAY ---
     "lib": ["es2022", "dom"]
   },
   "angularCompilerOptions": {

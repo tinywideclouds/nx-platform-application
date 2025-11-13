@@ -8,7 +8,7 @@ import { join } from 'path';
 
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/contacts-ui',
+  cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-ui',
 
   plugins: [angular({}), nxViteTsPaths()],
 
@@ -21,12 +21,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/messenger/contacts-ui/index.html'
+        '../../../dist/test-reports/libs/contacts/contacts-ui/index.html'
       ),
     },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/contacts-ui',
+      reportsDirectory: '../../../coverage/libs/contacts/contacts-ui',
       provider: 'v8' as const,
     },
   },

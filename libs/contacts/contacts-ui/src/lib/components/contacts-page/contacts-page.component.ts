@@ -24,7 +24,7 @@ export class ContactsPageComponent {
   // 2. Convert the observable to a signal for reactive, zoneless binding.
   //    Provide an initialValue to ensure it's always an array.
   contacts = toSignal(this.contactsService.contacts$, {
-    initialValue: [],
+    initialValue: [] as Contact[],
   });
 
   /**
