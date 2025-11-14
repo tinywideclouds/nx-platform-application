@@ -1,4 +1,13 @@
-<lib-contact-list
-  [contacts]="contacts()"
-  (contactSelected)="onContactSelect($event)"
-/>
+<div class="p-4">
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold">Contacts</h1>
+    <a routerLink="new" class="btn btn-primary">
+      New Contact
+    </a>
+  </div>
+
+  <lib-contact-list
+    [contacts]="contacts()"
+    (contactSelected)="onContactSelect($event)"
+  />
+</div>

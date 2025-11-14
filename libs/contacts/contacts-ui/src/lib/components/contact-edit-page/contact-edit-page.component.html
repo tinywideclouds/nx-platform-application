@@ -1,0 +1,13 @@
+<div class="max-w-lg mx-auto">
+  <!-- The template reactively handles the signal's null state -->
+  @if (contactToEdit()) {
+    <lib-contact-form
+      [contact]="contactToEdit()"
+      (save)="onSave($event)"
+      (cancel)="onCancel()"
+    />
+  } @else {
+    <!-- This will show on initial load while the async stream resolves -->
+    <p>Loading contact details...</p>
+  }
+</div>

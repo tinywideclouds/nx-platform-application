@@ -1,0 +1,41 @@
+<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
+  <div>
+    <label>First Name</label>
+    <input formControlName="firstName" class="input input-bordered w-full" />
+  </div>
+  <div>
+    <label>Surname</label>
+    <input formControlName="surname" class="input input-bordered w-full" />
+  </div>
+  <div>
+    <label>Alias</label>
+    <input formControlName="alias" class="input input-bordered w-full" />
+  </div>
+  <div>
+    <label>Primary Email</label>
+    <input formControlName="email" class="input input-bordered w-full" />
+  </div>
+
+  <div formArrayName="phoneNumbers">
+    <h3 class="font-medium">Phone Numbers</h3>
+    <div *ngFor="let phone of phoneNumbers.controls; let i = index" class="flex gap-2 mb-2">
+      <input [formControlName]="i" class="input input-bordered flex-1" />
+      <button type="button" (click)="removePhoneNumber(i)" class="btn btn-sm btn-error btn-outline" data-testid="remove-phone">Remove</button>
+    </div>
+    <button type="button" (click)="addPhoneNumber()" class="btn btn-sm btn-outline" data-testid="add-phone">Add Phone</button>
+  </div>
+
+  <div formArrayName="emailAddresses">
+    <h3 class="font-medium">Other Emails</h3>
+    <div *ngFor="let email of emailAddresses.controls; let i = index" class="flex gap-2 mb-2">
+      <input [formControlName]="i" class="input input-bordered flex-1" />
+      <button type="button" (click)="removeEmailAddress(i)" class="btn btn-sm btn-error btn-outline" data-testid="remove-email">Remove</button>
+    </div>
+    <button type="button" (click)="addEmailAddress()" class="btn btn-sm btn-outline" data-testid="add-email">Add Email</button>
+  </div>
+
+  <div class="flex justify-end gap-2 pt-4">
+    <button type="button" (click)="onCancel()" class="btn btn-ghost" data-testid="cancel-button">Cancel</button>
+    <button type="submit" [disabled]="form.invalid" class="btn btn-primary" data-testid="save-button">Save</button>
+  </div>
+</form>
