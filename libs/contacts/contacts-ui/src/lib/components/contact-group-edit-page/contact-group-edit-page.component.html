@@ -1,0 +1,18 @@
+<div class="max-w-lg mx-auto">
+  <!-- 
+    The template reactively handles the signal's null state.
+    It passes both the group-to-edit and the full contact list
+    down to the "dumb" form component.
+  -->
+  @if (groupToEdit()) {
+  <lib-contact-group-form
+    [group]="groupToEdit()"
+    [allContacts]="allContacts()"
+    (save)="onSave($event)"
+    (cancel)="onCancel()"
+  />
+  } @else {
+  <!-- This will show on initial load while the async stream resolves -->
+  <p>Loading group details...</p>
+  }
+</div>

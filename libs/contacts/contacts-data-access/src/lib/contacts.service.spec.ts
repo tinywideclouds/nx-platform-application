@@ -1,12 +1,15 @@
+// libs/contacts/contacts-data-access/src/lib/contacts.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { ContactsStorageService } from './contacts.service';
 import { ContactsDatabase } from './db/contacts.database';
-import { Contact } from './models/contacts';
+// 1. Import the new ContactGroup model
+import { Contact, ContactGroup } from './models/contacts';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 // --- Mocks ---
-const { mockDbTable, mockContactsDb } = vi.hoisted(() => {
+const { mockDbTable, mockDbGroupTable, mockContactsDb } = vi.hoisted(() => {
   const tableMock = {
     // Standard CRUD
     put: vi.fn(),
@@ -14,7 +17,8 @@ const { mockDbTable, mockContactsDb } = vi.hoisted(() => {
     get: vi.fn(),
     delete: vi.fn(),
     bulkPut: vi.fn(),
-    
+    bulkGet: vi.fn(), // 2. Add bulkGet for getContactsForGroup
+
     // Querying
     orderBy: vi.fn(() => tableMock),
     where: vi.fn(() => tableMock),
@@ -23,10 +27,23 @@ const { mockDbTable, mockContactsDb } = vi.hoisted(() => {
     first: vi.fn(),
   };
 
+  // 3. Create a separate mock for the new table
+  const groupTableMock = {
+    put: vi.fn(),
+    get: vi.fn(),
+    delete: vi.fn(),
+    orderBy: vi.fn(() => groupTableMock),
+    where: vi.fn(() => groupTableMock),
+    equals: vi.fn(() => groupTableMock),
+    toArray: vi.fn(),
+  };
+
   return {
     mockDbTable: tableMock,
+    mockDbGroupTable: groupTableMock, // 4. Export the new mock
     mockContactsDb: {
       contacts: tableMock,
+      contactGroups: groupTableMock, // 5. Add it to the mock DB
       // Mock transaction to immediately execute the callback
       transaction: vi.fn(async (_mode, _tables, callback) => await callback()),
     },
@@ -46,9 +63,16 @@ const mockContact: Contact = {
     messenger: {
       id: 'msg-uuid-1',
       alias: 'jd_messenger',
-      lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString
+      lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
     },
-  }
+  },
+};
+
+// 6. Define a new fixture for ContactGroup
+const mockGroup: ContactGroup = {
+  id: 'grp-abc',
+  name: 'Family',
+  contactIds: ['user-123', 'user-456'],
 };
 
 describe('ContactsStorageService', () => {
@@ -67,10 +91,15 @@ describe('ContactsStorageService', () => {
 
     service = TestBed.inject(ContactsStorageService);
 
-    // Default mock returns
+    // Default mock returns for contacts table
     mockDbTable.get.mockResolvedValue(mockContact);
     mockDbTable.first.mockResolvedValue(mockContact);
     mockDbTable.toArray.mockResolvedValue([mockContact]);
+    mockDbTable.bulkGet.mockResolvedValue([mockContact]); // 7. Add bulkGet default
+
+    // 8. Default mock returns for groups table
+    mockDbGroupTable.get.mockResolvedValue(mockGroup);
+    mockDbGroupTable.toArray.mockResolvedValue([mockGroup]);
   });
 
   it('should be created', () => {
@@ -92,7 +121,10 @@ describe('ContactsStorageService', () => {
     it('should update a contact', async () => {
       const changes = { alias: 'New Alias' };
       await service.updateContact('user-123', changes);
-      expect(mockContactsDb.contacts.update).toHaveBeenCalledWith('user-123', changes);
+      expect(mockContactsDb.contacts.update).toHaveBeenCalledWith(
+        'user-123',
+        changes
+      );
     });
 
     it('should delete a contact', async () => {
@@ -132,9 +164,67 @@ describe('ContactsStorageService', () => {
       expect(mockContactsDb.contacts.bulkPut).toHaveBeenCalledWith(batch);
     });
   });
-  
-  // Note: liveQuery logic relies on Dexie's observable implementation. 
-  // In unit tests with mocks, we primarily verify the query construction 
-  // (orderBy, where) inside the CRUD tests or by inspecting the calls 
+
+  // --- 9. NEW TEST SUITE ---
+  describe('Group Operations', () => {
+    it('should save a group', async () => {
+      await service.saveGroup(mockGroup);
+      expect(mockContactsDb.contactGroups.put).toHaveBeenCalledWith(mockGroup);
+    });
+
+    it('should get a group by ID', async () => {
+      const result = await service.getGroup('grp-abc');
+      expect(mockContactsDb.contactGroups.get).toHaveBeenCalledWith('grp-abc');
+      expect(result).toEqual(mockGroup);
+    });
+
+    it('should delete a group', async () => {
+      await service.deleteGroup('grp-abc');
+      expect(mockContactsDb.contactGroups.delete).toHaveBeenCalledWith(
+        'grp-abc'
+      );
+    });
+
+    it('should get groups for a specific contact', async () => {
+      const contactId = 'user-123';
+      const result = await service.getGroupsForContact(contactId);
+
+      // Verify it used the index on 'contactIds'
+      expect(mockDbGroupTable.where).toHaveBeenCalledWith('contactIds');
+      expect(mockDbGroupTable.equals).toHaveBeenCalledWith(contactId);
+      expect(result).toEqual([mockGroup]);
+    });
+
+    it('should get contacts for a specific group', async () => {
+      const groupId = 'grp-abc';
+      const result = await service.getContactsForGroup(groupId);
+
+      // Verify it first gets the group
+      expect(mockDbGroupTable.get).toHaveBeenCalledWith(groupId);
+      // Then it uses bulkGet with the IDs from that group
+      expect(mockDbTable.bulkGet).toHaveBeenCalledWith(mockGroup.contactIds);
+      expect(result).toEqual([mockContact]);
+    });
+
+    it('should return an empty array if group not found or has no contacts', async () => {
+      // Test case 1: Group not found
+      mockDbGroupTable.get.mockResolvedValue(undefined);
+      let result = await service.getContactsForGroup('grp-not-found');
+      expect(result).toEqual([]);
+
+      // Test case 2: Group has no contacts
+      mockDbGroupTable.get.mockResolvedValue({
+        id: 'grp-empty',
+        name: 'Empty',
+        contactIds: [],
+      });
+      result = await service.getContactsForGroup('grp-empty');
+      expect(result).toEqual([]);
+    });
+  });
+
+  // Note: liveQuery logic relies on Dexie's observable implementation.
+  // In unit tests with mocks, we primarily verify the query construction
+  // (orderBy, where) inside the CRUD tests or by inspecting the calls
   // made when accessing the observable if needed.
 });

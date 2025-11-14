@@ -1,0 +1,39 @@
+<!-- libs/contacts/contacts-ui/src/lib/components/contact-group-list-item/contact-group-list-item.component.html -->
+
+<div
+  class="flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+>
+  <!-- Icon -->
+  <div
+    class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-gray-500 text-white"
+  >
+    <!-- Simple inline SVG "users" icon -->
+    <svg
+      class="w-6 h-6"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm5-6a4 4 0 100-5.292M15 21h6v-1a6 6 0 00-9-5.197"
+      ></path>
+    </svg>
+  </div>
+
+  <!-- Text Content -->
+  <div class="flex-1 min-w-0">
+    <div
+      class="font-medium text-gray-900 truncate"
+      data-testid="group-name"
+    >
+      {{ group.name }}
+    </div>
+    <div class="text-sm text-gray-500 truncate">
+      {{ memberCount }} {{ memberCount === 1 ? 'member' : 'members' }}
+    </div>
+  </div>
+</div>

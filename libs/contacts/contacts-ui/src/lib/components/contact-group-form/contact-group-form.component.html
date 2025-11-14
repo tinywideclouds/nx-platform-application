@@ -1,0 +1,45 @@
+<!-- html:Contact Group Form (Template):libs/contacts/contacts-ui/src/lib/components/contact-group-form/contact-group-form.component.html -->
+<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
+  <div>
+    <label class="font-medium">Group Name</label>
+    <input formControlName="name" class="input input-bordered w-full mt-1" />
+  </div>
+
+  <div>
+    <label class="font-medium">Description</label>
+    <textarea
+      formControlName="description"
+      class="textarea textarea-bordered w-full mt-1"
+      rows="3"
+    ></textarea>
+  </div>
+
+  <div>
+    <label class="font-medium">Members</label>
+    <lib-contact-multi-selector
+      class="mt-1"
+      [allContacts]="allContacts()"
+      [selectedIds]="form.get('contactIds')?.value"
+      (selectedIdsChange)="form.get('contactIds')?.setValue($event)"
+    />
+  </div>
+
+  <div class="flex justify-end gap-2 pt-4">
+    <button
+      type="button"
+      (click)="onCancel()"
+      class="btn btn-ghost"
+      data-testid="cancel-button"
+    >
+      Cancel
+    </button>
+    <button
+      type="submit"
+      [disabled]="form.invalid"
+      class="btn btn-primary"
+      data-testid="save-button"
+    >
+      Save Group
+    </button>
+  </div>
+</form>

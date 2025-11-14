@@ -6,8 +6,39 @@
     </a>
   </div>
 
-  <lib-contact-list
-    [contacts]="contacts()"
-    (contactSelected)="onContactSelect($event)"
-  />
+  <!-- 
+    1. Add the Material Tab Group. 
+    The 'mat-tabs-config' class is a custom hook for any potential overrides.
+  -->
+  <mat-tab-group animationDuration="0ms">
+    <!-- Contacts Tab -->
+    <mat-tab label="Contacts">
+      <!-- 
+        2. Use ng-template matTabContent for lazy loading.
+        This content won't be initialized until the tab is active.
+      -->
+      <ng-template matTabContent>
+        <div class="pt-2">
+          <lib-contact-list
+            [contacts]="contacts()"
+            (contactSelected)="onContactSelect($event)"
+          />
+        </div>
+      </ng-template>
+    </mat-tab>
+
+    <!-- Groups Tab -->
+    <mat-tab label="Groups">
+      <ng-template matTabContent>
+        <div class="pt-2">
+          <!-- 3. Add our new ContactGroupListComponent -->
+          <lib-contact-group-list
+            [groups]="groups()"
+            (groupSelected)="onGroupSelect($event)"
+          />
+        </div>
+      </ng-template>
+    </mat-tab>
+  </mat-tab-group>
+
 </div>

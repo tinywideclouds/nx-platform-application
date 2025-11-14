@@ -14,7 +14,7 @@ export interface ServiceContact {
  * This is a PURE native interface. It does not know about Protobufs.
  */
 export interface Contact extends User {
-  firstName: string;        // Fixed typo from 'fistName'
+  firstName: string;       
   surname: string;
 
   phoneNumbers: string[];   // E.164 formatted phone numbers
@@ -24,4 +24,11 @@ export interface Contact extends User {
   // and potential indexing support in Dexie.
   // Key = Service Name (e.g., 'messenger', 'email', 'sip')
   serviceContacts: Record<string, ServiceContact>;
+}
+
+export interface ContactGroup {
+  id: string; 
+  name: string;
+  description?: string;
+  contactIds: string[]; 
 }

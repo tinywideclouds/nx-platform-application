@@ -1,0 +1,49 @@
+<div class="flex flex-col border rounded-md overflow-hidden">
+  <!-- 1. Filter Input -->
+  <div class="p-2 border-b">
+    <input
+      type="text"
+      placeholder="Filter contacts..."
+      class="input input-bordered w-full"
+      [ngModel]="filterText()"
+      (ngModelChange)="filterText.set($event)"
+    />
+  </div>
+
+  <!-- 2. Selectable List -->
+  <div class="flex-1 overflow-y-auto" style="max-height: 300px;">
+    @for (contact of filteredContacts(); track contact.id) {
+      <label
+        class="flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+      >
+        <!-- Checkbox -->
+        <input
+          type="checkbox"
+          class="checkbox"
+          [checked]="selectionSet().has(contact.id)"
+          (change)="onToggleContact(contact.id)"
+        />
+
+        <!-- Avatar -->
+        <lib-contact-avatar
+          [profilePictureUrl]="getProfilePicture(contact)"
+          [initials]="getInitials(contact)"
+        ></lib-contact-avatar>
+
+        <!-- Text Content -->
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-gray-900 truncate">
+            {{ contact.alias }}
+          </div>
+          <div class="text-sm text-gray-500 truncate">
+            {{ contact.firstName }} {{ contact.surname }}
+          </div>
+        </div>
+      </label>
+    } @empty {
+      <div class="p-4 text-center text-gray-500">
+        No contacts found.
+      </div>
+    }
+  </div>
+</div>
