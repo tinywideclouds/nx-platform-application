@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-form/contact-form.component.ts
+
 import {
   Component,
   Input,
@@ -16,11 +18,22 @@ import {
   Validators,
 } from '@angular/forms';
 import { Contact } from '@nx-platform-application/contacts-data-access';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   selector: 'lib-contact-form',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatIconModule,
+  ],
   templateUrl: './contact-form.component.html',
   styleUrl: './contact-form.component.scss',
   // No ChangeDetectionStrategy.OnPush needed; signals make this the default.
@@ -33,7 +46,7 @@ export class ContactFormComponent {
   @Output() cancel = new EventEmitter<void>();
 
   private fb = inject(FormBuilder);
-  
+
   form: FormGroup = this.fb.group({
     id: [''],
     firstName: ['', Validators.required],

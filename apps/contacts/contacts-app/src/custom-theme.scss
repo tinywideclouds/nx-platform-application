@@ -1,9 +1,5 @@
+// apps/contacts/contacts-app/src/custom-theme.scss
 
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
 @use '@angular/material' as mat;
 
 html {
@@ -15,7 +11,76 @@ html {
     typography: Roboto,
     density: 0,
   ));
+
+  @include mat.form-field-overrides((
+    // --- THIS IS THE FIX ---
+    // These tokens control the height and internal padding for all appearances.
+    container-height: 2.8em,
+    container-text-line-height: 1.2em,
+    container-vertical-padding: .3em,
+
+    // --- These are still good to use ---
+    container-text-size: 1em,
+    subscript-text-size: .6em,
+
+    // --- You can also control the border-radius here ---
+    filled-container-shape: 2px,
+    outlined-container-shape: 2px
+  ));
+
+  // --- 1. GLOBAL BUTTON RADIUS OVERRIDE ---
+  // This is what you asked for: reduce the "radius effect".
+  // We apply it here inside 'html' to make it global.
+  @include mat.button-overrides((
+    // The 'container-shape' token controls border-radius.
+    // The default M3 value is 'full' (which looks like a pill).
+    // Let's set them all to 8px for a more traditional, squared-off look.
+
+    filled-container-shape: 4px,
+    outlined-container-shape: 4px,
+    text-container-shape: 4px,
+    tonal-container-shape: 4px,
+    protected-container-shape: 4px // This styles the old 'mat-raised-button'
+  ));
 }
+
+// --- 2. SPECIFIC TONAL BUTTON OVERRIDE ---
+// Here is the "specific option" for your Tonal button.
+// We create a custom CSS class that you can apply whenever
+// you want to use these colors.
+.save-update-tonal-button {
+  @include mat.button-overrides((
+    // Example: A custom purple color scheme
+    tonal-container-color: #eaddff,
+    tonal-label-text-color: #21005d,
+
+    // -- THIS IS THE CORRECTED PART --
+
+    // 1. Set the COLOR for the state layer (used on hover, focus, press)
+    tonal-state-layer-color: #21005d,
+
+    // 2. Set the OPACITY for each state (adjust as needed)
+    tonal-hover-state-layer-opacity: 0.08,  // 8% opacity on hover
+    tonal-focus-state-layer-opacity: 0.12,  // 12% opacity on focus
+    tonal-pressed-state-layer-opacity: 0.12 // 12% opacity on press
+  ));
+}
+
+.toolbar-tonal-button {
+  @include mat.button-overrides((
+    tonal-container-color: #eaddff,
+    tonal-label-text-color: #2c3845,
+
+    // 1. Set the COLOR for the state layer (used on hover, focus, press)
+    tonal-state-layer-color: #3b4e64,
+
+    // 2. Set the OPACITY for each state (adjust as needed)
+    tonal-hover-state-layer-opacity: 0.08,  // 8% opacity on hover
+    tonal-focus-state-layer-opacity: 0.12,  // 12% opacity on focus
+    tonal-pressed-state-layer-opacity: 0.12 // 12% opacity on press
+  ));
+}
+
 
 body {
   // Default the application to a light color theme. This can be changed to

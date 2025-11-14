@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-group-form/contact-group-form.component.ts
+
 import {
   Component,
   input,
@@ -17,11 +19,21 @@ import {
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 
 @Component({
   selector: 'lib-contact-group-form',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ContactMultiSelectorComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    ContactMultiSelectorComponent,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+  ],
   templateUrl: './contact-group-form.component.html',
   styleUrl: './contact-group-form.component.scss',
 })

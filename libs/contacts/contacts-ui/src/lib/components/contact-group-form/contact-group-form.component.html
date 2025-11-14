@@ -1,21 +1,20 @@
-<!-- html:Contact Group Form (Template):libs/contacts/contacts-ui/src/lib/components/contact-group-form/contact-group-form.component.html -->
 <form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
-  <div>
-    <label class="font-medium">Group Name</label>
-    <input formControlName="name" class="input input-bordered w-full mt-1" />
-  </div>
+  <mat-form-field [floatLabel]="'always'" class="w-full">
+    <mat-label>Group Name</mat-label>
+    <input matInput formControlName="name" />
+  </mat-form-field>
 
-  <div>
-    <label class="font-medium">Description</label>
+  <mat-form-field [floatLabel]="'always'" class="w-full">
+    <mat-label>Description</mat-label>
     <textarea
+      matInput
       formControlName="description"
-      class="textarea textarea-bordered w-full mt-1"
       rows="3"
     ></textarea>
-  </div>
+  </mat-form-field>
 
   <div>
-    <label class="font-medium">Members</label>
+    <label class="font-medium text-sm text-gray-700">Members</label>
     <lib-contact-multi-selector
       class="mt-1"
       [allContacts]="allContacts()"
@@ -28,7 +27,7 @@
     <button
       type="button"
       (click)="onCancel()"
-      class="btn btn-ghost"
+      mat-button
       data-testid="cancel-button"
     >
       Cancel
@@ -36,7 +35,8 @@
     <button
       type="submit"
       [disabled]="form.invalid"
-      class="btn btn-primary"
+      mat-flat-button
+      color="primary"
       data-testid="save-button"
     >
       Save Group

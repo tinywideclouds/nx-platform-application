@@ -27,6 +27,22 @@ export const CONTACTS_ROUTES: Routes = [
         (m) => m.ContactEditPageComponent
       ),
   },
+  {
+    path: 'group-new', // This is '/contacts/group-new'
+    // The "Add Group" page
+    loadComponent: () =>
+      import('@nx-platform-application/contacts-ui').then(
+        (m) => m.ContactGroupEditPageComponent
+      ),
+  },
+  {
+    path: 'group-edit/:id', // This is '/contacts/group-edit/:id'
+    // The "Edit Group" page
+    loadComponent: () =>
+      import('@nx-platform-application/contacts-ui').then(
+        (m) => m.ContactGroupEditPageComponent
+      ),
+  },
   // You can add more contact-specific routes here,
   // like 'groups', 'favorites', etc.
 ];

@@ -1,14 +1,13 @@
-// libs/contacts/contacts-ui/src/lib/contact-edit-page/contact-edit-page.component.ts
-
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   ContactsStorageService,
   Contact,
+  ContactGroup, // 1. Import ContactGroup
 } from '@nx-platform-application/contacts-data-access';
 import { ContactFormComponent } from '../contact-form/contact-form.component';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toSignal, toObservable } from '@angular/core/rxjs-interop'; // 2. Import toObservable
 import { map, switchMap } from 'rxjs/operators';
 import { from, of, Observable } from 'rxjs';
 
@@ -24,7 +23,9 @@ export class ContactEditPageComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
-  private contactsService = inject(ContactsStorageService) as ContactsStorageService;
+  private contactsService = inject(
+    ContactsStorageService
+  ) as ContactsStorageService;
 
   // 2. Define private streams
   private id$: Observable<string | null> = this.route.paramMap.pipe(
@@ -39,22 +40,40 @@ export class ContactEditPageComponent {
   );
 
   // 3. Convert the final stream to a public signal
-  //    This perfectly matches your linter-approved pattern.
   contactToEdit = toSignal(this.contactStream$, {
     initialValue: null as Contact | null,
+  });
+
+  // 4. --- NEW: Stream for Contact's Groups ---
+  //    This stream automatically reacts to the contactToEdit signal changing.
+  private groupsForContactStream$: Observable<ContactGroup[]> =
+    toObservable(this.contactToEdit).pipe(
+      switchMap((contact) => {
+        if (!contact?.id) {
+          // If no contact (e.g., "add" mode), return an empty array
+          return of([] as ContactGroup[]);
+        }
+        // 'from' converts the Promise<ContactGroup[]> to an Observable
+        return from(this.contactsService.getGroupsForContact(contact.id));
+      })
+    );
+
+  // 5. --- NEW: Signal for Contact's Groups ---
+  groupsForContact = toSignal(this.groupsForContactStream$, {
+    initialValue: [] as ContactGroup[],
   });
 
   // --- Event Handlers ---
 
   async onSave(contact: Contact): Promise<void> {
     await this.contactsService.saveContact(contact);
-    // Navigate away after save
-    this.router.navigate(['/contacts']); // Or the previous page
+    // 6. --- FIX: Navigate back to the 'contacts' tab ---
+    this.router.navigate(['/contacts'], { queryParams: { tab: 'contacts' } });
   }
 
   onCancel(): void {
-    // Navigate away on cancel
-    this.router.navigate(['/contacts']); // Or the previous page
+    // 7. --- FIX: Navigate back to the 'contacts' tab ---
+    this.router.navigate(['/contacts'], { queryParams: { tab: 'contacts' } });
   }
 
   // --- Private Helper Methods ---

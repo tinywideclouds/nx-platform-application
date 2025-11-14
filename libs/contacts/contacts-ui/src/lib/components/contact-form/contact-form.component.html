@@ -1,41 +1,103 @@
 <form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
-  <div>
-    <label>First Name</label>
-    <input formControlName="firstName" class="input input-bordered w-full" />
-  </div>
-  <div>
-    <label>Surname</label>
-    <input formControlName="surname" class="input input-bordered w-full" />
-  </div>
-  <div>
-    <label>Alias</label>
-    <input formControlName="alias" class="input input-bordered w-full" />
-  </div>
-  <div>
-    <label>Primary Email</label>
-    <input formControlName="email" class="input input-bordered w-full" />
-  </div>
+  <mat-form-field [floatLabel]="'always'" class="w-full">
+    <mat-label>First Name</mat-label>
+    <input matInput formControlName="firstName" />
+  </mat-form-field>
+
+  <mat-form-field [floatLabel]="'always'" class="w-full">
+    <mat-label>Surname</mat-label>
+    <input matInput formControlName="surname" />
+  </mat-form-field>
+
+  <mat-form-field [floatLabel]="'always'" class="w-full">
+    <mat-label>Alias</mat-label>
+    <input matInput formControlName="alias" />
+  </mat-form-field>
+
+  <mat-form-field [floatLabel]="'always'" class="w-full">
+    <mat-label>Primary Email</mat-label>
+    <input matInput formControlName="email" type="email" />
+  </mat-form-field>
 
   <div formArrayName="phoneNumbers">
-    <h3 class="font-medium">Phone Numbers</h3>
-    <div *ngFor="let phone of phoneNumbers.controls; let i = index" class="flex gap-2 mb-2">
-      <input [formControlName]="i" class="input input-bordered flex-1" />
-      <button type="button" (click)="removePhoneNumber(i)" class="btn btn-sm btn-error btn-outline" data-testid="remove-phone">Remove</button>
+    <h3 class="font-medium text-gray-700">Phone Numbers</h3>
+    <div
+      *ngFor="let phone of phoneNumbers.controls; let i = index"
+      class="flex gap-2 mb-2 items-center"
+    >
+      <mat-form-field [floatLabel]="'always'" class="flex-1">
+        <mat-label>Phone Number</mat-label>
+        <input matInput [formControlName]="i" />
+      </mat-form-field>
+      <button
+        type="button"
+        (click)="removePhoneNumber(i)"
+        mat-icon-button
+        color="warn"
+        aria-label="Remove phone number"
+        data-testid="remove-phone"
+      >
+        <mat-icon>delete</mat-icon>
+      </button>
     </div>
-    <button type="button" (click)="addPhoneNumber()" class="btn btn-sm btn-outline" data-testid="add-phone">Add Phone</button>
+    <button
+      type="button"
+      (click)="addPhoneNumber()"
+      mat-stroked-button
+      data-testid="add-phone"
+    >
+      Add Phone
+    </button>
   </div>
 
   <div formArrayName="emailAddresses">
-    <h3 class="font-medium">Other Emails</h3>
-    <div *ngFor="let email of emailAddresses.controls; let i = index" class="flex gap-2 mb-2">
-      <input [formControlName]="i" class="input input-bordered flex-1" />
-      <button type="button" (click)="removeEmailAddress(i)" class="btn btn-sm btn-error btn-outline" data-testid="remove-email">Remove</button>
+    <h3 class="font-medium text-gray-700">Other Emails</h3>
+    <div
+      *ngFor="let email of emailAddresses.controls; let i = index"
+      class="flex gap-2 mb-2 items-center"
+    >
+      <mat-form-field class="flex-1">
+        <mat-label>Email Address</mat-label>
+        <input matInput [formControlName]="i" type="email" />
+      </mat-form-field>
+      <button
+        type="button"
+        (click)="removeEmailAddress(i)"
+        mat-icon-button
+        color="warn"
+        aria-label="Remove email address"
+        data-testid="remove-email"
+      >
+        <mat-icon>delete</mat-icon>
+      </button>
     </div>
-    <button type="button" (click)="addEmailAddress()" class="btn btn-sm btn-outline" data-testid="add-email">Add Email</button>
+    <button
+      type="button"
+      (click)="addEmailAddress()"
+      mat-stroked-button
+      data-testid="add-email"
+    >
+      Add Email
+    </button>
   </div>
 
   <div class="flex justify-end gap-2 pt-4">
-    <button type="button" (click)="onCancel()" class="btn btn-ghost" data-testid="cancel-button">Cancel</button>
-    <button type="submit" [disabled]="form.invalid" class="btn btn-primary" data-testid="save-button">Save</button>
+    <button
+      type="button"
+      (click)="onCancel()"
+      mat-button
+      data-testid="cancel-button"
+    >
+      Cancel
+    </button>
+    <button
+      type="submit"
+      [disabled]="form.invalid"
+      mat-flat-button
+      color="primary"
+      data-testid="save-button"
+    >
+      Save
+    </button>
   </div>
 </form>

@@ -25,7 +25,6 @@ export class ContactGroupEditPageComponent {
   private contactsService = inject(ContactsStorageService);
 
   // 2. Get all contacts (needed for the multi-selector)
-  //    This is converted directly to a signal.
   allContacts = toSignal(this.contactsService.contacts$, {
     initialValue: [] as Contact[],
   });
@@ -51,12 +50,15 @@ export class ContactGroupEditPageComponent {
 
   async onSave(group: ContactGroup): Promise<void> {
     await this.contactsService.saveGroup(group);
-    // Navigate back to the main contacts page
-    this.router.navigate(['/contacts']);
+    // --- THIS IS THE FIX ---
+    // Navigate back to the 'groups' tab
+    this.router.navigate(['/contacts'], { queryParams: { tab: 'groups' } });
   }
 
   onCancel(): void {
-    this.router.navigate(['/contacts']);
+    // --- THIS IS THE FIX ---
+    // Navigate back to the 'groups' tab
+    this.router.navigate(['/contacts'], { queryParams: { tab: 'groups' } });
   }
 
   // --- Private Helper Methods ---
