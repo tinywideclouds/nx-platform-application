@@ -14,6 +14,8 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 
 const COMPACT_THRESHOLD_REM = 24; // 24rem
 
+export type pageMode = "full" | "compact" | undefined;
+
 @Component({
   selector: 'contacts-page-toolbar',
   standalone: true,
@@ -29,8 +31,15 @@ export class ContactsPageToolbarComponent implements OnDestroy {
   private compactBreakpointPx = 0;
 
   /** The internal mode, computed from the component's own width. */
-  public readonly mode = computed(() => {
-    return this.elementWidth() < this.compactBreakpointPx ? 'compact' : 'full';
+  public readonly mode = computed<pageMode>(() => {
+    const width = this.elementWidth();
+
+    // If width is not yet set, mode is undefined
+    if (width === undefined) {
+      return undefined;
+    }
+
+    return width < this.compactBreakpointPx ? 'compact' : 'full';
   });
 
   constructor() {

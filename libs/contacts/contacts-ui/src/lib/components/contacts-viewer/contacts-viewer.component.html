@@ -1,6 +1,9 @@
 
   <contacts-page-toolbar #toolbar>
-    @if (toolbar.mode() === 'full') {
+    @if (!toolbar.mode()) {
+
+    }
+    @else if (toolbar.mode() === 'full') {
       <div class="flex gap-2">
         <a
           matButton="tonal"
