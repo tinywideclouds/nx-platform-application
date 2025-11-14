@@ -6,9 +6,11 @@ import {
   output,
   effect,
   inject,
-  signal, // 1. Import signal
+  signal,
+  computed, // 1. Import computed
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop'; // 2. Import toSignal
 import {
   ReactiveFormsModule,
   FormBuilder,
@@ -23,6 +25,7 @@ import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component'; // 3. Import avatar
 
 @Component({
   selector: 'contacts-group-form',
@@ -34,6 +37,7 @@ import { MatInputModule } from '@angular/material/input';
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    ContactAvatarComponent, // 4. Add avatar to imports
   ],
   templateUrl: './contact-group-form.component.html',
   styleUrl: './contact-group-form.component.scss',
@@ -48,18 +52,15 @@ export class ContactGroupFormComponent {
   allContacts = input.required<Contact[]>();
 
   /** The initial state of the form. */
-  startInEditMode = input(false); // 2. NEW: Input for initial state
+  startInEditMode = input(false);
 
   /** Emits the saved group data. */
   save = output<ContactGroup>();
-
-  // 3. --- @Output() cancel is removed ---
 
   // --- Internal State ---
 
   private fb = inject(FormBuilder);
 
-  // 4. --- NEW: Internal state for edit mode ---
   isEditing = signal(false);
 
   form: FormGroup = this.fb.group({
@@ -69,24 +70,24 @@ export class ContactGroupFormComponent {
     contactIds: [[] as string[]],
   });
 
+  // 5. --- NEW: Signal that tracks the form's contactIds value ---
+  private contactIdsValue = toSignal(
+    this.form.get('contactIds')!.valueChanges,
+    { initialValue: this.form.get('contactIds')!.value }
+  );
+
   constructor() {
-    // 5. --- NEW: Disable form by default ---
     this.form.disable();
 
-    // 6. --- NEW: Effect to set initial state ---
     effect(() => {
       this.isEditing.set(this.startInEditMode());
     });
 
-    // 7. Effect to patch data when the 'group' input changes
     effect(() => {
       const currentGroup = this.group();
-
       if (currentGroup) {
-        // "Edit Mode": Patch the form with group data
         this.form.patchValue(currentGroup);
       } else {
-        // "Add Mode": Reset the form to its empty state
         this.form.reset({
           id: '',
           name: '',
@@ -96,13 +97,11 @@ export class ContactGroupFormComponent {
       }
     });
 
-    // 8. --- NEW: Effect to toggle form state ---
     effect(() => {
       if (this.isEditing()) {
         this.form.enable();
       } else {
         this.form.disable();
-        // Reset form to its original state when leaving edit mode
         if (this.group()) {
           this.form.reset(this.group());
         }
@@ -110,19 +109,41 @@ export class ContactGroupFormComponent {
     });
   }
 
+  // 6. --- NEW: Computed signal to get full Contact objects for members ---
+  groupMembers = computed(() => {
+    // Create a map for fast O(1) lookups
+    const membersMap = new Map(this.allContacts().map((c) => [c.id, c]));
+    // Get the current list of IDs from the form's signal
+    const contactIds = this.contactIdsValue() ?? [];
+
+    return contactIds
+      .map((id: string) => membersMap.get(id)) // Find the full contact object
+      .filter((c: Contact ): c is Contact => Boolean(c)); // Filter out any undefined/missing
+  });
+
   // --- Event Handlers ---
 
   onSave(): void {
     if (this.form.valid) {
       this.save.emit({
-        ...this.group(), // Preserves any non-form data from the original
+        ...this.group(),
         ...this.form.value,
       });
     }
   }
 
-  // 9. --- REFACTORED: onCancel now just sets state ---
   onCancel(): void {
     this.isEditing.set(false);
+  }
+
+  // 7. --- NEW: Helper methods for rendering avatars ---
+  getInitials(contact: Contact): string {
+    const first = contact.firstName?.[0] || '';
+    const last = contact.surname?.[0] || '';
+    return (first + last).toUpperCase() || '?';
+  }
+
+  getProfilePicture(contact: Contact): string | undefined {
+    return contact.serviceContacts['messenger']?.profilePictureUrl;
   }
 }

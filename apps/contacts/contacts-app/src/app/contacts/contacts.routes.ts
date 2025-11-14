@@ -32,7 +32,7 @@ export const CONTACTS_ROUTES: Routes = [
     // The "Add Group" page
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactGroupEditPageComponent
+        (m) => m.ContactGroupPageComponent
       ),
   },
   {
@@ -40,7 +40,7 @@ export const CONTACTS_ROUTES: Routes = [
     // The "Edit Group" page
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactGroupEditPageComponent
+        (m) => m.ContactGroupPageComponent
       ),
   },
   // You can add more contact-specific routes here,

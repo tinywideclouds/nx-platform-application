@@ -1,4 +1,4 @@
-<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4 form-view-mode">
+<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
   <mat-form-field
     [floatLabel]="'always'"
     class="w-full"
@@ -27,9 +27,32 @@
       (selectedIdsChange)="form.get('contactIds')?.setValue($event)"
     />
     } @else {
-    <div class="mt-1 p-4 bg-gray-100 rounded-md text-gray-700">
-      {{ form.get('contactIds')?.value.length }}
-      {{ form.get('contactIds')?.value.length === 1 ? 'member' : 'members' }}
+    <div
+      class="mt-1 border rounded-md overflow-hidden"
+      style="max-height: 300px; overflow-y: auto;"
+    >
+      @for (contact of groupMembers(); track contact.id) {
+      <div
+        class="flex items-center p-3 space-x-3 border-b last:border-b-0 bg-gray-50"
+      >
+        <contacts-avatar
+          [profilePictureUrl]="getProfilePicture(contact)"
+          [initials]="getInitials(contact)"
+        ></contacts-avatar>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-gray-900 truncate">
+            {{ contact.alias }}
+          </div>
+          <div class="text-sm text-gray-500 truncate">
+            {{ contact.firstName }} {{ contact.surname }}
+          </div>
+        </div>
+      </div>
+      } @empty {
+      <div class="p-4 text-center text-gray-500">
+        No members in this group.
+      </div>
+      }
     </div>
     }
   </div>

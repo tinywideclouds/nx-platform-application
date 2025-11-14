@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-group-edit-page/contact-group-edit-page.component.ts
+
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -6,7 +8,7 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
-import { ContactGroupFormComponent } from '../contact-group-form/contact-group-form.component';
+import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map, switchMap } from 'rxjs/operators';
 import { from, of, Observable } from 'rxjs';
@@ -16,20 +18,20 @@ import { MatIconModule } from '@angular/material/icon';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
 @Component({
-  selector: 'contacts-group-edit-page',
+  selector: 'contacts-group-page',
   standalone: true,
   imports: [
-    CommonModule, 
+    CommonModule,
     RouterLink,
     MatButtonModule,
     MatIconModule,
     ContactGroupFormComponent,
     ContactsPageToolbarComponent,
   ],
-  templateUrl: './contact-group-edit-page.component.html',
-  styleUrl: './contact-group-edit-page.component.scss',
+  templateUrl: './contact-group-page.component.html',
+  styleUrl: './contact-group-page.component.scss',
 })
-export class ContactGroupEditPageComponent {
+export class ContactGroupPageComponent {
   // 1. Inject services
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -81,6 +83,8 @@ export class ContactGroupEditPageComponent {
    * EDIT MODE: Returns a stream for an existing group.
    */
   private getGroup(id: string): Observable<ContactGroup | null> {
+    // 5. --- FIX: Set initial state ---
+    this.startInEditMode.set(false);
     return from(this.contactsService.getGroup(id)).pipe(
       map((group) => group ?? null) // Ensure undefined becomes null
     );
@@ -90,6 +94,8 @@ export class ContactGroupEditPageComponent {
    * ADD MODE: Returns a stream for a new, empty group.
    */
   private getNewGroup(): Observable<ContactGroup> {
+    // 6. --- FIX: Set initial state ---
+    this.startInEditMode.set(true);
     return of({
       id: `urn:sm:group:${crypto.randomUUID()}`,
       name: '',
