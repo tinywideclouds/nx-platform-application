@@ -1,5 +1,9 @@
-<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
-  <mat-form-field [floatLabel]="'always'" class="w-full">
+<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4 form-view-mode">
+  <mat-form-field
+    [floatLabel]="'always'"
+    class="w-full"
+    [hideRequiredMarker]="!isEditing()"
+  >
     <mat-label>Group Name</mat-label>
     <input matInput formControlName="name" />
   </mat-form-field>
@@ -15,14 +19,22 @@
 
   <div>
     <label class="font-medium text-sm text-gray-700">Members</label>
-    <lib-contact-multi-selector
+    @if (isEditing()) {
+    <contacts-multi-selector
       class="mt-1"
       [allContacts]="allContacts()"
       [selectedIds]="form.get('contactIds')?.value"
       (selectedIdsChange)="form.get('contactIds')?.setValue($event)"
     />
+    } @else {
+    <div class="mt-1 p-4 bg-gray-100 rounded-md text-gray-700">
+      {{ form.get('contactIds')?.value.length }}
+      {{ form.get('contactIds')?.value.length === 1 ? 'member' : 'members' }}
+    </div>
+    }
   </div>
 
+  @if (isEditing()) {
   <div class="flex justify-end gap-2 pt-4">
     <button
       type="button"
@@ -42,4 +54,17 @@
       Save Group
     </button>
   </div>
+  } @else {
+  <div class="flex justify-end gap-2 pt-4">
+    <button
+      type="button"
+      (click)="isEditing.set(true)"
+      mat-flat-button
+      color="primary"
+      data-testid="edit-button"
+    >
+      Edit
+    </button>
+  </div>
+  }
 </form>

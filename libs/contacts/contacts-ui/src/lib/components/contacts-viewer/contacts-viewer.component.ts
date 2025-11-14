@@ -5,9 +5,9 @@ import {
   ChangeDetectionStrategy,
   inject,
   computed,
-  signal,
-  ElementRef,
-  OnDestroy,
+  signal, // 1. Import signal
+  ElementRef, // 2. Import ElementRef
+  OnDestroy, // 3. Import OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -22,12 +22,10 @@ import { MatTabsModule, MatTabChangeEvent } from '@angular/material/tabs';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-
-// 1. Define our breakpoint in logical REM units
-const COMPACT_THRESHOLD_REM = 24;
+import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component'; 
 
 @Component({
-  selector: 'lib-contacts-page',
+  selector: 'contacts-viewer',
   standalone: true,
   imports: [
     CommonModule,
@@ -37,22 +35,16 @@ const COMPACT_THRESHOLD_REM = 24;
     ContactGroupListComponent,
     MatButtonModule,
     MatIconModule,
+    ContactsPageToolbarComponent, 
   ],
-  templateUrl: './contacts-page.component.html',
-  styleUrl: './contacts-page.component.scss',
+  templateUrl: './contacts-viewer.component.html',
+  styleUrl: './contacts-viewer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ContactsPageComponent implements OnDestroy {
+export class ContactsViewerComponent {
   private contactsService = inject(ContactsStorageService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
-  private elRef = inject(ElementRef);
-
-  private resizeObserver!: ResizeObserver;
-  private elementWidth = signal(0);
-  
-  // 2. This will hold our calculated pixel breakpoint
-  private compactBreakpointPx = 0;
 
   // 1. Get data signals from the service
   contacts = toSignal(this.contactsService.contacts$, {
@@ -71,46 +63,6 @@ export class ContactsPageComponent implements OnDestroy {
 
   // 3. Compute the tab index for the mat-tab-group
   tabIndex = computed(() => (this.activeTab() === 'groups' ? 1 : 0));
-
-  /**
-   * Defines the display mode.
-   * 'full' = Standard page with text buttons.
-   * 'compact' = Sidebar view with icon buttons.
-   */
-  // 4. 'mode' now compares against our rem-based pixel value
-  mode = computed(() => {
-    return this.elementWidth() < this.compactBreakpointPx ? 'compact' : 'full';
-  });
-
-  constructor() {
-    // 3. Calculate the pixel breakpoint based on the user's root font size
-    try {
-      const rootFontSizePx = parseFloat(
-        getComputedStyle(document.documentElement).fontSize
-      );
-      this.compactBreakpointPx = COMPACT_THRESHOLD_REM * rootFontSizePx;
-    } catch (e) {
-      // Fallback for safety (e.g., in a weird test environment)
-      // 18rem * 16px/rem = 288px
-      this.compactBreakpointPx = COMPACT_THRESHOLD_REM * 16;
-    }
-
-    // Set up the observer
-    this.resizeObserver = new ResizeObserver((entries) => {
-      if (entries[0]) {
-        this.elementWidth.set(entries[0].contentRect.width);
-      }
-    });
-
-    // Start observing the component's host element
-    this.resizeObserver.observe(this.elRef.nativeElement);
-  }
-
-  ngOnDestroy(): void {
-    // Clean up the observer
-    this.resizeObserver.unobserve(this.elRef.nativeElement);
-    this.resizeObserver.disconnect();
-  }
 
   /**
    * Called when the user clicks a tab. Updates the URL.

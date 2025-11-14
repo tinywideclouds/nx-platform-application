@@ -2,7 +2,7 @@
   <!-- 1. Use new @for loop to iterate over groups -->
   @if (groups.length > 0) {
     @for (group of groups; track group.id) {
-      <lib-contact-group-list-item
+      <contacts-group-list-item
         [group]="group"
         (select)="onSelect($event)"
       />

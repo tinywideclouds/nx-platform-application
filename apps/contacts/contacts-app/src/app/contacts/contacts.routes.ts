@@ -8,7 +8,7 @@ export const CONTACTS_ROUTES: Routes = [
     // The main list view
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactsPageComponent
+        (m) => m.ContactsViewerComponent
       ),
   },
   {
@@ -16,7 +16,7 @@ export const CONTACTS_ROUTES: Routes = [
     // The "Add" page
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactEditPageComponent
+        (m) => m.ContactPageComponent
       ),
   },
   {
@@ -24,7 +24,7 @@ export const CONTACTS_ROUTES: Routes = [
     // The "Edit" page
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactEditPageComponent
+        (m) => m.ContactPageComponent
       ),
   },
   {

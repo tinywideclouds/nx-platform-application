@@ -6,6 +6,7 @@ import {
   output,
   effect,
   inject,
+  signal, // 1. Import signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -24,7 +25,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 
 @Component({
-  selector: 'lib-contact-group-form',
+  selector: 'contacts-group-form',
   standalone: true,
   imports: [
     CommonModule,
@@ -46,25 +47,38 @@ export class ContactGroupFormComponent {
   /** The full list of contacts to show in the multi-selector. */
   allContacts = input.required<Contact[]>();
 
+  /** The initial state of the form. */
+  startInEditMode = input(false); // 2. NEW: Input for initial state
+
   /** Emits the saved group data. */
   save = output<ContactGroup>();
 
-  /** Emits when the user cancels. */
-  cancel = output<void>();
+  // 3. --- @Output() cancel is removed ---
 
   // --- Internal State ---
 
   private fb = inject(FormBuilder);
 
+  // 4. --- NEW: Internal state for edit mode ---
+  isEditing = signal(false);
+
   form: FormGroup = this.fb.group({
     id: [''],
     name: ['', Validators.required],
     description: [''],
-    contactIds: [[] as string[]], // This will be bound to the multi-selector
+    contactIds: [[] as string[]],
   });
 
   constructor() {
-    // React to changes in the 'group' input signal
+    // 5. --- NEW: Disable form by default ---
+    this.form.disable();
+
+    // 6. --- NEW: Effect to set initial state ---
+    effect(() => {
+      this.isEditing.set(this.startInEditMode());
+    });
+
+    // 7. Effect to patch data when the 'group' input changes
     effect(() => {
       const currentGroup = this.group();
 
@@ -81,6 +95,19 @@ export class ContactGroupFormComponent {
         });
       }
     });
+
+    // 8. --- NEW: Effect to toggle form state ---
+    effect(() => {
+      if (this.isEditing()) {
+        this.form.enable();
+      } else {
+        this.form.disable();
+        // Reset form to its original state when leaving edit mode
+        if (this.group()) {
+          this.form.reset(this.group());
+        }
+      }
+    });
   }
 
   // --- Event Handlers ---
@@ -94,7 +121,8 @@ export class ContactGroupFormComponent {
     }
   }
 
+  // 9. --- REFACTORED: onCancel now just sets state ---
   onCancel(): void {
-    this.cancel.emit();
+    this.isEditing.set(false);
   }
 }

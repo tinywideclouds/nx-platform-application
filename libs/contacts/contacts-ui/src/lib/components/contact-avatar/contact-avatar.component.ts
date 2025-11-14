@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 // No longer imports Contact
 
 @Component({
-  selector: 'lib-contact-avatar',
+  selector: 'contacts-avatar',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './contact-avatar.component.html',

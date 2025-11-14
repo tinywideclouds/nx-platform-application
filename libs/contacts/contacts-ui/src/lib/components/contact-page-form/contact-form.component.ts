@@ -2,12 +2,12 @@
 
 import {
   Component,
-  Input,
   Output,
   EventEmitter,
   inject,
-  input, // Import signal input
-  effect, // Import effect
+  input,
+  effect,
+  signal, // 1. Import signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -24,7 +24,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 
 @Component({
-  selector: 'lib-contact-form',
+  selector: 'contacts-form',
   standalone: true,
   imports: [
     CommonModule,
@@ -36,14 +36,17 @@ import { MatIconModule } from '@angular/material/icon';
   ],
   templateUrl: './contact-form.component.html',
   styleUrl: './contact-form.component.scss',
-  // No ChangeDetectionStrategy.OnPush needed; signals make this the default.
 })
 export class ContactFormComponent {
-  // 1. Use the input() function to create a Signal
   contact = input<Contact | null>(null);
+  // 2. --- NEW: Input for initial state ---
+  startInEditMode = input(false);
 
   @Output() save = new EventEmitter<Contact>();
-  @Output() cancel = new EventEmitter<void>();
+  // 3. --- @Output() cancel is removed ---
+
+  // 4. --- NEW: Internal state for edit mode ---
+  isEditing = signal(false);
 
   private fb = inject(FormBuilder);
 
@@ -59,19 +62,22 @@ export class ContactFormComponent {
   });
 
   constructor() {
-    // 2. Use an effect() to react to input changes
+    // 5. --- NEW: Set internal state from input ---
     effect(() => {
-      const currentContact = this.contact(); // Read the signal's value
+      this.isEditing.set(this.startInEditMode());
+    });
+
+    // This effect patches data when the contact input changes
+    effect(() => {
+      const currentContact = this.contact();
 
       if (currentContact) {
-        // "Edit Mode"
         this.form.patchValue(currentContact);
         this.phoneNumbers.clear();
         currentContact.phoneNumbers.forEach((phone) => this.addPhoneNumber(phone));
         this.emailAddresses.clear();
         currentContact.emailAddresses.forEach((email) => this.addEmailAddress(email));
       } else {
-        // "Add Mode" - Fix: Reset with empty strings
         this.form.reset({
           id: '',
           firstName: '',
@@ -82,6 +88,19 @@ export class ContactFormComponent {
         });
         this.phoneNumbers.clear();
         this.emailAddresses.clear();
+      }
+    });
+
+    // 6. --- This effect now uses the INTERNAL isEditing signal ---
+    effect(() => {
+      if (this.isEditing()) {
+        this.form.enable();
+      } else {
+        this.form.disable();
+        // Reset form to its original state when leaving edit mode
+        if (this.contact()) {
+          this.form.reset(this.contact());
+        }
       }
     });
   }
@@ -114,13 +133,14 @@ export class ContactFormComponent {
   onSave(): void {
     if (this.form.valid) {
       this.save.emit({
-        ...this.contact(), // Read the signal for merge
+        ...this.contact(),
         ...this.form.value,
       });
     }
   }
 
+  // 7. --- REFACTORED: onCancel now just sets state ---
   onCancel(): void {
-    this.cancel.emit();
+    this.isEditing.set(false);
   }
 }

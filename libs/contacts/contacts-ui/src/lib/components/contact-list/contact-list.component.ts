@@ -12,7 +12,7 @@ import { Contact } from '@nx-platform-application/contacts-data-access';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
 @Component({
-  selector: 'lib-contact-list',
+  selector: 'contacts-list',
   standalone: true,
   imports: [CommonModule, ContactListItemComponent], // Import our list item
   templateUrl: './contact-list.component.html',

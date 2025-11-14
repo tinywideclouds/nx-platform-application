@@ -14,7 +14,7 @@ import { Contact } from '@nx-platform-application/contacts-data-access';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
-  selector: 'lib-contact-list-item',
+  selector: 'contacts-list-item',
   standalone: true,
   // Add ContactAvatarComponent to the imports array
   imports: [CommonModule, ContactAvatarComponent],

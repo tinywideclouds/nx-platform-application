@@ -1,6 +1,6 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ContactsStorageService,
   Contact,
@@ -11,10 +11,21 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map, switchMap } from 'rxjs/operators';
 import { from, of, Observable } from 'rxjs';
 
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
+
 @Component({
-  selector: 'lib-contact-group-edit-page',
+  selector: 'contacts-group-edit-page',
   standalone: true,
-  imports: [CommonModule, ContactGroupFormComponent],
+  imports: [
+    CommonModule, 
+    RouterLink,
+    MatButtonModule,
+    MatIconModule,
+    ContactGroupFormComponent,
+    ContactsPageToolbarComponent,
+  ],
   templateUrl: './contact-group-edit-page.component.html',
   styleUrl: './contact-group-edit-page.component.scss',
 })
@@ -23,6 +34,9 @@ export class ContactGroupEditPageComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private contactsService = inject(ContactsStorageService);
+
+  // 2. --- NEW: Signal for initial state ---
+  startInEditMode = signal(false);
 
   // 2. Get all contacts (needed for the multi-selector)
   allContacts = toSignal(this.contactsService.contacts$, {

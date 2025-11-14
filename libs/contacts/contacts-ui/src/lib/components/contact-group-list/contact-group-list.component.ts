@@ -10,7 +10,7 @@ import { ContactGroup } from '@nx-platform-application/contacts-data-access';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
 
 @Component({
-  selector: 'lib-contact-group-list',
+  selector: 'contacts-group-list',
   standalone: true,
   imports: [CommonModule, ContactGroupListItemComponent], // Import our new list item
   templateUrl: './contact-group-list.component.html',

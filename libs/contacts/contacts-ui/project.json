@@ -2,7 +2,7 @@
   "name": "contacts-ui",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/contacts/contacts-ui/src",
-  "prefix": "lib",
+  "prefix": "contacts",
   "projectType": "library",
   "tags": ["scope:contacts"],
   "targets": {

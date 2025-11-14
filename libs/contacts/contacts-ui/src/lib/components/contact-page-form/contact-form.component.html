@@ -1,20 +1,20 @@
-<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4">
-  <mat-form-field [floatLabel]="'always'" class="w-full">
+<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4 form-view-mode">
+  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
     <mat-label>First Name</mat-label>
     <input matInput formControlName="firstName" />
   </mat-form-field>
 
-  <mat-form-field [floatLabel]="'always'" class="w-full">
+  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
     <mat-label>Surname</mat-label>
     <input matInput formControlName="surname" />
   </mat-form-field>
 
-  <mat-form-field [floatLabel]="'always'" class="w-full">
+  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
     <mat-label>Alias</mat-label>
     <input matInput formControlName="alias" />
   </mat-form-field>
 
-  <mat-form-field [floatLabel]="'always'" class="w-full">
+  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
     <mat-label>Primary Email</mat-label>
     <input matInput formControlName="email" type="email" />
   </mat-form-field>
@@ -25,10 +25,11 @@
       *ngFor="let phone of phoneNumbers.controls; let i = index"
       class="flex gap-2 mb-2 items-center"
     >
-      <mat-form-field [floatLabel]="'always'" class="flex-1">
+      <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="flex-1">
         <mat-label>Phone Number</mat-label>
         <input matInput [formControlName]="i" />
       </mat-form-field>
+      @if (isEditing()) {
       <button
         type="button"
         (click)="removePhoneNumber(i)"
@@ -39,7 +40,9 @@
       >
         <mat-icon>delete</mat-icon>
       </button>
+      }
     </div>
+    @if (isEditing()) {
     <button
       type="button"
       (click)="addPhoneNumber()"
@@ -48,6 +51,7 @@
     >
       Add Phone
     </button>
+    }
   </div>
 
   <div formArrayName="emailAddresses">
@@ -56,10 +60,11 @@
       *ngFor="let email of emailAddresses.controls; let i = index"
       class="flex gap-2 mb-2 items-center"
     >
-      <mat-form-field class="flex-1">
+      <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="flex-1">
         <mat-label>Email Address</mat-label>
         <input matInput [formControlName]="i" type="email" />
       </mat-form-field>
+      @if (isEditing()) {
       <button
         type="button"
         (click)="removeEmailAddress(i)"
@@ -70,7 +75,9 @@
       >
         <mat-icon>delete</mat-icon>
       </button>
+      }
     </div>
+    @if (isEditing()) {
     <button
       type="button"
       (click)="addEmailAddress()"
@@ -79,8 +86,10 @@
     >
       Add Email
     </button>
+    }
   </div>
 
+  @if (isEditing()) {
   <div class="flex justify-end gap-2 pt-4">
     <button
       type="button"
@@ -100,4 +109,17 @@
       Save
     </button>
   </div>
+  } @else {
+  <div class="flex justify-end gap-2 pt-4">
+    <button
+      type="button"
+      (click)="isEditing.set(true)"
+      mat-flat-button
+      color="primary"
+      data-testid="edit-button"
+    >
+      Edit
+    </button>
+  </div>
+  }
 </form>

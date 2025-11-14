@@ -1,8 +1,6 @@
-<div class="p-4">
-  <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold">Contacts</h1>
 
-    @if (mode() === 'full') {
+  <contacts-page-toolbar #toolbar>
+    @if (toolbar.mode() === 'full') {
       <div class="flex gap-2">
         <a
           matButton="tonal"
@@ -45,7 +43,7 @@
         </a>
       </div>
     }
-  </div>
+  </contacts-page-toolbar>
 
   <mat-tab-group
     animationDuration="0ms"
@@ -55,7 +53,7 @@
     <mat-tab label="Contacts">
       <ng-template matTabContent>
         <div class="pt-2">
-          <lib-contact-list
+          <contacts-list
             [contacts]="contacts()"
             (contactSelected)="onContactSelect($event)"
           />
@@ -66,7 +64,7 @@
     <mat-tab label="Groups">
       <ng-template matTabContent>
         <div class="pt-2">
-          <lib-contact-group-list
+          <contacts-group-list
             [groups]="groups()"
             (groupSelected)="onGroupSelect($event)"
           />
@@ -74,4 +72,3 @@
       </ng-template>
     </mat-tab>
   </mat-tab-group>
-</div>

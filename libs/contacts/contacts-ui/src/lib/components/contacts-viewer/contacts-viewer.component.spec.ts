@@ -17,7 +17,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatButtonModule } from '@angular/material/button'; // 2. FIX: Import MatButtonModule
 import { MatIconModule } from '@angular/material/icon'; // 3. FIX: Import MatIconModule
 
-import { ContactsPageComponent } from './contacts-page.component';
+import { ContactsViewerComponent } from './contacts-viewer.component';
 import { ContactListComponent } from '../contact-list/contact-list.component';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
@@ -62,8 +62,8 @@ const mockActivatedRoute = {
 };
 
 describe('ContactsPageComponent', () => {
-  let fixture: ComponentFixture<ContactsPageComponent>;
-  let component: ContactsPageComponent;
+  let fixture: ComponentFixture<ContactsViewerComponent>;
+  let component: ContactsViewerComponent;
   let router: Router;
 
   beforeEach(async () => {
@@ -78,7 +78,7 @@ describe('ContactsPageComponent', () => {
         MatTabsModule,
         MatButtonModule, // 4. FIX: Add MatButtonModule
         MatIconModule, // 5. FIX: Add MatIconModule
-        ContactsPageComponent,
+        ContactsViewerComponent,
         ContactListComponent,
         ContactListItemComponent,
         ContactGroupListComponent,
@@ -92,7 +92,7 @@ describe('ContactsPageComponent', () => {
       ],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(ContactsPageComponent);
+    fixture = TestBed.createComponent(ContactsViewerComponent);
     component = fixture.componentInstance;
     router = TestBed.inject(Router); // Inject the real test router
   });

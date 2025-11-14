@@ -1,11 +1,36 @@
-<div class="max-w-lg mx-auto">
+<contacts-page-toolbar title="Contact" #toolbar>
+  @if (toolbar.mode() === 'full') {
+    <div class="flex gap-2">
+      <a
+        mat-button
+        routerLink="/contacts"
+        [queryParams]="{ tab: 'contacts' }"
+        data-testid="close-button"
+      >
+        Close
+      </a>
+    </div>
+  } @else {
+    <div class="flex gap-2">
+      <a
+        mat-icon-button
+        routerLink="/contacts"
+        [queryParams]="{ tab: 'contacts' }"
+        data-testid="close-button"
+        aria-label="Close"
+      >
+        <mat-icon>close</mat-icon>
+      </a>
+    </div>
+  }
+</contacts-page-toolbar>
   <!-- 
     The template reactively handles the signal's null state.
     It passes both the group-to-edit and the full contact list
     down to the "dumb" form component.
   -->
   @if (groupToEdit()) {
-  <lib-contact-group-form
+  <contacts-group-form
     [group]="groupToEdit()"
     [allContacts]="allContacts()"
     (save)="onSave($event)"
@@ -15,4 +40,3 @@
   <!-- This will show on initial load while the async stream resolves -->
   <p>Loading group details...</p>
   }
-</div>

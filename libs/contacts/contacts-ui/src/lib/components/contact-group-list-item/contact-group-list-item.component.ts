@@ -12,7 +12,7 @@ import { CommonModule } from '@angular/common';
 import { ContactGroup } from '@nx-platform-application/contacts-data-access';
 
 @Component({
-  selector: 'lib-contact-group-list-item',
+  selector: 'contacts-group-list-item',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './contact-group-list-item.component.html',

@@ -12,7 +12,7 @@ import { Contact } from '@nx-platform-application/contacts-data-access';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
-  selector: 'lib-contact-multi-selector',
+  selector: 'contacts-multi-selector',
   standalone: true,
   imports: [CommonModule, FormsModule, ContactAvatarComponent],
   templateUrl: './contact-multi-selector.component.html',
