@@ -1,1 +1,0 @@
-Most importantly, the core tasks are done: key-v2-access has its storeKeys method , and the new MessengerCryptoService correctly calls it after saving keys locally.

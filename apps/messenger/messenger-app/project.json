@@ -6,6 +6,17 @@
   "sourceRoot": "apps/messenger/messenger-app/src",
   "tags": ["scope:messenger"],
   "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{workspaceRoot}/dist/test-reports/apps/messenger/messenger-app"
+      ],
+      "options": {
+        "configFile": "apps/messenger/messenger-app/vitest.config.mts",
+        "reportsDirectory": "../../../coverage/apps/messenger/messenger-app"
+      }
+    },
     "build": {
       "executor": "@angular/build:application",
       "outputs": ["{options.outputPath}"],
@@ -40,7 +51,22 @@
         "development": {
           "optimization": false,
           "extractLicenses": false,
-          "sourceMap": true
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/messenger/messenger-app/src/environments/environment.ts",
+              "with": "apps/messenger/messenger-app/src/environments/environment.dev.ts"
+            }
+          ]
+        },
+        "mock": {
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/messenger/messenger-app/src/environments/environment.ts",
+              "with": "apps/messenger/messenger-app/src/environments/environment.mock.ts"
+            }
+          ]
         }
       },
       "defaultConfiguration": "production"
@@ -54,6 +80,9 @@
         },
         "development": {
           "buildTarget": "messenger-app:build:development"
+        },
+        "mock": {
+          "buildTarget": "messenger-app:build:mock"
         }
       },
       "defaultConfiguration": "development"

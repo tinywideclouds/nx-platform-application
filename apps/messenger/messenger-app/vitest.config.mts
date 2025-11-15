@@ -13,7 +13,7 @@ export default defineConfig({
   plugins: [angular(), nxViteTsPaths()],
 
   test: {
-    name: 'contacts-app',
+    name: 'messenger-app',
     globals: true,
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],

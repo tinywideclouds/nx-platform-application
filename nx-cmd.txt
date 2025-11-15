@@ -35,7 +35,9 @@ nx g @nx/workspace:move --project=platform-storage --destination=libs/platform/w
 
 nx g @nx/angular:library --name=platform-dexie-storage --directory=libs/platform/ng/dexie-storage --tags="scope:platform"
 
-nx g @nx/angular:application contacts-app --directory=apps/contacts/contacts-app
+nx g @nx/angular:application --directory=apps/contacts/contacts-app
+
+nx g @nx/angular:application --directory=apps/messenger/messenger-app --tags="scope:messenger"                
 
 
 

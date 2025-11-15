@@ -9,7 +9,8 @@
     "target": "es2022",
     "isolatedModules": true,
     "emitDecoratorMetadata": false,
-    "module": "preserve"
+    "module": "preserve",
+    "lib": ["es2022", "dom"]
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

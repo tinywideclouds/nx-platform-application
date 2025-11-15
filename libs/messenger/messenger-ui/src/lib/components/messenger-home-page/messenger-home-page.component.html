@@ -14,12 +14,43 @@
       @case ('start_conversation') {
         <div class="p-4 text-center text-gray-500">
           <h3 class="font-bold text-lg">Start a new chat</h3>
-          <p>Select a contact to begin a conversation.</p>
+          <p>Select a contact or group to begin.</p>
         </div>
-        <contacts-list
-          [contacts]="contacts()"
-          (contactSelected)="onSelectContactToChat($event)"
-        />
+        
+        <div class="flex border-b border-t">
+          <button
+            (click)="startChatView.set('contacts')"
+            [class.text-blue-600]="startChatView() === 'contacts'"
+            [class.border-b-2]="startChatView() === 'contacts'"
+            [class.border-blue-600]="startChatView() === 'contacts'"
+            [class.text-gray-500]="startChatView() !== 'contacts'"
+            class="flex-1 p-3 font-medium text-center hover:bg-gray-50"
+          >
+            Contacts
+          </button>
+          <button
+            (click)="startChatView.set('groups')"
+            [class.text-blue-600]="startChatView() === 'groups'"
+            [class.border-b-2]="startChatView() === 'groups'"
+            [class.border-blue-600]="startChatView() === 'groups'"
+            [class.text-gray-500]="startChatView() !== 'groups'"
+            class="flex-1 p-3 font-medium text-center hover:bg-gray-50"
+          >
+            Groups
+          </button>
+        </div>
+
+        @if (startChatView() === 'contacts') {
+          <contacts-list
+            [contacts]="contacts()"
+            (contactSelected)="onSelectContactToChat($event)"
+          />
+        } @else {
+          <contacts-group-list
+            [groups]="groups()"
+            (groupSelected)="onSelectGroupToChat($event)"
+          />
+        }
       }
       
       @case ('new_user_welcome') {

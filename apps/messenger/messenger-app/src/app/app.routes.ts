@@ -1,15 +1,43 @@
-// apps/messenger/messenger-app/src/app/app.routes.ts
 import { Routes } from '@angular/router';
+import {
+  MessengerHomePageComponent,
+  ChatWindowComponent,
+} from '@nx-platform-application/messenger-ui';
 
-export const app_routes: Routes = [
+import {
+  LoginSuccessComponent,
+  LoginComponent as RealLoginComponent
+} from '@nx-platform-application/platform-auth-ui';
+
+import { authGuard } from './auth/auth.guard';
+import { nonAuthGuard } from './auth/mocks/non-auth.guard';
+import { environment } from './environments/environment';
+import { MockLoginComponent } from './auth/mocks/mock-login.component';
+
+const loginComponent = environment.useMocks ? MockLoginComponent : RealLoginComponent;
+
+export const appRoutes: Routes = [
   {
-    path: 'messenger',
-    loadChildren: () =>
-      import('./messenger/messenger.routes').then((m) => m.MESSENGER_ROUTES),
+    path: 'login',
+    component: loginComponent,
+    canActivate: [nonAuthGuard], 
   },
   {
-    path: '',
-    redirectTo: 'messenger',
-    pathMatch: 'full',
+    path: 'login-success',
+    component: LoginSuccessComponent, 
   },
+  {
+    path: '', // Main app route
+    component: MessengerHomePageComponent,
+    canActivate: [authGuard], // Protect this route
+    children: [
+      {
+        path: 'chat/:id',
+        component: ChatWindowComponent,
+        // No extra guard needed, parent is already protected
+      },
+    ],
+  },
+  // Fallback route
+  { path: '**', redirectTo: '' },
 ];

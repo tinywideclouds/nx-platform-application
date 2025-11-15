@@ -56,6 +56,7 @@ const mockUser: User = {
   alias: 'Me',
   email: 'me@test.com',
 };
+const mockUserUrn = URN.parse(mockUser.id); // <--- Added for convenience
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
 const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
 
@@ -74,7 +75,7 @@ const mockAuthResponse: AuthStatusResponse = {
 };
 
 const mockEnvelope: SecureEnvelope = {
-  recipientId: URN.parse(mockUser.id),
+  recipientId: mockUserUrn,
   encryptedData: new Uint8Array([1, 2, 3]),
   encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
   signature: new Uint8Array([7, 8, 9]),
@@ -98,7 +99,7 @@ const mockDecryptedMessage: DecryptedMessage = {
 };
 const mockSentMessage: DecryptedMessage = {
   messageId: 'local-mock-uuid',
-  senderId: URN.parse(mockUser.id),
+  senderId: mockUserUrn,
   recipientId: mockRecipientUrn,
   sentTimestamp: '2025-11-04T17:00:00Z' as ISODateTimeString,
   typeId: URN.parse('urn:sm:type:text'),
@@ -218,16 +219,18 @@ describe('ChatService (Refactored Test)', () => {
     vi.useRealTimers();
   });
 
-  it('should initialize, load keys, and connect to live service', async () => {
+  it('should initialize, derive URN, load keys, and connect', async () => {
     await initializeService();
 
     expect(mockLogger.info).toHaveBeenCalledWith(
       'ChatService: Orchestrator initializing...'
     );
+    //
+    // --- THIS IS THE TEST FOR THE FIX ---
+    //
+    expect(service.currentUserUrn()?.toString()).toBe(mockUser.id);
     expect(mockStorageService.loadConversationSummaries).toHaveBeenCalled();
-    expect(mockCryptoService.loadMyKeys).toHaveBeenCalledWith(
-      URN.parse(mockUser.id)
-    );
+    expect(mockCryptoService.loadMyKeys).toHaveBeenCalledWith(mockUserUrn);
     expect(mockLiveService.connect).toHaveBeenCalledWith('mock-token');
   });
 
@@ -277,9 +280,6 @@ describe('ChatService (Refactored Test)', () => {
 
       await service.loadConversation(mockSenderUrn);
 
-      // ---
-      // --- THE FIX: Check the correct signal
-      // ---
       expect(service.selectedConversation()?.toString()).toBe(
         mockSenderUrn.toString()
       );
@@ -294,9 +294,6 @@ describe('ChatService (Refactored Test)', () => {
 
       await service.loadConversation(null);
 
-      // ---
-      // --- THE FIX: Check the correct signal
-      // ---
       expect(service.selectedConversation()).toBe(null);
       expect(service.messages()).toEqual([]);
     });
@@ -307,9 +304,6 @@ describe('ChatService (Refactored Test)', () => {
       await initializeService();
       mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
 
-      // ---
-      // --- THE FIX: Check the correct signal
-      // ---
       expect(service.selectedConversation()).toBe(null);
 
       await service.fetchAndProcessMessages();

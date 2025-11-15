@@ -1,5 +1,4 @@
 // --- FILE: libs/messenger/chat-state/src/lib/chat.service.ts ---
-// (REFACTORED - FULL CODE)
 
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
@@ -8,6 +7,7 @@ import {
   inject,
   OnDestroy,
   WritableSignal,
+  computed,
 } from '@angular/core';
 import {
   ISODateTimeString,
@@ -25,7 +25,10 @@ import {
 import { Temporal } from '@js-temporal/polyfill';
 
 // --- Platform Service Imports ---
-import { AuthService } from '@nx-platform-application/platform-auth-data-access';
+import {
+  AuthService,
+  IAuthService,
+} from '@nx-platform-application/platform-auth-data-access';
 import { Logger } from '@nx-platform-application/console-logger';
 
 // --- Messenger Service Imports ---
@@ -44,7 +47,10 @@ import {
   ConversationSummary,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/key-cache-access';
-import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
+import {
+  EncryptedMessagePayload,
+  ChatMessage, // <--- 1. Import the ChatMessage view model
+} from '@nx-platform-application/messenger-types';
 
 @Injectable({
   providedIn: 'root',
@@ -52,7 +58,7 @@ import { EncryptedMessagePayload } from '@nx-platform-application/messenger-type
 export class ChatService implements OnDestroy {
   // --- Injected Dependencies ---
   private readonly logger = inject(Logger);
-  private readonly authService = inject(AuthService);
+  private readonly authService = inject(IAuthService); // Inject the interface
   private readonly cryptoService = inject(MessengerCryptoService);
   private readonly dataService = inject(ChatDataService);
   private readonly sendService = inject(ChatSendService);
@@ -63,23 +69,30 @@ export class ChatService implements OnDestroy {
   // --- Private State ---
   private readonly destroy$ = new Subject<void>();
   private myKeys = signal<PrivateKeys | null>(null);
-  private currentUserCache = signal<User | null>(null);
+  private currentUserCache = signal<User | null>(null); // Keep this for the full User object
 
-  /**
-   * Promise-based mutex to serialize critical data operations.
-   * This ensures that `loadConversation`, `fetchAndProcessMessages`,
-   * and `sendMessage` do not run concurrently, preventing race conditions.
-   */
   private operationLock = Promise.resolve();
 
   // --- Public State (Signals) ---
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
-  public readonly messages: WritableSignal<DecryptedMessage[]> = signal([]);
-  // ---
-  // --- THE FIX (Part 1): Renamed this property back
-  // ---
+  
+  //
+  // --- 2. FIX (Part 1): The public signal is now of type ChatMessage[]
+  //
+  public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
   public readonly selectedConversation = signal<URN | null>(null);
+
+  public readonly currentUserUrn = computed(() => {
+    const user = this.authService.currentUser();
+    if (!user) return null;
+    try {
+      return URN.parse(user.id);
+    } catch (e) {
+      this.logger.error('Failed to parse current user URN from AuthService', e, user);
+      return null;
+    }
+  });
 
   constructor() {
     this.logger.info('ChatService: Orchestrator initializing...');
@@ -97,13 +110,15 @@ export class ChatService implements OnDestroy {
       const currentUser = this.authService.currentUser();
       if (!currentUser) throw new Error('Authentication failed.');
 
-      this.currentUserCache.set(currentUser);
+      this.currentUserCache.set(currentUser); // Cache the full user object
 
       const authToken = this.authService.getJwtToken();
       const summaries = await this.storageService.loadConversationSummaries();
       this.activeConversations.set(summaries);
 
-      const senderUrn = URN.parse(currentUser.id);
+      const senderUrn = this.currentUserUrn();
+      if (!senderUrn) throw new Error('Failed to derive user URN.');
+
       const keys = await this.cryptoService.loadMyKeys(senderUrn);
 
       if (!keys) {
@@ -180,21 +195,15 @@ export class ChatService implements OnDestroy {
 
   /**
    * CORE LOGIC: Selects a conversation and loads its history.
-   * (Method name `loadConversation` is correct)
    */
   public async loadConversation(urn: URN | null): Promise<void> {
-    // The entire method logic is wrapped in the lock
     return this.runExclusive(async () => {
-      // ---
-      // --- THE FIX (Part 2): Using the correct signal name
-      // ---
       if (!urn) {
         this.selectedConversation.set(null);
         this.messages.set([]);
         return;
       }
 
-      // Check if this is already the selected conversation
       if (this.selectedConversation()?.toString() === urn.toString()) {
         this.logger.info(`Conversation ${urn.toString()} already selected.`);
         return;
@@ -203,8 +212,12 @@ export class ChatService implements OnDestroy {
       this.logger.info(`Selecting conversation: ${urn.toString()}`);
       this.selectedConversation.set(urn);
 
+      //
+      // --- 3. FIX (Part 2): Map the storage model to the view model
+      //
       const history = await this.storageService.loadHistory(urn);
-      this.messages.set(history);
+      const viewMessages = history.map(this.mapDecryptedToChat);
+      this.messages.set(viewMessages);
     });
   }
 
@@ -212,14 +225,13 @@ export class ChatService implements OnDestroy {
    * CORE LOGIC: Fetches, decrypts, saves, and acknowledges messages.
    */
   public async fetchAndProcessMessages(batchLimit = 50): Promise<void> {
-    // This entire operation is now serialized by runExclusive.
     return this.runExclusive(async () => {
       const myKeys = this.myKeys();
-      const currentUser = this.currentUserCache();
+      const currentUserUrn = this.currentUserUrn();
 
-      if (!myKeys || !currentUser) {
+      if (!myKeys || !currentUserUrn) {
         this.logger.warn(
-          'Cannot process messages: crypto keys or user not loaded.'
+          'Cannot process messages: crypto keys or user URN not loaded.'
         );
         return;
       }
@@ -236,7 +248,10 @@ export class ChatService implements OnDestroy {
         this.logger.info(`Processing ${queuedMessages.length} new messages...`);
 
         const processedIds: string[] = [];
-        const newMessages: DecryptedMessage[] = [];
+        //
+        // --- 4. FIX (Part 3): This array now holds ChatMessage
+        //
+        const newMessages: ChatMessage[] = [];
 
         for (const msg of queuedMessages) {
           try {
@@ -245,14 +260,16 @@ export class ChatService implements OnDestroy {
               myKeys
             );
 
-            const newMsg = this.mapPayloadToDecrypted(
+            // Map to DecryptedMessage (storage model)
+            const newDecryptedMsg = this.mapPayloadToDecrypted(
               msg,
               decrypted,
-              currentUser
+              currentUserUrn
             );
-            await this.storageService.saveMessage(newMsg);
+            await this.storageService.saveMessage(newDecryptedMsg);
 
-            newMessages.push(newMsg);
+            // Map to ChatMessage (view model) and add to list
+            newMessages.push(this.mapDecryptedToChat(newDecryptedMsg));
             processedIds.push(msg.id);
           } catch (error) {
             this.logger.error('Failed to decrypt/verify message', error, msg);
@@ -281,20 +298,16 @@ export class ChatService implements OnDestroy {
     recipientUrn: URN,
     plaintext: string
   ): Promise<void> {
-    // Wrap in lock to prevent races with message processing or selection
     return this.runExclusive(async () => {
       const myKeys = this.myKeys();
-      const currentUser = this.currentUserCache();
+      const senderUrn = this.currentUserUrn();
 
-      if (!myKeys || !currentUser) {
-        this.logger.error('Cannot send: keys or user not loaded.');
+      if (!myKeys || !senderUrn) {
+        this.logger.error('Cannot send: keys or user URN not loaded.');
         return;
       }
 
-      const senderUrn = URN.parse(currentUser.id);
-
       try {
-        // 1. Create Inner Payload
         const payload: EncryptedMessagePayload = {
           senderId: senderUrn,
           sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
@@ -302,10 +315,8 @@ export class ChatService implements OnDestroy {
           payloadBytes: new TextEncoder().encode(plaintext),
         };
 
-        // 2. Fetch Recipient Keys
         const recipientKeys = await this.keyService.getPublicKey(recipientUrn);
 
-        // 3. Encrypt & Sign
         const envelope = await this.cryptoService.encryptAndSign(
           payload,
           recipientUrn,
@@ -313,10 +324,8 @@ export class ChatService implements OnDestroy {
           recipientKeys
         );
 
-        // 4. Send
         await firstValueFrom(this.sendService.sendMessage(envelope));
 
-        // 5. Optimistic Local Save
         const optimisticMsg: DecryptedMessage = {
           messageId: `local-${crypto.randomUUID()}`,
           senderId: senderUrn,
@@ -328,30 +337,32 @@ export class ChatService implements OnDestroy {
           conversationUrn: this.getConversationUrn(
             senderUrn,
             recipientUrn,
-            currentUser
+            senderUrn
           ),
         };
 
         await this.storageService.saveMessage(optimisticMsg);
-        this.upsertMessages([optimisticMsg]);
 
-        // TODO: Update activeConversations signal
+        //
+        // --- 5. FIX (Part 4): Map the optimistic message to a ChatMessage
+        //
+        this.upsertMessages([this.mapDecryptedToChat(optimisticMsg)]);
       } catch (error) {
         this.logger.error('Failed to send message', error);
-        // TODO: Update message status to 'failed'
       }
     });
   }
 
   // --- Utility Methods ---
 
-  private upsertMessages(messages: DecryptedMessage[]): void {
-    // ---
-    // --- THE FIX (Part 3): Using the correct signal name
-    // ---
+  //
+  // --- 6. FIX (Part 5): This method now takes ChatMessage[]
+  //
+  private upsertMessages(messages: ChatMessage[]): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
+    // Filter by ChatMessage.conversationUrn
     const relevantMessages = messages.filter(
       (msg) => msg.conversationUrn.toString() === activeConvo.toString()
     );
@@ -361,10 +372,38 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  /**
+   * NEW HELPER
+   * Maps the storage model (DecryptedMessage) to the view model (ChatMessage).
+   */
+  private mapDecryptedToChat(msg: DecryptedMessage): ChatMessage {
+    let textContent = '';
+    if (msg.typeId.toString().includes('text')) {
+      try {
+        textContent = new TextDecoder().decode(msg.payloadBytes);
+      } catch (e) {
+        this.logger.error('Failed to decode text payload', e, msg);
+        textContent = '[Error: Unreadable message]';
+      }
+    }
+    
+    return {
+      id: msg.messageId, // Use messageId for trackBy
+      conversationUrn: msg.conversationUrn,
+      senderId: msg.senderId,
+      timestamp: new Date(msg.sentTimestamp), // Convert ISO string to Date
+      textContent: textContent,
+      type: msg.typeId.toString().includes('text') ? 'text' : 'system',
+    };
+  }
+
+  /**
+   * Maps the raw server/crypto payload to the storage model.
+   */
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
     payload: EncryptedMessagePayload,
-    me: User
+    myUrn: URN
   ): DecryptedMessage {
     return {
       messageId: qMsg.id,
@@ -377,13 +416,13 @@ export class ChatService implements OnDestroy {
       conversationUrn: this.getConversationUrn(
         payload.senderId,
         qMsg.envelope.recipientId,
-        me
+        myUrn
       ),
     };
   }
 
-  private getConversationUrn(urn1: URN, urn2: URN, me: User): URN {
-    return urn1.toString() === me.id.toString() ? urn2 : urn1;
+  private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
+    return urn1.toString() === myUrn.toString() ? urn2 : urn1;
   }
 
   /**

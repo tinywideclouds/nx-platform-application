@@ -1,6 +1,13 @@
 // libs/messenger/messenger-ui/src/lib/messenger-home-page/messenger-home-page.component.ts
 
-import { Component, ChangeDetectionStrategy, inject, computed } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  inject,
+  computed,
+  signal,
+  WritableSignal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterOutlet } from '@angular/router';
@@ -22,7 +29,10 @@ import {
   ChatConversationListComponent,
   ConversationViewItem,
 } from '@nx-platform-application/chat-ui';
-import { ContactListComponent } from '@nx-platform-application/contacts-ui';
+import {
+  ContactListComponent,
+  ContactGroupListComponent, // <--- 1. IMPORT THE NEW COMPONENT
+} from '@nx-platform-application/contacts-ui';
 
 @Component({
   selector: 'messenger-home-page',
@@ -32,6 +42,7 @@ import { ContactListComponent } from '@nx-platform-application/contacts-ui';
     RouterOutlet,
     ChatConversationListComponent,
     ContactListComponent,
+    ContactGroupListComponent, // <--- 2. ADD IT HERE
   ],
   templateUrl: './messenger-home-page.component.html',
   styleUrl: './messenger-home-page.component.scss',
@@ -44,17 +55,20 @@ export class MessengerHomePageComponent {
 
   // --- 1. Get State from Services ---
   private conversations = this.chatService.activeConversations;
-  private contacts = toSignal(this.contactsService.contacts$, {
+  contacts = toSignal(this.contactsService.contacts$, {
     initialValue: [] as Contact[],
   });
-  private groups = toSignal(this.contactsService.groups$, {
+  groups = toSignal(this.contactsService.groups$, {
     initialValue: [] as ContactGroup[],
   });
-  private selectedConversationId = computed(() =>
+  selectedConversationId = computed(() =>
     this.chatService.selectedConversation()?.toString()
   );
 
-  // --- 2. Create Lookups (for mapping) ---
+  // --- 2. Add new UI State Signal ---
+  startChatView: WritableSignal<'contacts' | 'groups'> = signal('contacts');
+
+  // --- 3. Create Lookups (for mapping) ---
   private contactsMap = computed(() =>
     new Map(this.contacts().map((c) => [c.id, c]))
   );
@@ -62,7 +76,7 @@ export class MessengerHomePageComponent {
     new Map(this.groups().map((g) => [g.id, g]))
   );
 
-  // --- 3. Compute the "View Model" ---
+  // --- 4. Compute the "View Model" ---
   conversationViewItems = computed<ConversationViewItem[]>(() => {
     const contactsMap = this.contactsMap();
     const groupsMap = this.groupsMap();
@@ -105,7 +119,7 @@ export class MessengerHomePageComponent {
     });
   });
 
-  // --- 4. Compute the View Mode ---
+  // --- 5. Compute the View Mode ---
   viewMode = computed(() => {
     if (this.conversations().length > 0) {
       return 'conversations';
@@ -116,7 +130,7 @@ export class MessengerHomePageComponent {
     return 'new_user_welcome';
   });
 
-  // --- 5. Event Handlers ---
+  // --- 6. Event Handlers ---
   onSelectConversation(id: string): void {
     const urn = this.conversations().find(
       (c) => c.conversationUrn.toString() === id
@@ -140,6 +154,20 @@ export class MessengerHomePageComponent {
     const urn = URN.parse(urnString);
     if (urn) {
       this.chatService.loadConversation(urn); // This won't find history, but sets the state
+      this.router.navigate(['/messenger', 'chat', urn]);
+    }
+  }
+
+  onSelectGroupToChat(group: ContactGroup): void {
+    const urnString = this.groups().find((g) => g.id === group.id)?.id;
+    if (!urnString) {
+      //replace this with our console-logger lib
+      console.warn("urn must exist and parse")
+      return;
+    }
+    const urn = URN.parse(urnString);
+    if (urn) {
+      this.chatService.loadConversation(urn); // This sets the state
       this.router.navigate(['/messenger', 'chat', urn]);
     }
   }

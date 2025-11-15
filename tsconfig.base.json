@@ -64,6 +64,9 @@
       "@nx-platform-application/messenger-types": [
         "libs/messenger/types/src/index.ts"
       ],
+      "@nx-platform-application/messenger-ui": [
+        "libs/messenger/messenger-ui/src/index.ts"
+      ],
       "@nx-platform-application/node-auth": [
         "libs/platform/node/node-auth/src/index.ts"
       ],

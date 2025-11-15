@@ -21,11 +21,11 @@ export const appRoutes: Routes = [
   {
     path: 'login',
     component: loginComponent,
-    canActivate: [nonAuthGuard], // <-- APPLY THE GUARD HERE
+    canActivate: [nonAuthGuard], 
   },
   {
     path: 'login-success',
-    component: LoginSuccessComponent, // [cite: 24]
+    component: LoginSuccessComponent, 
   },
   {
     path: 'messaging',

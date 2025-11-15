@@ -8,21 +8,19 @@ export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/messenger-ui',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
-  test: {
-    name: 'messenger-ui',
-    watch: false,
-    globals: true,
-    environment: 'jsdom',
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    setupFiles: ['src/test-setup.ts'],
-    reporters: ['default'],
-    coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/messenger-ui',
-      provider: 'v8' as const,
+  build: {
+    outDir: '../../../dist/libs/messenger/messenger-ui',
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    // This tells Vite to build a library, not an app
+    lib: {
+      entry: 'src/index.ts',
+      name: 'chat-ui',
+      fileName: 'index',
+      formats: ['es' as const],
     },
   },
 }));

@@ -1,4 +1,4 @@
-// apps/contacts/contacts-app/tsconfig.spec.json
+// apps/messenger/messenger-app/tsconfig.spec.json
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
