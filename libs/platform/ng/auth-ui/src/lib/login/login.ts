@@ -13,7 +13,7 @@ import { IAuthService } from '@nx-platform-application/platform-auth-data-access
 })
 export class LoginComponent {
   // Inject the correct service
-  private authService = inject(IAuthService);
+  private authService = inject(IAuthService) as IAuthService;
 
   @Input() googleLoginUrl = '/api/auth/google'; // Default to a safe value
 

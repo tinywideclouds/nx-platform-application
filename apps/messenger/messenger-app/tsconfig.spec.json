@@ -1,0 +1,15 @@
+// apps/contacts/contacts-app/tsconfig.spec.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../../out-tsc/spec",
+    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "vitest"],
+    "target": "esNext"
+  },
+  "include": [
+    "src/**/*.spec.ts",
+    "src/**/*.d.ts",
+    "src/test-setup.ts",
+    "vitest.config.mts"
+  ]
+}

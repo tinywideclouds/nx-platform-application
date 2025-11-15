@@ -1,0 +1,18 @@
+<div
+  class="flex w-full"
+  [ngClass]="{
+    'justify-end': direction === 'outbound',
+    'justify-start': direction === 'inbound'
+  }"
+>
+  <div
+    class="max-w-[80%] rounded-lg p-3"
+    [ngClass]="{
+      'bg-blue-600 text-white': direction === 'outbound',
+      'bg-gray-200 text-gray-900': direction === 'inbound'
+    }"
+    data-testid="chat-bubble"
+  >
+    {{ message }}
+  </div>
+</div>

@@ -1,0 +1,23 @@
+<form
+  [formGroup]="form"
+  (ngSubmit)="sendMessage()"
+  class="flex items-start space-x-2 p-2 border-t"
+>
+  <textarea
+    formControlName="messageText"
+    (keydown)="onKeyDown($event)"
+    placeholder="Type a message..."
+    class="flex-1 resize-none border rounded-md p-2"
+    rows="3"
+    data-testid="message-textarea"
+  ></textarea>
+
+  <button
+    type="submit"
+    [disabled]="form.invalid || disabled"
+    class="bg-blue-600 text-white rounded-md p-2 h-full disabled:bg-gray-400"
+    data-testid="send-button"
+  >
+    Send
+  </button>
+</form>

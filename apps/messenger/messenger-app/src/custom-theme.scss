@@ -1,0 +1,128 @@
+// apps/contacts/contacts-app/src/custom-theme.scss
+
+@use '@angular/material' as mat;
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+
+  @include mat.form-field-overrides((
+    // These tokens control the height and internal padding for all appearances.
+    container-height: 2.8em,
+    container-text-line-height: 1.2em,
+    container-vertical-padding: .3em,
+
+    // --- These are still good to use ---
+    container-text-size: 1em,
+    subscript-text-size: .6em,
+
+    // --- You can also control the border-radius here ---
+    filled-container-shape: 2px,
+    outlined-container-shape: 2px
+  ));
+
+  // --- 1. GLOBAL BUTTON RADIUS OVERRIDE ---
+  // This is what you asked for: reduce the "radius effect".
+  // We apply it here inside 'html' to make it global.
+  @include mat.button-overrides((
+    // The 'container-shape' token controls border-radius.
+    // The default M3 value is 'full' (which looks like a pill).
+    // Let's set them all to 8px for a more traditional, squared-off look.
+
+    filled-container-shape: 4px,
+    outlined-container-shape: 4px,
+    text-container-shape: 4px,
+    tonal-container-shape: 4px,
+    protected-container-shape: 4px // This styles the old 'mat-raised-button'
+  ));
+}
+
+// --- 2. SPECIFIC TONAL BUTTON OVERRIDE ---
+// Here is the "specific option" for your Tonal button.
+// We create a custom CSS class that you can apply whenever
+// you want to use these colors.
+.save-update-tonal-button {
+  @include mat.button-overrides((
+    // Example: A custom purple color scheme
+    tonal-container-color: #eaddff,
+    tonal-label-text-color: #21005d,
+
+    // -- THIS IS THE CORRECTED PART --
+
+    // 1. Set the COLOR for the state layer (used on hover, focus, press)
+    tonal-state-layer-color: #21005d,
+
+    // 2. Set the OPACITY for each state (adjust as needed)
+    tonal-hover-state-layer-opacity: 0.08,  // 8% opacity on hover
+    tonal-focus-state-layer-opacity: 0.12,  // 12% opacity on focus
+    tonal-pressed-state-layer-opacity: 0.12 // 12% opacity on press
+  ));
+}
+
+.form-view-mode {
+  
+  // Call the same mixin, but scoped to this class
+  @include mat.form-field-overrides((
+    
+    // --- FILLED APPEARANCE ---
+    // Set disabled label color TO the normal enabled label color
+    filled-disabled-label-text-color: var(--mat-sys-on-surface-variant),
+    // Set disabled input text TO the normal enabled input text color
+    filled-disabled-input-text-color: var(--mat-sys-on-surface),
+    // Set disabled container color TO the normal enabled container color
+    filled-disabled-container-color: var(--mat-sys-surface-container-highest),
+
+    // --- OUTLINED APPEARANCE ---
+    // Set disabled label color TO the normal enabled label color
+    outlined-disabled-label-text-color: var(--mat-sys-on-surface-variant),
+    // Set disabled input text TO the normal enabled input text color
+    outlined-disabled-input-text-color: var(--mat-sys-on-surface),
+    // Set disabled outline color TO the normal enabled outline color
+    outlined-disabled-outline-color: var(--mat-sys-outline),
+
+    // --- OTHER UI ELEMENTS ---
+    disabled-input-text-placeholder-color: var(--mat-sys-on-surface-variant),
+    disabled-leading-icon-color: var(--mat-sys-on-surface-variant),
+    disabled-trailing-icon-color: var(--mat-sys-on-surface-variant),
+    disabled-select-arrow-color: var(--mat-sys-on-surface-variant)
+  ));
+}
+
+.toolbar-tonal-button {
+  @include mat.button-overrides((
+    tonal-container-color: #eaddff,
+    tonal-label-text-color: #2c3845,
+
+    // 1. Set the COLOR for the state layer (used on hover, focus, press)
+    tonal-state-layer-color: #3b4e64,
+
+    // 2. Set the OPACITY for each state (adjust as needed)
+    tonal-hover-state-layer-opacity: 0.08,  // 8% opacity on hover
+    tonal-focus-state-layer-opacity: 0.12,  // 12% opacity on focus
+    tonal-pressed-state-layer-opacity: 0.12 // 12% opacity on press
+  ));
+}
+
+
+body {
+  // Default the application to a light color theme. This can be changed to
+  // `dark` to enable the dark color theme, or to `light dark` to defer to the
+  // user's system settings.
+  color-scheme: light;
+
+  // Set a default background, font and text colors for the application using
+  // Angular Material's system-level CSS variables. Learn more about these
+  // variables at https://material.angular.dev/guide/system-variables
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  // Reset the user agent margin.
+  margin: 0;
+}

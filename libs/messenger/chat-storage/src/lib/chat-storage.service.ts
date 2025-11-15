@@ -71,6 +71,7 @@ export class ChatStorageService {
         conversationUrn: URN.parse(record.conversationUrn),
         timestamp: record.sentTimestamp,
         latestSnippet: new TextDecoder().decode(record.payloadBytes),
+        unreadCount: 0, // Stubbed for now
       });
     }
     return summaries;

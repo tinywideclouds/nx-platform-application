@@ -1,0 +1,32 @@
+/* libs/messenger/messenger-feature/src/lib/chat-home-page/chat-home-page.component.scss */
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100vh;
+}
+
+/* On mobile (screens smaller than md), the router-outlet 
+  (which holds the chat window) is hidden by default.
+*/
+.md\:block {
+  @media (max-width: 767px) {
+    display: none;
+  }
+}
+
+/* When we navigate, the <router-outlet> will be wrapped in its
+  own component. We'll add a class to it to make it
+  cover the screen on mobile.
+*/
+:host ::ng-deep .chat-window-mobile-active {
+  @media (max-width: 767px) {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+  }
+}

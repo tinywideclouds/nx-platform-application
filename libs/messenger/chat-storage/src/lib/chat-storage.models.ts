@@ -49,4 +49,5 @@ export interface ConversationSummary {
   conversationUrn: URN;
   latestSnippet: string; // Decrypted plaintext of the last message
   timestamp: ISODateTimeString;
+  unreadCount: number;
 }

@@ -11,7 +11,7 @@ export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/chat-ui',
   plugins: [
-    // Use the simple plugin setup, as confirmed on 'contacts-ui'
+    // Use the simple plugin setup, as confirmed on 'messenger-ui'
     angular(),
     nxViteTsPaths(),
     nxCopyAssetsPlugin(['*.md']),
