@@ -96,7 +96,7 @@ describe('ContactGroupListItemComponent (Events)', () => {
     standalone: true,
     imports: [ContactGroupListItemComponent],
     template: `
-      <lib-contact-group-list-item
+      <contacts-group-list-item
         [group]="group"
         (select)="onSelected($event)"
       />
@@ -127,7 +127,7 @@ describe('ContactGroupListItemComponent (Events)', () => {
     // Arrange
     const selectSpy = vi.spyOn(hostComponent, 'onSelected');
     const componentEl = fixture.debugElement.query(
-      By.css('lib-contact-group-list-item')
+      By.css('contacts-group-list-item')
     );
 
     // Act: Click the component

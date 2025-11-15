@@ -28,7 +28,7 @@ const MOCK_GROUPS: ContactGroup[] = [
   standalone: true,
   imports: [ContactGroupListComponent], // Host imports the component it tests
   template: `
-    <lib-contact-group-list
+    <contacts-group-list
       [groups]="groups"
       (groupSelected)="onSelected($event)"
     />
@@ -70,7 +70,7 @@ describe('ContactGroupListComponent', () => {
 
     // 3. Assert
     const items = fixture.debugElement.queryAll(
-      By.css('lib-contact-group-list-item')
+      By.css('contacts-group-list-item')
     );
     expect(items.length).toBe(MOCK_GROUPS.length);
   });
@@ -84,7 +84,7 @@ describe('ContactGroupListComponent', () => {
 
     // 3. Find the child element
     const firstItemEl = fixture.debugElement.query(
-      By.css('lib-contact-group-list-item')
+      By.css('contacts-group-list-item')
     );
 
     // 4. Trigger the child's output event
@@ -104,7 +104,7 @@ describe('ContactGroupListComponent', () => {
 
     // 3. Assert
     const items = fixture.debugElement.queryAll(
-      By.css('lib-contact-group-list-item')
+      By.css('contacts-group-list-item')
     );
     const emptyMessage = fixture.debugElement.query(
       By.css('[data-testid="empty-group-list"]')

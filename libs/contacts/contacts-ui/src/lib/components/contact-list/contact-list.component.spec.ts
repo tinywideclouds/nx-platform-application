@@ -54,7 +54,7 @@ const MOCK_CONTACTS: Contact[] = [
   standalone: true,
   imports: [ContactListComponent], // Host imports the component it tests
   template: `
-    <lib-contact-list
+    <contacts-list
       [contacts]="contacts"
       (contactSelected)="onSelected($event)"
     />
@@ -93,7 +93,7 @@ describe('ContactListComponent', () => {
 
     // 3. Assert
     const items = fixture.debugElement.queryAll(
-      By.css('lib-contact-list-item')
+      By.css('contacts-list-item')
     );
     expect(items.length).toBe(MOCK_CONTACTS.length);
   });
@@ -107,7 +107,7 @@ describe('ContactListComponent', () => {
 
     // 3. Find the child element
     const firstItemEl = fixture.debugElement.query(
-      By.css('lib-contact-list-item')
+      By.css('contacts-list-item')
     );
 
     // 4. Trigger the child's output event
@@ -127,7 +127,7 @@ describe('ContactListComponent', () => {
 
     // 3. Assert
     const items = fixture.debugElement.queryAll(
-      By.css('lib-contact-list-item')
+      By.css('contacts-list-item')
     );
     const emptyMessage = fixture.debugElement.query(
       By.css('[data-testid="empty-list"]')

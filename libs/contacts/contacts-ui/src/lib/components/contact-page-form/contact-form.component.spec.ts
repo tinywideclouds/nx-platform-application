@@ -1,4 +1,6 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+// libs/contacts/contacts-ui/src/lib/components/contact-page-form/contact-form.component.spec.ts
+
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
@@ -22,7 +24,7 @@ const mockContact: Contact = {
       lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
     },
   },
-  isFavorite: true,
+  // isFavorite: true,
 };
 
 describe('ContactFormComponent (Signal-based)', () => {
@@ -45,53 +47,67 @@ describe('ContactFormComponent (Signal-based)', () => {
   });
 
   it('should be in "add mode" with an empty form on init', () => {
-    // The effect runs in the constructor, setting defaults
     expect(component.contact()).toBeNull();
     expect(component.form.value.firstName).toBe('');
     expect(component.form.value.id).toBe('');
+    expect(component.isEditing()).toBe(false); // Default state
   });
 
   it('should be in "edit mode" and patch the form when contact input is set', () => {
-    // Act: Set the signal input
     fixture.componentRef.setInput('contact', mockContact);
     fixture.detectChanges(); // Trigger the effect
 
-    // Assert
     expect(component.form.value.firstName).toBe('John');
     expect(component.form.value.surname).toBe('Doe');
     expect(component.phoneNumbers.length).toBe(1);
     expect(component.phoneNumbers.at(0).value).toBe('+15550100');
   });
 
+  // --- FIXED TEST ---
   it('should dynamically add a phone number field', () => {
+    // 1. Set to editing mode
+    component.isEditing.set(true);
+    fixture.detectChanges();
+
+    // 2. Assert initial state
     expect(component.phoneNumbers.length).toBe(0);
-    const addButton = fixture.debugElement.query(By.css('[data-testid="add-phone"]')).nativeElement;
-    
+    const addButton = fixture.debugElement.query(
+      By.css('[data-testid="add-phone"]')
+    ).nativeElement;
+
+    // 3. Act
     addButton.click();
     fixture.detectChanges();
 
+    // 4. Assert final state
     expect(component.phoneNumbers.length).toBe(1);
   });
 
+  // --- FIXED TEST ---
   it('should dynamically remove a phone number field', () => {
-    // Arrange
+    // 1. Arrange: Set contact and enter edit mode
     fixture.componentRef.setInput('contact', mockContact);
+    component.isEditing.set(true);
     fixture.detectChanges();
     expect(component.phoneNumbers.length).toBe(1);
 
-    // Act
-    const removeButton = fixture.debugElement.query(By.css('[data-testid="remove-phone"]')).nativeElement;
+    // 2. Act
+    const removeButton = fixture.debugElement.query(
+      By.css('[data-testid="remove-phone"]')
+    ).nativeElement;
     removeButton.click();
     fixture.detectChanges();
 
-    // Assert
+    // 3. Assert
     expect(component.phoneNumbers.length).toBe(0);
   });
 
+  // --- FIXED TEST ---
   it('should emit (save) with the form data when "Save" is clicked', () => {
     const saveSpy = vi.spyOn(component.save, 'emit');
 
-    // Act: Set form to valid state
+    // 1. Act: Set form to valid state and enter edit mode
+    component.isEditing.set(true);
     component.form.patchValue({
       firstName: 'Test',
       surname: 'User',
@@ -100,30 +116,37 @@ describe('ContactFormComponent (Signal-based)', () => {
     });
     fixture.detectChanges();
 
-    const saveButton = fixture.debugElement.query(By.css('[data-testid="save-button"]')).nativeElement;
+    // 2. Find and click save button
+    const saveButton = fixture.debugElement.query(
+      By.css('[data-testid="save-button"]')
+    ).nativeElement;
     saveButton.click();
 
-    // Assert
+    // 3. Assert
     expect(saveSpy).toHaveBeenCalledWith(
       expect.objectContaining({ firstName: 'Test' })
     );
   });
 
+  // --- FIXED TEST ---
   it('should preserve non-form fields (like serviceContacts) on save', () => {
     const saveSpy = vi.spyOn(component.save, 'emit');
-    
-    // Arrange: Set the contact, effect runs, form is valid
+
+    // 1. Arrange: Set the contact and enter edit mode
     fixture.componentRef.setInput('contact', mockContact);
+    component.isEditing.set(true);
     fixture.detectChanges();
 
-    // Act: Change one value
+    // 2. Act: Change one value
     component.form.patchValue({ firstName: 'Johnny' });
     fixture.detectChanges();
 
-    const saveButton = fixture.debugElement.query(By.css('[data-testid="save-button"]')).nativeElement;
+    const saveButton = fixture.debugElement.query(
+      By.css('[data-testid="save-button"]')
+    ).nativeElement;
     saveButton.click();
 
-    // Assert
+    // 3. Assert
     expect(saveSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         firstName: 'Johnny',
@@ -133,11 +156,39 @@ describe('ContactFormComponent (Signal-based)', () => {
     );
   });
 
-  it('should emit (cancel) when "Cancel" is clicked', () => {
-    const cancelSpy = vi.spyOn(component.cancel, 'emit');
-    const cancelButton = fixture.debugElement.query(By.css('[data-testid="cancel-button"]')).nativeElement;
-    
+  // --- REVISED TEST (was 'should emit (cancel)') ---
+  it('should set isEditing to false when "Cancel" is clicked', () => {
+    // 1. Arrange: Enter edit mode
+    component.isEditing.set(true);
+    fixture.detectChanges();
+    expect(component.isEditing()).toBe(true);
+
+    // 2. Act
+    const cancelButton = fixture.debugElement.query(
+      By.css('[data-testid="cancel-button"]')
+    ).nativeElement;
     cancelButton.click();
-    expect(cancelSpy).toHaveBeenCalled();
+    fixture.detectChanges();
+
+    // 3. Assert: Internal state is changed
+    expect(component.isEditing()).toBe(false);
+  });
+
+  // --- NEW TEST ---
+  it('should switch from view mode to edit mode when "Edit" is clicked', () => {
+    // 1. Arrange: Should start in view mode
+    fixture.componentRef.setInput('contact', mockContact);
+    fixture.detectChanges();
+    expect(component.isEditing()).toBe(false);
+
+    // 2. Act
+    const editButton = fixture.debugElement.query(
+      By.css('[data-testid="edit-button"]')
+    ).nativeElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    // 3. Assert
+    expect(component.isEditing()).toBe(true);
   });
 });

@@ -19,7 +19,7 @@ const MOCK_CONTACT: Contact = {
   surname: 'Doe',
   phoneNumbers: ['+15550199'],
   emailAddresses: ['john@example.com'],
-  isFavorite: false,
+  // isFavorite: false,
   // We must provide the serviceContacts for the new getter to test
   serviceContacts: {
     messenger: {
@@ -37,7 +37,7 @@ const MOCK_CONTACT: Contact = {
   // The host must also import the components
   imports: [ContactListItemComponent, ContactAvatarComponent],
   template: `
-    <lib-contact-list-item
+    <contacts-list-item
       [contact]="contact"
       (select)="onSelected($event)"
     />
@@ -66,7 +66,7 @@ describe('ContactListItemComponent', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     // Check that the avatar is rendered
-    const avatar = el.querySelector('lib-contact-avatar');
+    const avatar = el.querySelector('contacts-avatar');
     expect(avatar).toBeTruthy();
 
     // Check that the alias is rendered
@@ -89,7 +89,7 @@ describe('ContactListItemComponent', () => {
     fixture.detectChanges();
 
     const listItem = fixture.debugElement.query(
-      By.css('lib-contact-list-item')
+      By.css('contacts-list-item')
     );
 
     // Simulate the click (this test was already correct)

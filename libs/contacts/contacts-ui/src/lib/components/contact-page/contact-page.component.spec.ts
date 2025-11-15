@@ -1,16 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { vi } from 'vitest';
-import { ContactEditPageComponent } from './contact-edit-page.component';
+import { ContactPageComponent } from './contact-page.component';
 import {
   ContactsStorageService,
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
-import { ContactFormComponent } from '../contact-form/contact-form.component';
-import { of, Subject } from 'rxjs';
+import { ContactFormComponent } from '../contact-page-form/contact-form.component';
+import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
+
+// --- NEW IMPORTS ---
+import { RouterTestingModule } from '@angular/router/testing';
+import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 // --- Fixtures ---
 const mockContact: Contact = {
@@ -42,17 +47,16 @@ const { mockContactsService } = vi.hoisted(() => {
   };
 });
 
-const mockRouter = {
-  navigate: vi.fn(),
-};
+// REMOVED: const mockRouter
 
 const mockActivatedRoute = {
   paramMap: new Subject(),
 };
 
-describe('ContactEditPageComponent (RxJS-based)', () => {
-  let fixture: ComponentFixture<ContactEditPageComponent>;
-  let component: ContactEditPageComponent;
+describe('ContactPageComponent (RxJS-based)', () => {
+  let fixture: ComponentFixture<ContactPageComponent>;
+  let component: ContactPageComponent;
+  let router: Router; // Will hold the real router
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -61,16 +65,27 @@ describe('ContactEditPageComponent (RxJS-based)', () => {
     mockContactsService.getGroupsForContact.mockResolvedValue([MOCK_GROUP]);
 
     await TestBed.configureTestingModule({
-      imports: [ContactEditPageComponent, ContactFormComponent],
+      imports: [
+        RouterTestingModule.withRoutes([]), // 1. Add router testing module
+        NoopAnimationsModule, // 2. Add animations module
+        ContactPageComponent,
+        ContactFormComponent,
+        ContactsPageToolbarComponent, // 3. Import the toolbar
+      ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
-        { provide: Router, useValue: mockRouter },
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
+        // 4. REMOVED: Mock router provider
       ],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(ContactEditPageComponent);
+    fixture = TestBed.createComponent(ContactPageComponent);
     component = fixture.componentInstance;
+    
+    // 5. Inject the real router and spy on it
+    router = TestBed.inject(Router);
+    vi.spyOn(router, 'navigate');
+
     fixture.detectChanges();
   });
 
@@ -97,31 +112,24 @@ describe('ContactEditPageComponent (RxJS-based)', () => {
     expect(component.contactToEdit()).toEqual(mockContact);
   });
 
-  // --- THIS IS THE FIXED TEST ---
   it('should fetch and display groups for the contact in EDIT MODE', async () => {
-    // 1. Emit route param to trigger contactToEdit
     mockActivatedRoute.paramMap.next({ get: () => 'user-123' });
     fixture.detectChanges();
-    
-    // 2. Wait for getContact() promise
     await fixture.whenStable();
-    
-    // 3. Wait for the derived getGroupsForContact() promise
-    await fixture.whenStable();
+    await fixture.whenStable(); // Wait for derived stream
     fixture.detectChanges();
 
-    // 4. Assert signal is set
-    expect(mockContactsService.getGroupsForContact).toHaveBeenCalledWith('user-123');
+    expect(mockContactsService.getGroupsForContact).toHaveBeenCalledWith(
+      'user-123'
+    );
     expect(component.groupsForContact()).toEqual([MOCK_GROUP]);
 
-    // 5. Assert DOM is rendered
     const chips = fixture.nativeElement.querySelectorAll(
       '[data-testid="group-chip"]'
     );
-    expect(chips.length).toBe(1); // This should no longer be null
+    expect(chips.length).toBe(1);
     expect(chips[0].textContent).toContain('Test Group');
   });
-  // --- END OF FIX ---
 
   it('should call saveContact and navigate on (save) event', async () => {
     mockActivatedRoute.paramMap.next({ get: () => null });
@@ -135,24 +143,9 @@ describe('ContactEditPageComponent (RxJS-based)', () => {
     await fixture.whenStable();
 
     expect(mockContactsService.saveContact).toHaveBeenCalledWith(mockContact);
-    expect(mockRouter.navigate).toHaveBeenCalledWith(['/contacts'], {
+    expect(router.navigate).toHaveBeenCalledWith(['/contacts'], {
       queryParams: { tab: 'contacts' },
     });
   });
 
-  it('should navigate on (cancel) event', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => null });
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const formComponent = fixture.debugElement.query(
-      By.directive(ContactFormComponent)
-    );
-    formComponent.triggerEventHandler('cancel');
-    await fixture.whenStable();
-
-    expect(mockRouter.navigate).toHaveBeenCalledWith(['/contacts'], {
-      queryParams: { tab: 'contacts' },
-    });
-  });
 });

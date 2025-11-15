@@ -49,7 +49,7 @@ const MOCK_CONTACTS: Contact[] = [
   standalone: true,
   imports: [ContactMultiSelectorComponent, FormsModule],
   template: `
-    <lib-contact-multi-selector
+    <contacts-multi-selector
       [allContacts]="allContacts()"
       [(selectedIds)]="selected"
     />

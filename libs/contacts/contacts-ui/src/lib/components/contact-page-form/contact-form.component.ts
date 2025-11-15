@@ -1,4 +1,4 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-form/contact-form.component.ts
+// libs/contacts/contacts-ui/src/lib/components/contact-page-form/contact-form.component.ts
 
 import {
   Component,
@@ -7,7 +7,7 @@ import {
   inject,
   input,
   effect,
-  signal, // 1. Import signal
+  signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -39,13 +39,10 @@ import { MatIconModule } from '@angular/material/icon';
 })
 export class ContactFormComponent {
   contact = input<Contact | null>(null);
-  // 2. --- NEW: Input for initial state ---
   startInEditMode = input(false);
 
   @Output() save = new EventEmitter<Contact>();
-  // 3. --- @Output() cancel is removed ---
 
-  // 4. --- NEW: Internal state for edit mode ---
   isEditing = signal(false);
 
   private fb = inject(FormBuilder);
@@ -62,12 +59,10 @@ export class ContactFormComponent {
   });
 
   constructor() {
-    // 5. --- NEW: Set internal state from input ---
     effect(() => {
       this.isEditing.set(this.startInEditMode());
     });
 
-    // This effect patches data when the contact input changes
     effect(() => {
       const currentContact = this.contact();
 
@@ -91,13 +86,11 @@ export class ContactFormComponent {
       }
     });
 
-    // 6. --- This effect now uses the INTERNAL isEditing signal ---
     effect(() => {
       if (this.isEditing()) {
         this.form.enable();
       } else {
         this.form.disable();
-        // Reset form to its original state when leaving edit mode
         if (this.contact()) {
           this.form.reset(this.contact());
         }
@@ -105,7 +98,6 @@ export class ContactFormComponent {
     });
   }
 
-  // --- FormArray Getters ---
   get phoneNumbers() {
     return this.form.get('phoneNumbers') as FormArray;
   }
@@ -113,7 +105,6 @@ export class ContactFormComponent {
     return this.form.get('emailAddresses') as FormArray;
   }
 
-  // --- FormArray Mutators ---
   addPhoneNumber(phone = ''): void {
     this.phoneNumbers.push(this.fb.control(phone, Validators.required));
   }
@@ -129,7 +120,6 @@ export class ContactFormComponent {
     this.emailAddresses.removeAt(index);
   }
 
-  // --- Event Handlers ---
   onSave(): void {
     if (this.form.valid) {
       this.save.emit({
@@ -139,7 +129,6 @@ export class ContactFormComponent {
     }
   }
 
-  // 7. --- REFACTORED: onCancel now just sets state ---
   onCancel(): void {
     this.isEditing.set(false);
   }

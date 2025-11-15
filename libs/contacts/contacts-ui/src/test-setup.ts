@@ -8,6 +8,17 @@ import {
   platformBrowserTesting,
 } from '@angular/platform-browser/testing';
 
+/**
+ * Mock ResizeObserver for jsdom environment
+ */
+const MockResizeObserver = vi.fn(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}));
+
+vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
 // Create a small NgModule to provide the Zoneless detection
 @NgModule({
   providers: [provideZonelessChangeDetection()],
