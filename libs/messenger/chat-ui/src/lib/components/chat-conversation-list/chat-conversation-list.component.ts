@@ -7,6 +7,7 @@ import {
   EventEmitter,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { URN } from '@nx-platform-application/platform-types'
 import { CommonModule } from '@angular/common';
 import { ChatConversationListItemComponent } from '../chat-conversation-list-item/chat-conversation-list-item.component';
 
@@ -15,7 +16,7 @@ import { ChatConversationListItemComponent } from '../chat-conversation-list-ite
  * This is what the "smart" parent component must provide.
  */
 export type ConversationViewItem = {
-  id: string; // The conversation URN string
+  id: URN;
   name: string;
   latestMessage: string;
   timestamp: string;
@@ -42,7 +43,7 @@ export class ChatConversationListComponent {
   /**
    * Emits the unique ID (conversation URN string) of the selected conversation.
    */
-  @Output() conversationSelected = new EventEmitter<string>();
+  @Output() conversationSelected = new EventEmitter<URN>();
 
   onSelect(item: ConversationViewItem): void {
     this.conversationSelected.emit(item.id);

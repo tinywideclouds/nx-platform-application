@@ -3,143 +3,216 @@
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';
 import { Observable, from } from 'rxjs';
+import { map } from 'rxjs/operators'; // <-- 1. Import map
 import { ContactsDatabase } from './db/contacts.database';
-// 1. Import the new ContactGroup model
-import { Contact, ContactGroup } from './models/contacts';
+// 2. Import all models
+import {
+  Contact,
+  ContactGroup,
+  StorableContact,
+  StorableGroup,
+  StorableServiceContact,
+  ServiceContact,
+} from './models/contacts';
+import { URN } from '@nx-platform-application/platform-types';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ContactsStorageService {
-  // Inject the domain-specific database
   private readonly db = inject(ContactsDatabase);
 
-  // --- Contact Streams ---
+  // --- 3. Add Mapper Functions ---
 
-  /**
-   * Live stream of all contacts, ordered alphabetically by alias.
-   */
+  // Maps from Storable (DB) to Domain (App)
+  private mapStorableToContact(c: StorableContact): Contact {
+    const serviceContacts: Record<string, ServiceContact> = {};
+    if (c.serviceContacts) {
+      for (const key in c.serviceContacts) {
+        const s = c.serviceContacts[key];
+        if (s) {
+          serviceContacts[key] = {
+            ...s,
+            id: URN.parse(s.id),
+          };
+        }
+      }
+    }
+    return {
+      ...c,
+      id: URN.parse(c.id),
+      serviceContacts,
+    };
+  }
+
+  // Maps from Domain (App) to Storable (DB)
+  private mapContactToStorable(c: Contact): StorableContact {
+    const serviceContacts: Record<string, StorableServiceContact> = {};
+    if (c.serviceContacts) {
+      for (const key in c.serviceContacts) {
+        const s = c.serviceContacts[key];
+        if (s) {
+          serviceContacts[key] = {
+            ...s,
+            id: s.id.toString(),
+          };
+        }
+      }
+    }
+    return {
+      ...c,
+      id: c.id.toString(),
+      serviceContacts,
+    };
+  }
+
+  // Maps from Storable (DB) to Domain (App)
+  private mapStorableToGroup(g: StorableGroup): ContactGroup {
+    return {
+      ...g,
+      id: URN.parse(g.id),
+      contactIds: g.contactIds.map((id) => URN.parse(id)),
+    };
+  }
+
+  // Maps from Domain (App) to Storable (DB)
+  private mapGroupToStorable(g: ContactGroup): StorableGroup {
+    return {
+      ...g,
+      id: g.id.toString(),
+      contactIds: g.contactIds.map((id) => id.toString()),
+    };
+  }
+
+  // --- 4. Update LiveQuery Streams to use mappers ---
+  // liveQuery now returns StorableContact[] or StorableGroup[].
+  // The 'map' pipe correctly converts them to Contact[] or ContactGroup[].
+
   readonly contacts$: Observable<Contact[]> = from(
     liveQuery(() => this.db.contacts.orderBy('alias').toArray())
-  );
+  ).pipe(map((storables) => storables.map(this.mapStorableToContact)));
 
-  /**
-   * Live stream of favorite contacts.
-   * Note: Dexie boolean indexes work seamlessly with true/false.
-   */
   readonly favorites$: Observable<Contact[]> = from(
     liveQuery(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.db.contacts.where('isFavorite').equals(true as any).toArray()
     )
-  );
+  ).pipe(map((storables) => storables.map(this.mapStorableToContact)));
 
-  // --- NEW: Group Streams ---
-
-  /**
-   * Live stream of all contact groups, ordered alphabetically by name.
-   */
   readonly groups$: Observable<ContactGroup[]> = from(
     liveQuery(() => this.db.contactGroups.orderBy('name').toArray())
-  );
+  ).pipe(map((storables) => storables.map(this.mapStorableToGroup)));
 
-  // --- Contact CRUD ---
+  // --- 5. Update ALL CRUD methods to use mappers and string IDs ---
 
-  /**
-   * Create or Update a contact.
-   * We use 'put' which acts as an upsert.
-   */
   async saveContact(contact: Contact): Promise<void> {
-    await this.db.contacts.put(contact);
+    const storable = this.mapContactToStorable(contact);
+    await this.db.contacts.put(storable);
   }
 
-  /**
-   * Updates specific fields of a contact without overwriting the whole record.
-   */
-  async updateContact(id: string, changes: Partial<Contact>): Promise<void> {
-    await this.db.contacts.update(id, changes);
+  async updateContact(id: URN, changes: Partial<Contact>): Promise<void> {
+    // 1. Destructure incompatible properties from the 'changes' object
+    const {
+      id: urnId,
+      serviceContacts: domainServiceContacts,
+      ...simpleChanges
+    } = changes;
+
+    // 2. Create the storable changes object with the simple, compatible properties
+    const storableChanges: Partial<StorableContact> = {
+      ...simpleChanges, // (e.g., alias, firstName, phoneNumbers)
+    };
+
+    // 3. Manually map and add the complex properties if they exist
+    if (urnId) {
+      storableChanges.id = urnId.toString();
+    }
+
+    if (domainServiceContacts) {
+      const serviceContacts: Record<string, StorableServiceContact> = {};
+      for (const key in domainServiceContacts) {
+        const s = domainServiceContacts[key];
+        if (s) {
+          serviceContacts[key] = {
+            ...s,
+            id: s.id.toString(),
+          };
+        }
+      }
+      storableChanges.serviceContacts = serviceContacts;
+    }
+
+    // 4. Call update with the string key and the storable changes
+    await this.db.contacts.update(id.toString(), storableChanges);
   }
 
-  async getContact(id: string): Promise<Contact | undefined> {
-    return this.db.contacts.get(id);
+  async getContact(id: URN): Promise<Contact | undefined> {
+    const storable = await this.db.contacts.get(id.toString());
+    return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
-  async deleteContact(id: string): Promise<void> {
-    await this.db.contacts.delete(id);
+  async deleteContact(id: URN): Promise<void> {
+    await this.db.contacts.delete(id.toString());
   }
 
-  /**
-   * Finds a contact by ANY of their associated email addresses.
-   * Leverages the multi-entry index '*emailAddresses'.
-   */
   async findByEmail(email: string): Promise<Contact | undefined> {
-    // 'emailAddresses' is a multi-entry index, so this query searches
-    // inside the arrays of all contacts.
-    return this.db.contacts.where('emailAddresses').equals(email).first();
+    const storable = await this.db.contacts
+      .where('emailAddresses')
+      .equals(email)
+      .first();
+    return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
-  /**
-   * Finds a contact by ANY of their associated phone numbers.
-   * Leverages the multi-entry index '*phoneNumbers'.
-   */
   async findByPhone(phone: string): Promise<Contact | undefined> {
-    return this.db.contacts.where('phoneNumbers').equals(phone).first();
+    const storable = await this.db.contacts
+      .where('phoneNumbers')
+      .equals(phone)
+      .first();
+    return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
-  /**
-   * Bulk operation for syncing lists from a server.
-   * Uses a transaction to ensure all-or-nothing safety.
-   */
   async bulkUpsert(contacts: Contact[]): Promise<void> {
+    const storables = contacts.map(this.mapContactToStorable);
     await this.db.transaction('rw', this.db.contacts, async () => {
-      await this.db.contacts.bulkPut(contacts);
+      await this.db.contacts.bulkPut(storables);
     });
   }
 
-  // --- NEW: Group CRUD & Queries ---
-
-  /**
-   * Create or Update a contact group.
-   * We use 'put' which acts as an upsert.
-   */
   async saveGroup(group: ContactGroup): Promise<void> {
-    await this.db.contactGroups.put(group);
+    const storable = this.mapGroupToStorable(group);
+    await this.db.contactGroups.put(storable);
   }
 
-  async getGroup(id: string): Promise<ContactGroup | undefined> {
-    return this.db.contactGroups.get(id);
+  async getGroup(id: URN): Promise<ContactGroup | undefined> {
+    const storable = await this.db.contactGroups.get(id.toString());
+    return storable ? this.mapStorableToGroup(storable) : undefined;
   }
 
-  async deleteGroup(id: string): Promise<void> {
-    await this.db.contactGroups.delete(id);
+  async deleteGroup(id: URN): Promise<void> {
+    await this.db.contactGroups.delete(id.toString());
   }
 
-  /**
-   * Finds all groups that a specific contact is a member of.
-   * Leverages the multi-entry index '*contactIds'.
-   */
-  async getGroupsForContact(contactId: string): Promise<ContactGroup[]> {
-    return this.db.contactGroups
+  async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
+    const storables = await this.db.contactGroups
       .where('contactIds')
-      .equals(contactId)
+      .equals(contactId.toString()) // <-- Use string for query
       .toArray();
+    return storables.map(this.mapStorableToGroup);
   }
 
-  /**
-   * Retrieves the full Contact objects for a given group ID.
-   */
-  async getContactsForGroup(groupId: string): Promise<Contact[]> {
-    const group = await this.db.contactGroups.get(groupId);
-    if (!group || group.contactIds.length === 0) {
+  async getContactsForGroup(groupId: URN): Promise<Contact[]> {
+    // 1. Get the StorableGroup
+    const groupStorable = await this.db.contactGroups.get(groupId.toString());
+    if (!groupStorable || groupStorable.contactIds.length === 0) {
       return [];
     }
     
-    // 1. Get the potentially mixed array
-    const contacts = await this.db.contacts.bulkGet(group.contactIds);
+    // 2. We already have the string IDs from the StorableGroup
+    const contactIdStrings = groupStorable.contactIds;
+    const storables = await this.db.contacts.bulkGet(contactIdStrings);
 
-    // 2. Filter out any 'undefined' results using a type predicate.
-    // This handles cases where a contactId in a group doesn't
-    // exist in the contacts table (e.g., it was deleted).
-    return contacts.filter((c): c is Contact => Boolean(c));
+    // 3. Filter out undefined and map back to DOMAIN contacts
+    return storables
+      .filter((c): c is StorableContact => Boolean(c))
+      .map(this.mapStorableToContact);
   }
 }

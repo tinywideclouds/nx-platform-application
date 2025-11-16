@@ -1,6 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { User } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
+import { vi } from 'vitest';
 
 /**
  * This interface defines the shape of the success response,

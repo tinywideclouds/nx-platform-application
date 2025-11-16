@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/contact-multi-selector/contact-multi-selector.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
@@ -10,6 +12,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Contact } from '@nx-platform-application/contacts-data-access';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
+// --- 1. URN import is no longer needed ---
 
 @Component({
   selector: 'contacts-multi-selector',
@@ -25,7 +28,8 @@ export class ContactMultiSelectorComponent {
   /** All contacts available to select from. */
   allContacts = input.required<Contact[]>();
 
-  /** The list of currently selected contact IDs. Binds two-way. */
+  /** The list of currently selected contact IDs (as strings). Binds two-way. */
+  // --- 2. Change model to string[] ---
   selectedIds = model<string[]>([]);
 
   // --- Internal State ---
@@ -33,7 +37,8 @@ export class ContactMultiSelectorComponent {
   /** The user's text in the filter input field. */
   filterText = signal('');
 
-  /** A Set for fast lookups of selected IDs. */
+  /** A Set for fast lookups of selected IDs (as strings). */
+  // --- 3. This is now a Set<string> ---
   selectionSet = computed(() => new Set(this.selectedIds()));
 
   /** The list of contacts to render, based on the filter text. */
@@ -56,7 +61,8 @@ export class ContactMultiSelectorComponent {
 
   // --- Methods ---
 
-  /** Toggles the selection state for a single contact ID. */
+  /** Toggles the selection state for a single contact ID (as a string). */
+  // --- 4. Change signature to accept string ---
   onToggleContact(id: string): void {
     const currentSet = new Set(this.selectedIds());
     if (currentSet.has(id)) {
@@ -66,6 +72,11 @@ export class ContactMultiSelectorComponent {
     }
     // Update the model, which emits the change
     this.selectedIds.set(Array.from(currentSet));
+  }
+
+  // --- 5. Add trackBy function ---
+  trackContactById(index: number, contact: Contact): string {
+    return contact.id.toString();
   }
 
   /** Gets the initials for a given contact. */

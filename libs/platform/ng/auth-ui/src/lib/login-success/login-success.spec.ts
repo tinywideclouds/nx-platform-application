@@ -6,14 +6,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoginSuccessComponent } from './login-success';
-import { User } from '@nx-platform-application/platform-types';
+import { User, URN } from '@nx-platform-application/platform-types';
 
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { MockAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 const mockUser: User = {
-  id: '1',
+  id: URN.parse('urn:sm:user:1'),
   alias: 'Test User',
   email: 'test@example.com',
 };

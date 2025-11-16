@@ -21,6 +21,8 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
+// --- 1. Import URN ---
+import { URN } from '@nx-platform-application/platform-types';
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -51,8 +53,9 @@ export class ContactGroupFormComponent {
   private fb = inject(FormBuilder);
   isEditing = signal(false);
 
+  // The form is kept identical to the original: it holds string IDs
   form: FormGroup = this.fb.group({
-    id: [''],
+    id: [''], // This will hold the string version of the URN
     name: ['', Validators.required],
     description: [''],
     contactIds: [[] as string[]],
@@ -70,11 +73,19 @@ export class ContactGroupFormComponent {
       this.isEditing.set(this.startInEditMode());
     });
 
+    // --- 2. Update Input effect ---
     effect(() => {
       const currentGroup = this.group();
       if (currentGroup) {
-        this.form.patchValue(currentGroup);
+        // Convert URNs to strings before patching the form
+        this.form.patchValue({
+          id: currentGroup.id.toString(),
+          name: currentGroup.name,
+          description: currentGroup.description,
+          contactIds: currentGroup.contactIds.map((id) => id.toString()),
+        });
       } else {
+        // Reset to primitives
         this.form.reset({
           id: '',
           name: '',
@@ -89,33 +100,63 @@ export class ContactGroupFormComponent {
         this.form.enable();
       } else {
         this.form.disable();
+        // --- 3. Update Reset effect ---
         if (this.group()) {
-          this.form.reset(this.group());
+          const currentGroup = this.group()!;
+          // Convert URNs to strings before resetting the form
+          this.form.reset({
+            id: currentGroup.id.toString(),
+            name: currentGroup.name,
+            description: currentGroup.description,
+            contactIds: currentGroup.contactIds.map((id) => id.toString()),
+          });
         }
       }
     });
   }
 
+  // --- 4. Update computed property ---
   groupMembers = computed(() => {
-    const membersMap = new Map(this.allContacts().map((c) => [c.id, c]));
+    // Create the Map using string keys
+    const membersMap = new Map(
+      this.allContacts().map((c) => [c.id.toString(), c])
+    );
+    // Get the string[] from the form
     const contactIds = this.contactIdsValue() ?? [];
 
+    // This logic now works perfectly
     return contactIds
       .map((id: string) => membersMap.get(id))
-      .filter((c: Contact): c is Contact => Boolean(c));
+      .filter((c: Contact | undefined): c is Contact => Boolean(c));
   });
 
+  // --- 5. Update Output method ---
   onSave(): void {
     if (this.form.valid) {
+      const formValue = this.form.value;
+      const originalGroup = this.group();
+
+      // We must construct a valid ContactGroup to emit
       this.save.emit({
-        ...this.group(),
-        ...this.form.value,
+        // Spread the original group to preserve non-form properties
+        ...originalGroup,
+        // The ID is the original URN, not the string from the form
+        id: originalGroup!.id,
+        name: formValue.name,
+        description: formValue.description,
+        // Convert string[] from form back to URN[]
+        contactIds: formValue.contactIds.map((id: string) => URN.parse(id)),
       });
     }
   }
 
   onCancel(): void {
     this.isEditing.set(false);
+  }
+
+  // --- 6. Add trackBy function ---
+  trackContactById(index: number, contact: Contact): string {
+    return contact.id.toString();
   }
 
   getInitials(contact: Contact): string {

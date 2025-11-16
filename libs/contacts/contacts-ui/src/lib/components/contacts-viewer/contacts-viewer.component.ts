@@ -39,7 +39,7 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactsViewerComponent {
-  private contactsService = inject(ContactsStorageService);
+  private contactsService = inject(ContactsStorageService) as ContactsStorageService;
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
@@ -67,11 +67,19 @@ export class ContactsViewerComponent {
     });
   }
 
+  // --- THIS IS THE FIX ---
   onContactSelect(contact: Contact): void {
-    this.router.navigate(['edit', contact.id], { relativeTo: this.route });
+    // Convert the URN object to a string before passing to the router
+    this.router.navigate(['edit', contact.id.toString()], {
+      relativeTo: this.route,
+    });
   }
 
+  // --- THIS IS THE FIX ---
   onGroupSelect(group: ContactGroup): void {
-    this.router.navigate(['group-edit', group.id], { relativeTo: this.route });
+    // Convert the URN object to a string before passing to the router
+    this.router.navigate(['group-edit', group.id.toString()], {
+      relativeTo: this.route,
+    });
   }
 }

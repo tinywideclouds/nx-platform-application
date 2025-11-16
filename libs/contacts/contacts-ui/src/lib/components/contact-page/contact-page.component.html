@@ -37,13 +37,12 @@
   <div class="mt-6 p-4 border rounded-md bg-white">
     <h3 class="font-medium text-gray-700">Member of Groups:</h3>
     <div class="flex flex-wrap gap-2 mt-2">
-      @for (group of groupsForContact(); track group.id) {
-      <span
-        class="inline-block bg-gray-200 text-gray-800 text-sm font-medium px-3 py-1 rounded-full"
-        data-testid="group-chip"
-      >
-        {{ group.name }}
-      </span>
+      @for (group of groupsForContact(); track group.id.toString()) {
+      <mat-chip-listbox aria-label="Group membership">
+        <mat-chip data-testid="group-chip">
+          {{ group.name }}
+        </mat-chip>
+      </mat-chip-listbox>
       }
     </div>
   </div>

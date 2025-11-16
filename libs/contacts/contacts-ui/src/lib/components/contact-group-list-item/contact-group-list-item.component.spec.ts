@@ -5,20 +5,22 @@ import { By } from '@angular/platform-browser';
 import { Component } from '@angular/core';
 import { ContactGroup } from '@nx-platform-application/contacts-data-access';
 import { vi } from 'vitest';
+// --- 1. Import URN ---
+import { URN } from '@nx-platform-application/platform-types';
 
 import { ContactGroupListItemComponent } from './contact-group-list-item.component';
 
-// --- Mock Fixture ---
+// --- 2. Update Mock Fixture to use URNs ---
 const MOCK_GROUP: ContactGroup = {
-  id: 'grp-123',
+  id: URN.parse('urn:sm:group:grp-123'),
   name: 'Family',
-  contactIds: ['user-1', 'user-2'],
+  contactIds: [
+    URN.parse('urn:sm:user:user-1'),
+    URN.parse('urn:sm:user:user-2'),
+  ],
 };
+// --- END CHANGES ---
 
-// ---
-// NEW: Describe block for standalone rendering tests
-// This follows the simpler, more reliable pattern from contact-avatar.component.spec.ts
-// ---
 describe('ContactGroupListItemComponent (Rendering)', () => {
   let fixture: ComponentFixture<ContactGroupListItemComponent>;
   let component: ContactGroupListItemComponent;
@@ -35,12 +37,9 @@ describe('ContactGroupListItemComponent (Rendering)', () => {
   });
 
   it('should render the group name', () => {
-    // 1. Set input
     component.group = MOCK_GROUP;
-    // 2. Run change detection
     fixture.detectChanges();
 
-    // 3. Assert
     const nameEl = el.querySelector('[data-testid="group-name"]');
     expect(nameEl).toBeTruthy();
     expect(nameEl?.textContent).toContain('Family');
@@ -56,42 +55,32 @@ describe('ContactGroupListItemComponent (Rendering)', () => {
   });
 
   it('should render the correct member count (singular)', () => {
-    // 1. Set input with new data
     component.group = {
       ...MOCK_GROUP,
-      contactIds: ['user-1'],
+      // --- 3. Use URN in this mock too ---
+      contactIds: [URN.parse('urn:sm:user:user-1')],
     };
-    // 2. Run change detection
     fixture.detectChanges();
 
-    // 3. Assert
     const countEl = el.querySelector('.text-sm.text-gray-500');
     expect(countEl).toBeTruthy();
     expect(countEl?.textContent?.trim()).toBe('1 member');
   });
 
   it('should render the correct member count (zero)', () => {
-    // 1. Set input with new data
     component.group = {
       ...MOCK_GROUP,
       contactIds: [],
     };
-    // 2. Run change detection
     fixture.detectChanges();
 
-    // 3. Assert
     const countEl = el.querySelector('.text-sm.text-gray-500');
     expect(countEl).toBeTruthy();
     expect(countEl?.textContent?.trim()).toBe('0 members');
   });
 });
 
-// ---
-// EXISTING: Describe block for event/host tests
-// This test was already passing and is correct.
-// ---
 describe('ContactGroupListItemComponent (Events)', () => {
-  // --- Mock Host Component (for testing inputs/outputs) ---
   @Component({
     standalone: true,
     imports: [ContactGroupListItemComponent],
@@ -103,7 +92,7 @@ describe('ContactGroupListItemComponent (Events)', () => {
     `,
   })
   class TestHostComponent {
-    group = MOCK_GROUP;
+    group = MOCK_GROUP; // <-- This now uses the URN-based mock
     selectedGroup?: ContactGroup;
     onSelected(group: ContactGroup) {
       this.selectedGroup = group;
@@ -124,17 +113,12 @@ describe('ContactGroupListItemComponent (Events)', () => {
   });
 
   it('should emit (select) with the group when clicked', () => {
-    // Arrange
     const selectSpy = vi.spyOn(hostComponent, 'onSelected');
     const componentEl = fixture.debugElement.query(
       By.css('contacts-group-list-item')
     );
-
-    // Act: Click the component
     componentEl.triggerEventHandler('click');
     fixture.detectChanges();
-
-    // Assert
     expect(selectSpy).toHaveBeenCalledWith(MOCK_GROUP);
     expect(hostComponent.selectedGroup).toBe(MOCK_GROUP);
   });

@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-page/contact-page.component.spec.ts
+
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { vi } from 'vitest';
@@ -10,16 +12,23 @@ import {
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+// --- 1. Import URN and ISODateTimeString ---
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 
-// --- NEW IMPORTS ---
 import { RouterTestingModule } from '@angular/router/testing';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { MatChipsModule } from '@angular/material/chips'; // <-- Import MatChipsModule
 
-// --- Fixtures ---
+// --- 2. Update Fixtures to use URNs ---
+const mockContactUrn = URN.parse('urn:sm:user:user-123');
+const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
+
 const mockContact: Contact = {
-  id: 'user-123',
+  id: mockContactUrn,
   alias: 'testuser',
   email: 'test@example.com',
   firstName: 'Test',
@@ -27,13 +36,12 @@ const mockContact: Contact = {
   phoneNumbers: ['+15550100'],
   emailAddresses: ['test@example.com'],
   serviceContacts: {},
-  isFavorite: false,
-} as Contact;
+} as Contact; // Use 'as Contact' for mock simplicity
 
 const MOCK_GROUP: ContactGroup = {
-  id: 'grp-123',
+  id: mockGroupUrn,
   name: 'Test Group',
-  contactIds: ['user-123'],
+  contactIds: [mockContactUrn],
 };
 
 // --- Mocks ---
@@ -47,8 +55,6 @@ const { mockContactsService } = vi.hoisted(() => {
   };
 });
 
-// REMOVED: const mockRouter
-
 const mockActivatedRoute = {
   paramMap: new Subject(),
 };
@@ -56,7 +62,7 @@ const mockActivatedRoute = {
 describe('ContactPageComponent (RxJS-based)', () => {
   let fixture: ComponentFixture<ContactPageComponent>;
   let component: ContactPageComponent;
-  let router: Router; // Will hold the real router
+  let router: Router;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -66,23 +72,22 @@ describe('ContactPageComponent (RxJS-based)', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        RouterTestingModule.withRoutes([]), // 1. Add router testing module
-        NoopAnimationsModule, // 2. Add animations module
+        RouterTestingModule.withRoutes([]),
+        NoopAnimationsModule,
         ContactPageComponent,
         ContactFormComponent,
-        ContactsPageToolbarComponent, // 3. Import the toolbar
+        ContactsPageToolbarComponent,
+        MatChipsModule, // <-- Add MatChipsModule
       ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
-        // 4. REMOVED: Mock router provider
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactPageComponent);
     component = fixture.componentInstance;
-    
-    // 5. Inject the real router and spy on it
+
     router = TestBed.inject(Router);
     vi.spyOn(router, 'navigate');
 
@@ -100,27 +105,35 @@ describe('ContactPageComponent (RxJS-based)', () => {
 
     expect(mockContactsService.getContact).not.toHaveBeenCalled();
     expect(component.contactToEdit()).toBeTruthy();
-    expect(component.contactToEdit()?.id).toContain('urn:sm:user:');
+    // Check that the ID is a URN object
+    expect(component.contactToEdit()?.id).toBeInstanceOf(URN);
+    expect(component.contactToEdit()?.id.toString()).toContain('urn:sm:user:');
   });
 
   it('should be in EDIT MODE', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => 'user-123' });
+    // --- 3. Pass the string version of the URN, as the router would ---
+    const idString = mockContactUrn.toString();
+    mockActivatedRoute.paramMap.next({ get: () => idString });
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(mockContactsService.getContact).toHaveBeenCalledWith('user-123');
+    // --- 4. Expect the service to be called with the PARSED URN object ---
+    expect(mockContactsService.getContact).toHaveBeenCalledWith(mockContactUrn);
     expect(component.contactToEdit()).toEqual(mockContact);
   });
 
   it('should fetch and display groups for the contact in EDIT MODE', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => 'user-123' });
+    // --- 5. Pass the string ID from the router ---
+    const idString = mockContactUrn.toString();
+    mockActivatedRoute.paramMap.next({ get: () => idString });
     fixture.detectChanges();
-    await fixture.whenStable();
-    await fixture.whenStable(); // Wait for derived stream
+    await fixture.whenStable(); // Waits for contactToEdit to resolve
+    await fixture.whenStable(); // Waits for groupsForContact to resolve
     fixture.detectChanges();
 
+    // --- 6. Expect service to be called with the URN ---
     expect(mockContactsService.getGroupsForContact).toHaveBeenCalledWith(
-      'user-123'
+      mockContactUrn
     );
     expect(component.groupsForContact()).toEqual([MOCK_GROUP]);
 
@@ -139,6 +152,7 @@ describe('ContactPageComponent (RxJS-based)', () => {
     const formComponent = fixture.debugElement.query(
       By.directive(ContactFormComponent)
     );
+    // Trigger with the URN-based mock
     formComponent.triggerEventHandler('save', mockContact);
     await fixture.whenStable();
 
@@ -147,5 +161,4 @@ describe('ContactPageComponent (RxJS-based)', () => {
       queryParams: { tab: 'contacts' },
     });
   });
-
 });

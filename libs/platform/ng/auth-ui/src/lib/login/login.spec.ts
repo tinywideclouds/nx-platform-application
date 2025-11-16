@@ -4,13 +4,13 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 // CUSTOM_ELEMENTS_SCHEMA has been REMOVED
 import { signal, WritableSignal } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { User } from '@nx-platform-application/platform-types';
+import { User, URN } from '@nx-platform-application/platform-types';
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
 import { LoginComponent } from './login';
 
 // --- Mock Data ---
 const mockUser: User = {
-  id: '1',
+  id: URN.parse('urn:sm:user:1'),
   alias: 'Test User',
   email: 'test@example.com',
 };

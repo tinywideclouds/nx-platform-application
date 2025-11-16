@@ -6,11 +6,20 @@ import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 import { ContactFormComponent } from './contact-form.component';
 import { Contact } from '@nx-platform-application/contacts-data-access';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+// --- 1. Import URN and ISODateTimeString ---
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations'; // <-- Import
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
 
-// --- Fixtures ---
+// --- 2. Update Fixtures to use URNs ---
 const mockContact: Contact = {
-  id: 'user-123',
+  id: URN.parse('urn:sm:user:user-123'),
   alias: 'johndoe',
   email: 'john@example.com',
   firstName: 'John',
@@ -19,12 +28,12 @@ const mockContact: Contact = {
   emailAddresses: ['john@work.com'],
   serviceContacts: {
     messenger: {
-      id: 'msg-uuid-1',
+      id: URN.parse('urn:sm:service:msg-uuid-1'),
       alias: 'jd_messenger',
       lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
     },
   },
-  // isFavorite: true,
+  // isFavorite: true, <-- This property is not on the base Contact/User
 };
 
 describe('ContactFormComponent (Signal-based)', () => {
@@ -33,7 +42,16 @@ describe('ContactFormComponent (Signal-based)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ContactFormComponent, ReactiveFormsModule],
+      // --- 3. Import all necessary modules ---
+      imports: [
+        ContactFormComponent,
+        ReactiveFormsModule,
+        NoopAnimationsModule,
+        MatFormFieldModule,
+        MatInputModule,
+        MatIconModule,
+        MatButtonModule,
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactFormComponent);
@@ -63,7 +81,6 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(component.phoneNumbers.at(0).value).toBe('+15550100');
   });
 
-  // --- FIXED TEST ---
   it('should dynamically add a phone number field', () => {
     // 1. Set to editing mode
     component.isEditing.set(true);
@@ -83,7 +100,6 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(component.phoneNumbers.length).toBe(1);
   });
 
-  // --- FIXED TEST ---
   it('should dynamically remove a phone number field', () => {
     // 1. Arrange: Set contact and enter edit mode
     fixture.componentRef.setInput('contact', mockContact);
@@ -102,7 +118,6 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(component.phoneNumbers.length).toBe(0);
   });
 
-  // --- FIXED TEST ---
   it('should emit (save) with the form data when "Save" is clicked', () => {
     const saveSpy = vi.spyOn(component.save, 'emit');
 
@@ -128,7 +143,6 @@ describe('ContactFormComponent (Signal-based)', () => {
     );
   });
 
-  // --- FIXED TEST ---
   it('should preserve non-form fields (like serviceContacts) on save', () => {
     const saveSpy = vi.spyOn(component.save, 'emit');
 
@@ -150,13 +164,12 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(saveSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         firstName: 'Johnny',
-        id: 'user-123',
+        id: mockContact.id, // <-- Check against the URN object
         serviceContacts: mockContact.serviceContacts,
       })
     );
   });
 
-  // --- REVISED TEST (was 'should emit (cancel)') ---
   it('should set isEditing to false when "Cancel" is clicked', () => {
     // 1. Arrange: Enter edit mode
     component.isEditing.set(true);
@@ -174,7 +187,6 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(component.isEditing()).toBe(false);
   });
 
-  // --- NEW TEST ---
   it('should switch from view mode to edit mode when "Edit" is clicked', () => {
     // 1. Arrange: Should start in view mode
     fixture.componentRef.setInput('contact', mockContact);

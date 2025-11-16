@@ -52,6 +52,7 @@ vitest.config.*.timestamp*
 /apps/platform/node-identity-service/util/
 
 **/.env
+**/.env.serve.development
 /foo_rsa
 /foo_rsa.pub
 /.github/secrets/messenger/.secrets

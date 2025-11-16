@@ -1,7 +1,6 @@
-import { User, ISODateTimeString } from '@nx-platform-application/platform-types';
+import { User, ISODateTimeString, Resource, URN } from '@nx-platform-application/platform-types';
 
-export interface ServiceContact {
-  id: string;               // Unique service contact ID (e.g., the messenger UUID)
+export interface ServiceContact extends Resource {
   alias: string;            // User alias or username specific to that service
   profilePictureUrl?: string; 
   lastSeen: ISODateTimeString; 
@@ -26,9 +25,45 @@ export interface Contact extends User {
   serviceContacts: Record<string, ServiceContact>;
 }
 
-export interface ContactGroup {
-  id: string; 
+export interface ContactGroup extends Resource {
   name: string;
   description?: string;
-  contactIds: string[]; 
+  contactIds: URN[]; 
+}
+
+/**
+ * Represents the ServiceContact as it is stored in Dexie
+ * (with primitive string IDs).
+ */
+export interface StorableServiceContact {
+  id: string; // <-- Changed from URN
+  alias: string;
+  profilePictureUrl?: string;
+  lastSeen: ISODateTimeString;
+}
+
+/**
+ * Represents the Contact as it is stored in Dexie
+ * (with primitive string IDs).
+ */
+export interface StorableContact {
+  id: string; // <-- Changed from URN
+  alias: string;
+  email: string;
+  firstName: string;
+  surname: string;
+  phoneNumbers: string[];
+  emailAddresses: string[];
+  serviceContacts: Record<string, StorableServiceContact>; // <-- Uses storable child
+}
+
+/**
+ * Represents the ContactGroup as it is stored in Dexie
+ * (with primitive string IDs).
+ */
+export interface StorableGroup {
+  id: string; // <-- Changed from URN
+  name: string;
+  description?: string;
+  contactIds: string[]; // <-- Changed from URN[]
 }

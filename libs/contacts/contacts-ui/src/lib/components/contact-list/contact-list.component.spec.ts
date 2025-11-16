@@ -4,55 +4,57 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { Contact } from '@nx-platform-application/contacts-data-access';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+// --- 1. Import URN and ISODateTimeString ---
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 
 import { ContactListComponent } from './contact-list.component';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
-// --- Mock Contacts ---
+// --- 2. Update Mock Contacts to use URNs ---
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: 'user-123',
+    id: URN.parse('urn:sm:user:user-123'),
     alias: 'johndoe',
     email: 'john@example.com',
     firstName: 'John',
     surname: 'Doe',
     phoneNumbers: ['+15550199'],
     emailAddresses: ['john@example.com'],
-    profilePictureUrl: undefined,
-    isFavorite: false,
     serviceContacts: {
       messenger: {
-        id: 'msg-uuid-1',
+        id: URN.parse('urn:sm:service:msg-uuid-1'),
         alias: 'jd_messenger',
         lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
       },
     },
   },
   {
-    id: 'user-456',
+    id: URN.parse('urn:sm:user:user-456'),
     alias: 'janedoe',
     email: 'jane@example.com',
     firstName: 'Jane',
     surname: 'Doe',
     phoneNumbers: ['+15550188'],
     emailAddresses: ['jane@example.com'],
-    profilePictureUrl: undefined,
-    isFavorite: true,
     serviceContacts: {
       messenger: {
-        id: 'msg-uuid-2',
+        id: URN.parse('urn:sm:service:msg-uuid-2'),
         alias: 'jane_messenger',
         lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
       },
     },
   },
 ];
+// Note: We're omitting properties like isFavorite for mock simplicity
+// in a way that is compatible with the Contact (User) interface.
 
 // --- Mock Host Component (for testing inputs/outputs) ---
 @Component({
   standalone: true,
-  imports: [ContactListComponent], // Host imports the component it tests
+  imports: [ContactListComponent],
   template: `
     <contacts-list
       [contacts]="contacts"
@@ -61,7 +63,7 @@ const MOCK_CONTACTS: Contact[] = [
   `,
 })
 class TestHostComponent {
-  contacts = MOCK_CONTACTS;
+  contacts = MOCK_CONTACTS; // <-- This now uses the URN-based mock
   selectedContact?: Contact;
   onSelected(contact: Contact) {
     this.selectedContact = contact;
@@ -80,14 +82,14 @@ describe('ContactListComponent', () => {
 
     fixture = TestBed.createComponent(TestHostComponent);
     hostComponent = fixture.componentInstance;
-    
+
     // DO NOT call fixture.detectChanges() here
   });
 
   it('should render the correct number of list items', () => {
     // 1. Set component state
     hostComponent.contacts = MOCK_CONTACTS;
-    
+
     // 2. Run change detection
     fixture.detectChanges();
 
@@ -121,7 +123,7 @@ describe('ContactListComponent', () => {
   it('should display an empty message when no contacts are provided', () => {
     // 1. Set component state
     hostComponent.contacts = [];
-    
+
     // 2. Run change detection
     fixture.detectChanges();
 

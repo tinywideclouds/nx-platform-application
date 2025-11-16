@@ -3,27 +3,29 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactListItemComponent } from './contact-list-item.component';
 import { Contact } from '@nx-platform-application/contacts-data-access';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+// --- 1. Import URN and ISODateTimeString ---
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { By } from '@angular/platform-browser';
 import { Component } from '@angular/core';
 
 // Import the avatar component, as it's a dependency
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
-// --- Mock Contact ---
+// --- 2. Update Mock Contact to use URNs ---
 const MOCK_CONTACT: Contact = {
-  id: 'user-123',
+  id: URN.parse('urn:sm:user:user-123'),
   alias: 'johndoe',
   email: 'john@example.com',
   firstName: 'John',
   surname: 'Doe',
   phoneNumbers: ['+15550199'],
   emailAddresses: ['john@example.com'],
-  // isFavorite: false,
-  // We must provide the serviceContacts for the new getter to test
   serviceContacts: {
     messenger: {
-      id: 'msg-uuid-1',
+      id: URN.parse('urn:sm:service:msg-uuid-1'),
       alias: 'jd_messenger',
       lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
       profilePictureUrl: 'http://messenger.com/img.png',

@@ -14,7 +14,7 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
 @Component({
   selector: 'contacts-list',
   standalone: true,
-  imports: [CommonModule, ContactListItemComponent], // Import our list item
+  imports: [CommonModule, ContactListItemComponent],
   templateUrl: './contact-list.component.html',
   styleUrl: './contact-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,11 +23,15 @@ export class ContactListComponent {
   @Input({ required: true }) contacts!: Contact[];
   @Output() contactSelected = new EventEmitter<Contact>();
 
-  /**
-   * This method acts as a pass-through, bubbling the event
-   * from the list item up to the parent component.
-   */
   onSelect(contact: Contact): void {
     this.contactSelected.emit(contact);
+  }
+
+  // --- 1. ADD THIS METHOD ---
+  /**
+   * Provides a stable, primitive value for Angular's @for loop tracking.
+   */
+  trackContactById(index: number, contact: Contact): string {
+    return contact.id.toString(); // Convert URN to string for tracking
   }
 }

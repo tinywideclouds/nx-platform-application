@@ -9,8 +9,9 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
+import { URN } from '@nx-platform-application/platform-types';
 import { Signal } from '@angular/core';
-import { Router, ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
+import { Router, ActivatedRoute, ParamMap, convertToParamMap } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -23,12 +24,12 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
-import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component'; // Import toolbar
+import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
-// --- Mock Data ---
+// --- Mock Data (Updated to use URNs) ---
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: 'user-123',
+    id: URN.parse('urn:sm:user:user-123'),
     alias: 'johndoe',
     firstName: 'John',
     surname: 'Doe',
@@ -40,7 +41,11 @@ const MOCK_CONTACTS: Contact[] = [
 ];
 
 const MOCK_GROUPS: ContactGroup[] = [
-  { id: 'grp-123', name: 'Family', contactIds: ['user-123'] },
+  {
+    id: URN.parse('urn:sm:group:grp-123'),
+    name: 'Family',
+    contactIds: [URN.parse('urn:sm:user:user-123')],
+  },
 ];
 
 // --- Mocks ---
@@ -82,7 +87,7 @@ describe('ContactsViewerComponent', () => {
         ContactGroupListComponent,
         ContactGroupListItemComponent,
         ContactAvatarComponent,
-        ContactsPageToolbarComponent, // Import toolbar
+        ContactsPageToolbarComponent,
       ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
@@ -93,7 +98,7 @@ describe('ContactsViewerComponent', () => {
     fixture = TestBed.createComponent(ContactsViewerComponent);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate'); // Spy on the real router
+    vi.spyOn(router, 'navigate');
   });
 
   // Helper function to initialize component
@@ -105,62 +110,59 @@ describe('ContactsViewerComponent', () => {
   }
 
   it('should create', () => {
-    initializeComponent(new Map() as ParamMap);
+    initializeComponent(convertToParamMap({}));
     expect(component).toBeTruthy();
   });
 
-  // --- FIXED TEST ---
   it('should have a "New Contact" link pointing to "new"', () => {
-    initializeComponent(new Map() as ParamMap);
+    initializeComponent(convertToParamMap({}));
     const newContactLinkEl = fixture.debugElement.query(
       By.css('[data-testid="new-contact-button"]')
     );
     expect(newContactLinkEl).toBeTruthy();
-
-    // Test the attribute on the element
     expect(newContactLinkEl.attributes['routerLink']).toBe('new');
   });
 
-  // --- FIXED TEST ---
   it('should have a "New Group" link pointing to "group-new"', () => {
-    initializeComponent(new Map() as ParamMap);
+    initializeComponent(convertToParamMap({}));
     const newGroupLinkEl = fixture.debugElement.query(
       By.css('[data-testid="new-group-button"]')
     );
     expect(newGroupLinkEl).toBeTruthy();
-
-    // Test the attribute on the element
     expect(newGroupLinkEl.attributes['routerLink']).toBe('group-new');
   });
 
   it('should default to the "Contacts" tab (index 0)', () => {
-    initializeComponent(new Map() as ParamMap);
+    initializeComponent(convertToParamMap({}));
     expect(component.tabIndex()).toBe(0);
   });
 
   it('should select "Groups" tab (index 1) when ?tab=groups', () => {
-    initializeComponent(new Map([['tab', 'groups']]) as ParamMap);
+    initializeComponent(convertToParamMap({ tab: 'groups' }));
     expect(component.tabIndex()).toBe(1);
   });
 
-  // --- FIXED TEST ---
+  // --- THIS TEST IS UPDATED ---
   it('should navigate to edit page on (contactSelected)', () => {
-    initializeComponent(new Map() as ParamMap);
+    initializeComponent(convertToParamMap({}));
 
     const contactListEl = fixture.debugElement.query(
       By.css('contacts-list')
     );
     contactListEl.triggerEventHandler('contactSelected', MOCK_CONTACTS[0]);
 
-    // Assert the correct path (no '../')
-    expect(router.navigate).toHaveBeenCalledWith(['edit', MOCK_CONTACTS[0].id], {
-      relativeTo: mockActivatedRoute,
-    });
+    // Assert the navigation is called with the STRING version of the URN
+    expect(router.navigate).toHaveBeenCalledWith(
+      ['edit', MOCK_CONTACTS[0].id.toString()],
+      {
+        relativeTo: mockActivatedRoute,
+      }
+    );
   });
 
-  // --- FIXED TEST ---
+  // --- THIS TEST IS UPDATED ---
   it('should navigate to group edit page on (groupSelected)', async () => {
-    initializeComponent(new Map([['tab', 'groups']]) as ParamMap);
+    initializeComponent(convertToParamMap({ tab: 'groups' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -169,15 +171,15 @@ describe('ContactsViewerComponent', () => {
     );
     groupListEl.triggerEventHandler('groupSelected', MOCK_GROUPS[0]);
 
-    // Assert the correct path (no '../')
+    // Assert the navigation is called with the STRING version of the URN
     expect(router.navigate).toHaveBeenCalledWith(
-      ['group-edit', MOCK_GROUPS[0].id],
+      ['group-edit', MOCK_GROUPS[0].id.toString()],
       { relativeTo: mockActivatedRoute }
     );
   });
 
   it('should update query params when tab is changed', async () => {
-    initializeComponent(new Map() as ParamMap);
+    initializeComponent(convertToParamMap({}));
     await fixture.whenStable();
 
     const tabLabels = fixture.debugElement.queryAll(By.css('[role="tab"]'));

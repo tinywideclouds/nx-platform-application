@@ -1,13 +1,27 @@
 import { computed, inject, Injectable, signal, Signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { User } from '@nx-platform-application/platform-types';
-import { catchError, Observable, of, tap, shareReplay } from 'rxjs';
-import { AUTH_API_URL } from './auth-data.config'; // <-- 1. Import the token
+// --- 1. Import URN and User from the types package ---
+import { User, URN } from '@nx-platform-application/platform-types';
+// --- 2. Import the 'map' operator ---
+import { catchError, Observable, of, tap, shareReplay, map } from 'rxjs';
+import { AUTH_API_URL } from './auth-data.config';
 
-// This interface correctly defines the flat structure
+// --- 3. Create a DTO for the raw HTTP response ---
+// This represents the JSON from the wire, where id is a string
+interface AuthStatusResponseDTO {
+  authenticated: boolean;
+  user: {
+    id: string; // <-- The ID is a string here
+    alias: string;
+    email: string;
+  } | null;
+  token: string | null;
+}
+
+// This interface remains the same, representing the DOMAIN object
 export interface AuthStatusResponse {
   authenticated: boolean;
-  user: User;
+  user: User; // <-- The ID is a URN here
   token: string;
 }
 
@@ -41,14 +55,34 @@ export class AuthService implements IAuthService {
   }
 
   public checkAuthStatus(): Observable<AuthStatusResponse | null> {
-    // 3. Use the injected URL
     return this.http
-      .get<AuthStatusResponse>(`${this.authApiUrl}/status`, {
+      // --- 4. Get the DTO, not the domain object ---
+      .get<AuthStatusResponseDTO>(`${this.authApiUrl}/status`, {
         withCredentials: true,
       })
       .pipe(
+        // --- 5. Map the DTO to the domain AuthStatusResponse ---
+        map((dto): AuthStatusResponse | null => {
+          if (dto && dto.authenticated && dto.user && dto.token) {
+            // This is the transformation
+            const domainUser: User = {
+              id: URN.parse(dto.user.id), // <-- PARSE THE STRING
+              alias: dto.user.alias,
+              email: dto.user.email,
+            };
+
+            return {
+              authenticated: true,
+              user: domainUser,
+              token: dto.token,
+            };
+          }
+          // If not authenticated or data is missing, return null
+          return null;
+        }),
+        // 'response' is now the mapped AuthStatusResponse or null
         tap((response) => {
-          if (response && response.authenticated) {
+          if (response) {
             this.setAuthState(response.user, response.token);
           } else {
             this.clearAuthState();

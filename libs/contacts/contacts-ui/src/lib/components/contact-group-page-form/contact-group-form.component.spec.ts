@@ -5,17 +5,25 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
+// --- 1. Import URN ---
+import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
+// --- 2. Import NoopAnimationsModule ---
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { ContactGroupFormComponent } from './contact-group-form.component';
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
-// --- Mock Fixtures ---
+// --- 3. Update Mock Fixtures to use URNs ---
+const mockContact1Urn = URN.parse('urn:sm:user:user-123');
+const mockContact2Urn = URN.parse('urn:sm:user:user-456');
+const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
+
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: 'user-123',
+    id: mockContact1Urn,
     alias: 'johndoe',
     firstName: 'John',
     surname: 'Doe',
@@ -25,7 +33,7 @@ const MOCK_CONTACTS: Contact[] = [
     emailAddresses: [],
   } as Contact,
   {
-    id: 'user-456',
+    id: mockContact2Urn,
     alias: 'janedoe',
     firstName: 'Jane',
     surname: 'Doe',
@@ -37,13 +45,13 @@ const MOCK_CONTACTS: Contact[] = [
 ];
 
 const MOCK_GROUP: ContactGroup = {
-  id: 'grp-123',
+  id: mockGroupUrn,
   name: 'Test Group',
   description: 'A test group',
-  contactIds: ['user-456'],
+  contactIds: [mockContact2Urn], // <-- Use URN
 };
 
-// --- Test Host ---
+// --- Test Host (This is the original, correct setup) ---
 @Component({
   standalone: true,
   imports: [
@@ -65,7 +73,6 @@ const MOCK_GROUP: ContactGroup = {
 class TestHostComponent {
   group = signal<ContactGroup | null>(null);
   allContacts = signal(MOCK_CONTACTS);
-  // --- NEW: Signal for startInEditMode ---
   startInEditMode = signal(false);
 
   savedGroup: ContactGroup | null = null;
@@ -73,7 +80,6 @@ class TestHostComponent {
   onSave(group: ContactGroup) {
     this.savedGroup = group;
   }
-  // REMOVED: onCancel()
 }
 
 describe('ContactGroupFormComponent', () => {
@@ -84,7 +90,8 @@ describe('ContactGroupFormComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [TestHostComponent],
+      // --- 4. Import the Host and the Animation Module ---
+      imports: [TestHostComponent, NoopAnimationsModule],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TestHostComponent);
@@ -104,11 +111,9 @@ describe('ContactGroupFormComponent', () => {
   });
 
   it('should be in "add mode" with an empty form', () => {
-    // 1. Set startInEditMode to true
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     
-    // 2. Query for the input
     const nameInput = componentEl.querySelector(
       'input[formControlName="name"]'
     ) as HTMLInputElement;
@@ -116,139 +121,126 @@ describe('ContactGroupFormComponent', () => {
     expect(formComponent.form.value.contactIds).toEqual([]);
   });
 
-  // --- FIXED TEST ---
+  // --- 5. Update Assertions for "edit mode" ---
   it('should be in "edit mode" and patch the form', async () => {
-    // 1. Set group and startInEditMode
     hostComponent.group.set(MOCK_GROUP);
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 2. Assert form values
     const nameInput = componentEl.querySelector(
       'input[formControlName="name"]'
     ) as HTMLInputElement;
     expect(nameInput.value).toBe('Test Group');
-    expect(formComponent.form.value.contactIds).toEqual(['user-456']);
+    // Assert against the string version in the form
+    expect(formComponent.form.value.id).toBe(mockGroupUrn.toString());
+    expect(formComponent.form.value.contactIds).toEqual([
+      mockContact2Urn.toString(),
+    ]);
 
-    // 3. Assert checkboxes (now that they are visible)
     const selectorCheckboxes = componentEl.querySelectorAll<HTMLInputElement>(
       'contacts-multi-selector input[type="checkbox"]'
     );
-    expect(selectorCheckboxes.length).toBe(MOCK_CONTACTS.length); // This should be 2, not 0
-    expect(selectorCheckboxes[0].checked).toBe(false); // 'johndoe'
-    expect(selectorCheckboxes[1].checked).toBe(true); // 'janedoe'
+    expect(selectorCheckboxes.length).toBe(MOCK_CONTACTS.length);
+    expect(selectorCheckboxes[0].checked).toBe(false);
+    expect(selectorCheckboxes[1].checked).toBe(true);
   });
 
-  // --- FIXED TEST ---
+  // --- 6. Update Assertions for "multi-selector" ---
   it('should update form when child multi-selector changes', async () => {
-    // 1. Set edit mode
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 2. Find checkbox
     const firstCheckbox = fixture.debugElement.query(
       By.css('contacts-multi-selector input[type="checkbox"]')
     ).nativeElement as HTMLInputElement;
 
-    // 3. Act
     firstCheckbox.click();
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 4. Assert
-    expect(formComponent.form.value.contactIds).toEqual(['user-123']);
+    // Assert the form holds the string ID
+    expect(formComponent.form.value.contactIds).toEqual([
+      mockContact1Urn.toString(),
+    ]);
   });
 
-  // --- FIXED TEST ---
+  // --- 7. Update Assertions for "save" ---
   it('should emit (save) with form data', async () => {
     const saveSpy = vi.spyOn(hostComponent, 'onSave');
     
-    // 1. Set edit mode
+    hostComponent.group.set(MOCK_GROUP); // Set the group so the ID is preserved
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 2. Patch form
+    // Patch with string IDs
     formComponent.form.patchValue({
       name: 'New Group Name',
       description: 'New desc',
-      contactIds: ['user-123'],
+      contactIds: [mockContact1Urn.toString()],
     });
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 3. Find and click save button
     const saveButton = fixture.debugElement.query(
       By.css('[data-testid="save-button"]')
     ).nativeElement as HTMLButtonElement;
     saveButton.click();
     fixture.detectChanges();
 
-    // 4. Assert
+    // Assert the emitted value is a ContactGroup with URNs
     expect(saveSpy).toHaveBeenCalled();
     expect(hostComponent.savedGroup).toBeTruthy();
     expect(hostComponent.savedGroup?.name).toBe('New Group Name');
-    expect(hostComponent.savedGroup?.contactIds).toEqual(['user-123']);
+    expect(hostComponent.savedGroup?.id).toBe(mockGroupUrn); // Preserved URN
+    expect(hostComponent.savedGroup?.contactIds).toEqual([mockContact1Urn]); // Converted URN
   });
 
-  // --- REVISED TEST ---
   it('should set isEditing to false on cancel click', () => {
-    // 1. Set edit mode
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     expect(formComponent.isEditing()).toBe(true);
     
-    // 2. Find and click cancel button
     const cancelButton = fixture.debugElement.query(
       By.css('[data-testid="cancel-button"]')
     ).nativeElement as HTMLButtonElement;
     cancelButton.click();
     fixture.detectChanges();
 
-    // 3. Assert internal state
     expect(formComponent.isEditing()).toBe(false);
   });
 
-  // --- FIXED TEST ---
   it('should disable save button when form is invalid', async () => {
-    // 1. Set edit mode
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 2. Find button and check state
     const saveButton = fixture.debugElement.query(
       By.css('[data-testid="save-button"]')
     ).nativeElement as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
 
-    // 3. Act
     formComponent.form.patchValue({ name: 'Valid Name' });
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 4. Assert
     expect(saveButton.disabled).toBe(false);
   });
   
-  // --- NEW TEST ---
   it('should switch from view mode to edit mode when "Edit" is clicked', () => {
-    // 1. Arrange: Should start in view mode
     hostComponent.group.set(MOCK_GROUP);
     hostComponent.startInEditMode.set(false);
     fixture.detectChanges();
     expect(formComponent.isEditing()).toBe(false);
 
-    // 2. Act
     const editButton = fixture.debugElement.query(
       By.css('[data-testid="edit-button"]')
     ).nativeElement;
     editButton.click();
     fixture.detectChanges();
 
-    // 3. Assert
     expect(formComponent.isEditing()).toBe(true);
   });
 });

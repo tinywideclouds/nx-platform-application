@@ -5,12 +5,13 @@ import {
 } from '@nx-platform-application/contacts-data-access';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 import { Observable, of } from 'rxjs';
+import { URN } from '@nx-platform-application/platform-types';
 
 // --- Mock Data ---
 
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: 'urn:sm:user:mock-contact-1',
+    id: URN.parse('urn:sm:user:mock-contact-1'),
     alias: 'Alice (Mock)',
     firstName: 'Alice',
     surname: 'Anderson',
@@ -27,7 +28,7 @@ const MOCK_CONTACTS: Contact[] = [
     },
   },
   {
-    id: 'urn:sm:user:mock-contact-2',
+    id: URN.parse('urn:sm:user:mock-contact-2'),
     alias: 'Bob (Mock)',
     firstName: 'Bob',
     surname: 'Brown',
@@ -44,7 +45,7 @@ const MOCK_CONTACTS: Contact[] = [
     },
   },
   {
-    id: 'urn:sm:user:mock-contact-3',
+    id: URN.parse('urn:sm:user:mock-contact-3'),
     alias: 'Charlie (Mock)',
     firstName: 'Charlie',
     surname: 'Davis',
@@ -101,7 +102,7 @@ export class MockContactsStorageService {
     return Promise.resolve();
   }
 
-  async getContact(id: string): Promise<Contact | undefined> {
+  async getContact(id: URN): Promise<Contact | undefined> {
     console.log('[MockContactsStorageService] Get Contact:', id);
     return MOCK_CONTACTS.find((c) => c.id === id);
   }

@@ -61,11 +61,11 @@ vi.mock('@js-temporal/polyfill', () => ({
 
 // --- Mock Fixtures ---
 const mockUser: User = {
-  id: 'urn:sm:user:me',
+  id: URN.parse('urn:sm:user:me'),
   alias: 'Me',
   email: 'me@test.com',
 };
-const mockUserUrn = URN.parse(mockUser.id);
+const mockUserUrn = mockUser.id;
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
 const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
 

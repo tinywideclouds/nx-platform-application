@@ -26,6 +26,10 @@ import {
   URN,
 } from '@nx-platform-application/platform-types';
 
+import {
+  Logger
+} from '@nx-platform-application/console-logger';
+
 // --- Our "Dumb" UI Libs ---
 import {
   ChatConversationListComponent,
@@ -54,6 +58,7 @@ export class MessengerHomePageComponent {
   private chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
   private router = inject(Router);
+  private logger = inject(Logger);
 
   // --- 3. Create a signal that tracks router events ---
   private routerEvents$ = this.router.events;
@@ -107,14 +112,14 @@ export class MessengerHomePageComponent {
     const selectedId = this.selectedConversationId();
 
     return this.conversations().map((summary) => {
-      const urnStr = summary.conversationUrn.toString();
+      const conversationUrn = summary.conversationUrn;
       let name = 'Unknown';
       let initials = '?';
       let profilePictureUrl: string | undefined;
 
       // --- This is the key "join" logic ---
       if (summary.conversationUrn.entityType == 'user') {
-        const contact = contactsMap.get(urnStr);
+        const contact = contactsMap.get(conversationUrn);
         if (contact) {
           name = contact.alias;
           initials = (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
@@ -122,7 +127,7 @@ export class MessengerHomePageComponent {
             contact.serviceContacts['messenger']?.profilePictureUrl;
         }
       } else if (summary.conversationUrn.entityType == 'group') {
-        const group = groupsMap.get(urnStr);
+        const group = groupsMap.get(conversationUrn.entityId);
         if (group) {
           name = group.name;
           initials = 'G'; // Placeholder for group avatar
@@ -130,14 +135,14 @@ export class MessengerHomePageComponent {
       }
 
       return {
-        id: urnStr,
+        id: conversationUrn,
         name: name,
         latestMessage: summary.latestSnippet,
         timestamp: summary.timestamp,
         initials: initials.toUpperCase() || '?',
         profilePictureUrl: profilePictureUrl,
         unreadCount: summary.unreadCount,
-        isActive: selectedId === urnStr,
+        isActive: selectedId === conversationUrn.entityId,
       };
     });
   });
@@ -168,12 +173,8 @@ export class MessengerHomePageComponent {
   }
 
   onSelectContactToChat(contact: Contact): void {
-    const urnString = this.contacts().find((c) => c.id === contact.id)?.id;
-    if (!urnString) {
-      console.warn("urn must exist and parse")
-      return;
-    }
-    const urn = URN.parse(urnString);
+    const urn= this.contacts().find((c) => c.id === contact.id)?.id;
+  
     if (urn) {
       this.chatService.loadConversation(urn); 
       // 5. Use relative root navigation

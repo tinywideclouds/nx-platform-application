@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import axios from 'axios';
 // [FIXED] Import Request and Response explicitly from express
 import { NextFunction, Request, Response } from 'express';
+import { URN } from '@nx-platform-application/platform-types';
 
 type JWKSClient = ReturnType<typeof createRemoteJWKSet>;
 
@@ -75,10 +76,8 @@ export function createJwtAuthMiddleware(identityServiceUrl: string) {
         throw new Error('Token payload is missing required claims.');
       }
 
-      // [FIXED] No 'as string' assertions are needed.
-      // TypeScript now correctly infers these properties as strings.
       req.user = {
-        id: payload.sub,
+        id: URN.parse(payload.sub),
         email: payload.email,
         alias: payload.alias,
       };

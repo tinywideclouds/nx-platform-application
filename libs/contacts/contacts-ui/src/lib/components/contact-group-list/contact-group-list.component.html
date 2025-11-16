@@ -1,14 +1,12 @@
 <div class="flex flex-col">
-  <!-- 1. Use new @for loop to iterate over groups -->
   @if (groups.length > 0) {
-    @for (group of groups; track group.id) {
+    @for (group of groups; track trackGroupById($index, group)) {
       <contacts-group-list-item
         [group]="group"
         (select)="onSelect($event)"
       />
     }
   } @else {
-    <!-- 2. Show an empty message -->
     <div
       class="p-4 text-center text-gray-500"
       data-testid="empty-group-list"

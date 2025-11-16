@@ -113,7 +113,7 @@ export class ChatService implements OnDestroy {
     const user = this.authService.currentUser();
     if (!user) return null;
     try {
-      return URN.parse(user.id);
+      return user.id;
     } catch (e) {
       this.logger.error('Failed to parse current user URN from AuthService', e, user);
       return null;

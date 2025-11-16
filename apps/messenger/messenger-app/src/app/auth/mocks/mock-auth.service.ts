@@ -1,59 +1,81 @@
-import { Injectable, signal, Signal, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
-import { Observable, of } from 'rxjs';
-import { User } from '@nx-platform-application/platform-types';
-// Import the IAuthService contract and the response type
-import { IAuthService, AuthStatusResponse } from '@nx-platform-application/platform-auth-data-access';
+import { Injectable, signal, computed } from '@angular/core';
+import { User, URN } from '@nx-platform-application/platform-types'; // <-- 1. Import URN
+import { of, Observable } from 'rxjs'; // <-- 2. Import Observable
+import {
+  AuthStatusResponse,
+  IAuthService,
+} from '@nx-platform-application/platform-auth-data-access';
+import { vi } from 'vitest';
 
-export const MOCK_USERS: User[] = [
-  { id: 'user-123', email: 'user@local.mock', alias: 'Regular User' },
-  { id: 'admin-001', email: 'admin@local.mock', alias: 'Admin User' },
-  { id: 'power-789', email: 'power@local.mock', alias: 'Power User' },
-];
+// --- 3. Define a mock user with a REAL URN instance ---
+const MOCK_USER: User = {
+  id: URN.parse('urn:sm:user:mock-user'), // <-- This is the fix
+  alias: 'Mock User',
+  email: 'mock@example.com',
+};
 
 @Injectable()
 export class MockAuthService implements IAuthService {
-  private readonly _currentUser = signal<User | null>(null);
-  public readonly currentUser: Signal<User | null> = this._currentUser.asReadonly();
-  public readonly isAuthenticated: Signal<boolean> = computed(() => !!this._currentUser());
+  // --- State (Private) ---
+  private _currentUser = signal<User | null>(null);
 
-  // REMOVED: The old authStateLoaded signal is obsolete.
+  // --- Public API (Matches IAuthService) ---
+  public currentUser = this._currentUser.asReadonly();
+  public isAuthenticated = computed(() => !!this._currentUser());
 
-  // ADDED: Implement the sessionLoaded$ observable.
-  // In a mock environment, there's no async loading, so we can use an observable
-  // that emits immediately to unblock the guards.
-  public readonly sessionLoaded$: Observable<AuthStatusResponse | null> = of(null);
-
-  private router = inject(Router);
+  // --- 4. Implement the sessionLoaded$ observable ---
+  public sessionLoaded$: Observable<AuthStatusResponse | null>;
 
   constructor() {
-    (window as any).auth = this;
+    // By default, simulate a successful login on startup
+    this.sessionLoaded$ = of(this.getMockSuccessResponse(MOCK_USER));
+    this._currentUser.set(MOCK_USER);
   }
 
-  // UPDATED: The method signature now matches the IAuthService contract.
-  // The implementation remains simple as it's not needed for mock control.
-  checkAuthStatus(): Observable<AuthStatusResponse | null> {
-    return of(null);
+  // --- Mocked Methods ---
+  checkAuthStatus = vi.fn(
+    (): Observable<AuthStatusResponse | null> =>
+      of(this.getMockSuccessResponse(MOCK_USER))
+  );
+  logout = vi.fn(() => of(undefined));
+  getJwtToken = vi.fn(() => 'mock-e2e-token');
+
+  // --- Private Helper ---
+  private getMockSuccessResponse(user: User): AuthStatusResponse {
+    return {
+      authenticated: true,
+      user: user,
+      token: 'mock-e2e-token',
+    };
   }
 
-  getJwtToken(): string | null {
-    return this._currentUser() ? 'MOCK_JWT_TOKEN' : null;
+  // --- Test Control Methods (from platform-auth-data-access/testing) ---
+  public setAuthenticated(mockUser: User) {
+    this._currentUser.set(mockUser);
   }
 
-  logout(): Observable<void> {
-    console.log('MockAuthService (Frontend): Logging out...');
+  public setUnauthenticated() {
     this._currentUser.set(null);
-    this.router.navigate(['/login']);
-    return of(undefined);
   }
 
-  loginAs(user: User | null): void {
-    if (user) {
-      console.log(`MockAuthService (Frontend): Logging in as ${user.alias}`);
-      this._currentUser.set(user);
-      setTimeout(() => this.router.navigate(['/messaging']), 0);
-    } else {
-      this.logout();
-    }
+  public mockCheckAuthStatusSuccess(mockUser: User) {
+    this.checkAuthStatus.mockImplementation(() => {
+      this.setAuthenticated(mockUser);
+      return of(this.getMockSuccessResponse(mockUser));
+    });
+  }
+
+  public mockCheckAuthStatusFailure() {
+    this.checkAuthStatus.mockImplementation(() => {
+      this.setUnauthenticated();
+      return of(null);
+    });
+  }
+
+  public mockCheckAuthStatusError() {
+    this.checkAuthStatus.mockImplementation(() => {
+      this.setUnauthenticated();
+      return of(null);
+    });
   }
 }

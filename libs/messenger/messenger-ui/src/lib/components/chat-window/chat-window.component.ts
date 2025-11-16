@@ -93,7 +93,7 @@ export class ChatWindowComponent implements AfterViewChecked {
     if (!urn) return null;
 
     if (urn.entityType === 'user') {
-      const contact = this.contacts().find((c) => c.id === urn.toString());
+      const contact = this.contacts().find((c) => c.id === urn);
       if (!contact) return { urn, name: 'Unknown User', initials: '?' };
       return {
         urn,

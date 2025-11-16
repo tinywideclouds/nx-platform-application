@@ -4,22 +4,27 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { ContactGroup } from '@nx-platform-application/contacts-data-access';
+// --- 1. Import URN ---
+import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 import { ContactGroupListComponent } from './contact-group-list.component';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
 
-// --- Mock Groups ---
+// --- 2. Update Mock Groups to use URNs ---
 const MOCK_GROUPS: ContactGroup[] = [
   {
-    id: 'grp-123',
+    id: URN.parse('urn:sm:group:grp-123'),
     name: 'Family',
-    contactIds: ['user-1', 'user-2'],
+    contactIds: [
+      URN.parse('urn:sm:user:user-1'),
+      URN.parse('urn:sm:user:user-2'),
+    ],
   },
   {
-    id: 'grp-456',
+    id: URN.parse('urn:sm:group:grp-456'),
     name: 'Work',
-    contactIds: ['user-3'],
+    contactIds: [URN.parse('urn:sm:user:user-3')],
   },
 ];
 

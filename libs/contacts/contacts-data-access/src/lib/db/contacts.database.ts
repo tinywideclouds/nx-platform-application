@@ -3,40 +3,39 @@
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
 import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
-// 1. Import the new model
-import { Contact, ContactGroup } from '../models/contacts';
+// --- 1. Import the Storable interfaces as well ---
+import {
+  Contact,
+  ContactGroup,
+  StorableContact,
+  StorableGroup,
+} from '../models/contacts';
+import { URN } from '@nx-platform-application/platform-types';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsDatabase extends PlatformDexieService {
-  contacts!: Table<Contact, string>;
-  // 2. Define the new table property
-  contactGroups!: Table<ContactGroup, string>;
+  // --- 2. Change Table types to use StorableContact and StorableGroup ---
+  // The first generic is the type stored, the second is the key type.
+  contacts!: Table<StorableContact, string>;
+  contactGroups!: Table<StorableGroup, string>;
 
   constructor() {
     super('contacts');
 
     // SCHEMA EXPLANATION (v1):
-    // id: Primary Key
-    // alias: Simple index for sorting
-    // isFavorite: Simple index for filtering
-    // *phoneNumbers: MULTI-ENTRY index. Allows db.contacts.where('phoneNumbers').equals('+123...')
-    // *emailAddresses: MULTI-ENTRY index. Allows searching by any email in the list.
     this.version(1).stores({
       contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
     });
 
     // SCHEMA EXPLANATION (v2):
-    // 3. Increment the version to 2
-    // 4. Add the new 'contactGroups' table
-    //    id: Primary Key
-    //    name: Simple index for sorting
-    //    *contactIds: MULTI-ENTRY index to find groups for a contact
+    // This schema definition is correct. It tells Dexie to index the
+    // 'id' and 'contactIds' properties, which will hold strings.
     this.version(2).stores({
       contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
       contactGroups: 'id, name, *contactIds',
     });
 
-    // 5. Initialize the table properties
+    // --- 3. Initialize the table properties (This part is unchanged) ---
     this.contacts = this.table('contacts');
     this.contactGroups = this.table('contactGroups');
   }

@@ -33,7 +33,7 @@ export interface DecryptedMessage {
   senderId: URN;
   recipientId: URN;
   sentTimestamp: ISODateTimeString;
-  typeId: URN; // e.g., "urn:sm:type:text"
+  typeId: URN; 
   payloadBytes: Uint8Array;
 
   // --- Client-Side Fields ---

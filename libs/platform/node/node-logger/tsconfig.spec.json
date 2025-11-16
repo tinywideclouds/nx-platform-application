@@ -11,6 +11,5 @@
     ],
     "target": "esNext"
   },
-  "include": ["src/**/*.spec.ts", "src/**/*.d.ts"],
-  "files": ["src/test-setup.ts"]
+  "include": ["src/**/*.spec.ts", "src/**/*.d.ts"]
 }

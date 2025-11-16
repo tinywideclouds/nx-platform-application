@@ -6,24 +6,30 @@ import {
 } from '@angular/common/http/testing';
 
 import { AuthService } from './auth.service';
-import { User } from '@nx-platform-application/platform-types';
+// --- 1. Import URN and User ---
+import { User, URN } from '@nx-platform-application/platform-types';
 import { MockAuthService } from './testing/mock-auth.service';
-import { AUTH_API_URL } from './auth-data.config'; // <-- 1. Import the token
+import { AUTH_API_URL } from './auth-data.config';
 
-// --- Mock Data ---
-const mockUser: User = {
-  id: '123',
+// --- 2. Define mock domain object and DTO ---
+const mockUserDomain: User = {
+  id: URN.parse('urn:sm:user:123'), // <-- Use a URN object
   alias: 'Test User',
   email: 'test@example.com',
 };
 
-const mockAuthResponse = {
+// This is the DTO (raw JSON) the API sends
+const mockAuthResponseDTO = {
   authenticated: true,
-  user: mockUser,
+  user: {
+    id: 'urn:sm:user:123', // <-- The ID is a string here
+    alias: 'Test User',
+    email: 'test@example.com',
+  },
   token: 'mock-jwt-token-123',
 };
+// --- END CHANGES ---
 
-// --- 2. Define the mock URL for this test suite ---
 const MOCK_AUTH_URL = '/api/auth';
 
 describe('AuthService', () => {
@@ -36,7 +42,6 @@ describe('AuthService', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         AuthService,
-        // --- 3. Provide the mock token ---
         { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL },
       ],
     });
@@ -63,12 +68,13 @@ describe('AuthService', () => {
   it('should set state on success when sessionLoaded$ is subscribed to', () => {
     service.sessionLoaded$.subscribe();
 
-    // --- 4. Update the expected URL ---
     const req = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
     expect(req.request.method).toBe('GET');
-    req.flush(mockAuthResponse);
+    // --- 3. Flush the DTO, not the domain object ---
+    req.flush(mockAuthResponseDTO);
 
-    expect(service.currentUser()).toEqual(mockUser);
+    // --- 4. Assert against the parsed domain object ---
+    expect(service.currentUser()).toEqual(mockUserDomain);
     expect(service.isAuthenticated()).toBeTruthy();
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
   });
@@ -76,7 +82,6 @@ describe('AuthService', () => {
   it('should clear state on failure when sessionLoaded$ is subscribed to', () => {
     service.sessionLoaded$.subscribe();
 
-    // --- 5. Update the expected URL ---
     const req = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
     expect(req.request.method).toBe('GET');
     req.flush('Error', { status: 401, statusText: 'Unauthorized' });
@@ -89,12 +94,12 @@ describe('AuthService', () => {
   it('should clear state on logout', () => {
     service.sessionLoaded$.subscribe();
     const initReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
-    initReq.flush(mockAuthResponse);
+    // --- 5. Flush DTO here too ---
+    initReq.flush(mockAuthResponseDTO);
     expect(service.isAuthenticated()).toBeTruthy(); // Verify pre-condition
 
     service.logout().subscribe();
 
-    // --- 6. Update the expected URL ---
     const logoutReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/logout`);
     expect(logoutReq.request.method).toBe('POST');
     logoutReq.flush({});
@@ -107,7 +112,8 @@ describe('AuthService', () => {
   it('should return the current token with getJwtToken()', () => {
     service.sessionLoaded$.subscribe();
     const initReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
-    initReq.flush(mockAuthResponse);
+    // --- 6. Flush DTO here too ---
+    initReq.flush(mockAuthResponseDTO);
 
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
   });
@@ -122,7 +128,6 @@ describe('MockAuthService Contract', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useClass: MockAuthService },
-        // --- 7. Add the provider here too ---
         { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL }
       ],
     });

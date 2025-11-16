@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-group-list/contact-group-list.component.ts
+
 import {
   Component,
   Input,
@@ -12,7 +14,7 @@ import { ContactGroupListItemComponent } from '../contact-group-list-item/contac
 @Component({
   selector: 'contacts-group-list',
   standalone: true,
-  imports: [CommonModule, ContactGroupListItemComponent], // Import our new list item
+  imports: [CommonModule, ContactGroupListItemComponent],
   templateUrl: './contact-group-list.component.html',
   styleUrl: './contact-group-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -27,5 +29,13 @@ export class ContactGroupListComponent {
    */
   onSelect(group: ContactGroup): void {
     this.groupSelected.emit(group);
+  }
+
+  // --- 1. ADD THIS METHOD ---
+  /**
+   * Provides a stable, primitive value for Angular's @for loop tracking.
+   */
+  trackGroupById(index: number, group: ContactGroup): string {
+    return group.id.toString(); // Convert URN to string for tracking
   }
 }
