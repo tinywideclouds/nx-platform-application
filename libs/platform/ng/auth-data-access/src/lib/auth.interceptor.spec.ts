@@ -11,24 +11,25 @@ import {
 
 // --- Import the new library's code ---
 import { authInterceptor } from './auth.interceptor';
-import { AuthService } from './auth.service';
+import { IAuthService } from './auth.service';
 import { AUTH_API_URL } from './auth-data.config';
 
 describe('authInterceptor', () => {
   let httpMock: HttpTestingController;
   let httpClient: HttpClient;
-  let authServiceMock: Partial<AuthService>; // <-- Use the new AuthService
+  
+  let authServiceMock: Partial<IAuthService>; // <-- Use the new AuthService
 
   // Use a constant for the test, just like the old 'environment' variable
   const mockAuthApiUrl = 'http://localhost:3000/api/auth';
 
-  const setup = (mock: Partial<AuthService>) => {
+  const setup = (mock: Partial<IAuthService>) => {
     authServiceMock = mock;
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
-        { provide: AuthService, useValue: authServiceMock }, // <-- Provide the new AuthService
+        { provide: IAuthService, useValue: authServiceMock }, // <-- Provide the new AuthService
         { provide: AUTH_API_URL, useValue: mockAuthApiUrl }, // <-- Provide the new Token
       ],
     });

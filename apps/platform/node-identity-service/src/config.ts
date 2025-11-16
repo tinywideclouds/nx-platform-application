@@ -1,3 +1,5 @@
+// apps/platform/node-identity-service/src/config.ts
+
 import pino from 'pino';
 
 /**
@@ -47,7 +49,7 @@ export const config: Config = {
   clientUrl: process.env.CLIENT_URL || 'http://localhost:4200',
   sessionSecret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
   jwtSecret: process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
-  jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY,
+  jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY, // <-- INSECURE FIX
   jwtAudience: process.env.JWT_AUDIENCE || '',
   gcpProjectId: process.env.GCP_PROJECT_ID,
   googleClientId: process.env.GOOGLE_CLIENT_ID,
@@ -79,13 +81,13 @@ const requiredConfigMap: Record<keyof Config, string> = {
   googleAuthCallback: 'GOOGLE_AUTH_CALLBACK',
   jwtSecret: 'JWT_SECRET',
   jwtAudience: 'JWT_AUDIENCE',
+  jwtPrivateKey: 'JWT_PRIVATE_KEY', // <-- 1. ADDED THIS
   internalApiKey: 'INTERNAL_API_KEY',
   sessionSecret: 'SESSION_SECRET',
   clientUrl: 'CLIENT_URL',
   // --- These are not checked here ---
   issuer: '',
   port: '',
-  jwtPrivateKey: '',
   enableRateLimiter: '',
   e2eTestSecret: '',
 };
@@ -114,6 +116,13 @@ try {
         'INSECURE: The default JWT_SECRET is being used in a production environment. Please generate a secure, random secret.'
       );
     }
+    // --- 2. THIS IS THE CRITICAL SECURITY FIX ---
+    if (config.jwtPrivateKey === DEFAULT_JWT_PRIVATE_KEY) {
+      throw new Error(
+        'INSECURE: The default JWT_PRIVATE_KEY is being used in a production environment. Please generate a real RSA private key.'
+      );
+    }
+    // --- (End of fix) ---
     if (config.e2eTestSecret) {
       throw new Error(
         'INSECURE: E2E_TEST_SECRET must not be set in a production environment. This variable is for testing only.'

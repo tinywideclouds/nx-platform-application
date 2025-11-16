@@ -1,18 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Firestore } from '@google-cloud/firestore';
-import { getUserProfile } from './firestore.js';
+// Import BOTH functions
+import { getUserProfile, findUserByEmail } from './firestore.js';
 import type { User } from '@nx-platform-application/platform-types';
 
 // --- FIRESTORE MOCK ---
 // We mock the entire @google-cloud/firestore library to have full control
 // over its behavior without making any real database calls.
 const mockDoc = vi.fn();
+
+// This is the mock for the query chain: collection().where().limit().get()
+const mockQueryGet = vi.fn();
+const mockQueryLimit = vi.fn(() => ({ get: mockQueryGet }));
+const mockQueryWhere = vi.fn(() => ({ limit: mockQueryLimit }));
+
 const mockCollection = vi.fn(() => ({
-  where: vi.fn(() => ({
-    limit: vi.fn(() => ({
-      get: vi.fn(),
-    })),
-  })),
+  where: mockQueryWhere,
   doc: mockDoc,
 }));
 
@@ -23,6 +26,7 @@ vi.mock('@google-cloud/firestore', () => {
     })),
   };
 });
+// --- END MOCK ---
 
 describe('Firestore Service (Unit)', () => {
   let db: Firestore;
@@ -77,11 +81,56 @@ describe('Firestore Service (Unit)', () => {
     });
   });
 
-  // We can also add unit tests for findUserByEmail here
+  // --- COMPLETED TEST SUITE FOR findUserByEmail ---
   describe('findUserByEmail', () => {
     it('should return an authenticated user if found by email', async () => {
-      // This would follow a similar mocking pattern as getUserProfile
-      // ... implementation for findUserByEmail test
+      // ARRANGE
+      const userEmail = 'found@example.com';
+      const userData: User = {
+        id: 'user-id-123',
+        email: userEmail,
+        alias: 'FoundUser',
+      };
+      const mockDoc = {
+        id: 'user-id-123',
+        data: () => userData,
+      };
+      const mockSnapshot = {
+        empty: false,
+        docs: [mockDoc],
+      };
+      mockQueryGet.mockResolvedValue(mockSnapshot);
+
+      // ACT
+      const result = await findUserByEmail(db, userEmail);
+
+      // ASSERT
+      expect(mockCollection).toHaveBeenCalledWith('authorized_users');
+      expect(mockQueryWhere).toHaveBeenCalledWith('email', '==', userEmail);
+      expect(mockQueryLimit).toHaveBeenCalledWith(1);
+      expect(result).toEqual({
+        id: 'user-id-123',
+        email: userEmail,
+        alias: 'FoundUser',
+      });
+    });
+
+    it('should return null if no user is found by email', async () => {
+      // ARRANGE
+      const userEmail = 'notfound@example.com';
+      const mockSnapshot = {
+        empty: true,
+        docs: [],
+      };
+      mockQueryGet.mockResolvedValue(mockSnapshot);
+
+      // ACT
+      const result = await findUserByEmail(db, userEmail);
+
+      // ASSERT
+      expect(mockQueryWhere).toHaveBeenCalledWith('email', '==', userEmail);
+      expect(result).toBeNull();
     });
   });
+  // --- END OF NEW TEST SUITE ---
 });

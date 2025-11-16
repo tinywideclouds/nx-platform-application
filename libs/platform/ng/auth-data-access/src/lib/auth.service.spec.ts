@@ -4,9 +4,11 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
+
 import { AuthService } from './auth.service';
 import { User } from '@nx-platform-application/platform-types';
 import { MockAuthService } from './testing/mock-auth.service';
+import { AUTH_API_URL } from './auth-data.config'; // <-- 1. Import the token
 
 // --- Mock Data ---
 const mockUser: User = {
@@ -21,13 +23,22 @@ const mockAuthResponse = {
   token: 'mock-jwt-token-123',
 };
 
+// --- 2. Define the mock URL for this test suite ---
+const MOCK_AUTH_URL = '/api/auth';
+
 describe('AuthService', () => {
   let service: AuthService;
   let httpTestingController: HttpTestingController;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), AuthService],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        AuthService,
+        // --- 3. Provide the mock token ---
+        { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL },
+      ],
     });
 
     httpTestingController = TestBed.inject(HttpTestingController);
@@ -40,89 +51,80 @@ describe('AuthService', () => {
   });
 
   it('should be created', () => {
-    // 1. The service is created, but no HTTP call is made. This is correct.
     expect(service).toBeTruthy();
-    // 2. We no longer expect any HTTP call here.
   });
 
   it('should have correct initial state', () => {
-    // 1. State should be initial (service created, no calls made)
     expect(service.currentUser()).toBeNull();
     expect(service.isAuthenticated()).toBeFalsy();
     expect(service.getJwtToken()).toBeNull();
-    // 2. We no longer expect any HTTP call here.
   });
 
   it('should set state on success when sessionLoaded$ is subscribed to', () => {
-    // 1. Subscribe to the observable to trigger the HTTP call
     service.sessionLoaded$.subscribe();
 
-    // 2. Now, we expect the call
-    const req = httpTestingController.expectOne('/api/auth/status');
+    // --- 4. Update the expected URL ---
+    const req = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
     expect(req.request.method).toBe('GET');
     req.flush(mockAuthResponse);
 
-    // 3. Assert the state is set
     expect(service.currentUser()).toEqual(mockUser);
     expect(service.isAuthenticated()).toBeTruthy();
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
   });
 
   it('should clear state on failure when sessionLoaded$ is subscribed to', () => {
-    // 1. Subscribe to the observable to trigger the HTTP call
     service.sessionLoaded$.subscribe();
 
-    // 2. Now, we expect the call
-    const req = httpTestingController.expectOne('/api/auth/status');
+    // --- 5. Update the expected URL ---
+    const req = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
     expect(req.request.method).toBe('GET');
     req.flush('Error', { status: 401, statusText: 'Unauthorized' });
 
-    // 3. Assert the state is cleared
     expect(service.currentUser()).toBeNull();
     expect(service.isAuthenticated()).toBeFalsy();
     expect(service.getJwtToken()).toBeNull();
   });
 
   it('should clear state on logout', () => {
-    // 1. Get into logged-in state
     service.sessionLoaded$.subscribe();
-    const initReq = httpTestingController.expectOne('/api/auth/status');
+    const initReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
     initReq.flush(mockAuthResponse);
     expect(service.isAuthenticated()).toBeTruthy(); // Verify pre-condition
 
-    // 2. Call logout
     service.logout().subscribe();
 
-    // 3. Expect and flush POST
-    const logoutReq = httpTestingController.expectOne('/api/auth/logout');
+    // --- 6. Update the expected URL ---
+    const logoutReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/logout`);
     expect(logoutReq.request.method).toBe('POST');
     logoutReq.flush({});
 
-    // 4. Check cleared state
     expect(service.currentUser()).toBeNull();
     expect(service.isAuthenticated()).toBeFalsy();
     expect(service.getJwtToken()).toBeNull();
   });
 
   it('should return the current token with getJwtToken()', () => {
-    // 1. Get to a logged-in state
     service.sessionLoaded$.subscribe();
-    const initReq = httpTestingController.expectOne('/api/auth/status');
+    const initReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/status`);
     initReq.flush(mockAuthResponse);
 
-    // 2. Assert the token is correct
     expect(service.getJwtToken()).toBe('mock-jwt-token-123');
   });
 });
 
 //
 // --- THE LOCAL CONTRACT TEST ---
-// (This test was fine and needs no changes)
+// This test also needs the provider
 //
 describe('MockAuthService Contract', () => {
   it('should be assignable to the real AuthService in TestBed', () => {
     TestBed.configureTestingModule({
-      providers: [{ provide: AuthService, useClass: MockAuthService }],
+      providers: [
+        { provide: AuthService, useClass: MockAuthService },
+        // --- 7. Add the provider here too ---
+        { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL }
+      ],
     });
 
     const service = TestBed.inject(AuthService);

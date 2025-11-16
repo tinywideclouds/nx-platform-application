@@ -4,7 +4,13 @@
 // behavior of loadConversation and fetchAndProcessMessages.
 //
 import { TestBed } from '@angular/core/testing';
-import { Subject, BehaviorSubject, of } from 'rxjs';
+import { Subject, BehaviorSubject, of, Observable } from 'rxjs';
+import {
+  signal,
+  WritableSignal,
+  Signal,
+  computed,
+} from '@angular/core';
 import {
   URN,
   PublicKeys,
@@ -13,7 +19,6 @@ import {
   SecureEnvelope,
   QueuedMessage,
 } from '@nx-platform-application/platform-types';
-// --- 1. IMPORT THE NEW VIEW MODEL ---
 import {
   EncryptedMessagePayload,
   ChatMessage,
@@ -24,7 +29,7 @@ import { ChatService } from './chat.service';
 
 // --- Dependencies (Mocks) ---
 import {
-  AuthService,
+  IAuthService, // <-- 1. Import the INTERFACE
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-data-access';
 import {
@@ -66,7 +71,6 @@ const mockUser: User = {
 };
 const mockUserUrn = URN.parse(mockUser.id);
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
-const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
 
 const mockMyKeys: PrivateKeys = {
   encKey: 'my-enc-key',
@@ -90,13 +94,12 @@ const mockEnvelope: SecureEnvelope = {
 };
 const mockQueuedMessage: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
 
-// --- 2. UPDATED MOCK DATA ---
 const mockTextContent = 'Test Payload';
 const mockDecryptedPayload: EncryptedMessagePayload = {
   senderId: mockSenderUrn,
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
   typeId: URN.parse('urn:sm:type:text'),
-  payloadBytes: new TextEncoder().encode(mockTextContent), // <-- Updated
+  payloadBytes: new TextEncoder().encode(mockTextContent),
 };
 const mockDecryptedMessage: DecryptedMessage = { // Storage Model
   messageId: 'msg-1',
@@ -108,24 +111,37 @@ const mockDecryptedMessage: DecryptedMessage = { // Storage Model
   status: 'received',
   conversationUrn: mockSenderUrn,
 };
-
-// --- Mock Instances (Copied from chat.service.spec.ts) ---
-const mockAuthService: Mocked<AuthService> = {
-  sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
-  currentUser: vi.fn(),
-  getJwtToken: vi.fn(),
-  isAuthenticated: vi.fn(),
-  logout: vi.fn(),
-  checkAuthStatus: vi.fn(),
+const mockChatMessage: ChatMessage = { // View Model
+  id: 'msg-1',
+  conversationUrn: mockSenderUrn,
+  senderId: mockSenderUrn,
+  timestamp: new Date(mockDecryptedPayload.sentTimestamp),
+  textContent: mockTextContent,
+  type: 'text',
 };
 
+// --- Mock Instances ---
+
+// --- 2. Create Mocks for IAuthService (Signal-based) ---
+let mockCurrentUser: WritableSignal<User | null>;
+let mockIsAuthenticated: Signal<boolean>;
+let mockSessionLoaded$: BehaviorSubject<AuthStatusResponse | null>;
+let mockAuthService: {
+  currentUser: Signal<User | null>;
+  isAuthenticated: Signal<boolean>;
+  sessionLoaded$: Observable<AuthStatusResponse | null>;
+  getJwtToken: ReturnType<typeof vi.fn>;
+  logout: ReturnType<typeof vi.fn>;
+  checkAuthStatus: ReturnType<typeof vi.fn>;
+};
+
+// --- (Other mocks remain the same) ---
 const mockCryptoService: Mocked<MessengerCryptoService> = {
   loadMyKeys: vi.fn(),
   verifyAndDecrypt: vi.fn(),
   encryptAndSign: vi.fn(),
   generateAndStoreKeys: vi.fn(),
 };
-
 const mockStorageService: Mocked<ChatStorageService> = {
   loadConversationSummaries: vi.fn(),
   saveMessage: vi.fn(),
@@ -134,14 +150,12 @@ const mockStorageService: Mocked<ChatStorageService> = {
   storeKey: vi.fn(),
   clearAllMessages: vi.fn(),
 };
-
 const mockLogger: Mocked<Logger> = {
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
   debug: vi.fn(),
 };
-
 const mockLiveService: Mocked<ChatLiveDataService> = {
   connect: vi.fn(),
   disconnect: vi.fn(),
@@ -149,16 +163,13 @@ const mockLiveService: Mocked<ChatLiveDataService> = {
   incomingMessage$: new Subject<void>(),
   ngOnDestroy: vi.fn(),
 };
-
 const mockKeyService: Mocked<KeyCacheService> = {
   getPublicKey: vi.fn(),
 };
-
 const mockDataService: Mocked<ChatDataService> = {
   getMessageBatch: vi.fn(),
   acknowledge: vi.fn(),
 };
-
 const mockSendService: Mocked<ChatSendService> = {
   sendMessage: vi.fn(),
 };
@@ -171,7 +182,12 @@ describe('ChatService (Race Condition Test)', () => {
 
   async function initializeService() {
     service = TestBed.inject(ChatService);
-    mockAuthService.sessionLoaded$.next(mockAuthResponse);
+    // Set mock state that init() will read
+    mockCurrentUser.set(mockUser);
+    mockAuthService.getJwtToken.mockReturnValue('mock-token');
+    
+    // Trigger the sessionLoaded$ stream
+    mockSessionLoaded$.next(mockAuthResponse);
     await vi.runOnlyPendingTimersAsync();
   }
 
@@ -179,9 +195,20 @@ describe('ChatService (Race Condition Test)', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    // --- Configure Mocks (Default Happy Path) ---
-    mockAuthService.currentUser.mockReturnValue(mockUser);
-    mockAuthService.getJwtToken.mockReturnValue('mock-token');
+    // --- 3. Initialize Signal-based Auth Mock ---
+    mockCurrentUser = signal<User | null>(null);
+    mockIsAuthenticated = computed(() => !!mockCurrentUser());
+    mockSessionLoaded$ = new BehaviorSubject<AuthStatusResponse | null>(null);
+    mockAuthService = {
+      currentUser: mockCurrentUser,
+      isAuthenticated: mockIsAuthenticated,
+      sessionLoaded$: mockSessionLoaded$.asObservable(),
+      getJwtToken: vi.fn(),
+      logout: vi.fn(() => of(undefined)),
+      checkAuthStatus: vi.fn(() => of(null)),
+    };
+
+    // --- Configure Other Mocks (Default Happy Path) ---
     mockStorageService.loadConversationSummaries.mockResolvedValue([]);
     mockStorageService.saveMessage.mockResolvedValue(undefined);
     mockStorageService.loadHistory.mockResolvedValue([]);
@@ -196,7 +223,8 @@ describe('ChatService (Race Condition Test)', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatService,
-        { provide: AuthService, useValue: mockAuthService },
+        // --- 4. Provide the INTERFACE ---
+        { provide: IAuthService, useValue: mockAuthService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
         { provide: Logger, useValue: mockLogger },
@@ -217,54 +245,37 @@ describe('ChatService (Race Condition Test)', () => {
   // ---
   it('should correctly process queued operations (select then fetch) in sequence', async () => {
     // 1. --- SETUP ---
-    // This is the new message that will arrive
     const newQueuedMessage: QueuedMessage = {
       ...mockQueuedMessage,
       id: 'race-msg-id-1',
     };
-    // This is the stale history that loadHistory will return
     const staleHistory: DecryptedMessage[] = [];
 
-    // --- 3. DEFINE THE EXPECTED VIEW MODEL ---
+    // --- 5. DEFINE THE EXPECTED VIEW MODEL ---
+    // This is the message that should be in the signal at the end
     const expectedChatMessage: ChatMessage = {
+      ...mockChatMessage,
       id: 'race-msg-id-1',
-      conversationUrn: mockSenderUrn,
-      senderId: mockSenderUrn,
-      timestamp: new Date(mockDecryptedPayload.sentTimestamp),
-      textContent: mockTextContent,
-      type: 'text',
     };
 
     // Configure mocks
     mockStorageService.loadHistory.mockResolvedValue(staleHistory);
     mockDataService.getMessageBatch.mockReturnValue(of([newQueuedMessage]));
-    // Note: verifyAndDecrypt is already mocked to return mockDecryptedPayload
+    // (verifyAndDecrypt is already mocked)
 
     // Initialize the service
     await initializeService();
 
     // 2. --- TRIGGER THE "RACE" ---
-    // Fire off both operations *without* awaiting them individually.
-    // This simulates them being called in the same event loop tick.
     const selectPromise = service.loadConversation(mockSenderUrn);
     const fetchPromise = service.fetchAndProcessMessages();
 
     // 3. --- VERIFY AND FLUSH THE QUEUE ---
-    // Wait for BOTH operations to complete. The mutex in the service
-    // will ensure they run sequentially (select, then fetch).
     await Promise.all([selectPromise, fetchPromise]);
     await vi.runAllTicks(); // Ensure any final microtasks are flushed
 
-    // 4. --- ASSERTION (This should pass) ---
-    // The lock has forced the operations to run sequentially.
-    // 1. loadConversation ran, setting messages to [] (from staleHistory).
-    // 2. fetchAndProcessMessages ran, saw selectedConversation was correct,
-    //    and appended the new message.
-    //
-    // We only check the FINAL state, which must be the ChatMessage view model.
+    // 4. --- ASSERTION (Checking for View Model) ---
     expect(service.messages()).toEqual([expectedChatMessage]);
-
-    // We can also verify the mocks were called
     expect(mockStorageService.loadHistory).toHaveBeenCalled();
     expect(mockDataService.getMessageBatch).toHaveBeenCalled();
   });

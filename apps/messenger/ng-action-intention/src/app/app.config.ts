@@ -10,9 +10,9 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { firstValueFrom } from 'rxjs'; // <-- 2. Import
 
 import { appRoutes } from './app.routes';
-import { authInterceptor } from './auth/auth.interceptor';
 import { environment } from '../environments/environment';
 import {
+  authInterceptor,
   IAuthService,
   AuthService,
 } from '@nx-platform-application/platform-auth-data-access';

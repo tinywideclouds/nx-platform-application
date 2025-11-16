@@ -1,10 +1,10 @@
 import { HttpInterceptorFn, HttpHandlerFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { AuthService } from './auth.service';
+import { IAuthService } from './auth.service'; // <-- Import the interface
 import { AUTH_API_URL } from './auth-data.config';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const authService = inject(AuthService);
+  const authService = inject(IAuthService); // <-- Inject the interface
   const authApiUrl = inject(AUTH_API_URL); // Inject the token
   let authReq = req;
 

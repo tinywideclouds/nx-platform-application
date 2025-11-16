@@ -7,10 +7,14 @@
   "targets": {
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}" 
+      ],
       "options": {
         "reportsDirectory": "{workspaceRoot}/coverage/apps/platform/node-identity-service",
-        "configFile": "apps/platform/node-identity-service/vitest.config.mts"
+        "configFile": "apps/platform/node-identity-service/vitest.config.mts",
+        "htmlReportDirectory": "{workspaceRoot}/dist/test-reports/node-identity-service" 
       },
       "configurations": {
         "unit": {

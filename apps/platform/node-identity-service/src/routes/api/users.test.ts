@@ -4,7 +4,7 @@ import { createUserApiRoutes } from './users.js';
 import { findUserByEmail } from '../../internal/firestore.js';
 import { generateToken } from '../../internal/services/jwt.service.js';
 import type { User } from '@nx-platform-application/platform-types';
-import { logger } from '@nx-platform-application/node-logger'; // <-- ADD THIS LINE
+import { logger } from '@nx-platform-application/node-logger';
 
 // --- Mocks ---
 

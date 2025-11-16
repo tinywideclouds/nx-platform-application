@@ -12,8 +12,24 @@
     "changeOrigin": true
   },
   "/api/messenger": {
-    "target": "http://localhost:3002",
+    "target": "http://localhost:8082",
     "secure": false,
+    "logLevel": "debug",
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api/messenger": "/api"
+    }
+  },
+  "/keys": {
+    "target": "http://localhost:8081",
+    "secure": false,
+    "logLevel": "debug",
+    "changeOrigin": true
+  },
+  "/connect": {
+    "target": "ws://localhost:8083",
+    "secure": false,
+    "ws": true,
     "logLevel": "debug",
     "changeOrigin": true
   }

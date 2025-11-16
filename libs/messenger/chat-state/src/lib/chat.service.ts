@@ -1,6 +1,5 @@
 // --- FILE: libs/messenger/chat-state/src/lib/chat.service.ts ---
 
-
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
   Injectable,
@@ -52,13 +51,19 @@ import {
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
 
+/**
+ * Orchestrates all chat-related services, acting as the central "brains"
+ * and state manager for the messenger application.
+ *
+ * Provided in 'root'.
+ */
 @Injectable({
   providedIn: 'root',
 })
 export class ChatService implements OnDestroy {
   // --- Injected Dependencies ---
   private readonly logger = inject(Logger);
-  private readonly authService = inject(IAuthService); // Inject the interface
+  private readonly authService = inject(IAuthService);
   private readonly cryptoService = inject(MessengerCryptoService);
   private readonly dataService = inject(ChatDataService);
   private readonly sendService = inject(ChatSendService);
@@ -69,20 +74,41 @@ export class ChatService implements OnDestroy {
   // --- Private State ---
   private readonly destroy$ = new Subject<void>();
   private myKeys = signal<PrivateKeys | null>(null);
-  private currentUserCache = signal<User | null>(null); // Keep this for the full User object
+  private currentUserCache = signal<User | null>(null);
 
+  /**
+   * A promise that resolves when the current exclusive operation is complete.
+   * This acts as a mutex to serialize critical, async operations
+   * (like loading and fetching) to prevent race conditions.
+   */
   private operationLock = Promise.resolve();
 
   // --- Public State (Signals) ---
+
+  /**
+   * A signal representing the user's list of active conversations.
+   * This is the source of truth for the conversation list UI.
+   */
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
-  
-  //
-  // --- 2. FIX (Part 1): The public signal is now of type ChatMessage[]
-  //
+
+  /**
+   * A signal representing the messages for the *currently selected conversation*.
+   * This signal is updated when a new conversation is loaded or when
+   * new messages are received.
+   */
   public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
+
+  /**
+   * A signal holding the URN of the currently selected conversation.
+   * This is null if no conversation is selected.
+   */
   public readonly selectedConversation = signal<URN | null>(null);
 
+  /**
+   * A computed signal that safely derives the current user's URN
+   * from the IAuthService.
+   */
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
     if (!user) return null;
@@ -101,10 +127,12 @@ export class ChatService implements OnDestroy {
 
   /**
    * CORE LIFECYCLE: Handles initialization and async setup.
+   * Waits for auth to be ready, then loads crypto keys,
+   * local conversation summaries, and connects to the live service.
    */
   private async init(): Promise<void> {
     try {
-      
+      // Wait for the APP_INITIALIZER to resolve
       await firstValueFrom(this.authService.sessionLoaded$);
 
       const currentUser = this.authService.currentUser();
@@ -127,6 +155,7 @@ export class ChatService implements OnDestroy {
         this.myKeys.set(keys);
       }
 
+      // Connect to the WebSocket and start listeners
       this.liveService.connect(authToken!);
       this.handleConnectionStatus();
       this.initLiveSubscriptions();
@@ -136,7 +165,8 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * LISTENER: Triggers initial pull and sets up fallback poller.
+   * LISTENER: Triggers initial pull when WebSocket connects
+   * and sets up a fallback poller.
    */
   private handleConnectionStatus(): void {
     this.liveService.status$
@@ -149,6 +179,7 @@ export class ChatService implements OnDestroy {
         this.fetchAndProcessMessages();
       });
 
+    // Fallback poller in case WebSocket connection flaps or misses a "poke"
     interval(15_000)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -158,7 +189,8 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * LISTENER: Triggers pull on explicit server notification ("poke").
+   * LISTENER: Triggers a message pull on explicit server
+   * notification ("poke") via WebSocket.
    */
   private initLiveSubscriptions(): void {
     this.liveService.incomingMessage$
@@ -171,7 +203,7 @@ export class ChatService implements OnDestroy {
 
   /**
    * Helper method to create a "critical section" and ensure
-   * only one data-mutating operation runs at a time.
+   * only one data-mutating operation (like load or fetch) runs at a time.
    */
   private async runExclusive<T>(task: () => Promise<T>): Promise<T> {
     const previousLock = this.operationLock;
@@ -194,27 +226,26 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * CORE LOGIC: Selects a conversation and loads its history.
+   * CORE LOGIC: Selects a conversation and loads its history from storage.
+   * This is a serialized operation to prevent race conditions.
+   * @param urn The URN of the conversation to load, or null to clear.
    */
   public async loadConversation(urn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
+      // Re-entrancy guard: Do nothing if this convo is already selected.
+      if (this.selectedConversation()?.toString() === urn?.toString()) {
+        this.logger.info(`Conversation ${urn?.toString()} already selected.`);
+        return;
+      }
+
+      this.logger.info(`Selecting conversation: ${urn?.toString()}`);
+      this.selectedConversation.set(urn);
+
       if (!urn) {
-        this.selectedConversation.set(null);
         this.messages.set([]);
         return;
       }
-
-      if (this.selectedConversation()?.toString() === urn.toString()) {
-        this.logger.info(`Conversation ${urn.toString()} already selected.`);
-        return;
-      }
-
-      this.logger.info(`Selecting conversation: ${urn.toString()}`);
-      this.selectedConversation.set(urn);
-
-      //
-      // --- 3. FIX (Part 2): Map the storage model to the view model
-      //
+      
       const history = await this.storageService.loadHistory(urn);
       const viewMessages = history.map(this.mapDecryptedToChat);
       this.messages.set(viewMessages);
@@ -222,7 +253,10 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * CORE LOGIC: Fetches, decrypts, saves, and acknowledges messages.
+   * CORE LOGIC: Fetches new messages from the server, decrypts them,
+   * saves them to storage, and acknowledges them.
+   * This is a serialized operation.
+   * @param batchLimit The max number of messages to fetch.
    */
   public async fetchAndProcessMessages(batchLimit = 50): Promise<void> {
     return this.runExclusive(async () => {
@@ -242,16 +276,13 @@ export class ChatService implements OnDestroy {
         );
 
         if (queuedMessages.length === 0) {
-          return;
+          return; // Nothing to do
         }
 
         this.logger.info(`Processing ${queuedMessages.length} new messages...`);
 
         const processedIds: string[] = [];
-        //
-        // --- 4. FIX (Part 3): This array now holds ChatMessage
-        //
-        const newMessages: ChatMessage[] = [];
+        const newMessages: ChatMessage[] = []; // Holds view models
 
         for (const msg of queuedMessages) {
           try {
@@ -273,16 +304,21 @@ export class ChatService implements OnDestroy {
             processedIds.push(msg.id);
           } catch (error) {
             this.logger.error('Failed to decrypt/verify message', error, msg);
+            // Acknowledge failed messages so we don't try again
             processedIds.push(msg.id);
           }
         }
 
+        // Add new messages to the UI if the conversation is active
         this.upsertMessages(newMessages);
 
+        // Acknowledge all processed messages
         await firstValueFrom(this.dataService.acknowledge(processedIds));
 
+        // If the queue was full, pull again immediately
         if (queuedMessages.length === batchLimit) {
           this.logger.info('Queue was full, pulling next batch immediately.');
+          // Recursive call is safe; it will be queued by the lock
           this.fetchAndProcessMessages(batchLimit);
         }
       } catch (error) {
@@ -292,7 +328,10 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * CORE LOGIC: Encrypts, sends, and optimistically saves the message.
+   * CORE LOGIC: Encrypts, sends, and optimistically saves a new message.
+   * This is a serialized operation.
+   * @param recipientUrn The URN of the user or group to send to.
+   * @param plaintext The message content.
    */
   public async sendMessage(
     recipientUrn: URN,
@@ -308,6 +347,7 @@ export class ChatService implements OnDestroy {
       }
 
       try {
+        // 1. Create the payload
         const payload: EncryptedMessagePayload = {
           senderId: senderUrn,
           sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
@@ -315,8 +355,10 @@ export class ChatService implements OnDestroy {
           payloadBytes: new TextEncoder().encode(plaintext),
         };
 
+        // 2. Get recipient keys
         const recipientKeys = await this.keyService.getPublicKey(recipientUrn);
 
+        // 3. Encrypt & Sign
         const envelope = await this.cryptoService.encryptAndSign(
           payload,
           recipientUrn,
@@ -324,8 +366,10 @@ export class ChatService implements OnDestroy {
           recipientKeys
         );
 
+        // 4. Send to server
         await firstValueFrom(this.sendService.sendMessage(envelope));
 
+        // 5. Create optimistic storage model
         const optimisticMsg: DecryptedMessage = {
           messageId: `local-${crypto.randomUUID()}`,
           senderId: senderUrn,
@@ -341,11 +385,10 @@ export class ChatService implements OnDestroy {
           ),
         };
 
+        // 6. Save to local DB
         await this.storageService.saveMessage(optimisticMsg);
 
-        //
-        // --- 5. FIX (Part 4): Map the optimistic message to a ChatMessage
-        //
+        // 7. Update UI (as view model)
         this.upsertMessages([this.mapDecryptedToChat(optimisticMsg)]);
       } catch (error) {
         this.logger.error('Failed to send message', error);
@@ -355,14 +398,16 @@ export class ChatService implements OnDestroy {
 
   // --- Utility Methods ---
 
-  //
-  // --- 6. FIX (Part 5): This method now takes ChatMessage[]
-  //
+  /**
+   * Adds new messages to the `messages` signal *only if* they
+   * belong to the currently selected conversation.
+   * @param messages An array of new `ChatMessage` view models.
+   */
   private upsertMessages(messages: ChatMessage[]): void {
     const activeConvo = this.selectedConversation();
-    if (!activeConvo) return;
+    if (!activeConvo) return; // No conversation selected, do nothing
 
-    // Filter by ChatMessage.conversationUrn
+    // Filter messages that belong to the active conversation
     const relevantMessages = messages.filter(
       (msg) => msg.conversationUrn.toString() === activeConvo.toString()
     );
@@ -373,10 +418,10 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * NEW HELPER
    * Maps the storage model (DecryptedMessage) to the view model (ChatMessage).
+   * This is an arrow function to preserve 'this' context when used in .map().
    */
-  private mapDecryptedToChat(msg: DecryptedMessage): ChatMessage {
+  private mapDecryptedToChat = (msg: DecryptedMessage): ChatMessage => {
     let textContent = '';
     if (msg.typeId.toString().includes('text')) {
       try {
@@ -398,7 +443,7 @@ export class ChatService implements OnDestroy {
   }
 
   /**
-   * Maps the raw server/crypto payload to the storage model.
+   * Maps the raw server/crypto payload to the storage model (DecryptedMessage).
    */
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
@@ -421,7 +466,11 @@ export class ChatService implements OnDestroy {
     };
   }
 
+  /**
+   * Determines the conversation URN for a 1:1 chat.
+   */
   private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
+    // For 1:1 chats, the conversation ID is the *other* person's URN.
     return urn1.toString() === myUrn.toString() ? urn2 : urn1;
   }
 

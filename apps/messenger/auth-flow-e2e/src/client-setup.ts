@@ -9,6 +9,7 @@ import { KeyCacheService } from '@nx-platform-application/key-cache-access';
 import { ChatService } from '@nx-platform-application/chat-state';
 import {
   AuthService,
+  IAuthService,
   provideAuth,
   AUTH_API_URL,
 } from '@nx-platform-application/platform-auth-data-access';
@@ -86,7 +87,7 @@ export async function createTestClient(
     providers: [
       provideHttpClient(withInterceptorsFromDi()),
       provideAuth(),
-      { provide: AuthService, useValue: mockAuthService },
+      { provide: IAuthService, useValue: mockAuthService },
       { provide: Logger, useValue: mockLogger },
       CryptoEngine,
       MessengerCryptoService,

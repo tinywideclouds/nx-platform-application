@@ -12,7 +12,7 @@ import { ContactsComponent } from '@nx-platform-application/contacts-ui'; //
 import { authGuard } from './auth/auth.guard'; // [cite: 24]
 import { environment } from '../environments/environment';
 import { MockLoginComponent } from "./auth/mocks/mock-login.component";
-import { nonAuthGuard } from "./auth/mocks/non-auth.guard";
+import { nonAuthGuard } from "./auth/non-auth.guard";
 
 // Conditionally choose which component to use for the '/login' path
 const loginComponent = environment.useMocks ? MockLoginComponent : RealLoginComponent;

@@ -10,7 +10,7 @@ import {
 } from '@nx-platform-application/platform-auth-ui';
 
 import { authGuard } from './auth/auth.guard';
-import { nonAuthGuard } from './auth/mocks/non-auth.guard';
+import { nonAuthGuard } from './auth/non-auth.guard';
 import { environment } from './environments/environment';
 import { MockLoginComponent } from './auth/mocks/mock-login.component';
 
