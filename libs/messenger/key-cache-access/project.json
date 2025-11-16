@@ -9,10 +9,14 @@
   
     "build": {
       "executor": "@nx/vite:build",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}",
+        "{options.outputHtmlPath}"
+      ],
       "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/libs/messenger/key-cache-access",
+        "outputHtmlPath": "dist/test-reports/libs/messenger/key-cache-access/index.html",
         "configFile": "libs/messenger/key-cache-access/vite.config.mts"
       }
     },

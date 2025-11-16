@@ -17,7 +17,7 @@ import {
   AuthService,
 } from '@nx-platform-application/platform-auth-data-access';
 import { MockAuthService } from './auth/mocks/mock-auth.service';
-import { LOG_LEVEL, LogLevel } from '@nx-platform-application/logger';
+import { LOG_LEVEL, LogLevel } from '@nx-platform-application/console-logger';
 
 // Conditionally provide the correct implementation for the IAuthService token
 const authProvider = environment.useMocks

@@ -17,9 +17,13 @@
     },
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.reportsHtmlDirectory}"
+      ],
       "options": {
         "reportsDirectory": "coverage/libs/platform/ng/auth-ui",
+        "reportsHtmlDirectory": "dist/test-reports/platform/ng/auth-ui",
         "configFile": "libs/platform/ng/auth-ui/vitest.config.mts"
       }
     },

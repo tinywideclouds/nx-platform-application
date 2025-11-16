@@ -7,6 +7,7 @@ import {
   ElementRef,
   ViewChild,
   AfterViewChecked,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -20,7 +21,12 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
+import {
+  AuthService,
+  IAuthService,
+} from '@nx-platform-application/platform-auth-data-access';
 import { URN } from '@nx-platform-application/platform-types';
+import { Logger } from '@nx-platform-application/console-logger';
 
 // --- Types ---
 import {
@@ -31,7 +37,8 @@ import {
 @Component({
   selector: 'messenger-chat-window',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  // RouterLink is no longer needed, as we use onBack()
+  imports: [CommonModule, FormsModule],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,16 +49,15 @@ export class ChatWindowComponent implements AfterViewChecked {
   private router = inject(Router);
   private chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
+  private authService = inject(IAuthService);
 
   @ViewChild('messageContainer')
   private messageContainer!: ElementRef;
 
   // --- 2. State from Services ---
-  // The component's signals should point directly to the service's signals.
-  //
+  // All state now comes directly from the services
   messages = this.chatService.messages;
   currentConversationUrn = this.chatService.selectedConversation;
-
   currentUserUrn = this.chatService.currentUserUrn;
 
   // Real state from contacts service
@@ -75,8 +81,8 @@ export class ChatWindowComponent implements AfterViewChecked {
     if (!urnStr) return null;
     try {
       return URN.parse(urnStr);
-    } catch (e) {
-      console.error('Failed to parse URN from route:', e);
+    } catch (err) {
+      this.logger.error('Failed to parse URN from route:', err);
       return null;
     }
   });
@@ -114,13 +120,18 @@ export class ChatWindowComponent implements AfterViewChecked {
 
   // --- 5. Effects ---
   // This effect reacts to the URN string changing and tells ChatService to load
-  constructor() {
+  constructor(private logger: Logger) {
     effect(() => {
+      // 1. This effect will *only* re-run when conversationUrn() changes.
       const urn = this.conversationUrn();
+      
       if (urn) {
-        // This will trigger the service to load messages
-        // and update the `selectedConversationMessages` signal
-        this.chatService.loadConversation(urn);
+        // 2. We explicitly call the service in an "untracked" context.
+        // This tells the effect to NOT track any signals that might
+        // be read *inside* loadConversation().
+        untracked(() => {
+          this.chatService.loadConversation(urn);
+        });
       }
     });
   }
@@ -135,16 +146,18 @@ export class ChatWindowComponent implements AfterViewChecked {
       this.messageContainer.nativeElement.scrollTop =
         this.messageContainer.nativeElement.scrollHeight;
     } catch (err) {
-      //
+      this.logger.error('Failed to scroll', err);
     }
   }
 
   // --- 7. Event Handlers ---
   onSendMessage(): void {
     const text = this.newMessageText.trim();
-    if (text) {
-      // This is where the real implementation will go
-      // this.chatService.sendMessage(text);
+    const recipientUrn = this.conversationUrn();
+
+    if (text && recipientUrn) {
+      // Call the ChatService method
+      this.chatService.sendMessage(recipientUrn, text);
 
       this.newMessageText = '';
       this.scrollToBottom();
@@ -155,6 +168,6 @@ export class ChatWindowComponent implements AfterViewChecked {
    * On mobile, navigate back to the conversation list.
    */
   onBack(): void {
-    this.router.navigate(['/messenger']);
+    this.router.navigate(['/']);
   }
 }

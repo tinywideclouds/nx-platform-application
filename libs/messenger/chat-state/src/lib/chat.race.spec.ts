@@ -13,7 +13,11 @@ import {
   SecureEnvelope,
   QueuedMessage,
 } from '@nx-platform-application/platform-types';
-import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
+// --- 1. IMPORT THE NEW VIEW MODEL ---
+import {
+  EncryptedMessagePayload,
+  ChatMessage,
+} from '@nx-platform-application/messenger-types';
 
 // --- Service Under Test ---
 import { ChatService } from './chat.service';
@@ -60,6 +64,7 @@ const mockUser: User = {
   alias: 'Me',
   email: 'me@test.com',
 };
+const mockUserUrn = URN.parse(mockUser.id);
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
 const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
 
@@ -78,19 +83,22 @@ const mockAuthResponse: AuthStatusResponse = {
 };
 
 const mockEnvelope: SecureEnvelope = {
-  recipientId: URN.parse(mockUser.id),
+  recipientId: mockUserUrn,
   encryptedData: new Uint8Array([1, 2, 3]),
   encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
   signature: new Uint8Array([7, 8, 9]),
 };
 const mockQueuedMessage: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
+
+// --- 2. UPDATED MOCK DATA ---
+const mockTextContent = 'Test Payload';
 const mockDecryptedPayload: EncryptedMessagePayload = {
   senderId: mockSenderUrn,
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
   typeId: URN.parse('urn:sm:type:text'),
-  payloadBytes: new Uint8Array([10, 11, 12]),
+  payloadBytes: new TextEncoder().encode(mockTextContent), // <-- Updated
 };
-const mockDecryptedMessage: DecryptedMessage = {
+const mockDecryptedMessage: DecryptedMessage = { // Storage Model
   messageId: 'msg-1',
   senderId: mockSenderUrn,
   recipientId: mockEnvelope.recipientId,
@@ -210,10 +218,6 @@ describe('ChatService (Race Condition Test)', () => {
   it('should correctly process queued operations (select then fetch) in sequence', async () => {
     // 1. --- SETUP ---
     // This is the new message that will arrive
-    const newMessage: DecryptedMessage = {
-      ...mockDecryptedMessage,
-      messageId: 'race-msg-id-1',
-    };
     const newQueuedMessage: QueuedMessage = {
       ...mockQueuedMessage,
       id: 'race-msg-id-1',
@@ -221,12 +225,20 @@ describe('ChatService (Race Condition Test)', () => {
     // This is the stale history that loadHistory will return
     const staleHistory: DecryptedMessage[] = [];
 
+    // --- 3. DEFINE THE EXPECTED VIEW MODEL ---
+    const expectedChatMessage: ChatMessage = {
+      id: 'race-msg-id-1',
+      conversationUrn: mockSenderUrn,
+      senderId: mockSenderUrn,
+      timestamp: new Date(mockDecryptedPayload.sentTimestamp),
+      textContent: mockTextContent,
+      type: 'text',
+    };
+
     // Configure mocks
     mockStorageService.loadHistory.mockResolvedValue(staleHistory);
     mockDataService.getMessageBatch.mockReturnValue(of([newQueuedMessage]));
-    mockCryptoService.verifyAndDecrypt.mockResolvedValue(
-      mockDecryptedPayload
-    );
+    // Note: verifyAndDecrypt is already mocked to return mockDecryptedPayload
 
     // Initialize the service
     await initializeService();
@@ -245,14 +257,14 @@ describe('ChatService (Race Condition Test)', () => {
 
     // 4. --- ASSERTION (This should pass) ---
     // The lock has forced the operations to run sequentially.
-    // 1. loadConversation ran, setting messages to [] (staleHistory).
+    // 1. loadConversation ran, setting messages to [] (from staleHistory).
     // 2. fetchAndProcessMessages ran, saw selectedConversation was correct,
     //    and appended the new message.
     //
-    // We only check the FINAL state.
-    expect(service.messages()).toEqual([newMessage]);
+    // We only check the FINAL state, which must be the ChatMessage view model.
+    expect(service.messages()).toEqual([expectedChatMessage]);
 
-    // We can also verify the mocks were called in the correct order
+    // We can also verify the mocks were called
     expect(mockStorageService.loadHistory).toHaveBeenCalled();
     expect(mockDataService.getMessageBatch).toHaveBeenCalled();
   });

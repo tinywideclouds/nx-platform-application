@@ -2,6 +2,7 @@ import { computed, inject, Injectable, signal, Signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { User } from '@nx-platform-application/platform-types';
 import { catchError, Observable, of, tap, shareReplay } from 'rxjs';
+import { AUTH_API_URL } from './auth-data.config'; // <-- 1. Import the token
 
 // This interface correctly defines the flat structure
 export interface AuthStatusResponse {
@@ -24,6 +25,8 @@ export abstract class IAuthService {
 })
 export class AuthService implements IAuthService {
   private http = inject(HttpClient);
+  private authApiUrl = inject(AUTH_API_URL); // <-- 2. Inject the token
+
   public readonly sessionLoaded$: Observable<AuthStatusResponse | null>;
   private _currentUser = signal<User | null>(null);
   private _jwt = signal<string | null>(null);
@@ -35,16 +38,16 @@ export class AuthService implements IAuthService {
     this.sessionLoaded$ = this.checkAuthStatus().pipe(
       shareReplay(1) // Cache the result for all subscribers
     );
-    // The subscribe call that was here has been REMOVED.
-    // The APP_INITIALIZER will now trigger this observable.
   }
 
   public checkAuthStatus(): Observable<AuthStatusResponse | null> {
+    // 3. Use the injected URL
     return this.http
-      .get<AuthStatusResponse>('/api/auth/status', { withCredentials: true })
+      .get<AuthStatusResponse>(`${this.authApiUrl}/status`, {
+        withCredentials: true,
+      })
       .pipe(
         tap((response) => {
-          // This logic now correctly handles the flat response
           if (response && response.authenticated) {
             this.setAuthState(response.user, response.token);
           } else {
@@ -59,8 +62,9 @@ export class AuthService implements IAuthService {
   }
 
   public logout() {
+    // 4. Use the injected URL
     return this.http
-      .post('/api/auth/logout', {}, { withCredentials: true })
+      .post(`${this.authApiUrl}/logout`, {}, { withCredentials: true })
       .pipe(tap(() => this.clearAuthState()));
   }
 

@@ -8,9 +8,13 @@
   "targets": {
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
       "options": {
         "reportsDirectory": "coverage/libs/messenger/messenger-ui",
+        "htmlReportDirectory": "dist/test-reports/libs/messenger/messenger-ui",
         "configFile": "libs/messenger/messenger-ui/vitest.config.mts"
       }
     },

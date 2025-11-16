@@ -18,9 +18,13 @@
     },
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
       "options": {
         "reportsDirectory": "coverage/libs/platform/ng/auth-data-access",
+        "htmlReportDirectory": "dist/test-reports/platform/ng/auth-data-access",
         "configFile": "libs/platform/ng/auth-data-access/vitest.config.mts"
       }
     },

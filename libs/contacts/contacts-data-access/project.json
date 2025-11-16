@@ -17,9 +17,13 @@
     },
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
       "options": {
         "reportsDirectory": "coverage/libs/contacts/contacts-data-access",
+        "htmlReportDirectory": "dist/test-reports/libs/contacts/contacts-data-access",
         "configFile": "libs/contacts/contacts-data-access/vitest.config.mts"
       }
     },

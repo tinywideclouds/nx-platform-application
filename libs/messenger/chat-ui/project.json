@@ -17,10 +17,14 @@
     },
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/chat-ui",
-        "configFile": "libs/messenger/chat-ui/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/chat-state",
+        "htmlReportDirectory": "dist/test-reports/libs/messenger/chat-state",
+        "configFile": "libs/messenger/chat-state/vitest.config.mts"
       }
     },
     "lint": {

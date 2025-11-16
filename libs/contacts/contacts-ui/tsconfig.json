@@ -3,7 +3,6 @@
   "compilerOptions": {
     "lib": ["es2022", "dom"],
     "target": "es2022",
-    "moduleResolution": "bundler",
     "strict": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,

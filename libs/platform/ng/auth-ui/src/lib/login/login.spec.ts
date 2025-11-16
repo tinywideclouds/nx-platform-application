@@ -1,13 +1,8 @@
-vi.mock('@angular/material/button', () => ({
-  MatButtonModule: {}, // Provide a fake module
-}));
-
-vi.mock('@angular/material/card', () => ({
-  MatCardModule: {}, // Provide a fake module
-}));
+// vi.mock for material has been REMOVED
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { CUSTOM_ELEMENTS_SCHEMA, signal, WritableSignal } from '@angular/core';
+// CUSTOM_ELEMENTS_SCHEMA has been REMOVED
+import { signal, WritableSignal } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { User } from '@nx-platform-application/platform-types';
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
@@ -40,20 +35,14 @@ describe('LoginComponent', () => {
 
     // 3. Configure the TestBed
     await TestBed.configureTestingModule({
-      imports: [LoginComponent],
+      imports: [LoginComponent], // This now correctly includes MatModules
       providers: [
         { provide: IAuthService, useValue: mockAuthService },
-        provideNoopAnimations(), // Use modern provider for animations
+        provideNoopAnimations(),
       ],
-      schemas: [
-        CUSTOM_ELEMENTS_SCHEMA, // 2. Add the schema here
-      ],
+      // schemas: [CUSTOM_ELEMENTS_SCHEMA] has been REMOVED
     })
-      .overrideComponent(LoginComponent, {
-        set: {
-          imports: [],
-        },
-      })
+      // .overrideComponent(...) block has been REMOVED
       .compileComponents();
 
     fixture = TestBed.createComponent(LoginComponent);

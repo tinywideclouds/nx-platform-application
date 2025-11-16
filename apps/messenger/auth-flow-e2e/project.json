@@ -8,9 +8,13 @@
   "targets": {
     "test": {
       "executor": "@nx/vite:test",
-      "outputs": ["{options.reportsDirectory}"],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
       "options": {
         "reportsDirectory": "coverage/apps/messenger/auth-flow-e2e",
+        "htmlReportDirectory": "dist/test-reports/apps/messenger/auth-flow-e2e",
         "configFile": "apps/messenger/auth-flow-e2e/vitest.config.mts"
       }
     },

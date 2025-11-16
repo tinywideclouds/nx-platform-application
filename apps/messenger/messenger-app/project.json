@@ -10,11 +10,12 @@
       "executor": "@nx/vite:test",
       "outputs": [
         "{options.reportsDirectory}",
-        "{workspaceRoot}/dist/test-reports/apps/messenger/messenger-app"
+        "{options.htmlReportDirectory}"
       ],
       "options": {
         "configFile": "apps/messenger/messenger-app/vitest.config.mts",
-        "reportsDirectory": "../../../coverage/apps/messenger/messenger-app"
+        "reportsDirectory": "coverage/apps/messenger/messenger-app",
+        "htmlReportDirectory": "dist/test-reports/apps/messenger/messenger-app"
       }
     },
     "build": {
@@ -30,7 +31,10 @@
             "input": "apps/messenger/messenger-app/public"
           }
         ],
-        "styles": ["apps/messenger/messenger-app/src/styles.css"]
+        "styles": [
+          "apps/messenger/messenger-app/src/styles.css",
+          "apps/messenger/messenger-app/src/custom-theme.scss"
+        ]
       },
       "configurations": {
         "production": {
@@ -54,8 +58,8 @@
           "sourceMap": true,
           "fileReplacements": [
             {
-              "replace": "apps/messenger/messenger-app/src/environments/environment.ts",
-              "with": "apps/messenger/messenger-app/src/environments/environment.dev.ts"
+              "replace": "apps/messenger/messenger-app/src/app/environments/environment.ts",
+              "with": "apps/messenger/messenger-app/src/app/environments/environment.dev.ts"
             }
           ]
         },
@@ -63,17 +67,20 @@
           "sourceMap": true,
           "fileReplacements": [
             {
-              "replace": "apps/messenger/messenger-app/src/environments/environment.ts",
-              "with": "apps/messenger/messenger-app/src/environments/environment.mock.ts"
+              "replace": "apps/messenger/messenger-app/src/app/environments/environment.ts",
+              "with": "apps/messenger/messenger-app/src/app/environments/environment.mock.ts"
             }
           ]
         }
       },
-      "defaultConfiguration": "production"
+      "defaultConfiguration": "development"
     },
     "serve": {
       "continuous": true,
       "executor": "@angular/build:dev-server",
+      "options": {
+        "proxyConfig": "apps/messenger/messenger-app/proxy.conf.json"
+      },
       "configurations": {
         "production": {
           "buildTarget": "messenger-app:build:production"
@@ -85,7 +92,7 @@
           "buildTarget": "messenger-app:build:mock"
         }
       },
-      "defaultConfiguration": "development"
+      "defaultConfiguration": "mock"
     },
     "extract-i18n": {
       "executor": "@angular/build:extract-i18n",

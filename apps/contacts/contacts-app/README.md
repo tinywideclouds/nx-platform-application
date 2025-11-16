@@ -1,54 +1,109 @@
-# **📱 Application: contacts-app**
+# 🚀 Application: contacts-app
 
-This project is a standalone Angular application that serves as the primary test harness and demonstration shell for the contacts feature libraries (contacts-ui and contacts-data-access).
+## 🎯 Purpose
 
-Its main purpose is to consume the library components in a real-world scenario, verifying routing, lazy loading, and component interaction.
+This application (`contacts-app`) serves as the primary **development harness** and integration-testing environment for the `@nx-platform-application/contacts-ui` and `@nx-platform-application/contacts-data-access` libraries.
 
-### **✨ Features**
+Its sole responsibility is to provide a realistic runtime environment to mount, display, and interact with the components and services from those libraries. It contains minimal logic of its own and instead delegates all functionality to the libraries it consumes.
 
-* **Standalone Bootstrap:** The application is bootstrapped using bootstrapApplication and a standalone AppComponent.  
-* **Zoneless:** The application is configured to run in a fully zoneless change detection mode via provideZonelessChangeDetection().  
-* **Lazy Loading:** The entire contacts feature is lazy-loaded using loadChildren. The feature routes, in turn, lazy-load the library components using loadComponent.  
-* **Modern Testing:** Uses **Vitest** for unit testing (@nx/vite:test) in a zoneless environment.  
-* **Styling:** Configured with **TailwindCSS** for global application styling.
+## 🏛️ Core Architecture & Flow
 
----
+This application demonstrates a clean separation of concerns, where the "app" is merely a thin shell that hosts the "features."
 
-### **🚀 Application Structure**
+The execution flow is as follows:
 
-The application's structure is minimal, designed to act as a host for the imported libraries.
+1.  **Bootstrap:** `main.ts` bootstraps the standalone `AppComponent` with `appConfig`.
 
-#### **Root Component (app.ts)**
+2.  **Root Config:** `app.config.ts` provides core services, including zoneless change detection (`provideZonelessChangeDetection`) and the `provideRouter` with `APP_ROUTES`.
 
-* **AppComponent**: The root component provides the main application shell.  
-* **Template (app.html)**: The template defines the top-level navigation bar and a <router-outlet> where all feature-routed components will be rendered.
+3.  **Root Routing:** `app.routes.ts` defines the application's top-level navigation. The primary route is:
 
-#### **Routing (app.routes.ts & contacts.routes.ts)**
+    ```typescript
+    {
+      path: 'contacts',
+      loadChildren: () =>
+        import('./contacts/contacts.routes').then((m) => m.CONTACTS_ROUTES),
+    },
+    ```
 
-The application uses a two-tiered routing setup:
+    This `loadChildren` command delegates all routing under the `/contacts` path to a feature-specific routing file.
 
-1. **Main Routes (app.routes.ts)**:  
-   * Defines the top-level navigation paths.  
-   * The /contacts path is configured to **lazy-load** the feature routes from contacts.routes.ts.  
-   * Defaults the base path ('') to redirect to /contacts.  
-2. **Feature Routes (contacts.routes.ts)**:  
-   * This file defines all routes for the contacts feature.  
-   * It **lazy-loads** the "smart" components directly from the @nx-platform-application/contacts-ui library.  
-   * This setup allows the contacts-app to test the library components without ever importing them directly into its own modules or source files.
+4.  **Feature Routing (The Harness Core):** The file `contacts.routes.ts` is the heart of the development harness. It maps application routes directly to the "smart" page components lazy-loaded from the `@nx-platform-application/contacts-ui` library.
 
-| Path | Lazy-Loaded Component | Purpose |
-| :---- | :---- | :---- |
-| /contacts | ContactsPageComponent | Main contact list view. |
-| /contacts/new | ContactEditPageComponent | "Create new contact" form. |
-| /contacts/edit/:id | ContactEditPageComponent | "Edit existing contact" form. |
+    ```typescript
+    // in apps/contacts/contacts-app/src/app/contacts/contacts.routes.ts
 
----
+    export const CONTACTS_ROUTES: Routes = [
+      {
+        path: '', // -> /contacts
+        loadComponent: () =>
+          import('@nx-platform-application/contacts-ui').then(
+            (m) => m.ContactsViewerComponent // The main list page
+          ),
+      },
+      {
+        path: 'new', // -> /contacts/new
+        loadComponent: () =>
+          import('@nx-platform-application/contacts-ui').then(
+            (m) => m.ContactPageComponent // The Add/Edit page
+          ),
+      },
+      {
+        path: 'edit/:id', // -> /contacts/edit/123
+        loadComponent: () =>
+          import('@nx-platform-application/contacts-ui').then(
+            (m) => m.ContactPageComponent // Re-uses the Add/Edit page
+          ),
+      },
+      {
+        path: 'group-new', // -> /contacts/group-new
+        loadComponent: () =>
+          import('@nx-platform-application/contacts-ui').then(
+            (m) => m.ContactGroupPageComponent // The Add/Edit Group page
+          ),
+      },
+      {
+        path: 'group-edit/:id', // -> /contacts/group-edit/123
+        loadComponent: () =>
+          import('@nx-platform-application/contacts-ui').then(
+            (m) => m.ContactGroupPageComponent // Re-uses the Add/Edit Group page
+          ),
+      },
+    ];
+    ```
 
-### **🧪 Testing**
+    This pattern confirms the app's role as a harness: it simply provides the router configuration that *consumes* the `contacts-ui` library as-is.
 
-The application is configured with a modern, zoneless test setup.
+## 🧩 Key Libraries in Use
 
-* **Runner**: Vitest  
-* **Configuration**: vitest.config.mts  
-* **Environment**: jsdom  
-* **Setup**: The test-setup.ts file initializes the Angular TestBed with provideZonelessChangeDetection(), ensuring tests run under the same zoneless conditions as the application.
+This application is built on two key internal libraries:
+
+### 1\. `@nx-platform-application/contacts-data-access`
+
+  * **Purpose:** Provides all data persistence and models.
+  * **Service:** `ContactsStorageService` is `providedIn: 'root'`, so it is automatically available as a singleton throughout this application.
+  * **Models:** `Contact` and `ContactGroup` models are used by the UI components.
+
+### 2\. `@nx-platform-application/contacts-ui`
+
+  * **Purpose:** Provides all UI components (smart and dumb).
+  * **Service Consumption:** The smart components within this library (e.g., `ContactsViewerComponent`, `ContactPageComponent`) directly `inject(ContactsStorageService)` to get their data.
+  * **Re-Export:** This library conveniently re-exports all data services and models from `contacts-data-access`. This application's routing files (`contacts.routes.ts`) take advantage of this by importing components *from the UI library*.
+
+## 🎨 Styling
+
+This application is responsible for providing the global styling context that the `contacts-ui` library components expect.
+
+  * `styles.css`: Loads TailwindCSS base, components, and utilities.
+  * `custom-theme.scss`:
+      * Defines and provides a custom Angular Material theme.
+      * Provides global helper classes that `contacts-ui` components rely on, such as:
+          * `.form-view-mode`: Styles `MatFormField` elements for a read-only "view" state.
+          * `.toolbar-tonal-button`: Provides specific theme colors for tonal buttons used in toolbars.
+
+## 🛠️ Application Stack
+
+  * **Framework:** Angular (Standalone Components, Zoneless)
+  * **Routing:** Angular Router (`loadChildren` and `loadComponent`)
+  * **Testing:** Vitest
+  * **Styling:** TailwindCSS & Angular Material

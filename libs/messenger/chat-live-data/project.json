@@ -26,9 +26,9 @@
         "reportsDirectory": "coverage/libs/messenger/chat-live-data",
         "configFile": "libs/messenger/chat-live-data/vitest.config.mts"
       }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
     }
-  },
-  "lint": {
-    "executor": "@nx/eslint:lint"
   }
 }

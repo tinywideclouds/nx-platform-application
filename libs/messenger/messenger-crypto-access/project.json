@@ -8,10 +8,14 @@
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}",
+        "{options.outputHtmlPath}"
+      ],
       "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/libs/messenger/messenger-crypto-access",
+        "outputHtmlPath": "dist/test-reports/libs/messenger/messenger-crypto-access/index.html",
         "configFile": "libs/messenger/messenger-crypto-access/vite.config.mts"
       }
     },

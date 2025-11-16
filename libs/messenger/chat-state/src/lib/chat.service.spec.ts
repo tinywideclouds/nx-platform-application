@@ -1,6 +1,12 @@
 // --- FILE: libs/messenger/chat-state/src/lib/chat.service.spec.ts ---
 import { TestBed } from '@angular/core/testing';
-import { Subject, BehaviorSubject, of, from } from 'rxjs';
+import { Subject, BehaviorSubject, of, Observable } from 'rxjs';
+import {
+  signal,
+  WritableSignal,
+  Signal,
+  computed,
+} from '@angular/core';
 import {
   URN,
   PublicKeys,
@@ -9,14 +15,17 @@ import {
   SecureEnvelope,
   QueuedMessage,
 } from '@nx-platform-application/platform-types';
-import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
+import {
+  EncryptedMessagePayload,
+  ChatMessage, // <-- View Model
+} from '@nx-platform-application/messenger-types';
 
 // --- Service Under Test ---
 import { ChatService } from './chat.service';
 
 // --- Dependencies (Mocks) ---
 import {
-  AuthService,
+  IAuthService, // <-- 1. Import the INTERFACE
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-data-access';
 import {
@@ -56,7 +65,7 @@ const mockUser: User = {
   alias: 'Me',
   email: 'me@test.com',
 };
-const mockUserUrn = URN.parse(mockUser.id); // <--- Added for convenience
+const mockUserUrn = URN.parse(mockUser.id);
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
 const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
 
@@ -81,13 +90,15 @@ const mockEnvelope: SecureEnvelope = {
   signature: new Uint8Array([7, 8, 9]),
 };
 const mockQueuedMessage: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
+
+const mockTextContent = 'Test Payload';
 const mockDecryptedPayload: EncryptedMessagePayload = {
   senderId: mockSenderUrn,
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
   typeId: URN.parse('urn:sm:type:text'),
-  payloadBytes: new Uint8Array([10, 11, 12]),
+  payloadBytes: new TextEncoder().encode(mockTextContent),
 };
-const mockDecryptedMessage: DecryptedMessage = {
+const mockDecryptedMessage: DecryptedMessage = { // Storage Model
   messageId: 'msg-1',
   senderId: mockSenderUrn,
   recipientId: mockEnvelope.recipientId,
@@ -97,7 +108,16 @@ const mockDecryptedMessage: DecryptedMessage = {
   status: 'received',
   conversationUrn: mockSenderUrn,
 };
-const mockSentMessage: DecryptedMessage = {
+const mockChatMessage: ChatMessage = { // View Model
+  id: 'msg-1',
+  conversationUrn: mockSenderUrn,
+  senderId: mockSenderUrn,
+  timestamp: new Date(mockDecryptedPayload.sentTimestamp),
+  textContent: mockTextContent,
+  type: 'text',
+};
+
+const mockSentMessage: DecryptedMessage = { // Storage Model
   messageId: 'local-mock-uuid',
   senderId: mockUserUrn,
   recipientId: mockRecipientUrn,
@@ -107,24 +127,37 @@ const mockSentMessage: DecryptedMessage = {
   status: 'sent',
   conversationUrn: mockRecipientUrn,
 };
-
-// --- Mock Instances ---
-const mockAuthService: Mocked<AuthService> = {
-  sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
-  currentUser: vi.fn(),
-  getJwtToken: vi.fn(),
-  isAuthenticated: vi.fn(),
-  logout: vi.fn(),
-  checkAuthStatus: vi.fn(),
+const mockSentChatMessage: ChatMessage = { // View Model
+  id: 'local-mock-uuid',
+  conversationUrn: mockRecipientUrn,
+  senderId: mockUserUrn,
+  timestamp: new Date(mockSentMessage.sentTimestamp),
+  textContent: 'Hello, Recipient!',
+  type: 'text',
 };
 
+// --- Mock Instances ---
+
+// --- 2. Create Mocks for IAuthService (Signal-based) ---
+let mockCurrentUser: WritableSignal<User | null>;
+let mockIsAuthenticated: Signal<boolean>;
+let mockSessionLoaded$: BehaviorSubject<AuthStatusResponse | null>;
+let mockAuthService: {
+  currentUser: Signal<User | null>;
+  isAuthenticated: Signal<boolean>;
+  sessionLoaded$: Observable<AuthStatusResponse | null>;
+  getJwtToken: ReturnType<typeof vi.fn>;
+  logout: ReturnType<typeof vi.fn>;
+  checkAuthStatus: ReturnType<typeof vi.fn>;
+};
+
+// --- (Other mocks remain the same) ---
 const mockCryptoService: Mocked<MessengerCryptoService> = {
   loadMyKeys: vi.fn(),
   verifyAndDecrypt: vi.fn(),
   encryptAndSign: vi.fn(),
   generateAndStoreKeys: vi.fn(),
 };
-
 const mockStorageService: Mocked<ChatStorageService> = {
   loadConversationSummaries: vi.fn(),
   saveMessage: vi.fn(),
@@ -133,14 +166,12 @@ const mockStorageService: Mocked<ChatStorageService> = {
   storeKey: vi.fn(),
   clearAllMessages: vi.fn(),
 };
-
 const mockLogger: Mocked<Logger> = {
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
   debug: vi.fn(),
 };
-
 const mockLiveService: Mocked<ChatLiveDataService> = {
   connect: vi.fn(),
   disconnect: vi.fn(),
@@ -148,16 +179,13 @@ const mockLiveService: Mocked<ChatLiveDataService> = {
   incomingMessage$: new Subject<void>(),
   ngOnDestroy: vi.fn(),
 };
-
 const mockKeyService: Mocked<KeyCacheService> = {
   getPublicKey: vi.fn(),
 };
-
 const mockDataService: Mocked<ChatDataService> = {
   getMessageBatch: vi.fn(),
   acknowledge: vi.fn(),
 };
-
 const mockSendService: Mocked<ChatSendService> = {
   sendMessage: vi.fn(),
 };
@@ -173,7 +201,12 @@ describe('ChatService (Refactored Test)', () => {
    */
   async function initializeService() {
     service = TestBed.inject(ChatService);
-    mockAuthService.sessionLoaded$.next(mockAuthResponse);
+    // Set mock state that init() will read
+    mockCurrentUser.set(mockUser);
+    mockAuthService.getJwtToken.mockReturnValue('mock-token');
+    
+    // Trigger the sessionLoaded$ stream
+    mockSessionLoaded$.next(mockAuthResponse);
     await vi.runOnlyPendingTimersAsync();
   }
 
@@ -181,10 +214,20 @@ describe('ChatService (Refactored Test)', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    // --- Configure Mocks (Default Happy Path) ---
-    mockAuthService.currentUser.mockReturnValue(mockUser);
-    mockAuthService.getJwtToken.mockReturnValue('mock-token');
+    // --- 3. Initialize Signal-based Auth Mock ---
+    mockCurrentUser = signal<User | null>(null);
+    mockIsAuthenticated = computed(() => !!mockCurrentUser());
+    mockSessionLoaded$ = new BehaviorSubject<AuthStatusResponse | null>(null);
+    mockAuthService = {
+      currentUser: mockCurrentUser,
+      isAuthenticated: mockIsAuthenticated,
+      sessionLoaded$: mockSessionLoaded$.asObservable(),
+      getJwtToken: vi.fn(),
+      logout: vi.fn(() => of(undefined)),
+      checkAuthStatus: vi.fn(() => of(null)),
+    };
 
+    // --- Configure Other Mocks (Default Happy Path) ---
     mockStorageService.loadConversationSummaries.mockResolvedValue([]);
     mockStorageService.saveMessage.mockResolvedValue(undefined);
     mockStorageService.loadHistory.mockResolvedValue([]);
@@ -203,7 +246,8 @@ describe('ChatService (Refactored Test)', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatService,
-        { provide: AuthService, useValue: mockAuthService },
+        // --- 4. Provide the INTERFACE ---
+        { provide: IAuthService, useValue: mockAuthService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
         { provide: Logger, useValue: mockLogger },
@@ -225,9 +269,6 @@ describe('ChatService (Refactored Test)', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       'ChatService: Orchestrator initializing...'
     );
-    //
-    // --- THIS IS THE TEST FOR THE FIX ---
-    //
     expect(service.currentUserUrn()?.toString()).toBe(mockUser.id);
     expect(mockStorageService.loadConversationSummaries).toHaveBeenCalled();
     expect(mockCryptoService.loadMyKeys).toHaveBeenCalledWith(mockUserUrn);
@@ -265,9 +306,14 @@ describe('ChatService (Refactored Test)', () => {
   });
 
   describe('Conversation Selection', () => {
+    // --- 5. UPDATED Mocks for View Model ---
     const history: DecryptedMessage[] = [
       mockDecryptedMessage,
       { ...mockDecryptedMessage, messageId: 'msg-2' },
+    ];
+    const expectedChatHistory: ChatMessage[] = [
+      mockChatMessage,
+      { ...mockChatMessage, id: 'msg-2' },
     ];
 
     beforeEach(() => {
@@ -284,7 +330,7 @@ describe('ChatService (Refactored Test)', () => {
         mockSenderUrn.toString()
       );
       expect(mockStorageService.loadHistory).toHaveBeenCalledWith(mockSenderUrn);
-      expect(service.messages()).toBe(history);
+      expect(service.messages()).toEqual(expectedChatHistory);
     });
 
     it('should clear messages when deselecting', async () => {
@@ -321,9 +367,7 @@ describe('ChatService (Refactored Test)', () => {
       await service.fetchAndProcessMessages();
 
       expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(service.messages()).toEqual([
-        expect.objectContaining({ messageId: 'msg-1' }),
-      ]);
+      expect(service.messages()).toEqual([mockChatMessage]);
     });
 
     it('sendMessage: should add optimistic message to state if conversation is selected', async () => {
@@ -334,9 +378,7 @@ describe('ChatService (Refactored Test)', () => {
       await service.sendMessage(mockRecipientUrn, 'Hello, Recipient!');
 
       expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(service.messages()).toEqual([
-        expect.objectContaining({ messageId: 'local-mock-uuid' }),
-      ]);
+      expect(service.messages()).toEqual([mockSentChatMessage]);
     });
   });
 

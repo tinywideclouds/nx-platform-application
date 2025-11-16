@@ -1,5 +1,6 @@
 // --- FILE: libs/messenger/chat-state/src/lib/chat.service.ts ---
 
+
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
   Injectable,
@@ -26,7 +27,6 @@ import { Temporal } from '@js-temporal/polyfill';
 
 // --- Platform Service Imports ---
 import {
-  AuthService,
   IAuthService,
 } from '@nx-platform-application/platform-auth-data-access';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -49,7 +49,7 @@ import {
 import { KeyCacheService } from '@nx-platform-application/key-cache-access';
 import {
   EncryptedMessagePayload,
-  ChatMessage, // <--- 1. Import the ChatMessage view model
+  ChatMessage,
 } from '@nx-platform-application/messenger-types';
 
 @Injectable({
@@ -104,9 +104,9 @@ export class ChatService implements OnDestroy {
    */
   private async init(): Promise<void> {
     try {
-      await firstValueFrom(
-        this.authService.sessionLoaded$.pipe(filter((session) => !!session))
-      );
+      
+      await firstValueFrom(this.authService.sessionLoaded$);
+
       const currentUser = this.authService.currentUser();
       if (!currentUser) throw new Error('Authentication failed.');
 

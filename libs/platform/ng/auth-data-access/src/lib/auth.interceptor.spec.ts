@@ -12,7 +12,7 @@ import {
 // --- Import the new library's code ---
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
-import { AUTH_API_URL } from './auth-access.config';
+import { AUTH_API_URL } from './auth-data.config';
 
 describe('authInterceptor', () => {
   let httpMock: HttpTestingController;

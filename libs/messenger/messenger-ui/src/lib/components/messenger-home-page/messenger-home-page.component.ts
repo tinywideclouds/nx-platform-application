@@ -9,8 +9,10 @@ import {
   WritableSignal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+// 1. Import toSignal and router events
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet, Event, NavigationEnd } from '@angular/router';
+import { filter, map } from 'rxjs/operators'; // 2. Import RxJS operators
 
 // --- Our Services ---
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -31,7 +33,7 @@ import {
 } from '@nx-platform-application/chat-ui';
 import {
   ContactListComponent,
-  ContactGroupListComponent, // <--- 1. IMPORT THE NEW COMPONENT
+  ContactGroupListComponent,
 } from '@nx-platform-application/contacts-ui';
 
 @Component({
@@ -42,7 +44,7 @@ import {
     RouterOutlet,
     ChatConversationListComponent,
     ContactListComponent,
-    ContactGroupListComponent, // <--- 2. ADD IT HERE
+    ContactGroupListComponent,
   ],
   templateUrl: './messenger-home-page.component.html',
   styleUrl: './messenger-home-page.component.scss',
@@ -52,6 +54,28 @@ export class MessengerHomePageComponent {
   private chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
   private router = inject(Router);
+
+  // --- 3. Create a signal that tracks router events ---
+  private routerEvents$ = this.router.events;
+
+  // --- 4. NEW: Signal to track if a chat is active ---
+  /**
+   * Reads the router events and checks if the current URL
+   * includes '/chat/'. This is used to toggle the mobile
+   * chat overlay.
+   */
+  isChatActive = toSignal(
+    this.routerEvents$.pipe(
+      filter((event: Event): event is NavigationEnd => 
+        event instanceof NavigationEnd
+      ),
+      map((event: NavigationEnd) => 
+        event.urlAfterRedirects.includes('/chat/')
+      )
+    ),
+    // Check the initial URL on load
+    { initialValue: this.router.url.includes('/chat/') }
+  );
 
   // --- 1. Get State from Services ---
   private conversations = this.chatService.activeConversations;
@@ -104,7 +128,6 @@ export class MessengerHomePageComponent {
           initials = 'G'; // Placeholder for group avatar
         }
       }
-      // (Future: add case for 'llm', etc.)
 
       return {
         id: urnStr,
@@ -139,36 +162,36 @@ export class MessengerHomePageComponent {
     if (urn) {
       this.chatService.loadConversation(urn);
       // Navigate to the chat window (which will be in the router-outlet)
-      this.router.navigate(['/messenger', 'chat', id]);
+      // 5. Use relative root navigation
+      this.router.navigate(['', 'chat', id]);
     }
   }
 
   onSelectContactToChat(contact: Contact): void {
-    // This logic runs when in 'start_conversation' mode
     const urnString = this.contacts().find((c) => c.id === contact.id)?.id;
     if (!urnString) {
-      //replace this with our console-logger lib
       console.warn("urn must exist and parse")
       return;
     }
     const urn = URN.parse(urnString);
     if (urn) {
-      this.chatService.loadConversation(urn); // This won't find history, but sets the state
-      this.router.navigate(['/messenger', 'chat', urn]);
+      this.chatService.loadConversation(urn); 
+      // 5. Use relative root navigation
+      this.router.navigate(['', 'chat', urn]);
     }
   }
 
   onSelectGroupToChat(group: ContactGroup): void {
     const urnString = this.groups().find((g) => g.id === group.id)?.id;
     if (!urnString) {
-      //replace this with our console-logger lib
       console.warn("urn must exist and parse")
       return;
     }
     const urn = URN.parse(urnString);
     if (urn) {
-      this.chatService.loadConversation(urn); // This sets the state
-      this.router.navigate(['/messenger', 'chat', urn]);
+      this.chatService.loadConversation(urn);
+      // 5. Use relative root navigation
+      this.router.navigate(['', 'chat', urn]);
     }
   }
 }

@@ -35,7 +35,7 @@ export class ContactGroupPageComponent {
   // 1. Inject services
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private contactsService = inject(ContactsStorageService);
+  private contactsService = inject(ContactsStorageService) as ContactsStorageService;
 
   // 2. --- NEW: Signal for initial state ---
   startInEditMode = signal(false);
@@ -66,13 +66,11 @@ export class ContactGroupPageComponent {
 
   async onSave(group: ContactGroup): Promise<void> {
     await this.contactsService.saveGroup(group);
-    // --- THIS IS THE FIX ---
     // Navigate back to the 'groups' tab
     this.router.navigate(['/contacts'], { queryParams: { tab: 'groups' } });
   }
 
   onCancel(): void {
-    // --- THIS IS THE FIX ---
     // Navigate back to the 'groups' tab
     this.router.navigate(['/contacts'], { queryParams: { tab: 'groups' } });
   }
@@ -83,7 +81,7 @@ export class ContactGroupPageComponent {
    * EDIT MODE: Returns a stream for an existing group.
    */
   private getGroup(id: string): Observable<ContactGroup | null> {
-    // 5. --- FIX: Set initial state ---
+    // Set initial state ---
     this.startInEditMode.set(false);
     return from(this.contactsService.getGroup(id)).pipe(
       map((group) => group ?? null) // Ensure undefined becomes null
@@ -94,7 +92,7 @@ export class ContactGroupPageComponent {
    * ADD MODE: Returns a stream for a new, empty group.
    */
   private getNewGroup(): Observable<ContactGroup> {
-    // 6. --- FIX: Set initial state ---
+    // Set initial state ---
     this.startInEditMode.set(true);
     return of({
       id: `urn:sm:group:${crypto.randomUUID()}`,

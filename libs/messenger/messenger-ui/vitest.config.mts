@@ -4,6 +4,7 @@
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import { join } from 'path';
 
 export default defineConfig({
   root: __dirname,
@@ -25,6 +26,12 @@ export default defineConfig({
     coverage: {
       reportsDirectory: '../../../coverage/libs/messenger/messenger-ui',
       provider: 'v8' as const,
+    },
+    outputFile: {
+      html: join(
+        __dirname,
+        '../../../dist/test-reports/libs/messenger/messenger-ui/index.html'
+      ),
     },
   },
 });

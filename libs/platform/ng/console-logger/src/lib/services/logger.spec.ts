@@ -1,68 +1,118 @@
+// src/lib/services/logger.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { Logger } from './logger';
-//
-
-// No imports from 'vitest' are needed when globals are enabled.
+import { LOGGER_CONFIG, LogLevel } from '../logger.models'; // <-- Import models
 
 describe('Logger', () => {
   let service: Logger;
 
-  // Correctly type the spies by inferring the return type
-  // from the global 'vi.spyOn' function.
+  // Store all spies
+  let debugSpy: ReturnType<typeof vi.spyOn>;
   let infoSpy: ReturnType<typeof vi.spyOn>;
   let warnSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
-    // Create fresh spies *before* each test
-    infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {
-      // Non-empty mock for linter
-    });
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
-      // Non-empty mock for linter
-    });
-    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-      // Non-empty mock for linter
-    });
-
-    TestBed.configureTestingModule({
-      providers: [Logger],
-    });
-    service = TestBed.inject(Logger);
-  });
+  // Helper to create fresh spies
+  function setupSpies() {
+    debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  }
 
   afterEach(() => {
-    // Restore all mocks *after* each test
+    // Restore all mocks after each test
     vi.restoreAllMocks();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
+  // --- Test group for default level (WARN) ---
+  describe('with default level (WARN)', () => {
+    beforeEach(() => {
+      setupSpies();
+      TestBed.configureTestingModule({
+        providers: [Logger], // No config provided, should use default
+      });
+      service = TestBed.inject(Logger);
+    });
+
+    it('should be created', () => {
+      expect(service).toBeTruthy();
+    });
+
+    it('should NOT call console.debug', () => {
+      service.debug('Test debug');
+      expect(debugSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call console.info', () => {
+      service.info('Test info');
+      expect(infoSpy).not.toHaveBeenCalled();
+    });
+
+    it('should call console.warn', () => {
+      service.warn('Test warn');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith('Test warn');
+    });
+
+    it('should call console.error', () => {
+      const err = new Error('Test Error');
+      service.error('Test error', err);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(errorSpy).toHaveBeenCalledWith('Test error', err);
+    });
   });
 
-  it('should call console.info when info() is called', () => {
-    const message = 'Test info message';
-    const data = { id: 1 };
-    service.info(message, data);
+  // --- Test group for configured level (DEBUG) ---
+  describe('with configured level (DEBUG)', () => {
+    beforeEach(() => {
+      setupSpies();
+      TestBed.configureTestingModule({
+        providers: [
+          Logger,
+          {
+            provide: LOGGER_CONFIG,
+            useValue: { level: LogLevel.DEBUG }, // Provide DEBUG level
+          },
+        ],
+      });
+      service = TestBed.inject(Logger);
+    });
 
-    expect(infoSpy).toHaveBeenCalledTimes(1);
-    expect(infoSpy).toHaveBeenCalledWith(message, data);
+    it('should call console.debug', () => {
+      service.debug('Test debug', { id: 1 });
+      expect(debugSpy).toHaveBeenCalledWith('Test debug', { id: 1 });
+    });
+
+    it('should call console.info', () => {
+      service.info('Test info', { id: 2 });
+      expect(infoSpy).toHaveBeenCalledWith('Test info', { id: 2 });
+    });
   });
 
-  it('should call console.warn when warn() is called', () => {
-    const message = 'Test warn message';
-    service.warn(message);
+  // --- Test group for setLevel() functionality ---
+  describe('setLevel()', () => {
+    beforeEach(() => {
+      setupSpies();
+      TestBed.configureTestingModule({
+        providers: [Logger], // Default level is WARN
+      });
+      service = TestBed.inject(Logger);
+    });
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(message);
-  });
+    it('should change log level dynamically', () => {
+      service.info('Test 1');
+      expect(infoSpy).not.toHaveBeenCalled(); // Default level is WARN
 
-  it('should call console.error when error() is called', () => {
-    const message = 'Test error message';
-    const err = new Error('Test Error');
-    service.error(message, err);
+      // Change level to INFO
+      service.setLevel(LogLevel.INFO);
+      service.info('Test 2');
+      expect(infoSpy).toHaveBeenCalledWith('Test 2'); // Now it logs
 
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledWith(message, err);
+      // Change level to OFF
+      service.setLevel(LogLevel.OFF);
+      service.error('Test 3');
+      expect(errorSpy).not.toHaveBeenCalled(); // Even errors are suppressed
+    });
   });
 });
