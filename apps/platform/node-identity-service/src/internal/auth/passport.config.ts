@@ -1,45 +1,57 @@
+// apps/platform/node-identity-service/src/internal/auth/passport.config.ts
+
 import passport from 'passport';
 import { Firestore } from '@google-cloud/firestore';
-
-import { getUserProfile } from '../firestore.js';
+// 1. Import URN and User
+import { URN, User } from '@nx-platform-application/platform-types';
 import { configureGoogleStrategy } from './google.strategy.js';
 import { logger } from '@nx-platform-application/node-logger';
-import type { User } from '@nx-platform-application/platform-types';
+// 2. Import the policy interface
+import { IAuthorizationPolicy } from './policies/authorization.policy.js';
+// getUserProfile is no longer used by passport
 
 /**
  * Configures the entire Passport.js middleware.
  *
- * This function sets up the user serialization and deserialization, which are
- * essential for session management. It also initializes and registers all the
- * different authentication strategies the application will support.
- *
  * @param db - The shared Firestore database instance.
+ * @param authPolicy - The selected authorization policy.
  */
-export function configurePassport(db: Firestore): void {
-  // Register the Google strategy
-  passport.use(configureGoogleStrategy(db, logger));
+// 3. Update function signature
+export function configurePassport(
+  db: Firestore,
+  authPolicy: IAuthorizationPolicy
+): void {
+  // 4. Pass the policy to the strategy
+  passport.use(configureGoogleStrategy(db, logger, authPolicy));
 
-  // In the future, you would add other strategies here:
-  // passport.use(configureMicrosoftStrategy(db));
-  // passport.use(configureAppleStrategy(db));
-
-  // Stores the user's unique Firestore ID in the session cookie.
+  // Stores a serializable object in the session.
   passport.serializeUser((user, done) => {
-    done(null, (user as User).id);
+    const u = user as User;
+    const token = (user as any).token; // Get token from the strategy
+    
+    const sessionData = {
+      id: u.id.toString(), // Store the stringified URN
+      email: u.email,
+      alias: u.alias,
+      token: token,
+    };
+    done(null, sessionData);
   });
 
-  // Uses the ID from the session cookie to retrieve the full user object
-  // from Firestore on subsequent requests.
-  passport.deserializeUser(async (id: string, done) => {
+  // Reconstructs the User object (with URN) from the session data.
+  // This is now synchronous and has no DB dependency.
+  passport.deserializeUser((sessionData: any, done) => {
     try {
-      const userProfile = await getUserProfile(db, id);
-      if (userProfile) {
-        // Reconstruct the AuthenticatedUser object for req.user
-        const sessionUser: User = { ...userProfile, id };
-        done(null, sessionUser);
-      } else {
-        done(new Error('User not found.'));
-      }
+      // 5. Reconstruct the User from the session blob
+      const user: User = {
+        id: URN.parse(sessionData.id), // Re-parse the string URN
+        email: sessionData.email,
+        alias: sessionData.alias,
+      };
+      // Re-attach the token
+      (user as any).token = sessionData.token;
+      
+      done(null, user);
     } catch (err) {
       done(err);
     }

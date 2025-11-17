@@ -1,6 +1,6 @@
 // apps/platform/node-identity-service/src/internal/firestore.ts
 
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, WriteResult } from '@google-cloud/firestore';
 // 1. Import URN
 import { User, URN } from '@nx-platform-application/platform-types';
 
@@ -8,6 +8,13 @@ import { User, URN } from '@nx-platform-application/platform-types';
 interface AuthorizedUserDoc {
   email: string;
   alias: string;
+}
+
+export function UserToUserDoc(u: User): AuthorizedUserDoc {
+  return {
+    email: u.email,
+    alias: u.alias
+  }
 }
 
 // 2. This is the object our internal services will return from lookups
@@ -80,7 +87,7 @@ export async function getUserProfile(
   const userData = userDoc.data() as AuthorizedUserDoc;
   if (!userData) return null;
 
-  // 4. FIX: This function MUST return the URN-based object
+  // 4. This function MUST return the URN-based object
   // to match the 'User' type, as it's not part of the auth flow.
   // It is creating a 'urn:sm:user' URN.
   return {
@@ -88,4 +95,16 @@ export async function getUserProfile(
     email: userData.email,
     alias: userData.alias,
   };
+}
+
+export async function addAuthorizedUser(
+  db: Firestore,
+  user: User 
+): Promise<WriteResult | null> {
+
+  const key = user.id.toString();
+  const doc = UserToUserDoc(user);
+
+  const r = await db.collection('authorized_users').doc(key).set(doc);
+  return r
 }

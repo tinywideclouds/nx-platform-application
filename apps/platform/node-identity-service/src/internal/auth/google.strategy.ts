@@ -1,3 +1,5 @@
+// apps/platform/node-identity-service/src/internal/auth/google.strategy.ts
+
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Firestore } from '@google-cloud/firestore';
 import type {
@@ -7,8 +9,11 @@ import type {
 import type { Request } from 'express';
 import type { Logger } from 'pino';
 
+// --- 1. Import URN and User ---
+import { URN, User } from '@nx-platform-application/platform-types';
 import { config } from '../../config.js';
-import { findUserByEmail } from '../firestore.js';
+// 2. Import the Policy Interface
+import { IAuthorizationPolicy } from './policies/authorization.policy.js';
 import { generateToken } from '../services/jwt.service.js';
 
 /**
@@ -16,15 +21,14 @@ import { generateToken } from '../services/jwt.service.js';
  *
  * @param db - The shared Firestore database instance.
  * @param logger
+ * @param authPolicy - The pluggable authorization policy to use.
  * @returns A configured instance of the GoogleStrategy.
  */
 export function configureGoogleStrategy(
   db: Firestore,
-  logger: Logger
+  logger: Logger,
+  authPolicy: IAuthorizationPolicy // <-- 3. Accept the policy
 ): GoogleStrategy {
-  // [FIX] Add a type guard.
-  // We know from config.ts that these are validated at startup, but this
-  // check satisfies the linter and narrows the type from 'string | undefined' to 'string'.
   if (!config.googleClientId || !config.googleClientSecret) {
     throw new Error(
       'FATAL: Google OAuth configuration (CLIENT_ID or CLIENT_SECRET) is missing.'
@@ -44,35 +48,45 @@ export function configureGoogleStrategy(
     refreshToken: string,
     params: GoogleCallbackParameters,
     profile: Profile,
-    // We must use 'any' to match the type definition from passport.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     done: (error: any, user?: any, info?: any) => void
   ) => {
     const email = profile.emails?.[0]?.value;
     const idToken = params.id_token;
+    const googleId = profile.id; // The provider-specific ID
 
-    // A robust check to ensure the id_token exists.
-    if (!email || !idToken) {
-      const err = new Error('Email or ID token missing from Google profile.');
+    if (!email || !idToken || !googleId) {
+      const err = new Error('Email, ID token, or Google ID missing from profile.');
       logger.error({ profile }, 'Google profile was missing required fields.');
       return done(err);
     }
+
     try {
-      // NOTE: This `user` object will correctly be the shared `User` type
-      // once we refactor `firestore.ts`. No change is needed here.
-      const user = await findUserByEmail(db, email);
-      if (user) {
-        // NOTE: `generateToken` now correctly expects the shared `User` type,
-        // which is what we will receive from `findUserByEmail`.
+      // 4. AUTHORIZE: Ask the injected policy for a decision
+      const decision = await authPolicy.checkAuthorization(profile);
+
+      if (decision.isAuthorized) {
+        // 5. CONSTRUCT FEDERATED IDENTITY
+        const federatedUrn = URN.parse(`urn:auth:google:${googleId}`);
+        
+        const user: User = {
+          id: federatedUrn,
+          email: email,
+          alias: decision.alias, // Use alias from the policy decision
+        };
+
         logger.info(
-          { userId: user.id, email, provider: 'google' },
+          { userId: user.id.toString(), email, provider: 'google' },
           'User authorized successfully.'
         );
+        
+        // 6. GENERATE TOKEN & ATTACH
+        // This is the object that will be passed to serializeUser
         const internalToken = await generateToken(user, idToken);
         const userWithToken = { ...user, token: internalToken };
+
         return done(null, userWithToken);
       } else {
-        // Log unauthorized user attempt
+        // Policy denied access
         logger.warn(
           { email, provider: 'google' },
           'Unauthorized user login attempt.'

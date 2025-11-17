@@ -1,17 +1,23 @@
 // apps/platform/node-identity-service/src/internal/firestore.test.ts
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, WriteResult } from '@google-cloud/firestore';
 import {
   getUserProfile,
   findUserByEmail,
   isEmailBlocked,
+  addAuthorizedUser,
 } from './firestore.js';
 import { User, URN } from '@nx-platform-application/platform-types';
 
 // --- FIRESTORE MOCK ---
 const mockDocGet = vi.fn();
-const mockDoc = vi.fn(() => ({ get: mockDocGet }));
+const mockDocSet = vi.fn();
+const mockDoc = vi.fn((docId) => ({ 
+  get: mockDocGet,
+  set: mockDocSet,
+  id: docId,
+}));
 
 const mockQueryGet = vi.fn();
 const mockQueryLimit = vi.fn(() => ({ get: mockQueryGet }));
@@ -23,10 +29,17 @@ const mockCollection = vi.fn(() => ({
 }));
 
 vi.mock('@google-cloud/firestore', () => {
+  // Mock the static WriteResult class
+  class MockWriteResult {
+    isEqual(other: any): boolean { return true; }
+    get writeTime(): any { return { toDate: () => new Date() }; }
+  }
+  
   return {
     Firestore: vi.fn(() => ({
       collection: mockCollection,
     })),
+    WriteResult: MockWriteResult,
   };
 });
 // --- END MOCK ---
@@ -39,9 +52,11 @@ describe('Firestore Service (Unit)', () => {
     vi.clearAllMocks();
     mockDocGet.mockReset();
     mockQueryGet.mockReset();
+    mockDocSet.mockReset();
+    mockDoc.mockClear();
+    mockCollection.mockClear();
   });
 
-  // --- 1. FIX: getUserProfile returns a URN-based User object ---
   describe('getUserProfile', () => {
     it('should return a URN-based user profile if the document exists', async () => {
       const userId = 'existing-user-id';
@@ -49,6 +64,7 @@ describe('Firestore Service (Unit)', () => {
         email: 'found@example.com',
         alias: 'FoundUser',
       };
+      // This function creates the old platform-specific URN
       const expectedUser: User = {
         id: URN.parse(`urn:sm:user:${userId}`),
         email: 'found@example.com',
@@ -78,7 +94,6 @@ describe('Firestore Service (Unit)', () => {
     });
   });
 
-  // --- 2. FIX: findUserByEmail returns UserProfileData ---
   describe('findUserByEmail', () => {
     it('should return user profile data if found by email', async () => {
       const userEmail = 'found@example.com';
@@ -113,7 +128,6 @@ describe('Firestore Service (Unit)', () => {
     });
   });
 
-  // --- 3. isEmailBlocked tests (Unchanged) ---
   describe('isEmailBlocked', () => {
     it('should return true if the email document exists in blocked_users', async () => {
       const email = 'blocked@example.com';
@@ -131,12 +145,45 @@ describe('Firestore Service (Unit)', () => {
       const email = 'safe@example.com';
       const mockDocSnapshot = { exists: false };
       mockDocGet.mockResolvedValue(mockDocSnapshot);
-
+      
       const result = await isEmailBlocked(db, email);
       
       expect(mockCollection).toHaveBeenCalledWith('blocked_users');
       expect(mockDoc).toHaveBeenCalledWith(email);
       expect(result).toBe(false);
+    });
+  });
+
+  // --- New test for your new function ---
+  describe('addAuthorizedUser', () => {
+    it('should save a plain document using the string URN as the key', async () => {
+      // 1. Create a federated URN
+      const federatedUrn = URN.parse('urn:auth:google:12345');
+      const testUser: User = {
+        id: federatedUrn,
+        email: 'test@example.com',
+        alias: 'TestUser',
+      };
+      
+      // 2. This is the plain object that should be saved
+      const expectedDocData = {
+        email: 'test@example.com',
+        alias: 'TestUser',
+      };
+
+      // 3. This is the string key that should be used
+      const expectedDocId = 'urn:auth:google:12345';
+      
+      // 4. Mock the result of the .set call
+      mockDocSet.mockResolvedValue(new WriteResult());
+
+      // 5. Act
+      await addAuthorizedUser(db, testUser);
+
+      // 6. Assert
+      expect(mockCollection).toHaveBeenCalledWith('authorized_users');
+      expect(mockDoc).toHaveBeenCalledWith(expectedDocId);
+      expect(mockDocSet).toHaveBeenCalledWith(expectedDocData);
     });
   });
 });

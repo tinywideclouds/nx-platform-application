@@ -10,12 +10,14 @@ import {
 import request from 'supertest';
 import type { Express } from 'express';
 import { Firestore } from '@google-cloud/firestore';
+import { addAuthorizedUser } from '../internal/firestore.js';
 import { startTestServer } from './test-setup.js';
+import { URN } from '@nx-platform-application/platform-types';
 import type { User } from '@nx-platform-application/platform-types';
 
 // This is the user we will add to our test database.
 const authorizedUser: User = {
-  id: 'dffd',
+  id: URN.parse("urn:user:auth:1"),
   email: 'test.user@example.com',
   alias: 'TestUser',
 };
@@ -42,7 +44,11 @@ vi.mock('passport-google-oauth20', () => {
 
     // This is the function that the real Passport middleware will call.
     authenticate(req: any) {
-      const userProfile = { emails: [{ value: authorizedUser.email }] };
+      const userProfile = { 
+        id: 'mock-google-id-123',
+        displayName: authorizedUser.alias,
+        emails: [{ value: authorizedUser.email }] 
+      };
       const params = { id_token: 'mock-google-id-token' };
 
       // The 'done' callback is what our google.strategy.ts expects.
@@ -98,7 +104,7 @@ describe('Authentication Flow (Integration)', () => {
   // This ensures each test runs in a predictable and isolated state.
   beforeEach(async () => {
     // This operation will now correctly connect to the running emulator.
-    await db.collection('authorized_users').add(authorizedUser);
+    await addAuthorizedUser(db, authorizedUser);
   });
 
   it('should authenticate an authorized user and issue a JWT', async () => {

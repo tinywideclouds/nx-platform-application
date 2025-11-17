@@ -1,12 +1,17 @@
+// apps/platform/node-identity-service/src/tests/api.integration.test.ts
+
 import request from 'supertest';
 import type { Express } from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { startTestServer } from './test-setup.js';
+import { addAuthorizedUser } from '../internal/firestore.js';
+import { URN } from '@nx-platform-application/platform-types';
 import type { User } from '@nx-platform-application/platform-types';
 
 // Define a user to seed the database with
+// This URN must be flexible, so we use 'auth:user'
 const testUser: User = {
-  id: 'user-for-lookup',
+  id: URN.parse("urn:auth:user:user-for-lookup"),
   email: 'test@example.com',
   alias: 'TestLookup',
 };
@@ -39,7 +44,7 @@ describe('API Endpoints (Integration)', () => {
 
   beforeEach(async () => {
     // Seed the database
-    await db.collection('authorized_users').doc(testUser.id).set(testUser);
+    await addAuthorizedUser(db, testUser);
   });
 
   it('GET /api/auth/status should return not authenticated for unauthenticated requests', async () => {
@@ -63,12 +68,12 @@ describe('API Endpoints (Integration)', () => {
 
     const response = await request(testServer.app)
       .get(`/api/users/by-email/${testUser.email}`)
-      // Use the generated internal API key from the testConfig
       .set('x-internal-api-key', testConfig.INTERNAL_API_KEY);
 
     expect(response.status).toBe(200);
+
     expect(response.body).toEqual({
-      id: testUser.id,
+      id: testUser.id.toString(),
       alias: testUser.alias,
       email: testUser.email,
     });

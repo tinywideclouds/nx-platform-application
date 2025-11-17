@@ -42,21 +42,29 @@ export class URN {
   public static parse(s: string): URN {
     const parts = s.split(URN.DELIMITER);
 
-    // --- FIX ADDED (3 Checks) ---
     if (parts.length !== 4) {
       throw new Error(`Invalid URN format: expected 4 parts, but got ${parts.length}`);
     }
     if (parts[0] !== URN.SCHEME) {
       throw new Error(`Invalid URN format: invalid scheme '${parts[0]}', expected '${URN.SCHEME}'`);
     }
-    if (parts[1] !== URN.NAMESPACE) {
-      throw new Error(`Invalid URN format: invalid namespace '${parts[1]}', expected '${URN.NAMESPACE}'`);
-    }
-    // --- END FIX ---
+    
+    const namespace = parts[1];
+    const entityType = parts[2];
+    const entityId = parts[3];
 
-    // Delegate final validation to the constructor via create()
-    // We can safely call create now, as it only validates parts 2 and 3
-    return URN.create(parts[2], parts[3]);
+    if (!namespace) {
+      throw new Error('Invalid URN format: namespace (part 2) cannot be empty');
+    }
+    if (!entityType) {
+      throw new Error('Invalid URN format: entityType (part 3) cannot be empty');
+    }
+    if (!entityId) {
+      throw new Error('Invalid URN format: entityId (part 4) cannot be empty');
+    }
+    
+    // Use the constructor directly
+    return new URN(namespace, entityType, entityId);
   }
 
   private constructor(namespace: string, entityType: string, entityId: string) {
