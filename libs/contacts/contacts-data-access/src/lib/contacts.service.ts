@@ -14,8 +14,12 @@ import {
   ServiceContact,
   IdentityLink,
   StorableIdentityLink,
+  StorableBlockedIdentity,
+  StorablePendingIdentity,
+  BlockedIdentity,
+  PendingIdentity,
 } from './models/contacts';
-import { URN } from '@nx-platform-application/platform-types';
+import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
 
 @Injectable({
   providedIn: 'root',
@@ -23,9 +27,7 @@ import { URN } from '@nx-platform-application/platform-types';
 export class ContactsStorageService {
   private readonly db = inject(ContactsDatabase);
 
-  // --- Mapper Functions ---
-
-  // Maps from Storable (DB) to Domain (App)
+  // --- Mappers ---
   private mapStorableToContact(c: StorableContact): Contact {
     const serviceContacts: Record<string, ServiceContact> = {};
     if (c.serviceContacts) {
@@ -46,7 +48,6 @@ export class ContactsStorageService {
     };
   }
 
-  // Maps from Domain (App) to Storable (DB)
   private mapContactToStorable(c: Contact): StorableContact {
     const serviceContacts: Record<string, StorableServiceContact> = {};
     if (c.serviceContacts) {
@@ -67,7 +68,6 @@ export class ContactsStorageService {
     };
   }
 
-  // Maps from Storable (DB) to Domain (App)
   private mapStorableToGroup(g: StorableGroup): ContactGroup {
     return {
       ...g,
@@ -76,12 +76,27 @@ export class ContactsStorageService {
     };
   }
 
-  // Maps from Domain (App) to Storable (DB)
   private mapGroupToStorable(g: ContactGroup): StorableGroup {
     return {
       ...g,
       id: g.id.toString(),
       contactIds: g.contactIds.map((id) => id.toString()),
+    };
+  }
+
+  private mapStorableToBlocked(b: StorableBlockedIdentity): BlockedIdentity {
+    return {
+      ...b,
+      urn: URN.parse(b.urn),
+    };
+  }
+
+  private mapStorableToPending(p: StorablePendingIdentity): PendingIdentity {
+    return {
+      ...p,
+      urn: URN.parse(p.urn),
+      // Only parse vouchedBy if it exists
+      vouchedBy: p.vouchedBy ? URN.parse(p.vouchedBy) : undefined,
     };
   }
 
@@ -101,7 +116,22 @@ export class ContactsStorageService {
     liveQuery(() => this.db.contactGroups.orderBy('name').toArray())
   ).pipe(map((storables) => storables.map(this.mapStorableToGroup)));
 
-  // --- CRUD Methods ---
+  /**
+   * Stream of all blocked identities.
+   */
+  readonly blocked$: Observable<BlockedIdentity[]> = from(
+    liveQuery(() => this.db.blocked_identities.orderBy('blockedAt').toArray())
+  ).pipe(map((storables) => storables.map(this.mapStorableToBlocked)));
+
+  /**
+   * The Waiting Room.
+   * Stream of all identities awaiting action (Unknowns + Vouched).
+   */
+  readonly pending$: Observable<PendingIdentity[]> = from(
+    liveQuery(() => this.db.pending_identities.orderBy('firstSeenAt').toArray())
+  ).pipe(map((storables) => storables.map(this.mapStorableToPending)));
+
+  // --- CRUD Methods (Contacts/Groups) ---
 
   async saveContact(contact: Contact): Promise<void> {
     const storable = this.mapContactToStorable(contact);
@@ -114,29 +144,17 @@ export class ContactsStorageService {
       serviceContacts: domainServiceContacts,
       ...simpleChanges
     } = changes;
+    const storableChanges: Partial<StorableContact> = { ...simpleChanges };
 
-    const storableChanges: Partial<StorableContact> = {
-      ...simpleChanges,
-    };
-
-    if (urnId) {
-      storableChanges.id = urnId.toString();
-    }
-
+    if (urnId) storableChanges.id = urnId.toString();
     if (domainServiceContacts) {
       const serviceContacts: Record<string, StorableServiceContact> = {};
       for (const key in domainServiceContacts) {
         const s = domainServiceContacts[key];
-        if (s) {
-          serviceContacts[key] = {
-            ...s,
-            id: s.id.toString(),
-          };
-        }
+        if (s) serviceContacts[key] = { ...s, id: s.id.toString() };
       }
       storableChanges.serviceContacts = serviceContacts;
     }
-
     await this.db.contacts.update(id.toString(), storableChanges);
   }
 
@@ -150,18 +168,12 @@ export class ContactsStorageService {
   }
 
   async findByEmail(email: string): Promise<Contact | undefined> {
-    const storable = await this.db.contacts
-      .where('emailAddresses')
-      .equals(email)
-      .first();
+    const storable = await this.db.contacts.where('emailAddresses').equals(email).first();
     return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
   async findByPhone(phone: string): Promise<Contact | undefined> {
-    const storable = await this.db.contacts
-      .where('phoneNumbers')
-      .equals(phone)
-      .first();
+    const storable = await this.db.contacts.where('phoneNumbers').equals(phone).first();
     return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
@@ -196,13 +208,9 @@ export class ContactsStorageService {
 
   async getContactsForGroup(groupId: URN): Promise<Contact[]> {
     const groupStorable = await this.db.contactGroups.get(groupId.toString());
-    if (!groupStorable || groupStorable.contactIds.length === 0) {
-      return [];
-    }
-
+    if (!groupStorable || groupStorable.contactIds.length === 0) return [];
     const contactIdStrings = groupStorable.contactIds;
     const storables = await this.db.contacts.bulkGet(contactIdStrings);
-
     return storables
       .filter((c): c is StorableContact => Boolean(c))
       .map(this.mapStorableToContact);
@@ -210,50 +218,119 @@ export class ContactsStorageService {
 
   // --- Federated Identity Linking Methods ---
 
-  /**
-   * Links a federated Authentication URN (e.g., urn:auth:google:bob) to a local Contact.
-   */
   async linkIdentityToContact(contactId: URN, authUrn: URN): Promise<void> {
-    // We store strictly primitive strings in the DB
     const storableLink: StorableIdentityLink = {
       contactId: contactId.toString(),
       authUrn: authUrn.toString(),
     };
-
-    // Dexie handles the auto-incrementing 'id'
     await this.db.identity_links.put(storableLink);
   }
 
-  /**
-   * Retrieves all federated identities linked to a specific Contact.
-   */
   async getLinkedIdentities(contactId: URN): Promise<URN[]> {
     const storables = await this.db.identity_links
       .where('contactId')
       .equals(contactId.toString())
       .toArray();
-
     return storables.map((link) => URN.parse(link.authUrn));
   }
 
-  /**
-   * Finds the local Contact associated with a specific federated Authentication URN.
-   * This is the primary method for resolving incoming "Sender IDs" to "Conversations".
-   */
+  async getAllIdentityLinks(): Promise<IdentityLink[]> {
+    const storables = await this.db.identity_links.toArray();
+    return storables.map(link => ({
+      id: link.id,
+      contactId: URN.parse(link.contactId),
+      authUrn: URN.parse(link.authUrn)
+    }));
+  }
+
   async findContactByAuthUrn(authUrn: URN): Promise<Contact | null> {
-    // 1. Look up the link
     const link = await this.db.identity_links
       .where('authUrn')
       .equals(authUrn.toString())
       .first();
-
-    if (!link) {
-      return null;
-    }
-
-    // 2. If link exists, fetch the full contact
+    if (!link) return null;
     const contactStorable = await this.db.contacts.get(link.contactId);
-
     return contactStorable ? this.mapStorableToContact(contactStorable) : null;
+  }
+
+  // --- Gatekeeper: Blocking ---
+
+  async blockIdentity(urn: URN, reason?: string): Promise<void> {
+    const blocked: StorableBlockedIdentity = {
+      urn: urn.toString(),
+      blockedAt: new Date().toISOString() as ISODateTimeString,
+      reason,
+    };
+    await this.db.blocked_identities.put(blocked);
+  }
+
+  async unblockIdentity(urn: URN): Promise<void> {
+    const records = await this.db.blocked_identities
+        .where('urn')
+        .equals(urn.toString())
+        .toArray();
+    
+    const idsToDelete = records.map(r => r.id!).filter(id => id !== undefined);
+    if (idsToDelete.length > 0) {
+        await this.db.blocked_identities.bulkDelete(idsToDelete);
+    }
+  }
+
+  async getAllBlockedIdentityUrns(): Promise<string[]> {
+    const storables = await this.db.blocked_identities.toArray();
+    return storables.map(b => b.urn);
+  }
+
+  // --- Gatekeeper: The Waiting Room (Pending) ---
+
+  /**
+   * Adds an identity to the Waiting Room.
+   * Can be a random stranger (no voucher) or a referral (with voucher).
+   */
+  async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
+    // Upsert logic: if it's already pending, we might be adding a vouch to it.
+    const existing = await this.db.pending_identities
+      .where('urn')
+      .equals(urn.toString())
+      .first();
+
+    const pending: StorablePendingIdentity = {
+      id: existing?.id, // Preserve ID if updating
+      urn: urn.toString(),
+      // Preserve original timestamp or set new
+      firstSeenAt: existing?.firstSeenAt ?? (new Date().toISOString() as ISODateTimeString),
+      // Overwrite vouch if new one is provided, otherwise keep existing
+      vouchedBy: vouchedBy ? vouchedBy.toString() : existing?.vouchedBy,
+      note: note ?? existing?.note,
+    };
+    await this.db.pending_identities.put(pending);
+  }
+
+  async getPendingIdentity(urn: URN): Promise<PendingIdentity | null> {
+    const storable = await this.db.pending_identities
+      .where('urn')
+      .equals(urn.toString())
+      .first();
+    
+    if (!storable) return null;
+    return this.mapStorableToPending(storable);
+  }
+
+  /**
+   * Removes an identity from the Waiting Room.
+   * Call this when:
+   * 1. User Blocks the identity (move to blocked_identities)
+   * 2. User Adds/Links the identity (move to identity_links)
+   */
+  async deletePending(urn: URN): Promise<void> {
+    const records = await this.db.pending_identities
+        .where('urn')
+        .equals(urn.toString())
+        .toArray();
+    
+    const idsToDelete = records.map(r => r.id!).filter(id => id !== undefined);
+    if (idsToDelete.length > 0) {
+        await this.db.pending_identities.bulkDelete(idsToDelete);
+    }
   }
 }

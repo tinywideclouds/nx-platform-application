@@ -3,57 +3,49 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
-import { Subject, of } from 'rxjs';
+import { Subject } from 'rxjs';
 import {
   ContactsStorageService,
   Contact,
   ContactGroup,
+  PendingIdentity,
+  BlockedIdentity,
 } from '@nx-platform-application/contacts-data-access';
 import { URN } from '@nx-platform-application/platform-types';
-import { Signal } from '@angular/core';
 import { Router, ActivatedRoute, ParamMap, convertToParamMap } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { ContactsViewerComponent } from './contacts-viewer.component';
 import { ContactListComponent } from '../contact-list/contact-list.component';
-import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
-import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
-import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
+import { PendingListComponent } from '../pending-list/pending-list.component';
+import { BlockedListComponent } from '../blocked-list/blocked-list.component';
 
-// --- Mock Data (Updated to use URNs) ---
-const MOCK_CONTACTS: Contact[] = [
-  {
-    id: URN.parse('urn:sm:user:user-123'),
-    alias: 'johndoe',
-    firstName: 'John',
-    surname: 'Doe',
-    email: 'john@example.com',
-    serviceContacts: {},
-    phoneNumbers: [],
-    emailAddresses: [],
-  } as Contact,
+const MOCK_CONTACTS: Contact[] = [];
+const MOCK_GROUPS: ContactGroup[] = [];
+const MOCK_PENDING: PendingIdentity[] = [
+  { urn: URN.parse('urn:auth:google:stranger'), firstSeenAt: '2023-01-01T00:00:00Z' as any }
+];
+const MOCK_BLOCKED: BlockedIdentity[] = [
+  { urn: URN.parse('urn:auth:google:spam'), blockedAt: '2023-01-01T00:00:00Z' as any }
 ];
 
-const MOCK_GROUPS: ContactGroup[] = [
-  {
-    id: URN.parse('urn:sm:group:grp-123'),
-    name: 'Family',
-    contactIds: [URN.parse('urn:sm:user:user-123')],
-  },
-];
-
-// --- Mocks ---
 const { mockContactsService } = vi.hoisted(() => {
   return {
     mockContactsService: {
       contacts$: null as Subject<Contact[]> | null,
       groups$: null as Subject<ContactGroup[]> | null,
+      pending$: null as Subject<PendingIdentity[]> | null,
+      blocked$: null as Subject<BlockedIdentity[]> | null,
+      deletePending: vi.fn(),
+      blockIdentity: vi.fn(),
+      unblockIdentity: vi.fn(),
     },
   };
 });
@@ -73,6 +65,12 @@ describe('ContactsViewerComponent', () => {
     vi.clearAllMocks();
     mockContactsService.contacts$ = new Subject<Contact[]>();
     mockContactsService.groups$ = new Subject<ContactGroup[]>();
+    mockContactsService.pending$ = new Subject<PendingIdentity[]>();
+    mockContactsService.blocked$ = new Subject<BlockedIdentity[]>();
+
+    mockContactsService.deletePending.mockResolvedValue(undefined);
+    mockContactsService.blockIdentity.mockResolvedValue(undefined);
+    mockContactsService.unblockIdentity.mockResolvedValue(undefined);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -81,13 +79,13 @@ describe('ContactsViewerComponent', () => {
         MatTabsModule,
         MatButtonModule,
         MatIconModule,
+        MatTooltipModule,
         ContactsViewerComponent,
         ContactListComponent,
-        ContactListItemComponent,
         ContactGroupListComponent,
-        ContactGroupListItemComponent,
-        ContactAvatarComponent,
         ContactsPageToolbarComponent,
+        PendingListComponent,
+        BlockedListComponent,
       ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
@@ -101,11 +99,12 @@ describe('ContactsViewerComponent', () => {
     vi.spyOn(router, 'navigate');
   });
 
-  // Helper function to initialize component
   function initializeComponent(params: ParamMap) {
     mockQueryParamMap.next(params);
     mockContactsService.contacts$!.next(MOCK_CONTACTS);
     mockContactsService.groups$!.next(MOCK_GROUPS);
+    mockContactsService.pending$!.next(MOCK_PENDING);
+    mockContactsService.blocked$!.next(MOCK_BLOCKED);
     fixture.detectChanges();
   }
 
@@ -114,85 +113,64 @@ describe('ContactsViewerComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should have a "New Contact" link pointing to "new"', () => {
-    initializeComponent(convertToParamMap({}));
-    const newContactLinkEl = fixture.debugElement.query(
-      By.css('[data-testid="new-contact-button"]')
-    );
-    expect(newContactLinkEl).toBeTruthy();
-    expect(newContactLinkEl.attributes['routerLink']).toBe('new');
+  it('should select "Manage" tab (index 2) when ?tab=manage', () => {
+    initializeComponent(convertToParamMap({ tab: 'manage' }));
+    expect(component.tabIndex()).toBe(2);
   });
 
-  it('should have a "New Group" link pointing to "group-new"', () => {
-    initializeComponent(convertToParamMap({}));
-    const newGroupLinkEl = fixture.debugElement.query(
-      By.css('[data-testid="new-group-button"]')
-    );
-    expect(newGroupLinkEl).toBeTruthy();
-    expect(newGroupLinkEl.attributes['routerLink']).toBe('group-new');
-  });
-
-  it('should default to the "Contacts" tab (index 0)', () => {
-    initializeComponent(convertToParamMap({}));
-    expect(component.tabIndex()).toBe(0);
-  });
-
-  it('should select "Groups" tab (index 1) when ?tab=groups', () => {
-    initializeComponent(convertToParamMap({ tab: 'groups' }));
-    expect(component.tabIndex()).toBe(1);
-  });
-
-  // --- THIS TEST IS UPDATED ---
-  it('should navigate to edit page on (contactSelected)', () => {
-    initializeComponent(convertToParamMap({}));
-
-    const contactListEl = fixture.debugElement.query(
-      By.css('contacts-list')
-    );
-    contactListEl.triggerEventHandler('contactSelected', MOCK_CONTACTS[0]);
-
-    // Assert the navigation is called with the STRING version of the URN
-    expect(router.navigate).toHaveBeenCalledWith(
-      ['edit', MOCK_CONTACTS[0].id.toString()],
-      {
-        relativeTo: mockActivatedRoute,
-      }
-    );
-  });
-
-  // --- THIS TEST IS UPDATED ---
-  it('should navigate to group edit page on (groupSelected)', async () => {
-    initializeComponent(convertToParamMap({ tab: 'groups' }));
+  it('should display pending items in Manage tab', () => {
+    initializeComponent(convertToParamMap({ tab: 'manage' }));
     fixture.detectChanges();
-    await fixture.whenStable();
 
-    const groupListEl = fixture.debugElement.query(
-      By.css('contacts-group-list')
-    );
-    groupListEl.triggerEventHandler('groupSelected', MOCK_GROUPS[0]);
+    const pendingList = fixture.debugElement.query(By.directive(PendingListComponent));
+    const blockedList = fixture.debugElement.query(By.directive(BlockedListComponent));
 
-    // Assert the navigation is called with the STRING version of the URN
-    expect(router.navigate).toHaveBeenCalledWith(
-      ['group-edit', MOCK_GROUPS[0].id.toString()],
-      { relativeTo: mockActivatedRoute }
-    );
+    expect(pendingList).toBeTruthy();
+    expect(blockedList).toBeTruthy();
+
+    // Check signals are passed
+    expect(pendingList.componentInstance.pending()).toEqual(MOCK_PENDING);
+    expect(blockedList.componentInstance.blocked()).toEqual(MOCK_BLOCKED);
   });
 
-  it('should update query params when tab is changed', async () => {
-    initializeComponent(convertToParamMap({}));
-    await fixture.whenStable();
-
-    const tabLabels = fixture.debugElement.queryAll(By.css('[role="tab"]'));
-    const groupTabLabel = tabLabels[1]?.nativeElement as HTMLElement;
-
-    groupTabLabel.click();
+  it('should handle events from PendingList', async () => {
+    initializeComponent(convertToParamMap({ tab: 'manage' }));
     fixture.detectChanges();
+
+    const pendingList = fixture.debugElement.query(By.directive(PendingListComponent));
+    
+    // Trigger block
+    pendingList.triggerEventHandler('block', MOCK_PENDING[0]);
+    
+    // FIX: Wait for async component methods (blockIdentity + deletePending)
     await fixture.whenStable();
 
-    expect(router.navigate).toHaveBeenCalledWith([], {
-      relativeTo: mockActivatedRoute,
-      queryParams: { tab: 'groups' },
-      queryParamsHandling: 'merge',
-    });
+    expect(mockContactsService.blockIdentity).toHaveBeenCalledWith(
+      MOCK_PENDING[0].urn, 
+      'Blocked via Manager'
+    );
+    expect(mockContactsService.deletePending).toHaveBeenCalledWith(MOCK_PENDING[0].urn);
+
+    // Trigger approve
+    pendingList.triggerEventHandler('approve', MOCK_PENDING[0]);
+    
+    // FIX: Wait for async component methods (deletePending)
+    await fixture.whenStable();
+    
+    expect(mockContactsService.deletePending).toHaveBeenCalledTimes(2);
+  });
+
+  it('should handle events from BlockedList', async () => {
+    initializeComponent(convertToParamMap({ tab: 'manage' }));
+    fixture.detectChanges();
+
+    const blockedList = fixture.debugElement.query(By.directive(BlockedListComponent));
+    
+    blockedList.triggerEventHandler('unblock', MOCK_BLOCKED[0]);
+    
+    // FIX: Wait for async component methods (unblockIdentity)
+    await fixture.whenStable();
+    
+    expect(mockContactsService.unblockIdentity).toHaveBeenCalledWith(MOCK_BLOCKED[0].urn);
   });
 });

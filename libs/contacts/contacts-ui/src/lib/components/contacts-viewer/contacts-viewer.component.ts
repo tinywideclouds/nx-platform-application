@@ -12,6 +12,8 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
+  PendingIdentity,
+  BlockedIdentity,
 } from '@nx-platform-application/contacts-data-access';
 import { ContactListComponent } from '../contact-list/contact-list.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -19,7 +21,12 @@ import { MatTabsModule, MatTabChangeEvent } from '@angular/material/tabs';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
+
+// --- NEW COMPONENTS ---
+import { PendingListComponent } from '../pending-list/pending-list.component';
+import { BlockedListComponent } from '../blocked-list/blocked-list.component';
 
 @Component({
   selector: 'contacts-viewer',
@@ -32,7 +39,10 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
     ContactGroupListComponent,
     MatButtonModule,
     MatIconModule,
+    MatTooltipModule,
     ContactsPageToolbarComponent,
+    PendingListComponent, // <-- Used here
+    BlockedListComponent, // <-- Used here
   ],
   templateUrl: './contacts-viewer.component.html',
   styleUrl: './contacts-viewer.component.scss',
@@ -50,16 +60,34 @@ export class ContactsViewerComponent {
     initialValue: [] as ContactGroup[],
   });
 
-  private queryParams = toSignal(this.route.queryParamMap);
-  activeTab = computed(() => {
-    const tab = this.queryParams()?.get('tab');
-    return tab === 'groups' ? 'groups' : 'contacts';
+  pending = toSignal(this.contactsService.pending$, {
+    initialValue: [] as PendingIdentity[],
+  });
+  blocked = toSignal(this.contactsService.blocked$, {
+    initialValue: [] as BlockedIdentity[],
   });
 
-  tabIndex = computed(() => (this.activeTab() === 'groups' ? 1 : 0));
+  private queryParams = toSignal(this.route.queryParamMap);
+  
+  activeTab = computed(() => {
+    const tab = this.queryParams()?.get('tab');
+    if (tab === 'groups') return 'groups';
+    if (tab === 'manage') return 'manage';
+    return 'contacts';
+  });
+
+  tabIndex = computed(() => {
+    const tab = this.activeTab();
+    if (tab === 'groups') return 1;
+    if (tab === 'manage') return 2;
+    return 0;
+  });
 
   onTabChange(event: MatTabChangeEvent): void {
-    const tab = event.index === 1 ? 'groups' : 'contacts';
+    let tab = 'contacts';
+    if (event.index === 1) tab = 'groups';
+    if (event.index === 2) tab = 'manage';
+
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { tab },
@@ -67,19 +95,28 @@ export class ContactsViewerComponent {
     });
   }
 
-  // --- THIS IS THE FIX ---
   onContactSelect(contact: Contact): void {
-    // Convert the URN object to a string before passing to the router
     this.router.navigate(['edit', contact.id.toString()], {
       relativeTo: this.route,
     });
   }
 
-  // --- THIS IS THE FIX ---
   onGroupSelect(group: ContactGroup): void {
-    // Convert the URN object to a string before passing to the router
     this.router.navigate(['group-edit', group.id.toString()], {
       relativeTo: this.route,
     });
+  }
+
+  async approveIdentity(pending: PendingIdentity): Promise<void> {
+    await this.contactsService.deletePending(pending.urn);
+  }
+
+  async blockPending(pending: PendingIdentity): Promise<void> {
+    await this.contactsService.blockIdentity(pending.urn, 'Blocked via Manager');
+    await this.contactsService.deletePending(pending.urn);
+  }
+
+  async unblockIdentity(blocked: BlockedIdentity): Promise<void> {
+    await this.contactsService.unblockIdentity(blocked.urn);
   }
 }

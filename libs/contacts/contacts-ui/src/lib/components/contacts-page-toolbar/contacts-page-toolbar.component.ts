@@ -35,7 +35,7 @@ export class ContactsPageToolbarComponent implements OnDestroy {
     const width = this.elementWidth();
 
     // If width is not yet set, mode is undefined
-    if (width === undefined) {
+    if (!width){ //should accurately replace if (width === undefined || width === null || width === 0) {
       return undefined;
     }
 

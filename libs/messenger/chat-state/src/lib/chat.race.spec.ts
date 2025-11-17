@@ -1,8 +1,5 @@
-// --- FILE: libs/messenger/chat-state/src/lib/chat.service.race.spec.ts ---
-//
-// This file contains a specific test to validate the serialized (non-racy)
-// behavior of loadConversation and fetchAndProcessMessages.
-//
+// --- FILE: libs/messenger/chat-state/src/lib/chat.race.spec.ts ---
+
 import { TestBed } from '@angular/core/testing';
 import { Subject, BehaviorSubject, of, Observable } from 'rxjs';
 import {
@@ -24,12 +21,10 @@ import {
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
 
-// --- Service Under Test ---
 import { ChatService } from './chat.service';
 
-// --- Dependencies (Mocks) ---
 import {
-  IAuthService, // <-- 1. Import the INTERFACE
+  IAuthService,
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-data-access';
 import {
@@ -50,9 +45,10 @@ import {
   ChatDataService,
   ChatSendService,
 } from '@nx-platform-application/chat-data-access';
+// --- NEW IMPORT ---
+import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
 import { vi, Mocked } from 'vitest';
 
-// STUB: Mock the @js-temporal/polyfill import
 vi.mock('@js-temporal/polyfill', () => ({
   Temporal: {
     Now: {
@@ -63,13 +59,12 @@ vi.mock('@js-temporal/polyfill', () => ({
   },
 }));
 
-// --- Mock Fixtures (Copied from chat.service.spec.ts) ---
 const mockUser: User = {
-  id: 'urn:sm:user:me',
+  id: URN.parse('urn:sm:user:me'),
   alias: 'Me',
   email: 'me@test.com',
 };
-const mockUserUrn = URN.parse(mockUser.id);
+const mockUserUrn = mockUser.id;
 const mockSenderUrn = URN.parse('urn:sm:user:sender');
 
 const mockMyKeys: PrivateKeys = {
@@ -101,17 +96,8 @@ const mockDecryptedPayload: EncryptedMessagePayload = {
   typeId: URN.parse('urn:sm:type:text'),
   payloadBytes: new TextEncoder().encode(mockTextContent),
 };
-const mockDecryptedMessage: DecryptedMessage = { // Storage Model
-  messageId: 'msg-1',
-  senderId: mockSenderUrn,
-  recipientId: mockEnvelope.recipientId,
-  sentTimestamp: mockDecryptedPayload.sentTimestamp,
-  typeId: mockDecryptedPayload.typeId,
-  payloadBytes: mockDecryptedPayload.payloadBytes,
-  status: 'received',
-  conversationUrn: mockSenderUrn,
-};
-const mockChatMessage: ChatMessage = { // View Model
+
+const mockChatMessage: ChatMessage = { 
   id: 'msg-1',
   conversationUrn: mockSenderUrn,
   senderId: mockSenderUrn,
@@ -120,29 +106,18 @@ const mockChatMessage: ChatMessage = { // View Model
   type: 'text',
 };
 
-// --- Mock Instances ---
-
-// --- 2. Create Mocks for IAuthService (Signal-based) ---
 let mockCurrentUser: WritableSignal<User | null>;
 let mockIsAuthenticated: Signal<boolean>;
 let mockSessionLoaded$: BehaviorSubject<AuthStatusResponse | null>;
-let mockAuthService: {
-  currentUser: Signal<User | null>;
-  isAuthenticated: Signal<boolean>;
-  sessionLoaded$: Observable<AuthStatusResponse | null>;
-  getJwtToken: ReturnType<typeof vi.fn>;
-  logout: ReturnType<typeof vi.fn>;
-  checkAuthStatus: ReturnType<typeof vi.fn>;
-};
+let mockAuthService: any;
 
-// --- (Other mocks remain the same) ---
-const mockCryptoService: Mocked<MessengerCryptoService> = {
+const mockCryptoService = {
   loadMyKeys: vi.fn(),
   verifyAndDecrypt: vi.fn(),
   encryptAndSign: vi.fn(),
   generateAndStoreKeys: vi.fn(),
 };
-const mockStorageService: Mocked<ChatStorageService> = {
+const mockStorageService = {
   loadConversationSummaries: vi.fn(),
   saveMessage: vi.fn(),
   loadHistory: vi.fn(),
@@ -150,31 +125,20 @@ const mockStorageService: Mocked<ChatStorageService> = {
   storeKey: vi.fn(),
   clearAllMessages: vi.fn(),
 };
-const mockLogger: Mocked<Logger> = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
-};
-const mockLiveService: Mocked<ChatLiveDataService> = {
-  connect: vi.fn(),
-  disconnect: vi.fn(),
-  status$: new Subject<ConnectionStatus>(),
-  incomingMessage$: new Subject<void>(),
-  ngOnDestroy: vi.fn(),
-};
-const mockKeyService: Mocked<KeyCacheService> = {
-  getPublicKey: vi.fn(),
-};
-const mockDataService: Mocked<ChatDataService> = {
-  getMessageBatch: vi.fn(),
-  acknowledge: vi.fn(),
-};
-const mockSendService: Mocked<ChatSendService> = {
-  sendMessage: vi.fn(),
+const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+const mockLiveService = { connect: vi.fn(), disconnect: vi.fn(), status$: new Subject(), incomingMessage$: new Subject(), ngOnDestroy: vi.fn() };
+const mockKeyService = { getPublicKey: vi.fn() };
+const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
+const mockSendService = { sendMessage: vi.fn() };
+
+// --- NEW MOCK ---
+const mockContactsService = {
+  getAllIdentityLinks: vi.fn(),
+  getAllBlockedIdentityUrns: vi.fn(),
+  addToPending: vi.fn(),
+  getLinkedIdentities: vi.fn(),
 };
 
-// Stub crypto.randomUUID
 vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'mock-uuid') });
 
 describe('ChatService (Race Condition Test)', () => {
@@ -182,11 +146,8 @@ describe('ChatService (Race Condition Test)', () => {
 
   async function initializeService() {
     service = TestBed.inject(ChatService);
-    // Set mock state that init() will read
     mockCurrentUser.set(mockUser);
     mockAuthService.getJwtToken.mockReturnValue('mock-token');
-    
-    // Trigger the sessionLoaded$ stream
     mockSessionLoaded$.next(mockAuthResponse);
     await vi.runOnlyPendingTimersAsync();
   }
@@ -195,7 +156,6 @@ describe('ChatService (Race Condition Test)', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    // --- 3. Initialize Signal-based Auth Mock ---
     mockCurrentUser = signal<User | null>(null);
     mockIsAuthenticated = computed(() => !!mockCurrentUser());
     mockSessionLoaded$ = new BehaviorSubject<AuthStatusResponse | null>(null);
@@ -208,7 +168,6 @@ describe('ChatService (Race Condition Test)', () => {
       checkAuthStatus: vi.fn(() => of(null)),
     };
 
-    // --- Configure Other Mocks (Default Happy Path) ---
     mockStorageService.loadConversationSummaries.mockResolvedValue([]);
     mockStorageService.saveMessage.mockResolvedValue(undefined);
     mockStorageService.loadHistory.mockResolvedValue([]);
@@ -220,10 +179,15 @@ describe('ChatService (Race Condition Test)', () => {
     mockDataService.acknowledge.mockReturnValue(of(undefined));
     mockSendService.sendMessage.mockReturnValue(of(undefined));
 
+    // --- CONTACTS MOCK DEFAULTS ---
+    mockContactsService.getAllIdentityLinks.mockResolvedValue([]);
+    mockContactsService.getAllBlockedIdentityUrns.mockResolvedValue([]);
+    mockContactsService.addToPending.mockResolvedValue(undefined);
+    mockContactsService.getLinkedIdentities.mockResolvedValue([]);
+
     TestBed.configureTestingModule({
       providers: [
         ChatService,
-        // --- 4. Provide the INTERFACE ---
         { provide: IAuthService, useValue: mockAuthService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
@@ -232,6 +196,8 @@ describe('ChatService (Race Condition Test)', () => {
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: ChatDataService, useValue: mockDataService },
         { provide: ChatSendService, useValue: mockSendService },
+        // Provide the mock
+        { provide: ContactsStorageService, useValue: mockContactsService },
       ],
     });
   });
@@ -240,43 +206,37 @@ describe('ChatService (Race Condition Test)', () => {
     vi.useRealTimers();
   });
 
-  // ---
-  // --- THE (FIXED) RACE CONDITION TEST ---
-  // ---
   it('should correctly process queued operations (select then fetch) in sequence', async () => {
-    // 1. --- SETUP ---
     const newQueuedMessage: QueuedMessage = {
       ...mockQueuedMessage,
       id: 'race-msg-id-1',
     };
     const staleHistory: DecryptedMessage[] = [];
-
-    // --- 5. DEFINE THE EXPECTED VIEW MODEL ---
-    // This is the message that should be in the signal at the end
     const expectedChatMessage: ChatMessage = {
       ...mockChatMessage,
       id: 'race-msg-id-1',
     };
 
-    // Configure mocks
     mockStorageService.loadHistory.mockResolvedValue(staleHistory);
     mockDataService.getMessageBatch.mockReturnValue(of([newQueuedMessage]));
-    // (verifyAndDecrypt is already mocked)
-
-    // Initialize the service
+    
+    // Need to allow unknown senders (or mock links) for this test
+    // Since the payload sender is not linked, it will hit addToPending
+    // which is mocked to resolve safely.
+    
     await initializeService();
 
-    // 2. --- TRIGGER THE "RACE" ---
     const selectPromise = service.loadConversation(mockSenderUrn);
     const fetchPromise = service.fetchAndProcessMessages();
 
-    // 3. --- VERIFY AND FLUSH THE QUEUE ---
     await Promise.all([selectPromise, fetchPromise]);
-    await vi.runAllTicks(); // Ensure any final microtasks are flushed
+    await vi.runAllTicks();
 
-    // 4. --- ASSERTION (Checking for View Model) ---
     expect(service.messages()).toEqual([expectedChatMessage]);
     expect(mockStorageService.loadHistory).toHaveBeenCalled();
     expect(mockDataService.getMessageBatch).toHaveBeenCalled();
+    
+    // Verify Gatekeeper was called for unknown sender
+    expect(mockContactsService.addToPending).toHaveBeenCalledWith(mockSenderUrn);
   });
 });

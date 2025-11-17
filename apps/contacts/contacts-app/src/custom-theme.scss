@@ -65,6 +65,19 @@ html {
   ));
 }
 
+// Applies to a <mat-tab-group>. 
+// It forces the LAST tab to shrink to icon-width.
+.mat-tab-icon-button {
+  .mat-mdc-tab-header .mat-mdc-tab-labels {
+    // Target the last tab (Manage/Gatekeeper)
+    .mat-mdc-tab:last-child {
+      min-width: 64px !important; // Override Material min-width
+      padding: 0 12px;           // Reduce padding
+      flex-grow: 0;              // Prevent expanding
+    }
+  }
+}
+
 .form-view-mode {
   
   // Call the same mixin, but scoped to this class

@@ -1,0 +1,58 @@
+<div>
+  <h3 class="text-lg font-medium mb-2 flex items-center gap-2">
+    <mat-icon class="text-orange-500">notifications</mat-icon>
+    Pending Requests
+    <span class="text-sm text-gray-500 font-normal">({{ pending().length }})</span>
+  </h3>
+  
+  @if (pending().length > 0) {
+    <div class="border rounded-lg bg-white overflow-hidden">
+      @for (item of pending(); track trackByUrn($index, item)) {
+        <div class="p-4 border-b last:border-b-0 flex items-center justify-between hover:bg-gray-50">
+          <div class="flex-1">
+            <div class="font-medium text-gray-900" data-testid="urn-display">
+              {{ formatUrn(item.urn) }}
+            </div>
+            
+            @if (item.vouchedBy) {
+              <div class="text-sm text-blue-600 flex items-center gap-1" data-testid="vouch-badge">
+                <mat-icon class="text-xs h-4 w-4 text-blue-600" style="font-size: 16px; width: 16px; height: 16px;">verified</mat-icon>
+                Vouched by {{ formatUrn(item.vouchedBy) }}
+              </div>
+              @if (item.note) {
+                <div class="text-xs text-gray-500 italic mt-1">"{{ item.note }}"</div>
+              }
+            } @else {
+              <div class="text-sm text-gray-500">Unknown Sender</div>
+            }
+          </div>
+          
+          <div class="flex gap-2">
+            <button 
+              mat-icon-button 
+              color="warn" 
+              (click)="onBlock(item)" 
+              matTooltip="Block"
+              data-testid="block-button"
+            >
+              <mat-icon>block</mat-icon>
+            </button>
+            <button 
+              mat-icon-button 
+              color="primary" 
+              (click)="onApprove(item)" 
+              matTooltip="Approve"
+              data-testid="approve-button"
+            >
+              <mat-icon>check_circle</mat-icon>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="p-8 text-center text-gray-400 bg-gray-50 rounded-lg border border-dashed">
+      No pending requests.
+    </div>
+  }
+</div>

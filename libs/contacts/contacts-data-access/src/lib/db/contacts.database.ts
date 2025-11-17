@@ -5,6 +5,8 @@ import {
   StorableContact,
   StorableGroup,
   StorableIdentityLink,
+  StorableBlockedIdentity,
+  StorablePendingIdentity,
 } from '../models/contacts';
 
 @Injectable({ providedIn: 'root' })
@@ -12,32 +14,47 @@ export class ContactsDatabase extends PlatformDexieService {
   contacts!: Table<StorableContact, string>;
   contactGroups!: Table<StorableGroup, string>;
   identity_links!: Table<StorableIdentityLink, number>;
+  
+  // Gatekeeper Tables
+  blocked_identities!: Table<StorableBlockedIdentity, number>;
+  pending_identities!: Table<StorablePendingIdentity, number>; // The Waiting Room
 
   constructor() {
     super('contacts');
 
-    // SCHEMA EXPLANATION (v1):
+    // v1
     this.version(1).stores({
       contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
     });
 
-    // SCHEMA EXPLANATION (v2):
+    // v2
     this.version(2).stores({
       contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
       contactGroups: 'id, name, *contactIds',
     });
 
-    // SCHEMA EXPLANATION (v3):
-    // Added identity_links table for Federated Identity support.
-    // Indexes on contactId and authUrn allow for fast bidirectional lookups.
+    // v3
     this.version(3).stores({
       contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
       contactGroups: 'id, name, *contactIds',
       identity_links: '++id, contactId, authUrn',
     });
 
+    // v4: Gatekeeper
+    // blocked_identities: Deny list
+    // pending_identities: The "Waiting Room" for Unknowns + Vouched
+    this.version(4).stores({
+      contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
+      contactGroups: 'id, name, *contactIds',
+      identity_links: '++id, contactId, authUrn',
+      blocked_identities: '++id, urn, blockedAt', 
+      pending_identities: '++id, urn, vouchedBy, firstSeenAt',
+    });
+
     this.contacts = this.table('contacts');
     this.contactGroups = this.table('contactGroups');
     this.identity_links = this.table('identity_links');
+    this.blocked_identities = this.table('blocked_identities');
+    this.pending_identities = this.table('pending_identities');
   }
 }

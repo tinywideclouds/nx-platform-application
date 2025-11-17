@@ -1,0 +1,10 @@
+// libs/contacts/contacts-ui/src/lib/components/blocked-list/blocked-list.component.scss
+
+:host {
+  display: block;
+}
+
+// Utility class for red icons (if Tailwind isn't picking it up in tests/shadow dom)
+.text-red-500 {
+  color: #f44336 !important;
+}

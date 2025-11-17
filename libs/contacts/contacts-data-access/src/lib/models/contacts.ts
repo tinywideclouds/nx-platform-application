@@ -9,19 +9,14 @@ export interface ServiceContact extends Resource {
 /**
  * A Contact represents a person in the local address book.
  * It extends the base User identity with local-specific fields.
- * * Architectural Note:
- * This is a PURE native interface. It does not know about Protobufs.
  */
 export interface Contact extends User {
   firstName: string;       
   surname: string;
 
   phoneNumbers: string[];   // E.164 formatted phone numbers
-  emailAddresses: string[]; // Verified email addresses (User.email can be the primary)
+  emailAddresses: string[]; // Verified email addresses
 
-  // We use Record instead of Map for better JSON serialization 
-  // and potential indexing support in Dexie.
-  // Key = Service Name (e.g., 'messenger', 'email', 'sip')
   serviceContacts: Record<string, ServiceContact>;
 }
 
@@ -33,7 +28,6 @@ export interface ContactGroup extends Resource {
 
 /**
  * Represents a link between a local Contact and a federated Authentication URN.
- * This allows a single Contact to be associated with multiple providers (Google, Apple, etc.).
  */
 export interface IdentityLink {
   id?: number;      // Auto-incrementing ID from Dexie
@@ -41,49 +35,82 @@ export interface IdentityLink {
   authUrn: URN;     // The federated Sender URN (urn:auth:provider:...)
 }
 
+// --- GATEKEEPER MODELS ---
+
 /**
- * Represents the ServiceContact as it is stored in Dexie
- * (with primitive string IDs).
+ * Represents an Authentication URN that has been explicitly blocked.
+ * Messages from this URN will be silently dropped.
  */
+export interface BlockedIdentity {
+  id?: number;
+  urn: URN;                    // The Sender URN to block
+  blockedAt: ISODateTimeString;
+  reason?: string;
+}
+
+/**
+ * The "Waiting Room".
+ * Represents an identity that has contacted us (or been introduced)
+ * but is not yet a trusted Contact or explicitly Blocked.
+ */
+export interface PendingIdentity {
+  id?: number;
+  urn: URN;                    // The Stranger's URN
+  firstSeenAt: ISODateTimeString;
+  
+  // If present, this person was introduced by a trusted contact.
+  // If missing, this is a random "Unknown Sender".
+  vouchedBy?: URN;             
+  note?: string;               // "This is my cousin June"
+}
+
+// --- Storable Models (Primitives) ---
+
 export interface StorableServiceContact {
-  id: string; // <-- Changed from URN
+  id: string; 
   alias: string;
   profilePictureUrl?: string;
   lastSeen: ISODateTimeString;
 }
 
-/**
- * Represents the Contact as it is stored in Dexie
- * (with primitive string IDs).
- */
 export interface StorableContact {
-  id: string; // <-- Changed from URN
+  id: string; 
   alias: string;
   email: string;
   firstName: string;
   surname: string;
   phoneNumbers: string[];
   emailAddresses: string[];
-  serviceContacts: Record<string, StorableServiceContact>; // <-- Uses storable child
+  serviceContacts: Record<string, StorableServiceContact>; 
 }
 
-/**
- * Represents the ContactGroup as it is stored in Dexie
- * (with primitive string IDs).
- */
 export interface StorableGroup {
-  id: string; // <-- Changed from URN
+  id: string; 
   name: string;
   description?: string;
-  contactIds: string[]; // <-- Changed from URN[]
+  contactIds: string[]; 
+}
+
+export interface StorableIdentityLink {
+  id?: number;
+  contactId: string;
+  authUrn: string;
+}
+
+export interface StorableBlockedIdentity {
+  id?: number;
+  urn: string;
+  blockedAt: ISODateTimeString;
+  reason?: string;
 }
 
 /**
- * Represents the IdentityLink as it is stored in Dexie
- * (with primitive string IDs).
+ * Storable version of PendingIdentity.
  */
-export interface StorableIdentityLink {
-  id?: number;        // Auto-incrementing ID
-  contactId: string;  // Stored as string version of URN
-  authUrn: string;    // Stored as string version of URN
+export interface StorablePendingIdentity {
+  id?: number;
+  urn: string;                 // Indexed
+  firstSeenAt: ISODateTimeString;
+  vouchedBy?: string;          // Indexed (optional)
+  note?: string;
 }

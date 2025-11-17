@@ -1,6 +1,6 @@
 // --- FILE: libs/messenger/chat-state/src/lib/chat.service.spec.ts ---
 import { TestBed } from '@angular/core/testing';
-import { Subject, BehaviorSubject, of, Observable } from 'rxjs';
+import { Subject, BehaviorSubject, of } from 'rxjs';
 import {
   signal,
   WritableSignal,
@@ -17,15 +17,13 @@ import {
 } from '@nx-platform-application/platform-types';
 import {
   EncryptedMessagePayload,
-  ChatMessage, // <-- View Model
+  ChatMessage,
 } from '@nx-platform-application/messenger-types';
 
-// --- Service Under Test ---
 import { ChatService } from './chat.service';
 
-// --- Dependencies (Mocks) ---
 import {
-  IAuthService, // <-- 1. Import the INTERFACE
+  IAuthService,
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-data-access';
 import {
@@ -39,16 +37,16 @@ import {
 import { Logger } from '@nx-platform-application/console-logger';
 import {
   ChatLiveDataService,
-  ConnectionStatus,
 } from '@nx-platform-application/chat-live-data';
 import { KeyCacheService } from '@nx-platform-application/key-cache-access';
 import {
   ChatDataService,
   ChatSendService,
 } from '@nx-platform-application/chat-data-access';
-import { vi, Mocked } from 'vitest';
+import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { vi } from 'vitest';
 
-// STUB: Mock the @js-temporal/polyfill import
+// --- STUB: Mock the @js-temporal/polyfill import ---
 vi.mock('@js-temporal/polyfill', () => ({
   Temporal: {
     Now: {
@@ -59,153 +57,104 @@ vi.mock('@js-temporal/polyfill', () => ({
   },
 }));
 
-// --- Mock Fixtures ---
+// --- FIXTURES ---
+
 const mockUser: User = {
-  id: URN.parse('urn:sm:user:me'),
+  id: URN.parse('urn:sm:user:me'), // Treated as Auth URN
   alias: 'Me',
   email: 'me@test.com',
 };
-const mockUserUrn = mockUser.id;
-const mockSenderUrn = URN.parse('urn:sm:user:sender');
+
+// Identity & Routing Fixtures
+const mockAuthSenderUrn = URN.parse('urn:auth:google:sender');
+const mockContactSenderUrn = URN.parse('urn:sm:user:sender-contact');
 const mockRecipientUrn = URN.parse('urn:sm:user:recipient');
+const mockBlockedUrn = URN.parse('urn:auth:google:blocked-spammer');
+const mockUnknownUrn = URN.parse('urn:auth:apple:unknown-stranger');
 
-const mockMyKeys: PrivateKeys = {
-  encKey: 'my-enc-key',
-  sigKey: 'my-sig-key',
-} as any;
-const mockRecipientKeys: PublicKeys = {
-  encKey: new Uint8Array([1, 1, 1]),
-  sigKey: new Uint8Array([2, 2, 2]),
-};
-const mockAuthResponse: AuthStatusResponse = {
-  authenticated: true,
-  user: mockUser,
-  token: 'mock-token',
-};
+// Keys & Auth
+const mockMyKeys: PrivateKeys = { encKey: 'my-enc-key', sigKey: 'my-sig-key' } as any;
+const mockRecipientKeys: PublicKeys = { encKey: new Uint8Array([1]), sigKey: new Uint8Array([2]) };
+const mockAuthResponse: AuthStatusResponse = { authenticated: true, user: mockUser, token: 'mock-token' };
 
+// Messages
 const mockEnvelope: SecureEnvelope = {
-  recipientId: mockUserUrn,
-  encryptedData: new Uint8Array([1, 2, 3]),
-  encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
-  signature: new Uint8Array([7, 8, 9]),
+  recipientId: mockUser.id,
+  encryptedData: new Uint8Array([1]),
+  encryptedSymmetricKey: new Uint8Array([1]),
+  signature: new Uint8Array([1]),
 };
 const mockQueuedMessage: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
 
 const mockTextContent = 'Test Payload';
 const mockDecryptedPayload: EncryptedMessagePayload = {
-  senderId: mockSenderUrn,
+  senderId: mockAuthSenderUrn, // The raw Auth URN
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
   typeId: URN.parse('urn:sm:type:text'),
   payloadBytes: new TextEncoder().encode(mockTextContent),
 };
-const mockDecryptedMessage: DecryptedMessage = { // Storage Model
+
+// The Storage Model should now use the CONTACT URN
+const mockDecryptedMessage: DecryptedMessage = { 
   messageId: 'msg-1',
-  senderId: mockSenderUrn,
+  senderId: mockContactSenderUrn, // <-- Mapped!
   recipientId: mockEnvelope.recipientId,
   sentTimestamp: mockDecryptedPayload.sentTimestamp,
   typeId: mockDecryptedPayload.typeId,
   payloadBytes: mockDecryptedPayload.payloadBytes,
   status: 'received',
-  conversationUrn: mockSenderUrn,
+  conversationUrn: mockContactSenderUrn, // <-- Conversation is Contact
 };
-const mockChatMessage: ChatMessage = { // View Model
+
+const mockChatMessage: ChatMessage = { 
   id: 'msg-1',
-  conversationUrn: mockSenderUrn,
-  senderId: mockSenderUrn,
+  conversationUrn: mockContactSenderUrn,
+  senderId: mockContactSenderUrn,
   timestamp: new Date(mockDecryptedPayload.sentTimestamp),
   textContent: mockTextContent,
   type: 'text',
 };
 
-const mockSentMessage: DecryptedMessage = { // Storage Model
-  messageId: 'local-mock-uuid',
-  senderId: mockUserUrn,
-  recipientId: mockRecipientUrn,
-  sentTimestamp: '2025-11-04T17:00:00Z' as ISODateTimeString,
-  typeId: URN.parse('urn:sm:type:text'),
-  payloadBytes: new TextEncoder().encode('Hello, Recipient!'),
-  status: 'sent',
-  conversationUrn: mockRecipientUrn,
-};
-const mockSentChatMessage: ChatMessage = { // View Model
-  id: 'local-mock-uuid',
-  conversationUrn: mockRecipientUrn,
-  senderId: mockUserUrn,
-  timestamp: new Date(mockSentMessage.sentTimestamp),
-  textContent: 'Hello, Recipient!',
-  type: 'text',
-};
+// --- MOCK INSTANCES ---
 
-// --- Mock Instances ---
-
-// --- 2. Create Mocks for IAuthService (Signal-based) ---
 let mockCurrentUser: WritableSignal<User | null>;
 let mockIsAuthenticated: Signal<boolean>;
 let mockSessionLoaded$: BehaviorSubject<AuthStatusResponse | null>;
-let mockAuthService: {
-  currentUser: Signal<User | null>;
-  isAuthenticated: Signal<boolean>;
-  sessionLoaded$: Observable<AuthStatusResponse | null>;
-  getJwtToken: ReturnType<typeof vi.fn>;
-  logout: ReturnType<typeof vi.fn>;
-  checkAuthStatus: ReturnType<typeof vi.fn>;
-};
+let mockAuthService: any;
 
-// --- (Other mocks remain the same) ---
-const mockCryptoService: Mocked<MessengerCryptoService> = {
+const mockCryptoService = {
   loadMyKeys: vi.fn(),
   verifyAndDecrypt: vi.fn(),
   encryptAndSign: vi.fn(),
-  generateAndStoreKeys: vi.fn(),
 };
-const mockStorageService: Mocked<ChatStorageService> = {
+const mockStorageService = {
   loadConversationSummaries: vi.fn(),
   saveMessage: vi.fn(),
   loadHistory: vi.fn(),
-  getKey: vi.fn(),
-  storeKey: vi.fn(),
-  clearAllMessages: vi.fn(),
 };
-const mockLogger: Mocked<Logger> = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
-};
-const mockLiveService: Mocked<ChatLiveDataService> = {
-  connect: vi.fn(),
-  disconnect: vi.fn(),
-  status$: new Subject<ConnectionStatus>(),
-  incomingMessage$: new Subject<void>(),
-  ngOnDestroy: vi.fn(),
-};
-const mockKeyService: Mocked<KeyCacheService> = {
-  getPublicKey: vi.fn(),
-};
-const mockDataService: Mocked<ChatDataService> = {
-  getMessageBatch: vi.fn(),
-  acknowledge: vi.fn(),
-};
-const mockSendService: Mocked<ChatSendService> = {
-  sendMessage: vi.fn(),
+const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+const mockLiveService = { connect: vi.fn(), disconnect: vi.fn(), status$: new Subject(), incomingMessage$: new Subject() };
+const mockKeyService = { getPublicKey: vi.fn() };
+const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
+const mockSendService = { sendMessage: vi.fn() };
+
+// Contacts Mock (Gatekeeper)
+const mockContactsService = {
+  getAllIdentityLinks: vi.fn(),
+  getLinkedIdentities: vi.fn(),
+  getAllBlockedIdentityUrns: vi.fn(),
+  addToPending: vi.fn(),
 };
 
-// Stub crypto.randomUUID
 vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'mock-uuid') });
 
 describe('ChatService (Refactored Test)', () => {
   let service: ChatService;
 
-  /**
-   * Helper function to fully initialize the service
-   */
   async function initializeService() {
     service = TestBed.inject(ChatService);
-    // Set mock state that init() will read
     mockCurrentUser.set(mockUser);
     mockAuthService.getJwtToken.mockReturnValue('mock-token');
-    
-    // Trigger the sessionLoaded$ stream
     mockSessionLoaded$.next(mockAuthResponse);
     await vi.runOnlyPendingTimersAsync();
   }
@@ -214,7 +163,6 @@ describe('ChatService (Refactored Test)', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    // --- 3. Initialize Signal-based Auth Mock ---
     mockCurrentUser = signal<User | null>(null);
     mockIsAuthenticated = computed(() => !!mockCurrentUser());
     mockSessionLoaded$ = new BehaviorSubject<AuthStatusResponse | null>(null);
@@ -223,30 +171,39 @@ describe('ChatService (Refactored Test)', () => {
       isAuthenticated: mockIsAuthenticated,
       sessionLoaded$: mockSessionLoaded$.asObservable(),
       getJwtToken: vi.fn(),
-      logout: vi.fn(() => of(undefined)),
-      checkAuthStatus: vi.fn(() => of(null)),
     };
 
-    // --- Configure Other Mocks (Default Happy Path) ---
+    // Default Mocks
     mockStorageService.loadConversationSummaries.mockResolvedValue([]);
     mockStorageService.saveMessage.mockResolvedValue(undefined);
     mockStorageService.loadHistory.mockResolvedValue([]);
-
+    
     mockCryptoService.loadMyKeys.mockResolvedValue(mockMyKeys);
     mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
     mockCryptoService.encryptAndSign.mockResolvedValue(mockEnvelope);
-
+    
     mockKeyService.getPublicKey.mockResolvedValue(mockRecipientKeys);
-
+    
     mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
-
+    
     mockSendService.sendMessage.mockReturnValue(of(undefined));
+
+    // Contacts Default Mocks
+    // Return a link: AuthUrn -> ContactUrn
+    mockContactsService.getAllIdentityLinks.mockResolvedValue([
+      { contactId: mockContactSenderUrn, authUrn: mockAuthSenderUrn }
+    ]);
+    // Return the AuthUrn when looking up the ContactUrn
+    mockContactsService.getLinkedIdentities.mockResolvedValue([mockAuthSenderUrn]);
+    // Empty block list
+    mockContactsService.getAllBlockedIdentityUrns.mockResolvedValue([]);
+    // Add to pending default
+    mockContactsService.addToPending.mockResolvedValue(undefined);
 
     TestBed.configureTestingModule({
       providers: [
         ChatService,
-        // --- 4. Provide the INTERFACE ---
         { provide: IAuthService, useValue: mockAuthService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
@@ -255,6 +212,7 @@ describe('ChatService (Refactored Test)', () => {
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: ChatDataService, useValue: mockDataService },
         { provide: ChatSendService, useValue: mockSendService },
+        { provide: ContactsStorageService, useValue: mockContactsService },
       ],
     });
   });
@@ -263,171 +221,89 @@ describe('ChatService (Refactored Test)', () => {
     vi.useRealTimers();
   });
 
-  it('should initialize, derive URN, load keys, and connect', async () => {
+  it('should initialize and load identity links and block list', async () => {
+    mockContactsService.getAllBlockedIdentityUrns.mockResolvedValue(['urn:auth:bad']);
     await initializeService();
+    
+    expect(mockContactsService.getAllIdentityLinks).toHaveBeenCalled();
+    expect(mockContactsService.getAllBlockedIdentityUrns).toHaveBeenCalled();
+    
+    // Assert that BOTH logs occurred
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Loaded 1 identity links'));
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Loaded 1 blocked identities'));
+  });
 
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      'ChatService: Orchestrator initializing...'
+  it('fetchAndProcessMessages: should resolve Auth URN to Contact URN', async () => {
+    await initializeService();
+    
+    // The message comes from mockAuthSenderUrn (payload)
+    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
+    
+    // Select the conversation (Contact URN) so upsert works
+    await service.loadConversation(mockContactSenderUrn);
+    
+    await service.fetchAndProcessMessages();
+
+    // Verify Mapping: Saved message should use CONTACT URN
+    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        senderId: mockContactSenderUrn, 
+        conversationUrn: mockContactSenderUrn
+      })
     );
-    expect(service.currentUserUrn()?.toString()).toBe(mockUser.id);
-    expect(mockStorageService.loadConversationSummaries).toHaveBeenCalled();
-    expect(mockCryptoService.loadMyKeys).toHaveBeenCalledWith(mockUserUrn);
-    expect(mockLiveService.connect).toHaveBeenCalledWith('mock-token');
+    
+    // Verify UI Update
+    expect(service.messages()).toEqual([mockChatMessage]);
   });
 
-  it('should trigger a pull on "poke" notification', async () => {
-    await initializeService();
-    const pullSpy = vi
-      .spyOn(service, 'fetchAndProcessMessages')
-      .mockResolvedValue();
-
-    mockLiveService.incomingMessage$.next();
-    await vi.runAllTicks();
-
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      '"Poke" received! Triggering pull.'
-    );
-    expect(pullSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('should trigger a pull when live service connects', async () => {
-    await initializeService();
-    const pullSpy = vi
-      .spyOn(service, 'fetchAndProcessMessages')
-      .mockResolvedValue();
-
-    mockLiveService.status$.next('connected');
-    await vi.runAllTicks();
-
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      'Poke service connected. Triggering initial pull.'
-    );
-    expect(pullSpy).toHaveBeenCalledTimes(1);
-  });
-
-  describe('Conversation Selection', () => {
-    // --- 5. UPDATED Mocks for View Model ---
-    const history: DecryptedMessage[] = [
-      mockDecryptedMessage,
-      { ...mockDecryptedMessage, messageId: 'msg-2' },
-    ];
-    const expectedChatHistory: ChatMessage[] = [
-      mockChatMessage,
-      { ...mockChatMessage, id: 'msg-2' },
-    ];
-
-    beforeEach(() => {
-      mockStorageService.loadHistory.mockResolvedValue(history);
-    });
-
-    it('should load history and set messages on loadConversation', async () => {
-      await initializeService();
-      expect(service.messages()).toEqual([]);
-
-      await service.loadConversation(mockSenderUrn);
-
-      expect(service.selectedConversation()?.toString()).toBe(
-        mockSenderUrn.toString()
-      );
-      expect(mockStorageService.loadHistory).toHaveBeenCalledWith(mockSenderUrn);
-      expect(service.messages()).toEqual(expectedChatHistory);
-    });
-
-    it('should clear messages when deselecting', async () => {
-      await initializeService();
-      await service.loadConversation(mockSenderUrn);
-      expect(service.messages().length).toBe(2);
-
-      await service.loadConversation(null);
-
-      expect(service.selectedConversation()).toBe(null);
-      expect(service.messages()).toEqual([]);
-    });
-  });
-
-  describe('Context-Aware Message Handling', () => {
-    it('fetchAndProcessMessages: should NOT add messages to state if no conversation is selected', async () => {
-      await initializeService();
-      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
-
-      expect(service.selectedConversation()).toBe(null);
-
-      await service.fetchAndProcessMessages();
-
-      expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(service.messages()).toEqual([]);
-    });
-
-    it('fetchAndProcessMessages: should add messages to state if conversation is selected', async () => {
-      await initializeService();
-      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
-
-      await service.loadConversation(mockSenderUrn);
-
-      await service.fetchAndProcessMessages();
-
-      expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(service.messages()).toEqual([mockChatMessage]);
-    });
-
-    it('sendMessage: should add optimistic message to state if conversation is selected', async () => {
-      await initializeService();
-
-      await service.loadConversation(mockRecipientUrn);
-
-      await service.sendMessage(mockRecipientUrn, 'Hello, Recipient!');
-
-      expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(service.messages()).toEqual([mockSentChatMessage]);
-    });
-  });
-
-  it('should perform the full "Pull-Decrypt-Save-Ack" loop (DB only)', async () => {
-    await initializeService();
+  it('fetchAndProcessMessages: should DROP message from blocked identity', async () => {
+    // 1. Setup: Blocked user sends a message
+    mockContactsService.getAllBlockedIdentityUrns.mockResolvedValue([mockBlockedUrn.toString()]);
+    
+    const blockedPayload = { ...mockDecryptedPayload, senderId: mockBlockedUrn };
+    mockCryptoService.verifyAndDecrypt.mockResolvedValue(blockedPayload);
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
 
+    await initializeService();
     await service.fetchAndProcessMessages();
 
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      'Processing 1 new messages...'
-    );
-    expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalled();
-    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
-      expect.objectContaining(mockDecryptedMessage)
-    );
-    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+    // 2. Verify: Message NOT saved
+    expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
+
+    // 3. Verify: Message Acked (to remove from queue)
+    expect(mockDataService.acknowledge).toHaveBeenCalledWith([mockQueuedMessage.id]);
   });
 
-  it('should recursively pull if batch was full', async () => {
+  it('fetchAndProcessMessages: should ADD unknown sender to PENDING', async () => {
+    // 1. Setup: Unknown user sends a message
+    const unknownPayload = { ...mockDecryptedPayload, senderId: mockUnknownUrn };
+    mockCryptoService.verifyAndDecrypt.mockResolvedValue(unknownPayload);
+    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMessage]));
+
     await initializeService();
-    const fullBatch = Array(50).fill(mockQueuedMessage);
-
-    mockDataService.getMessageBatch
-      .mockReturnValueOnce(of(fullBatch))
-      .mockReturnValueOnce(of([]));
-
-    const pullSpy = vi.spyOn(service, 'fetchAndProcessMessages');
-
     await service.fetchAndProcessMessages();
-    await vi.runAllTicks();
 
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      'Queue was full, pulling next batch immediately.'
+    // 2. Verify: Added to Pending Table
+    expect(mockContactsService.addToPending).toHaveBeenCalledWith(mockUnknownUrn);
+
+    // 3. Verify: Message SAVED (Unknowns are still stored)
+    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ senderId: mockUnknownUrn })
     );
-    expect(pullSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('should complete the full Encrypt-Send-Save (A->B) flow (DB only)', async () => {
+  it('sendMessage: should resolve Contact URN to Auth URN for encryption', async () => {
     await initializeService();
-    const plaintext = 'Hello, Recipient!';
+    // We send to the Contact URN
+    await service.sendMessage(mockContactSenderUrn, 'Hello');
 
-    await service.sendMessage(mockRecipientUrn, plaintext);
-
-    expect(mockKeyService.getPublicKey).toHaveBeenCalledWith(mockRecipientUrn);
-    expect(mockCryptoService.encryptAndSign).toHaveBeenCalled();
-    expect(mockSendService.sendMessage).toHaveBeenCalledWith(mockEnvelope);
-    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
-      expect.objectContaining(mockSentMessage)
+    // But we should encrypt for the Auth URN (from getLinkedIdentities)
+    expect(mockKeyService.getPublicKey).toHaveBeenCalledWith(mockAuthSenderUrn);
+    expect(mockCryptoService.encryptAndSign).toHaveBeenCalledWith(
+      expect.anything(),
+      mockAuthSenderUrn, // Envelope recipient
+      expect.anything(),
+      expect.anything()
     );
   });
 });

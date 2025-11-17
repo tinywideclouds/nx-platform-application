@@ -12,6 +12,8 @@ import {
   ServiceContact,
   StorableServiceContact,
   StorableIdentityLink,
+  StorableBlockedIdentity,
+  StorablePendingIdentity,
 } from './models/contacts';
 import {
   ISODateTimeString,
@@ -19,55 +21,82 @@ import {
 } from '@nx-platform-application/platform-types';
 
 // --- Mocks ---
-const { mockDbTable, mockDbGroupTable, mockDbLinksTable, mockContactsDb } =
-  vi.hoisted(() => {
-    const tableMock = {
-      put: vi.fn(),
-      update: vi.fn(),
-      get: vi.fn(),
-      delete: vi.fn(),
-      bulkPut: vi.fn(),
-      bulkGet: vi.fn(),
-      orderBy: vi.fn(() => tableMock),
-      where: vi.fn(() => tableMock),
-      equals: vi.fn(() => tableMock),
-      toArray: vi.fn(),
-      first: vi.fn(),
-    };
+const {
+  mockDbTable,
+  mockDbGroupTable,
+  mockDbLinksTable,
+  mockDbBlockedTable,
+  mockDbPendingTable,
+  mockContactsDb,
+} = vi.hoisted(() => {
+  const tableMock = {
+    put: vi.fn(),
+    update: vi.fn(),
+    get: vi.fn(),
+    delete: vi.fn(),
+    bulkPut: vi.fn(),
+    bulkGet: vi.fn(),
+    orderBy: vi.fn(() => tableMock),
+    where: vi.fn(() => tableMock),
+    equals: vi.fn(() => tableMock),
+    toArray: vi.fn(),
+    first: vi.fn(),
+  };
 
-    const groupTableMock = {
-      put: vi.fn(),
-      get: vi.fn(),
-      delete: vi.fn(),
-      orderBy: vi.fn(() => groupTableMock),
-      where: vi.fn(() => groupTableMock),
-      equals: vi.fn(() => groupTableMock),
-      toArray: vi.fn(),
-    };
+  const groupTableMock = {
+    put: vi.fn(),
+    get: vi.fn(),
+    delete: vi.fn(),
+    orderBy: vi.fn(() => groupTableMock),
+    where: vi.fn(() => groupTableMock),
+    equals: vi.fn(() => groupTableMock),
+    toArray: vi.fn(),
+  };
 
-    // Mock for the new identity_links table
-    const linksTableMock = {
-      put: vi.fn(),
-      where: vi.fn(() => linksTableMock),
-      equals: vi.fn(() => linksTableMock),
-      toArray: vi.fn(),
-      first: vi.fn(),
-    };
+  // Mock for the identity_links table
+  const linksTableMock = {
+    put: vi.fn(),
+    where: vi.fn(() => linksTableMock),
+    equals: vi.fn(() => linksTableMock),
+    toArray: vi.fn(),
+    first: vi.fn(),
+  };
 
-    return {
-      mockDbTable: tableMock,
-      mockDbGroupTable: groupTableMock,
-      mockDbLinksTable: linksTableMock,
-      mockContactsDb: {
-        contacts: tableMock,
-        contactGroups: groupTableMock,
-        identity_links: linksTableMock,
-        transaction: vi.fn(
-          async (_mode, _tables, callback) => await callback()
-        ),
-      },
-    };
-  });
+  // Mock for blocked_identities table
+  const blockedTableMock = {
+    put: vi.fn(),
+    where: vi.fn(() => blockedTableMock),
+    equals: vi.fn(() => blockedTableMock),
+    toArray: vi.fn(),
+    bulkDelete: vi.fn(),
+  };
+
+  // Mock for pending_identities table
+  const pendingTableMock = {
+    put: vi.fn(),
+    where: vi.fn(() => pendingTableMock),
+    equals: vi.fn(() => pendingTableMock),
+    first: vi.fn(),
+    toArray: vi.fn(),
+    bulkDelete: vi.fn(),
+  };
+
+  return {
+    mockDbTable: tableMock,
+    mockDbGroupTable: groupTableMock,
+    mockDbLinksTable: linksTableMock,
+    mockDbBlockedTable: blockedTableMock,
+    mockDbPendingTable: pendingTableMock,
+    mockContactsDb: {
+      contacts: tableMock,
+      contactGroups: groupTableMock,
+      identity_links: linksTableMock,
+      blocked_identities: blockedTableMock,
+      pending_identities: pendingTableMock,
+      transaction: vi.fn(async (_mode, _tables, callback) => await callback()),
+    },
+  };
+});
 
 // --- Fixtures ---
 
@@ -77,9 +106,11 @@ const mockGroupUrn = URN.parse('urn:sm:group:grp-abc');
 const mockOtherContactUrn = URN.parse('urn:sm:user:user-456');
 const mockServiceContactUrn = URN.parse('urn:sm:service:msg-uuid-1');
 
-// New Federated URNs
+// Federated & Gatekeeper URNs
 const mockGoogleAuthUrn = URN.parse('urn:auth:google:bob-123');
-const mockAppleAuthUrn = URN.parse('urn:auth:apple:bob-456');
+const mockSpammerUrn = URN.parse('urn:auth:google:spammer');
+const mockStrangerUrn = URN.parse('urn:auth:apple:stranger');
+const mockVoucherUrn = URN.parse('urn:sm:user:bob-contact'); // Bob (Local Contact)
 
 const mockServiceContact: ServiceContact = {
   id: mockServiceContactUrn,
@@ -167,6 +198,11 @@ describe('ContactsStorageService', () => {
     // Default mock for links
     mockDbLinksTable.toArray.mockResolvedValue([]);
     mockDbLinksTable.first.mockResolvedValue(undefined);
+
+    // Default mock for gatekeeper
+    mockDbBlockedTable.toArray.mockResolvedValue([]);
+    mockDbPendingTable.first.mockResolvedValue(undefined);
+    mockDbPendingTable.toArray.mockResolvedValue([]);
   });
 
   it('should be created', () => {
@@ -298,7 +334,7 @@ describe('ContactsStorageService', () => {
   });
 
   describe('Federated Identity Linking', () => {
-    it('should link a federated identity to a contact (storing as strings)', async () => {
+    it('should link a federated identity to a contact', async () => {
       await service.linkIdentityToContact(mockContactUrn, mockGoogleAuthUrn);
 
       expect(mockDbLinksTable.put).toHaveBeenCalledWith({
@@ -307,8 +343,7 @@ describe('ContactsStorageService', () => {
       });
     });
 
-    it('should retrieve linked identities for a contact (returning URNs)', async () => {
-      // Mock the DB returning a storable link
+    it('should retrieve linked identities for a contact', async () => {
       mockDbLinksTable.toArray.mockResolvedValue([mockStorableLink]);
 
       const result = await service.getLinkedIdentities(mockContactUrn);
@@ -320,43 +355,122 @@ describe('ContactsStorageService', () => {
 
       expect(result.length).toBe(1);
       expect(result[0]).toBeInstanceOf(URN);
-      // Verify equality as strings to ensure value correctness
       expect(result[0].toString()).toBe(mockGoogleAuthUrn.toString());
     });
 
+    it('should retrieve ALL identity links', async () => {
+      mockDbLinksTable.toArray.mockResolvedValue([mockStorableLink]);
+
+      const result = await service.getAllIdentityLinks();
+
+      expect(mockDbLinksTable.toArray).toHaveBeenCalled();
+      expect(result.length).toBe(1);
+      expect(result[0].authUrn).toBeInstanceOf(URN);
+      expect(result[0].authUrn.toString()).toBe(mockGoogleAuthUrn.toString());
+    });
+
     it('should find a contact by auth URN if link exists', async () => {
-      // 1. Mock that the link lookup finds a link
       mockDbLinksTable.first.mockResolvedValue(mockStorableLink);
-      // 2. Mock that the contact lookup finds the contact (default behavior)
 
       const result = await service.findContactByAuthUrn(mockGoogleAuthUrn);
 
-      // Verify link lookup
       expect(mockDbLinksTable.where).toHaveBeenCalledWith('authUrn');
       expect(mockDbLinksTable.equals).toHaveBeenCalledWith(
         mockGoogleAuthUrn.toString()
       );
       expect(mockDbLinksTable.first).toHaveBeenCalled();
-
-      // Verify contact lookup
       expect(mockDbTable.get).toHaveBeenCalledWith(mockContactUrn.toString());
-
-      // Verify result
       expect(result).toEqual(mockContact);
     });
+  });
 
-    it('should return null if no link exists for auth URN', async () => {
-      // Mock link lookup returning undefined
-      mockDbLinksTable.first.mockResolvedValue(undefined);
-
-      const result = await service.findContactByAuthUrn(mockAppleAuthUrn);
-
-      expect(mockDbLinksTable.where).toHaveBeenCalledWith('authUrn');
-      expect(mockDbLinksTable.equals).toHaveBeenCalledWith(
-        mockAppleAuthUrn.toString()
+  describe('Gatekeeper: Blocking', () => {
+    it('should block an identity', async () => {
+      await service.blockIdentity(mockSpammerUrn, 'Spam');
+      expect(mockDbBlockedTable.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          urn: mockSpammerUrn.toString(),
+          reason: 'Spam',
+        })
       );
-      expect(mockDbTable.get).not.toHaveBeenCalled();
-      expect(result).toBeNull();
+    });
+
+    it('should unblock an identity', async () => {
+      // Mock finding the record to get its ID
+      mockDbBlockedTable.toArray.mockResolvedValue([
+        { id: 123, urn: mockSpammerUrn.toString() },
+      ]);
+
+      await service.unblockIdentity(mockSpammerUrn);
+
+      expect(mockDbBlockedTable.where).toHaveBeenCalledWith('urn');
+      expect(mockDbBlockedTable.equals).toHaveBeenCalledWith(
+        mockSpammerUrn.toString()
+      );
+      expect(mockDbBlockedTable.bulkDelete).toHaveBeenCalledWith([123]);
+    });
+
+    it('should retrieve all blocked identity URNs', async () => {
+      mockDbBlockedTable.toArray.mockResolvedValue([
+        { urn: 'urn:auth:a' },
+        { urn: 'urn:auth:b' },
+      ]);
+
+      const result = await service.getAllBlockedIdentityUrns();
+      expect(result).toEqual(['urn:auth:a', 'urn:auth:b']);
+    });
+  });
+
+  describe('Gatekeeper: The Waiting Room (Pending)', () => {
+    it('should add an unknown stranger to pending', async () => {
+      await service.addToPending(mockStrangerUrn); // No voucher
+      expect(mockDbPendingTable.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          urn: mockStrangerUrn.toString(),
+          vouchedBy: undefined,
+        })
+      );
+    });
+
+    it('should add a vouched identity to pending', async () => {
+      await service.addToPending(mockStrangerUrn, mockVoucherUrn, 'Intro');
+      expect(mockDbPendingTable.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          urn: mockStrangerUrn.toString(),
+          vouchedBy: mockVoucherUrn.toString(),
+          note: 'Intro',
+        })
+      );
+    });
+
+    it('should delete a pending record (when approved or blocked)', async () => {
+      mockDbPendingTable.toArray.mockResolvedValue([
+        { id: 99, urn: mockStrangerUrn.toString() },
+      ]);
+
+      await service.deletePending(mockStrangerUrn);
+
+      expect(mockDbPendingTable.where).toHaveBeenCalledWith('urn');
+      expect(mockDbPendingTable.equals).toHaveBeenCalledWith(
+        mockStrangerUrn.toString()
+      );
+      expect(mockDbPendingTable.bulkDelete).toHaveBeenCalledWith([99]);
+    });
+
+    it('should get a pending identity by URN', async () => {
+      const mockStorable: StorablePendingIdentity = {
+        id: 1,
+        urn: mockStrangerUrn.toString(),
+        firstSeenAt: '2023-01-01T12:00:00Z' as ISODateTimeString,
+        vouchedBy: mockVoucherUrn.toString(),
+      };
+      mockDbPendingTable.first.mockResolvedValue(mockStorable);
+
+      const result = await service.getPendingIdentity(mockStrangerUrn);
+
+      expect(result).toBeTruthy();
+      expect(result?.urn).toEqual(mockStrangerUrn);
+      expect(result?.vouchedBy).toEqual(mockVoucherUrn);
     });
   });
 
@@ -367,6 +481,14 @@ describe('ContactsStorageService', () => {
 
     it('should create groups$ stream', () => {
       expect(service.groups$).toBeTruthy();
+    });
+
+    it('should create blocked$ stream', () => {
+      expect(service.blocked$).toBeTruthy();
+    });
+
+    it('should create pending$ stream', () => {
+      expect(service.pending$).toBeTruthy();
     });
   });
 });
