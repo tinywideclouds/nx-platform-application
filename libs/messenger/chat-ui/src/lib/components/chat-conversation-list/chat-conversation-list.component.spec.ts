@@ -3,6 +3,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
+// --- 1. Import URN ---
+import { URN } from '@nx-platform-application/platform-types';
 
 // Import the new View Model
 import {
@@ -12,10 +14,10 @@ import {
 import { ChatConversationListItemComponent } from '../chat-conversation-list-item/chat-conversation-list-item.component';
 import { ContactAvatarComponent } from '@nx-platform-application/contacts-ui';
 
-// --- New Mock Fixture ---
+// --- 2. Update Mock Fixture to use URN objects ---
 const MOCK_ITEMS: ConversationViewItem[] = [
   {
-    id: 'urn:sm:user:contact-123',
+    id: URN.parse('urn:sm:user:contact-123'),
     name: 'johndoe',
     latestMessage: 'Hey',
     timestamp: '2025-11-15T12:30:00Z',
@@ -24,13 +26,13 @@ const MOCK_ITEMS: ConversationViewItem[] = [
     isActive: false,
   },
   {
-    id: 'urn:sm:user:contact-456',
+    id: URN.parse('urn:sm:user:contact-456'),
     name: 'janedoe',
     latestMessage: 'Hi',
     timestamp: '2025-11-15T12:31:00Z',
     initials: 'JD',
     unreadCount: 0,
-    isActive: true, // Test this property
+    isActive: true,
   },
 ];
 
@@ -47,8 +49,9 @@ const MOCK_ITEMS: ConversationViewItem[] = [
 })
 class TestHostComponent {
   conversations: ConversationViewItem[] = [];
-  selectedId?: string;
-  onSelected(id: string) {
+  // --- 3. Update the type to URN ---
+  selectedId?: URN;
+  onSelected(id: URN) {
     this.selectedId = id;
   }
 }
@@ -81,6 +84,7 @@ describe('ChatConversationListComponent', () => {
     expect(items.length).toBe(MOCK_ITEMS.length);
   });
 
+  // --- 4. Update the assertion to check for the URN object ---
   it('should emit the ID when a child item emits (select)', () => {
     hostComponent.conversations = MOCK_ITEMS;
     fixture.detectChanges();
@@ -93,8 +97,9 @@ describe('ChatConversationListComponent', () => {
     firstItemEl.triggerEventHandler('select');
     fixture.detectChanges();
 
-    // Assert that the host's handler was called with the ID
+    // Assert that the host's handler was called with the URN object
     expect(hostComponent.selectedId).toBe(MOCK_ITEMS[0].id);
+    expect(hostComponent.selectedId).toBeInstanceOf(URN);
   });
 
   it('should display an empty message when no conversations are provided', () => {

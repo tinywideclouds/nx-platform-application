@@ -3,7 +3,6 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal, WritableSignal } from '@angular/core';
-// 1. IMPORT 'Observable'
 import { of, ReplaySubject, Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -22,13 +21,13 @@ import {
 } from '@nx-platform-application/messenger-types';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 
-// --- Fixtures ---
+// --- Fixtures (ALL MOCKS UPDATED TO USE URNs) ---
 const MOCK_CURRENT_USER_URN = URN.parse('urn:sm:user:me');
 const MOCK_CONTACT_URN = URN.parse('urn:sm:user:contact-123');
 const MOCK_GROUP_URN = URN.parse('urn:sm:group:group-456');
 
 const MOCK_CONTACT: Contact = {
-  id: 'urn:sm:user:contact-123',
+  id: MOCK_CONTACT_URN, // <-- FIX
   alias: 'Mock Contact',
   firstName: 'Mock',
   surname: 'Contact',
@@ -37,7 +36,7 @@ const MOCK_CONTACT: Contact = {
   phoneNumbers: [],
   serviceContacts: {
     "messenger": {
-      id: 'service:messenger:contact-123',
+      id: URN.parse('urn:sm:service:messenger:contact-123'), // <-- FIX
       alias: 'Mock Contact',
       lastSeen: new Date().toISOString() as ISODateTimeString,
       profilePictureUrl: 'http://pic.url/contact.png',
@@ -46,9 +45,9 @@ const MOCK_CONTACT: Contact = {
 };
 
 const MOCK_GROUP: ContactGroup = {
-  id: 'urn:sm:group:group-456',
+  id: MOCK_GROUP_URN, // <-- FIX
   name: 'Mock Group',
-  contactIds: ['urn:sm:user:contact-123'],
+  contactIds: [MOCK_CONTACT_URN], // <-- FIX
 };
 
 const MOCK_MESSAGES: ChatMessage[] = [
@@ -78,16 +77,11 @@ let mockChatService: {
   currentUserUrn: WritableSignal<URN | null>;
 };
 
-//
-// 2. THIS IS THE FIX:
-//    Be explicit about the Observable types.
-//
 let mockContactsService: {
   contacts$: Observable<Contact[]>;
   groups$: Observable<ContactGroup[]>;
 };
 
-// Mock for ActivatedRoute
 let paramMapSubject: ReplaySubject<ReturnType<typeof convertToParamMap>>;
 
 describe('ChatWindowComponent', () => {
@@ -96,7 +90,6 @@ describe('ChatWindowComponent', () => {
   let nativeElement: HTMLElement;
 
   beforeEach(async () => {
-    // --- Define Mocks ---
     paramMapSubject = new ReplaySubject(1);
 
     mockChatService = {
@@ -129,7 +122,6 @@ describe('ChatWindowComponent', () => {
   });
 
   it('should create', async () => {
-    // Set initial route and trigger change detection
     paramMapSubject.next(convertToParamMap({ id: MOCK_CONTACT_URN.toString() }));
     await fixture.detectChanges();
     expect(component).toBeTruthy();
@@ -139,8 +131,9 @@ describe('ChatWindowComponent', () => {
     paramMapSubject.next(convertToParamMap({ id: MOCK_CONTACT_URN.toString() }));
     await fixture.detectChanges();
 
+    // Assert it's called with the URN object
     expect(mockChatService.loadConversation).toHaveBeenCalledWith(
-      MOCK_CONTACT_URN
+      expect.objectContaining({ _entityId: 'contact-123' })
     );
   });
 
@@ -157,7 +150,6 @@ describe('ChatWindowComponent', () => {
 
     expect(component.participant()).toEqual(expectedParticipant);
 
-    // Check DOM
     const headerEl = nativeElement.querySelector('header');
     expect(headerEl?.textContent).toContain('Mock Contact');
     const img = headerEl?.querySelector('img');
@@ -176,24 +168,20 @@ describe('ChatWindowComponent', () => {
 
     expect(component.participant()).toEqual(expectedParticipant);
 
-    // Check DOM
     const headerEl = nativeElement.querySelector('header');
     expect(headerEl?.textContent).toContain('Mock Group');
     expect(headerEl?.textContent).toContain('G'); // Initials
     const img = headerEl?.querySelector('img');
-    expect(img).toBeFalsy(); // No profile pic
+    expect(img).toBeFalsy();
   });
 
   it('should render incoming and outgoing messages', async () => {
-    // Arrange
     mockChatService.messages.set(MOCK_MESSAGES);
     mockChatService.currentUserUrn.set(MOCK_CURRENT_USER_URN);
 
-    // Act
     paramMapSubject.next(convertToParamMap({ id: MOCK_CONTACT_URN.toString() }));
     await fixture.detectChanges();
 
-    // Assert
     const outgoing = nativeElement.querySelectorAll(
       '.flex.justify-end .bg-blue-600'
     );
@@ -205,29 +193,29 @@ describe('ChatWindowComponent', () => {
     expect(incoming[0].textContent).toContain('Their reply');
   });
 
-  it('should clear input text onSendMessage', async () => {
+  it('should call sendMessage and clear input', async () => {
     paramMapSubject.next(convertToParamMap({ id: MOCK_CONTACT_URN.toString() }));
     await fixture.detectChanges();
 
-    // Arrange
     component.newMessageText = '  Hello!  ';
-    await fixture.detectChanges(); // Update ngModel
+    await fixture.detectChanges();
 
     const inputEl = nativeElement.querySelector('input') as HTMLInputElement;
     expect(inputEl.value).toBe('  Hello!  ');
 
-    // Act
     const sendButton = nativeElement.querySelector(
       'footer button'
     ) as HTMLButtonElement;
     sendButton.click();
     await fixture.detectChanges();
 
-    // Assert
     expect(component.newMessageText).toBe('');
     expect(inputEl.value).toBe('');
-    // We don't test the service call because it's commented out in the component
-    expect(mockChatService.sendMessage).not.toHaveBeenCalled();
+    // Now it should be called
+    expect(mockChatService.sendMessage).toHaveBeenCalledWith(
+      MOCK_CONTACT_URN,
+      'Hello!'
+    );
   });
 
   it('should navigate back when onBack is called', async () => {
@@ -238,7 +226,7 @@ describe('ChatWindowComponent', () => {
     await fixture.detectChanges();
 
     const backButton = nativeElement.querySelector(
-      'header button' // First button in header is "back"
+      'header button'
     ) as HTMLButtonElement;
 
     backButton.click();

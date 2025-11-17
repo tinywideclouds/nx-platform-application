@@ -9,7 +9,7 @@ import { LoginSuccessComponent } from './login-success';
 import { User, URN } from '@nx-platform-application/platform-types';
 
 import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
-import { MockAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
+import { MockTestingAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 const mockUser: User = {
@@ -21,7 +21,7 @@ const mockUser: User = {
 describe('LoginSuccessComponent', () => {
   let fixture: ComponentFixture<LoginSuccessComponent>;
   let mockRouter: { navigate: ReturnType<typeof vi.fn> };
-  let mockAuthService: MockAuthService;
+  let mockAuthService: MockTestingAuthService;
 
   beforeEach(async () => {
     mockRouter = {
@@ -33,7 +33,7 @@ describe('LoginSuccessComponent', () => {
       providers: [
         provideNoopAnimations(),
         { provide: Router, useValue: mockRouter },
-        { provide: IAuthService, useClass: MockAuthService },
+        { provide: IAuthService, useClass: MockTestingAuthService },
       ],
       schemas: [
         CUSTOM_ELEMENTS_SCHEMA, // 2. Add the schema here
@@ -48,7 +48,7 @@ describe('LoginSuccessComponent', () => {
 
     mockAuthService = TestBed.inject(
       IAuthService
-    ) as unknown as MockAuthService;
+    ) as unknown as MockTestingAuthService;
     fixture = TestBed.createComponent(LoginSuccessComponent);
   });
 

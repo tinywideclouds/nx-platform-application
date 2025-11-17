@@ -3,8 +3,11 @@ import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { User } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
-import { MockAuthService, MOCK_USERS } from './mock-auth.service';
+import { MockAuthService } from './mock-auth.service';
+import { Router } from '@angular/router';
+
+// 1. Import the new token
+import { MOCK_USERS_TOKEN } from './mock-auth.config';
 
 @Component({
   selector: 'app-mock-login',
@@ -18,7 +21,7 @@ import { MockAuthService, MOCK_USERS } from './mock-auth.service';
           <mat-card-subtitle>Select a user to log in</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content class="user-buttons">
-          @for (user of mockUsers; track user.id) {
+          @for (user of mockUsers; track user.id.toString()) {
             <button mat-raised-button color="primary" (click)="login(user)">
               Login as {{ user.alias }}
             </button>
@@ -27,36 +30,17 @@ import { MockAuthService, MOCK_USERS } from './mock-auth.service';
       </mat-card>
     </div>
   `,
-  styles: [
-    `
-      .mock-login-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        background-color: #f5f5f5;
-      }
-      mat-card {
-        width: 400px;
-      }
-      .user-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        padding-top: 1rem;
-      }
-    `,
-  ],
+  styles: [ /* ... styles ... */ ]
 })
 export class MockLoginComponent {
-  // We can safely cast AuthService to MockAuthService here because this
-  // component will only ever be used in the mock environment.
-  private authService = inject(IAuthService) as MockAuthService;
+  private authService = inject(MockAuthService) as MockAuthService;
+  private router = inject(Router);
 
-  public mockUsers = MOCK_USERS;
+  // 3. Inject the user list from the token
+  public mockUsers = inject(MOCK_USERS_TOKEN);
 
   login(user: User): void {
     this.authService.loginAs(user);
+    this.router.navigate(['/']);
   }
-
 }

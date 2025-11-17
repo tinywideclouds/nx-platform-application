@@ -78,6 +78,10 @@ export class URN {
   public toJSON(): string {
     return this.toString();
   }
+
+  public equals(c: URN): boolean {
+    return c.toString() === this.toString()
+  }
 }
 
 // --- NEW HELPER FUNCTIONS ---

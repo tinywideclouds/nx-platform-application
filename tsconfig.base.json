@@ -82,6 +82,9 @@
       "@nx-platform-application/platform-auth-ui": [
         "libs/platform/ng/auth-ui/src/index.ts"
       ],
+      "@nx-platform-application/platform-auth-ui/mocks": [
+        "libs/platform/ng/auth-ui/src/mocking.ts"
+      ],
       "@nx-platform-application/platform-dexie-storage": [
         "libs/platform/ng/dexie-storage/src/index.ts"
       ],

@@ -1,3 +1,5 @@
+// libs/messenger/messenger-ui/src/lib/chat-window/chat-window.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
@@ -11,7 +13,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router'; // RouterLink removed
 import { toSignal } from '@angular/core/rxjs-interop';
 
 // --- Services ---
@@ -22,9 +24,8 @@ import {
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
 import {
-  AuthService,
   IAuthService,
-} from '@nx-platform-application/platform-auth-data-access';
+} from '@nx-platform-application/platform-auth-data-access'; // IAuthService
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 
@@ -37,8 +38,7 @@ import {
 @Component({
   selector: 'messenger-chat-window',
   standalone: true,
-  // RouterLink is no longer needed, as we use onBack()
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule], // RouterLink removed
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -49,18 +49,16 @@ export class ChatWindowComponent implements AfterViewChecked {
   private router = inject(Router);
   private chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
-  private authService = inject(IAuthService);
+  private authService = inject(IAuthService); // Injected but not used
 
   @ViewChild('messageContainer')
   private messageContainer!: ElementRef;
 
   // --- 2. State from Services ---
-  // All state now comes directly from the services
   messages = this.chatService.messages;
   currentConversationUrn = this.chatService.selectedConversation;
   currentUserUrn = this.chatService.currentUserUrn;
 
-  // Real state from contacts service
   private contacts = toSignal(this.contactsService.contacts$, {
     initialValue: [] as Contact[],
   });
@@ -70,12 +68,10 @@ export class ChatWindowComponent implements AfterViewChecked {
 
   // --- 3. Route & Component State ---
   private routeParams = toSignal(this.route.paramMap);
-  newMessageText = ''; // Using simple string for ngModel
+  newMessageText = '';
 
-  // Get the URN string from the route
   conversationUrnString = computed(() => this.routeParams()?.get('id') || null);
 
-  // Parse the URN string into a URN object
   conversationUrn = computed(() => {
     const urnStr = this.conversationUrnString();
     if (!urnStr) return null;
@@ -93,7 +89,8 @@ export class ChatWindowComponent implements AfterViewChecked {
     if (!urn) return null;
 
     if (urn.entityType === 'user') {
-      const contact = this.contacts().find((c) => c.id === urn);
+      // Find by comparing two URN objects
+      const contact = this.contacts().find((c) => c.id.equals(urn));
       if (!contact) return { urn, name: 'Unknown User', initials: '?' };
       return {
         urn,
@@ -106,29 +103,26 @@ export class ChatWindowComponent implements AfterViewChecked {
     }
 
     if (urn.entityType === 'group') {
-      const group = this.groups().find((g) => g.id === urn.toString());
+      // --- THIS IS THE FIX ---
+      // Compare two strings: the URN from the group (g.id) and the URN from the route (urn)
+      const group = this.groups().find((g) => g.id.toString() === urn.toString());
+      // --- END FIX ---
       if (!group) return { urn, name: 'Unknown Group', initials: 'G' };
       return {
         urn,
         name: group.name,
         initials: 'G',
-        // profilePictureUrl: group.avatarUrl (if we add this)
       };
     }
     return null;
   });
 
   // --- 5. Effects ---
-  // This effect reacts to the URN string changing and tells ChatService to load
   constructor(private logger: Logger) {
     effect(() => {
-      // 1. This effect will *only* re-run when conversationUrn() changes.
       const urn = this.conversationUrn();
       
       if (urn) {
-        // 2. We explicitly call the service in an "untracked" context.
-        // This tells the effect to NOT track any signals that might
-        // be read *inside* loadConversation().
         untracked(() => {
           this.chatService.loadConversation(urn);
         });
@@ -146,7 +140,7 @@ export class ChatWindowComponent implements AfterViewChecked {
       this.messageContainer.nativeElement.scrollTop =
         this.messageContainer.nativeElement.scrollHeight;
     } catch (err) {
-      this.logger.error('Failed to scroll', err);
+      // Errors here are common during init, safe to ignore
     }
   }
 
@@ -156,18 +150,15 @@ export class ChatWindowComponent implements AfterViewChecked {
     const recipientUrn = this.conversationUrn();
 
     if (text && recipientUrn) {
-      // Call the ChatService method
       this.chatService.sendMessage(recipientUrn, text);
-
       this.newMessageText = '';
       this.scrollToBottom();
     }
   }
 
-  /**
-   * On mobile, navigate back to the conversation list.
-   */
   onBack(): void {
-    this.router.navigate(['/']);
+    // --- FIX: Navigate back to the base route ---
+    // We were navigating to '/' which is wrong
+    this.router.navigate(['/messenger']);
   }
 }

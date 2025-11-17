@@ -12,7 +12,7 @@ import {
 import { authGuard } from './auth/auth.guard';
 import { nonAuthGuard } from './auth/non-auth.guard';
 import { environment } from './environments/environment';
-import { MockLoginComponent } from './auth/mocks/mock-login.component';
+import { MockLoginComponent } from '@nx-platform-application/platform-auth-ui/mocks';
 
 const loginComponent = environment.useMocks ? MockLoginComponent : RealLoginComponent;
 

@@ -14,7 +14,7 @@ interface AuthStatusResponse {
 }
 
 @Injectable()
-export class MockAuthService {
+export class MockTestingAuthService {
   // --- State (Private) ---
   private _currentUser = signal<User | null>(null);
 

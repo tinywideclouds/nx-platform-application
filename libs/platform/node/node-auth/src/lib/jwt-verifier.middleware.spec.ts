@@ -1,6 +1,8 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { createJwtAuthMiddleware } from '../lib/jwt-verifier.middleware';
+// --- 1. Import URN ---
+import { URN } from '@nx-platform-application/platform-types';
 
 // --- MOCKS ---
 const mocks = vi.hoisted(() => {
@@ -35,12 +37,16 @@ vi.mock('jose', async (importActual) => {
 // --- Mock Data ---
 const MOCK_IDENTITY_URL = 'http://fake-identity-service.com';
 const MOCK_USER_PAYLOAD = {
-  sub: 'user-123',
+  // This comes from the JWT (a string)
+  sub: 'urn:sm:user:user-123',
   email: 'test@example.com',
   alias: 'Testy',
 };
+
+// --- 2. Update MOCK_USER_OBJECT to use a URN ---
+// This is what req.user should look like after the middleware runs
 const MOCK_USER_OBJECT = {
-  id: 'user-123',
+  id: URN.parse('urn:sm:user:user-123'),
   email: 'test@example.com',
   alias: 'Testy',
 };
@@ -92,10 +98,12 @@ describe('jwt-verifier.middleware', () => {
 
     expect(mocks.mockJwtVerify).toHaveBeenCalledWith(
       'valid-token-123',
-      // [FIXED] The JWKS client is a function, not an object.
       expect.any(Function)
     );
+    // --- 3. Assert against the URN-based object ---
     expect(mockRequest.user).toEqual(MOCK_USER_OBJECT);
+    expect(mockRequest.user?.id).toBeInstanceOf(URN);
+    // ---
     expect(mockNext).toHaveBeenCalledWith();
     expect(mockNext).toHaveBeenCalledTimes(1);
   });

@@ -8,7 +8,7 @@ import {
 import { AuthService } from './auth.service';
 // --- 1. Import URN and User ---
 import { User, URN } from '@nx-platform-application/platform-types';
-import { MockAuthService } from './testing/mock-auth.service';
+import { MockTestingAuthService } from './testing/mock-auth.service';
 import { AUTH_API_URL } from './auth-data.config';
 
 // --- 2. Define mock domain object and DTO ---
@@ -127,13 +127,13 @@ describe('MockAuthService Contract', () => {
   it('should be assignable to the real AuthService in TestBed', () => {
     TestBed.configureTestingModule({
       providers: [
-        { provide: AuthService, useClass: MockAuthService },
+        { provide: AuthService, useClass: MockTestingAuthService },
         { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL }
       ],
     });
 
     const service = TestBed.inject(AuthService);
-    expect(service).toBeInstanceOf(MockAuthService);
+    expect(service).toBeInstanceOf(MockTestingAuthService);
   });
 
   afterEach(() => {

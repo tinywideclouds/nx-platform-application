@@ -9,10 +9,9 @@ import {
   WritableSignal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-// 1. Import toSignal and router events
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterOutlet, Event, NavigationEnd } from '@angular/router';
-import { filter, map } from 'rxjs/operators'; // 2. Import RxJS operators
+import { filter, map } from 'rxjs/operators';
 
 // --- Our Services ---
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -60,15 +59,8 @@ export class MessengerHomePageComponent {
   private router = inject(Router);
   private logger = inject(Logger);
 
-  // --- 3. Create a signal that tracks router events ---
   private routerEvents$ = this.router.events;
 
-  // --- 4. NEW: Signal to track if a chat is active ---
-  /**
-   * Reads the router events and checks if the current URL
-   * includes '/chat/'. This is used to toggle the mobile
-   * chat overlay.
-   */
   isChatActive = toSignal(
     this.routerEvents$.pipe(
       filter((event: Event): event is NavigationEnd => 
@@ -78,7 +70,6 @@ export class MessengerHomePageComponent {
         event.urlAfterRedirects.includes('/chat/')
       )
     ),
-    // Check the initial URL on load
     { initialValue: this.router.url.includes('/chat/') }
   );
 
@@ -94,15 +85,16 @@ export class MessengerHomePageComponent {
     this.chatService.selectedConversation()?.toString()
   );
 
-  // --- 2. Add new UI State Signal ---
   startChatView: WritableSignal<'contacts' | 'groups'> = signal('contacts');
 
   // --- 3. Create Lookups (for mapping) ---
   private contactsMap = computed(() =>
-    new Map(this.contacts().map((c) => [c.id, c]))
+    // Create map with STRING keys
+    new Map(this.contacts().map((c) => [c.id.toString(), c]))
   );
   private groupsMap = computed(() =>
-    new Map(this.groups().map((g) => [g.id, g]))
+    // Create map with STRING keys
+    new Map(this.groups().map((g) => [g.id.toString(), g]))
   );
 
   // --- 4. Compute the "View Model" ---
@@ -113,13 +105,14 @@ export class MessengerHomePageComponent {
 
     return this.conversations().map((summary) => {
       const conversationUrn = summary.conversationUrn;
+      // --- FIX: Use string for map lookup ---
+      const conversationUrnString = conversationUrn.toString();
       let name = 'Unknown';
       let initials = '?';
       let profilePictureUrl: string | undefined;
 
-      // --- This is the key "join" logic ---
       if (summary.conversationUrn.entityType == 'user') {
-        const contact = contactsMap.get(conversationUrn);
+        const contact = contactsMap.get(conversationUrnString); // <-- FIX
         if (contact) {
           name = contact.alias;
           initials = (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
@@ -127,10 +120,10 @@ export class MessengerHomePageComponent {
             contact.serviceContacts['messenger']?.profilePictureUrl;
         }
       } else if (summary.conversationUrn.entityType == 'group') {
-        const group = groupsMap.get(conversationUrn.entityId);
+        const group = groupsMap.get(conversationUrnString); // <-- FIX
         if (group) {
           name = group.name;
-          initials = 'G'; // Placeholder for group avatar
+          initials = 'G';
         }
       }
 
@@ -142,7 +135,8 @@ export class MessengerHomePageComponent {
         initials: initials.toUpperCase() || '?',
         profilePictureUrl: profilePictureUrl,
         unreadCount: summary.unreadCount,
-        isActive: selectedId === conversationUrn.entityId,
+        // --- FIX: Compare two strings ---
+        isActive: selectedId === conversationUrnString,
       };
     });
   });
@@ -159,40 +153,33 @@ export class MessengerHomePageComponent {
   });
 
   // --- 6. Event Handlers ---
-  onSelectConversation(id: string): void {
-    const urn = this.conversations().find(
-      (c) => c.conversationUrn.toString() === id
-    )?.conversationUrn;
-
+  
+  // --- FIX: Event is now a URN ---
+  onSelectConversation(urn: URN): void {
     if (urn) {
       this.chatService.loadConversation(urn);
-      // Navigate to the chat window (which will be in the router-outlet)
-      // 5. Use relative root navigation
-      this.router.navigate(['', 'chat', id]);
+      // --- FIX: Navigate with string ---
+      this.router.navigate(['', 'chat', urn.toString()]);
     }
   }
 
   onSelectContactToChat(contact: Contact): void {
-    const urn= this.contacts().find((c) => c.id === contact.id)?.id;
+    const urn = contact.id; // Get URN directly
   
     if (urn) {
       this.chatService.loadConversation(urn); 
-      // 5. Use relative root navigation
-      this.router.navigate(['', 'chat', urn]);
+      // --- FIX: Navigate with string ---
+      this.router.navigate(['', 'chat', urn.toString()]);
     }
   }
 
   onSelectGroupToChat(group: ContactGroup): void {
-    const urnString = this.groups().find((g) => g.id === group.id)?.id;
-    if (!urnString) {
-      console.warn("urn must exist and parse")
-      return;
-    }
-    const urn = URN.parse(urnString);
+    const urn = group.id; // Get URN directly
+    
     if (urn) {
       this.chatService.loadConversation(urn);
-      // 5. Use relative root navigation
-      this.router.navigate(['', 'chat', urn]);
+      // --- FIX: Navigate with string ---
+      this.router.navigate(['', 'chat', urn.toString()]);
     }
   }
 }

@@ -13,45 +13,44 @@ import { firstValueFrom } from 'rxjs';
 import { appRoutes } from './app.routes';
 import { environment } from './environments/environment';
 
-// --- Auth Providers (Existing) ---
+// --- Auth Providers ---
 import {
   authInterceptor,
   IAuthService,
   AuthService,
   AUTH_API_URL,
 } from '@nx-platform-application/platform-auth-data-access';
-import { MockAuthService } from './auth/mocks/mock-auth.service';
+import { MOCK_USERS_TOKEN, MockAuthService } from '@nx-platform-application/platform-auth-ui/mocks';
 
-// --- Mock Providers (from Phase 1) ---
+// --- Mock Providers ---
 import { ChatService } from '@nx-platform-application/chat-state';
 import { MockChatService } from './mocks/mock-chat.service';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
+// 1. Import the new mock user list
+import { MESSENGER_MOCK_USERS } from './mocks/users'; 
 
-// --- 1. IMPORT ALL REQUIRED SERVICE TOKENS ---
-import {
-  ChatDataService, // (Import one to get the path)
-  ROUTING_SERVICE_URL,
-} from '@nx-platform-application/chat-data-access';
-import {
-  ChatLiveDataService, // (Import one to get the path)
-  WSS_URL_TOKEN,
-} from '@nx-platform-application/chat-live-data';
-import {
-  SecureKeyService, // (Import one to get the path)
-  KEY_SERVICE_URL,
-} from '@nx-platform-application/messenger-key-access';
-// --- (End of new imports) ---
+// --- Service Tokens ---
+import { ROUTING_SERVICE_URL } from '@nx-platform-application/chat-data-access';
+import { WSS_URL_TOKEN } from '@nx-platform-application/chat-live-data';
+import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-key-access';
 
 import { CryptoEngine } from '@nx-platform-application/messenger-crypto-access';
 import { LOGGER_CONFIG, LogLevel } from '@nx-platform-application/console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 
+// ---
+// 2. The app-specific user definitions are GONE from this file.
+// ---
+
 // --- Conditional Mock Providers ---
-const authProvider = environment.useMocks
-  ? { provide: IAuthService, useClass: MockAuthService }
-  : { provide: IAuthService, useClass: AuthService };
+const authProviders = environment.useMocks
+  ? [
+      MockAuthService, // Provide the class itself
+      { provide: IAuthService, useExisting: MockAuthService }, // Provide it for the interface
+    ]
+  : [{ provide: IAuthService, useExisting: AuthService }];
 
 const chatProvider = environment.useMocks
   ? { provide: ChatService, useClass: MockChatService }
@@ -61,8 +60,14 @@ const contactsProvider = environment.useMocks
   ? { provide: ContactsStorageService, useClass: MockContactsStorageService }
   : [];
 
-// --- 2. ADD CONDITIONAL DEV PROVIDERS ---
-// These provide the *real* URLs *only* when not in mock mode.
+// ---
+// 3. The provider now references the imported MESSENGER_MOCK_USERS
+// ---
+const mockUserProvider = environment.useMocks
+  ? { provide: MOCK_USERS_TOKEN, useValue: MESSENGER_MOCK_USERS }
+  : [];
+
+// --- Dev Providers (unchanged) ---
 const devProviders = environment.useMocks
   ? []
   : [
@@ -83,9 +88,8 @@ const devProviders = environment.useMocks
         useValue: environment.wssUrl,
       },
     ];
-// --- (End of new providers) ---
 
-// Factory for the APP_INITIALIZER
+// Factory for the APP_INITIALIZER (unchanged)
 export function initializeAuthFactory(
   authService: IAuthService
 ): () => Promise<unknown> {
@@ -100,12 +104,14 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideHttpClient(withInterceptors([authInterceptor])),
 
-    // --- 3. ADD ALL PROVIDERS TO THE ARRAY ---
-    authProvider,
+    // ---
+    // 4. The providers list is now clean
+    // ---
+    ...authProviders,
     chatProvider,
     contactsProvider,
-    ...devProviders, // <-- Spreads the correct URL tokens or []
-    // --- (End of provider list changes) ---
+    ...devProviders,
+    mockUserProvider, // <-- Provider remains
     
     {
       provide: LOGGER_CONFIG,
