@@ -42,6 +42,9 @@ export function configurePassport(
   // This is now synchronous and has no DB dependency.
   passport.deserializeUser((sessionData: any, done) => {
     try {
+      if (!sessionData || !sessionData.id) {
+        return done(null, false); // 'false' tells passport no user was found
+      }
       // 5. Reconstruct the User from the session blob
       const user: User = {
         id: URN.parse(sessionData.id), // Re-parse the string URN
