@@ -18,10 +18,12 @@ import {
   Validators,
 } from '@angular/forms';
 import { Contact } from '@nx-platform-application/contacts-data-access';
+import { URN } from '@nx-platform-application/platform-types'; // <-- Import URN
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips'; // <-- Import Chips for display
 
 @Component({
   selector: 'contacts-form',
@@ -33,12 +35,15 @@ import { MatIconModule } from '@angular/material/icon';
     MatFormFieldModule,
     MatInputModule,
     MatIconModule,
+    MatChipsModule,
   ],
   templateUrl: './contact-form.component.html',
   styleUrl: './contact-form.component.scss',
 })
 export class ContactFormComponent {
   contact = input<Contact | null>(null);
+  // --- NEW INPUT ---
+  linkedIdentities = input<URN[]>([]);
   startInEditMode = input(false);
 
   @Output() save = new EventEmitter<Contact>();
@@ -71,7 +76,9 @@ export class ContactFormComponent {
         this.phoneNumbers.clear();
         currentContact.phoneNumbers.forEach((phone) => this.addPhoneNumber(phone));
         this.emailAddresses.clear();
-        currentContact.emailAddresses.forEach((email) => this.addEmailAddress(email));
+        currentContact.emailAddresses.forEach((email) =>
+          this.addEmailAddress(email)
+        );
       } else {
         this.form.reset({
           id: '',
@@ -131,5 +138,17 @@ export class ContactFormComponent {
 
   onCancel(): void {
     this.isEditing.set(false);
+  }
+
+  // --- Helper to format URNs for display ---
+  getProviderName(urn: URN): string {
+    // urn:auth:google:123 -> google
+    const parts = urn.toString().split(':');
+    return parts.length > 2 ? parts[2] : 'Unknown';
+  }
+  
+  getProviderId(urn: URN): string {
+    const parts = urn.toString().split(':');
+    return parts.length > 3 ? parts.slice(3).join(':') : urn.toString();
   }
 }

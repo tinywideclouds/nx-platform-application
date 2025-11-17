@@ -29,6 +29,7 @@
   @if (contactToEdit()) {
   <contacts-form
     [contact]="contactToEdit()"
+    [linkedIdentities]="linkedIdentities()"
     [startInEditMode]="startInEditMode()"
     (save)="onSave($event)"
   />

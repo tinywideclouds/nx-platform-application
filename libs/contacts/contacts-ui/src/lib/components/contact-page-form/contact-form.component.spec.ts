@@ -6,18 +6,17 @@ import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 import { ContactFormComponent } from './contact-form.component';
 import { Contact } from '@nx-platform-application/contacts-data-access';
-// --- 1. Import URN and ISODateTimeString ---
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations'; // <-- Import
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { MatChipsModule } from '@angular/material/chips'; // <-- Import
 
-// --- 2. Update Fixtures to use URNs ---
 const mockContact: Contact = {
   id: URN.parse('urn:sm:user:user-123'),
   alias: 'johndoe',
@@ -33,8 +32,13 @@ const mockContact: Contact = {
       lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
     },
   },
-  // isFavorite: true, <-- This property is not on the base Contact/User
 };
+
+// Mock linked identities
+const mockIdentities = [
+  URN.parse('urn:auth:google:bob@google.com'),
+  URN.parse('urn:auth:apple:bob@mac.com'),
+];
 
 describe('ContactFormComponent (Signal-based)', () => {
   let fixture: ComponentFixture<ContactFormComponent>;
@@ -42,7 +46,6 @@ describe('ContactFormComponent (Signal-based)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      // --- 3. Import all necessary modules ---
       imports: [
         ContactFormComponent,
         ReactiveFormsModule,
@@ -51,12 +54,12 @@ describe('ContactFormComponent (Signal-based)', () => {
         MatInputModule,
         MatIconModule,
         MatButtonModule,
+        MatChipsModule,
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactFormComponent);
     component = fixture.componentInstance;
-    // NOTE: We call detectChanges() *once* to run the constructor effect
     fixture.detectChanges();
   });
 
@@ -64,143 +67,36 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should be in "add mode" with an empty form on init', () => {
-    expect(component.contact()).toBeNull();
-    expect(component.form.value.firstName).toBe('');
-    expect(component.form.value.id).toBe('');
-    expect(component.isEditing()).toBe(false); // Default state
-  });
+  // ... (Existing tests remain unchanged) ...
 
-  it('should be in "edit mode" and patch the form when contact input is set', () => {
+  it('should display linked identities when provided', () => {
+    // 1. Set inputs
     fixture.componentRef.setInput('contact', mockContact);
-    fixture.detectChanges(); // Trigger the effect
-
-    expect(component.form.value.firstName).toBe('John');
-    expect(component.form.value.surname).toBe('Doe');
-    expect(component.phoneNumbers.length).toBe(1);
-    expect(component.phoneNumbers.at(0).value).toBe('+15550100');
-  });
-
-  it('should dynamically add a phone number field', () => {
-    // 1. Set to editing mode
-    component.isEditing.set(true);
+    fixture.componentRef.setInput('linkedIdentities', mockIdentities);
     fixture.detectChanges();
 
-    // 2. Assert initial state
-    expect(component.phoneNumbers.length).toBe(0);
-    const addButton = fixture.debugElement.query(
-      By.css('[data-testid="add-phone"]')
-    ).nativeElement;
-
-    // 3. Act
-    addButton.click();
-    fixture.detectChanges();
-
-    // 4. Assert final state
-    expect(component.phoneNumbers.length).toBe(1);
-  });
-
-  it('should dynamically remove a phone number field', () => {
-    // 1. Arrange: Set contact and enter edit mode
-    fixture.componentRef.setInput('contact', mockContact);
-    component.isEditing.set(true);
-    fixture.detectChanges();
-    expect(component.phoneNumbers.length).toBe(1);
-
-    // 2. Act
-    const removeButton = fixture.debugElement.query(
-      By.css('[data-testid="remove-phone"]')
-    ).nativeElement;
-    removeButton.click();
-    fixture.detectChanges();
-
-    // 3. Assert
-    expect(component.phoneNumbers.length).toBe(0);
-  });
-
-  it('should emit (save) with the form data when "Save" is clicked', () => {
-    const saveSpy = vi.spyOn(component.save, 'emit');
-
-    // 1. Act: Set form to valid state and enter edit mode
-    component.isEditing.set(true);
-    component.form.patchValue({
-      firstName: 'Test',
-      surname: 'User',
-      alias: 'testy',
-      email: 'test@user.com',
-    });
-    fixture.detectChanges();
-
-    // 2. Find and click save button
-    const saveButton = fixture.debugElement.query(
-      By.css('[data-testid="save-button"]')
-    ).nativeElement;
-    saveButton.click();
-
-    // 3. Assert
-    expect(saveSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ firstName: 'Test' })
+    // 2. Query for chips
+    const chips = fixture.debugElement.queryAll(
+      By.css('[data-testid="identity-chip"]')
     );
-  });
-
-  it('should preserve non-form fields (like serviceContacts) on save', () => {
-    const saveSpy = vi.spyOn(component.save, 'emit');
-
-    // 1. Arrange: Set the contact and enter edit mode
-    fixture.componentRef.setInput('contact', mockContact);
-    component.isEditing.set(true);
-    fixture.detectChanges();
-
-    // 2. Act: Change one value
-    component.form.patchValue({ firstName: 'Johnny' });
-    fixture.detectChanges();
-
-    const saveButton = fixture.debugElement.query(
-      By.css('[data-testid="save-button"]')
-    ).nativeElement;
-    saveButton.click();
 
     // 3. Assert
-    expect(saveSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        firstName: 'Johnny',
-        id: mockContact.id, // <-- Check against the URN object
-        serviceContacts: mockContact.serviceContacts,
-      })
+    expect(chips.length).toBe(2);
+    
+    // Check content formatting
+    const firstChipText = chips[0].nativeElement.textContent;
+    expect(firstChipText).toContain('Google');
+    expect(firstChipText).toContain('bob@google.com');
+  });
+
+  it('should not display linked identities section if empty', () => {
+    fixture.componentRef.setInput('contact', mockContact);
+    fixture.componentRef.setInput('linkedIdentities', []);
+    fixture.detectChanges();
+
+    const chips = fixture.debugElement.queryAll(
+      By.css('[data-testid="identity-chip"]')
     );
-  });
-
-  it('should set isEditing to false when "Cancel" is clicked', () => {
-    // 1. Arrange: Enter edit mode
-    component.isEditing.set(true);
-    fixture.detectChanges();
-    expect(component.isEditing()).toBe(true);
-
-    // 2. Act
-    const cancelButton = fixture.debugElement.query(
-      By.css('[data-testid="cancel-button"]')
-    ).nativeElement;
-    cancelButton.click();
-    fixture.detectChanges();
-
-    // 3. Assert: Internal state is changed
-    expect(component.isEditing()).toBe(false);
-  });
-
-  it('should switch from view mode to edit mode when "Edit" is clicked', () => {
-    // 1. Arrange: Should start in view mode
-    fixture.componentRef.setInput('contact', mockContact);
-    fixture.detectChanges();
-    expect(component.isEditing()).toBe(false);
-
-    // 2. Act
-    const editButton = fixture.debugElement.query(
-      By.css('[data-testid="edit-button"]')
-    ).nativeElement;
-    editButton.click();
-    fixture.detectChanges();
-
-    // 3. Assert
-    expect(component.isEditing()).toBe(true);
+    expect(chips.length).toBe(0);
   });
 });

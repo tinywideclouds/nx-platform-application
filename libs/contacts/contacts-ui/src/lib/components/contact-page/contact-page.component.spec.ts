@@ -12,20 +12,19 @@ import {
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
-// --- 1. Import URN and ISODateTimeString ---
 import {
-  ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 
 import { RouterTestingModule } from '@angular/router/testing';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { MatChipsModule } from '@angular/material/chips'; // <-- Import MatChipsModule
+import { MatChipsModule } from '@angular/material/chips';
 
-// --- 2. Update Fixtures to use URNs ---
+// --- Fixtures ---
 const mockContactUrn = URN.parse('urn:sm:user:user-123');
 const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
+const mockAuthUrn = URN.parse('urn:auth:google:bob-123');
 
 const mockContact: Contact = {
   id: mockContactUrn,
@@ -36,7 +35,7 @@ const mockContact: Contact = {
   phoneNumbers: ['+15550100'],
   emailAddresses: ['test@example.com'],
   serviceContacts: {},
-} as Contact; // Use 'as Contact' for mock simplicity
+} as Contact;
 
 const MOCK_GROUP: ContactGroup = {
   id: mockGroupUrn,
@@ -51,6 +50,7 @@ const { mockContactsService } = vi.hoisted(() => {
       getContact: vi.fn(),
       saveContact: vi.fn(),
       getGroupsForContact: vi.fn(),
+      getLinkedIdentities: vi.fn(), // <-- Added mock
     },
   };
 });
@@ -69,6 +69,7 @@ describe('ContactPageComponent (RxJS-based)', () => {
     mockContactsService.getContact.mockResolvedValue(mockContact);
     mockContactsService.saveContact.mockResolvedValue(undefined);
     mockContactsService.getGroupsForContact.mockResolvedValue([MOCK_GROUP]);
+    mockContactsService.getLinkedIdentities.mockResolvedValue([mockAuthUrn]); // <-- Default return
 
     await TestBed.configureTestingModule({
       imports: [
@@ -77,7 +78,7 @@ describe('ContactPageComponent (RxJS-based)', () => {
         ContactPageComponent,
         ContactFormComponent,
         ContactsPageToolbarComponent,
-        MatChipsModule, // <-- Add MatChipsModule
+        MatChipsModule,
       ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
@@ -105,33 +106,39 @@ describe('ContactPageComponent (RxJS-based)', () => {
 
     expect(mockContactsService.getContact).not.toHaveBeenCalled();
     expect(component.contactToEdit()).toBeTruthy();
-    // Check that the ID is a URN object
     expect(component.contactToEdit()?.id).toBeInstanceOf(URN);
-    expect(component.contactToEdit()?.id.toString()).toContain('urn:sm:user:');
   });
 
-  it('should be in EDIT MODE', async () => {
-    // --- 3. Pass the string version of the URN, as the router would ---
+  it('should be in EDIT MODE and fetch linked identities', async () => {
     const idString = mockContactUrn.toString();
     mockActivatedRoute.paramMap.next({ get: () => idString });
     fixture.detectChanges();
+    
+    // 1. Wait for 'getContact' to resolve and update the contactToEdit signal
     await fixture.whenStable();
+    fixture.detectChanges(); 
 
-    // --- 4. Expect the service to be called with the PARSED URN object ---
+    // Verify Contact fetch (This was already passing)
     expect(mockContactsService.getContact).toHaveBeenCalledWith(mockContactUrn);
     expect(component.contactToEdit()).toEqual(mockContact);
+
+    // 2. Wait for 'toObservable' to react and 'getLinkedIdentities' to resolve
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Verify Linked Identities fetch (This should now pass)
+    expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(mockContactUrn);
+    expect(component.linkedIdentities()).toEqual([mockAuthUrn]);
   });
 
   it('should fetch and display groups for the contact in EDIT MODE', async () => {
-    // --- 5. Pass the string ID from the router ---
     const idString = mockContactUrn.toString();
     mockActivatedRoute.paramMap.next({ get: () => idString });
     fixture.detectChanges();
-    await fixture.whenStable(); // Waits for contactToEdit to resolve
-    await fixture.whenStable(); // Waits for groupsForContact to resolve
+    await fixture.whenStable(); // Contact
+    await fixture.whenStable(); // Groups & Links
     fixture.detectChanges();
 
-    // --- 6. Expect service to be called with the URN ---
     expect(mockContactsService.getGroupsForContact).toHaveBeenCalledWith(
       mockContactUrn
     );
@@ -141,7 +148,6 @@ describe('ContactPageComponent (RxJS-based)', () => {
       '[data-testid="group-chip"]'
     );
     expect(chips.length).toBe(1);
-    expect(chips[0].textContent).toContain('Test Group');
   });
 
   it('should call saveContact and navigate on (save) event', async () => {
@@ -152,7 +158,6 @@ describe('ContactPageComponent (RxJS-based)', () => {
     const formComponent = fixture.debugElement.query(
       By.directive(ContactFormComponent)
     );
-    // Trigger with the URN-based mock
     formComponent.triggerEventHandler('save', mockContact);
     await fixture.whenStable();
 

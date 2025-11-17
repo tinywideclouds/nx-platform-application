@@ -89,6 +89,20 @@
     }
   </div>
 
+  @if (linkedIdentities().length > 0) {
+    <div class="mt-4">
+      <h3 class="font-medium text-gray-700 mb-2">Linked Accounts</h3>
+      <mat-chip-listbox aria-label="Linked Identities">
+        @for (urn of linkedIdentities(); track urn.toString()) {
+          <mat-chip data-testid="identity-chip">
+            <span class="font-bold">{{ getProviderName(urn) | titlecase }}: </span>
+            <span>{{ getProviderId(urn) }}</span>
+          </mat-chip>
+        }
+      </mat-chip-listbox>
+    </div>
+  }
+
   @if (isEditing()) {
   <div class="flex justify-end gap-2 pt-4">
     <button

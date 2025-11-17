@@ -32,6 +32,16 @@ export interface ContactGroup extends Resource {
 }
 
 /**
+ * Represents a link between a local Contact and a federated Authentication URN.
+ * This allows a single Contact to be associated with multiple providers (Google, Apple, etc.).
+ */
+export interface IdentityLink {
+  id?: number;      // Auto-incrementing ID from Dexie
+  contactId: URN;   // The local Contact URN (urn:sm:user:...)
+  authUrn: URN;     // The federated Sender URN (urn:auth:provider:...)
+}
+
+/**
  * Represents the ServiceContact as it is stored in Dexie
  * (with primitive string IDs).
  */
@@ -66,4 +76,14 @@ export interface StorableGroup {
   name: string;
   description?: string;
   contactIds: string[]; // <-- Changed from URN[]
+}
+
+/**
+ * Represents the IdentityLink as it is stored in Dexie
+ * (with primitive string IDs).
+ */
+export interface StorableIdentityLink {
+  id?: number;        // Auto-incrementing ID
+  contactId: string;  // Stored as string version of URN
+  authUrn: string;    // Stored as string version of URN
 }

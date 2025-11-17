@@ -3,9 +3,8 @@
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';
 import { Observable, from } from 'rxjs';
-import { map } from 'rxjs/operators'; // <-- 1. Import map
+import { map } from 'rxjs/operators';
 import { ContactsDatabase } from './db/contacts.database';
-// 2. Import all models
 import {
   Contact,
   ContactGroup,
@@ -13,6 +12,8 @@ import {
   StorableGroup,
   StorableServiceContact,
   ServiceContact,
+  IdentityLink,
+  StorableIdentityLink,
 } from './models/contacts';
 import { URN } from '@nx-platform-application/platform-types';
 
@@ -22,7 +23,7 @@ import { URN } from '@nx-platform-application/platform-types';
 export class ContactsStorageService {
   private readonly db = inject(ContactsDatabase);
 
-  // --- 3. Add Mapper Functions ---
+  // --- Mapper Functions ---
 
   // Maps from Storable (DB) to Domain (App)
   private mapStorableToContact(c: StorableContact): Contact {
@@ -84,9 +85,7 @@ export class ContactsStorageService {
     };
   }
 
-  // --- 4. Update LiveQuery Streams to use mappers ---
-  // liveQuery now returns StorableContact[] or StorableGroup[].
-  // The 'map' pipe correctly converts them to Contact[] or ContactGroup[].
+  // --- LiveQuery Streams ---
 
   readonly contacts$: Observable<Contact[]> = from(
     liveQuery(() => this.db.contacts.orderBy('alias').toArray())
@@ -102,7 +101,7 @@ export class ContactsStorageService {
     liveQuery(() => this.db.contactGroups.orderBy('name').toArray())
   ).pipe(map((storables) => storables.map(this.mapStorableToGroup)));
 
-  // --- 5. Update ALL CRUD methods to use mappers and string IDs ---
+  // --- CRUD Methods ---
 
   async saveContact(contact: Contact): Promise<void> {
     const storable = this.mapContactToStorable(contact);
@@ -110,19 +109,16 @@ export class ContactsStorageService {
   }
 
   async updateContact(id: URN, changes: Partial<Contact>): Promise<void> {
-    // 1. Destructure incompatible properties from the 'changes' object
     const {
       id: urnId,
       serviceContacts: domainServiceContacts,
       ...simpleChanges
     } = changes;
 
-    // 2. Create the storable changes object with the simple, compatible properties
     const storableChanges: Partial<StorableContact> = {
-      ...simpleChanges, // (e.g., alias, firstName, phoneNumbers)
+      ...simpleChanges,
     };
 
-    // 3. Manually map and add the complex properties if they exist
     if (urnId) {
       storableChanges.id = urnId.toString();
     }
@@ -141,7 +137,6 @@ export class ContactsStorageService {
       storableChanges.serviceContacts = serviceContacts;
     }
 
-    // 4. Call update with the string key and the storable changes
     await this.db.contacts.update(id.toString(), storableChanges);
   }
 
@@ -194,25 +189,71 @@ export class ContactsStorageService {
   async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
     const storables = await this.db.contactGroups
       .where('contactIds')
-      .equals(contactId.toString()) // <-- Use string for query
+      .equals(contactId.toString())
       .toArray();
     return storables.map(this.mapStorableToGroup);
   }
 
   async getContactsForGroup(groupId: URN): Promise<Contact[]> {
-    // 1. Get the StorableGroup
     const groupStorable = await this.db.contactGroups.get(groupId.toString());
     if (!groupStorable || groupStorable.contactIds.length === 0) {
       return [];
     }
-    
-    // 2. We already have the string IDs from the StorableGroup
+
     const contactIdStrings = groupStorable.contactIds;
     const storables = await this.db.contacts.bulkGet(contactIdStrings);
 
-    // 3. Filter out undefined and map back to DOMAIN contacts
     return storables
       .filter((c): c is StorableContact => Boolean(c))
       .map(this.mapStorableToContact);
+  }
+
+  // --- Federated Identity Linking Methods ---
+
+  /**
+   * Links a federated Authentication URN (e.g., urn:auth:google:bob) to a local Contact.
+   */
+  async linkIdentityToContact(contactId: URN, authUrn: URN): Promise<void> {
+    // We store strictly primitive strings in the DB
+    const storableLink: StorableIdentityLink = {
+      contactId: contactId.toString(),
+      authUrn: authUrn.toString(),
+    };
+
+    // Dexie handles the auto-incrementing 'id'
+    await this.db.identity_links.put(storableLink);
+  }
+
+  /**
+   * Retrieves all federated identities linked to a specific Contact.
+   */
+  async getLinkedIdentities(contactId: URN): Promise<URN[]> {
+    const storables = await this.db.identity_links
+      .where('contactId')
+      .equals(contactId.toString())
+      .toArray();
+
+    return storables.map((link) => URN.parse(link.authUrn));
+  }
+
+  /**
+   * Finds the local Contact associated with a specific federated Authentication URN.
+   * This is the primary method for resolving incoming "Sender IDs" to "Conversations".
+   */
+  async findContactByAuthUrn(authUrn: URN): Promise<Contact | null> {
+    // 1. Look up the link
+    const link = await this.db.identity_links
+      .where('authUrn')
+      .equals(authUrn.toString())
+      .first();
+
+    if (!link) {
+      return null;
+    }
+
+    // 2. If link exists, fetch the full contact
+    const contactStorable = await this.db.contacts.get(link.contactId);
+
+    return contactStorable ? this.mapStorableToContact(contactStorable) : null;
   }
 }

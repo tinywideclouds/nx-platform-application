@@ -4,7 +4,6 @@ import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { ContactsStorageService } from './contacts.service';
 import { ContactsDatabase } from './db/contacts.database';
-// --- 1. Import all models, including Storable ---
 import {
   Contact,
   ContactGroup,
@@ -12,57 +11,75 @@ import {
   StorableGroup,
   ServiceContact,
   StorableServiceContact,
+  StorableIdentityLink,
 } from './models/contacts';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 
-// --- Mocks (Unchanged) ---
-const { mockDbTable, mockDbGroupTable, mockContactsDb } = vi.hoisted(() => {
-  const tableMock = {
-    put: vi.fn(),
-    update: vi.fn(),
-    get: vi.fn(),
-    delete: vi.fn(),
-    bulkPut: vi.fn(),
-    bulkGet: vi.fn(),
-    orderBy: vi.fn(() => tableMock),
-    where: vi.fn(() => tableMock),
-    equals: vi.fn(() => tableMock),
-    toArray: vi.fn(),
-    first: vi.fn(),
-  };
+// --- Mocks ---
+const { mockDbTable, mockDbGroupTable, mockDbLinksTable, mockContactsDb } =
+  vi.hoisted(() => {
+    const tableMock = {
+      put: vi.fn(),
+      update: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+      bulkPut: vi.fn(),
+      bulkGet: vi.fn(),
+      orderBy: vi.fn(() => tableMock),
+      where: vi.fn(() => tableMock),
+      equals: vi.fn(() => tableMock),
+      toArray: vi.fn(),
+      first: vi.fn(),
+    };
 
-  const groupTableMock = {
-    put: vi.fn(),
-    get: vi.fn(),
-    delete: vi.fn(),
-    orderBy: vi.fn(() => groupTableMock),
-    where: vi.fn(() => groupTableMock),
-    equals: vi.fn(() => groupTableMock),
-    toArray: vi.fn(),
-  };
+    const groupTableMock = {
+      put: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+      orderBy: vi.fn(() => groupTableMock),
+      where: vi.fn(() => groupTableMock),
+      equals: vi.fn(() => groupTableMock),
+      toArray: vi.fn(),
+    };
 
-  return {
-    mockDbTable: tableMock,
-    mockDbGroupTable: groupTableMock,
-    mockContactsDb: {
-      contacts: tableMock,
-      contactGroups: groupTableMock,
-      transaction: vi.fn(async (_mode, _tables, callback) => await callback()),
-    },
-  };
-});
+    // Mock for the new identity_links table
+    const linksTableMock = {
+      put: vi.fn(),
+      where: vi.fn(() => linksTableMock),
+      equals: vi.fn(() => linksTableMock),
+      toArray: vi.fn(),
+      first: vi.fn(),
+    };
 
-// --- 2. Fixtures ---
+    return {
+      mockDbTable: tableMock,
+      mockDbGroupTable: groupTableMock,
+      mockDbLinksTable: linksTableMock,
+      mockContactsDb: {
+        contacts: tableMock,
+        contactGroups: groupTableMock,
+        identity_links: linksTableMock,
+        transaction: vi.fn(
+          async (_mode, _tables, callback) => await callback()
+        ),
+      },
+    };
+  });
+
+// --- Fixtures ---
 
 // --- DOMAIN FIXTURES (with URNs) ---
-// These are what the app uses and what the service's public methods accept/return.
 const mockContactUrn = URN.parse('urn:sm:user:user-123');
 const mockGroupUrn = URN.parse('urn:sm:group:grp-abc');
 const mockOtherContactUrn = URN.parse('urn:sm:user:user-456');
 const mockServiceContactUrn = URN.parse('urn:sm:service:msg-uuid-1');
+
+// New Federated URNs
+const mockGoogleAuthUrn = URN.parse('urn:auth:google:bob-123');
+const mockAppleAuthUrn = URN.parse('urn:auth:apple:bob-456');
 
 const mockServiceContact: ServiceContact = {
   id: mockServiceContactUrn,
@@ -90,7 +107,6 @@ const mockGroup: ContactGroup = {
 };
 
 // --- STORABLE FIXTURES (with Strings) ---
-// These are what the mock database will return.
 const mockStorableServiceContact: StorableServiceContact = {
   id: mockServiceContactUrn.toString(),
   alias: 'jd_messenger',
@@ -116,7 +132,13 @@ const mockStorableGroup: StorableGroup = {
   contactIds: [mockContactUrn.toString(), mockOtherContactUrn.toString()],
 };
 
-// --- 3. Test Suite ---
+const mockStorableLink: StorableIdentityLink = {
+  id: 1,
+  contactId: mockContactUrn.toString(),
+  authUrn: mockGoogleAuthUrn.toString(),
+};
+
+// --- Test Suite ---
 
 describe('ContactsStorageService', () => {
   let service: ContactsStorageService;
@@ -133,15 +155,18 @@ describe('ContactsStorageService', () => {
 
     service = TestBed.inject(ContactsStorageService);
 
-    // Default mock returns for contacts table (return STORABLE objects)
+    // Default mock returns
     mockDbTable.get.mockResolvedValue(mockStorableContact);
     mockDbTable.first.mockResolvedValue(mockStorableContact);
     mockDbTable.toArray.mockResolvedValue([mockStorableContact]);
     mockDbTable.bulkGet.mockResolvedValue([mockStorableContact]);
 
-    // Default mock returns for groups table (return STORABLE objects)
     mockDbGroupTable.get.mockResolvedValue(mockStorableGroup);
     mockDbGroupTable.toArray.mockResolvedValue([mockStorableGroup]);
+
+    // Default mock for links
+    mockDbLinksTable.toArray.mockResolvedValue([]);
+    mockDbLinksTable.first.mockResolvedValue(undefined);
   });
 
   it('should be created', () => {
@@ -151,20 +176,16 @@ describe('ContactsStorageService', () => {
   describe('CRUD Operations', () => {
     it('should save a contact (mapping to storable)', async () => {
       await service.saveContact(mockContact);
-      // Expect the DB to have been called with the storable version
       expect(mockContactsDb.contacts.put).toHaveBeenCalledWith(
         mockStorableContact
       );
     });
 
     it('should get a contact by ID (mapping from storable)', async () => {
-      // Call with URN
       const result = await service.getContact(mockContactUrn);
-      // Expect DB to be called with string
       expect(mockContactsDb.contacts.get).toHaveBeenCalledWith(
         mockContactUrn.toString()
       );
-      // Expect result to be the DOMAIN object
       expect(result).toEqual(mockContact);
     });
 
@@ -173,7 +194,6 @@ describe('ContactsStorageService', () => {
       const storableChanges: Partial<StorableContact> = { alias: 'New Alias' };
 
       await service.updateContact(mockContactUrn, changes);
-      // Expect DB to be called with string key and storable changes
       expect(mockContactsDb.contacts.update).toHaveBeenCalledWith(
         mockContactUrn.toString(),
         storableChanges
@@ -182,7 +202,6 @@ describe('ContactsStorageService', () => {
 
     it('should delete a contact', async () => {
       await service.deleteContact(mockContactUrn);
-      // Expect DB to be called with string
       expect(mockContactsDb.contacts.delete).toHaveBeenCalledWith(
         mockContactUrn.toString()
       );
@@ -190,35 +209,32 @@ describe('ContactsStorageService', () => {
   });
 
   describe('Search Operations', () => {
-    it('should find by email (mapping from storable)', async () => {
+    it('should find by email', async () => {
       const searchEmail = 'work@example.com';
       const result = await service.findByEmail(searchEmail);
 
       expect(mockDbTable.where).toHaveBeenCalledWith('emailAddresses');
       expect(mockDbTable.equals).toHaveBeenCalledWith(searchEmail);
-      // Expect result to be the DOMAIN object
       expect(result).toEqual(mockContact);
     });
 
-    it('should find by phone (mapping from storable)', async () => {
+    it('should find by phone', async () => {
       const searchPhone = '+15550199';
       const result = await service.findByPhone(searchPhone);
 
       expect(mockDbTable.where).toHaveBeenCalledWith('phoneNumbers');
       expect(mockDbTable.equals).toHaveBeenCalledWith(searchPhone);
-      // Expect result to be the DOMAIN object
       expect(result).toEqual(mockContact);
     });
   });
 
   describe('Bulk Operations', () => {
-    it('should perform bulk upsert (mapping to storable)', async () => {
+    it('should perform bulk upsert', async () => {
       const batch = [mockContact];
       const storableBatch = [mockStorableContact];
       await service.bulkUpsert(batch);
 
       expect(mockContactsDb.transaction).toHaveBeenCalled();
-      // Expect DB to be called with storable batch
       expect(mockContactsDb.contacts.bulkPut).toHaveBeenCalledWith(
         storableBatch
       );
@@ -226,77 +242,125 @@ describe('ContactsStorageService', () => {
   });
 
   describe('Group Operations', () => {
-    it('should save a group (mapping to storable)', async () => {
+    it('should save a group', async () => {
       await service.saveGroup(mockGroup);
-      // Expect DB to be called with storable version
       expect(mockContactsDb.contactGroups.put).toHaveBeenCalledWith(
         mockStorableGroup
       );
     });
 
-    it('should get a group by ID (mapping from storable)', async () => {
-      // Call with URN
+    it('should get a group by ID', async () => {
       const result = await service.getGroup(mockGroupUrn);
-      // Expect DB to be called with string
       expect(mockContactsDb.contactGroups.get).toHaveBeenCalledWith(
         mockGroupUrn.toString()
       );
-      // Expect result to be the DOMAIN object
       expect(result).toEqual(mockGroup);
     });
 
     it('should delete a group', async () => {
       await service.deleteGroup(mockGroupUrn);
-      // Expect DB to be called with string
       expect(mockContactsDb.contactGroups.delete).toHaveBeenCalledWith(
         mockGroupUrn.toString()
       );
     });
 
-    it('should get groups for a specific contact (mapping from storable)', async () => {
-      // Call with URN
+    it('should get groups for a specific contact', async () => {
       const result = await service.getGroupsForContact(mockContactUrn);
 
-      // Expect query to use string
       expect(mockDbGroupTable.where).toHaveBeenCalledWith('contactIds');
       expect(mockDbGroupTable.equals).toHaveBeenCalledWith(
         mockContactUrn.toString()
       );
-      // Expect result to be the DOMAIN object
       expect(result).toEqual([mockGroup]);
     });
 
-    it('should get contacts for a specific group (mapping from storable)', async () => {
-      // Call with URN
+    it('should get contacts for a specific group', async () => {
       const result = await service.getContactsForGroup(mockGroupUrn);
 
-      // 1. getGroup is called, which calls db.get with string
-      expect(mockDbGroupTable.get).toHaveBeenCalledWith(mockGroupUrn.toString());
-      
-      // 2. db.bulkGet is called with string IDs from the storable group
+      expect(mockDbGroupTable.get).toHaveBeenCalledWith(
+        mockGroupUrn.toString()
+      );
       expect(mockDbTable.bulkGet).toHaveBeenCalledWith(
         mockStorableGroup.contactIds
       );
-      
-      // 3. Expect result to be the DOMAIN object
       expect(result).toEqual([mockContact]);
     });
 
     it('should return an empty array if group not found', async () => {
       const notFoundUrn = URN.parse('urn:sm:group:grp-not-found');
       mockDbGroupTable.get.mockResolvedValue(undefined);
-      
-      let result = await service.getContactsForGroup(notFoundUrn);
-      
+
+      const result = await service.getContactsForGroup(notFoundUrn);
+
       expect(mockDbGroupTable.get).toHaveBeenCalledWith(notFoundUrn.toString());
       expect(result).toEqual([]);
     });
   });
 
+  describe('Federated Identity Linking', () => {
+    it('should link a federated identity to a contact (storing as strings)', async () => {
+      await service.linkIdentityToContact(mockContactUrn, mockGoogleAuthUrn);
+
+      expect(mockDbLinksTable.put).toHaveBeenCalledWith({
+        contactId: mockContactUrn.toString(),
+        authUrn: mockGoogleAuthUrn.toString(),
+      });
+    });
+
+    it('should retrieve linked identities for a contact (returning URNs)', async () => {
+      // Mock the DB returning a storable link
+      mockDbLinksTable.toArray.mockResolvedValue([mockStorableLink]);
+
+      const result = await service.getLinkedIdentities(mockContactUrn);
+
+      expect(mockDbLinksTable.where).toHaveBeenCalledWith('contactId');
+      expect(mockDbLinksTable.equals).toHaveBeenCalledWith(
+        mockContactUrn.toString()
+      );
+
+      expect(result.length).toBe(1);
+      expect(result[0]).toBeInstanceOf(URN);
+      // Verify equality as strings to ensure value correctness
+      expect(result[0].toString()).toBe(mockGoogleAuthUrn.toString());
+    });
+
+    it('should find a contact by auth URN if link exists', async () => {
+      // 1. Mock that the link lookup finds a link
+      mockDbLinksTable.first.mockResolvedValue(mockStorableLink);
+      // 2. Mock that the contact lookup finds the contact (default behavior)
+
+      const result = await service.findContactByAuthUrn(mockGoogleAuthUrn);
+
+      // Verify link lookup
+      expect(mockDbLinksTable.where).toHaveBeenCalledWith('authUrn');
+      expect(mockDbLinksTable.equals).toHaveBeenCalledWith(
+        mockGoogleAuthUrn.toString()
+      );
+      expect(mockDbLinksTable.first).toHaveBeenCalled();
+
+      // Verify contact lookup
+      expect(mockDbTable.get).toHaveBeenCalledWith(mockContactUrn.toString());
+
+      // Verify result
+      expect(result).toEqual(mockContact);
+    });
+
+    it('should return null if no link exists for auth URN', async () => {
+      // Mock link lookup returning undefined
+      mockDbLinksTable.first.mockResolvedValue(undefined);
+
+      const result = await service.findContactByAuthUrn(mockAppleAuthUrn);
+
+      expect(mockDbLinksTable.where).toHaveBeenCalledWith('authUrn');
+      expect(mockDbLinksTable.equals).toHaveBeenCalledWith(
+        mockAppleAuthUrn.toString()
+      );
+      expect(mockDbTable.get).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+  });
+
   describe('LiveQuery Streams', () => {
-    // Note: We can't easily test the stream's mapper function here
-    // as it's wrapped by `liveQuery`. We trust the mappers
-    // as they are tested in the CRUD operations.
     it('should create contacts$ stream', () => {
       expect(service.contacts$).toBeTruthy();
     });
