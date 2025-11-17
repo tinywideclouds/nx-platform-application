@@ -6,11 +6,13 @@ import pino from 'pino';
  * A minimal, synchronous logger for use ONLY during the initial config validation.
  * It ensures that fatal startup errors are logged as structured JSON
  * before the main application logger is available.
- * [FIXED] Removed pino-pretty transport. It will now log standard JSON.
  */
 const bootstrapLogger = pino({
   level: 'info',
 });
+
+// 1. Define the possible policy types
+export type AuthPolicy = 'ALLOW_ALL' | 'MEMBERSHIP' | 'BLOCK';
 
 /**
  * Defines the shape of the application's configuration object.
@@ -32,6 +34,8 @@ interface Config {
   internalApiKey: string | undefined;
   enableRateLimiter: boolean;
   e2eTestSecret: string | undefined;
+  // 2. Add the new authPolicy property
+  authPolicy: AuthPolicy;
 }
 
 // Store the default (insecure) secrets in constants.
@@ -39,6 +43,19 @@ const DEFAULT_SESSION_SECRET = 'a-very-secret-key-for-dev';
 const DEFAULT_JWT_SECRET = 'a-different-very-secret-key-for-dev';
 const DEFAULT_JWT_PRIVATE_KEY =
   'a-crypto-lib-private-key-from-public-private-pair';
+
+// 3. Helper to validate the auth policy from process.env
+function getAuthPolicy(): AuthPolicy {
+  const policy = process.env.AUTH_POLICY || 'ALLOW_ALL';
+  if (policy === 'ALLOW_ALL' || policy === 'MEMBERSHIP' || policy === 'BLOCK') {
+    return policy;
+  }
+  // Fallback for invalid values
+  bootstrapLogger.warn(
+    `Invalid AUTH_POLICY "${policy}". Defaulting to "ALLOW_ALL".`
+  );
+  return 'ALLOW_ALL';
+}
 
 /**
  * A centralized, type-safe configuration object for the application.
@@ -49,7 +66,7 @@ export const config: Config = {
   clientUrl: process.env.CLIENT_URL || 'http://localhost:4200',
   sessionSecret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
   jwtSecret: process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
-  jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY, // <-- INSECURE FIX
+  jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY,
   jwtAudience: process.env.JWT_AUDIENCE || '',
   gcpProjectId: process.env.GCP_PROJECT_ID,
   googleClientId: process.env.GOOGLE_CLIENT_ID,
@@ -67,6 +84,8 @@ export const config: Config = {
     ? process.env.ENABLE_RATE_LIMITER === 'true'
     : true,
   e2eTestSecret: process.env.E2E_TEST_SECRET,
+  // 4. Read the policy from the environment
+  authPolicy: getAuthPolicy(),
 };
 
 // --- Runtime Validation ---
@@ -81,7 +100,7 @@ const requiredConfigMap: Record<keyof Config, string> = {
   googleAuthCallback: 'GOOGLE_AUTH_CALLBACK',
   jwtSecret: 'JWT_SECRET',
   jwtAudience: 'JWT_AUDIENCE',
-  jwtPrivateKey: 'JWT_PRIVATE_KEY', // <-- 1. ADDED THIS
+  jwtPrivateKey: 'JWT_PRIVATE_KEY',
   internalApiKey: 'INTERNAL_API_KEY',
   sessionSecret: 'SESSION_SECRET',
   clientUrl: 'CLIENT_URL',
@@ -90,6 +109,7 @@ const requiredConfigMap: Record<keyof Config, string> = {
   port: '',
   enableRateLimiter: '',
   e2eTestSecret: '',
+  authPolicy: '', // Not "required", as it has a safe default
 };
 
 try {
@@ -116,13 +136,11 @@ try {
         'INSECURE: The default JWT_SECRET is being used in a production environment. Please generate a secure, random secret.'
       );
     }
-    // --- 2. THIS IS THE CRITICAL SECURITY FIX ---
     if (config.jwtPrivateKey === DEFAULT_JWT_PRIVATE_KEY) {
       throw new Error(
         'INSECURE: The default JWT_PRIVATE_KEY is being used in a production environment. Please generate a real RSA private key.'
       );
     }
-    // --- (End of fix) ---
     if (config.e2eTestSecret) {
       throw new Error(
         'INSECURE: E2E_TEST_SECRET must not be set in a production environment. This variable is for testing only.'

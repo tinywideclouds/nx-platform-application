@@ -1,3 +1,5 @@
+// apps/platform/node-identity-service/src/main.ts
+
 import express from 'express';
 import session from 'express-session';
 import passport from 'passport';
@@ -12,11 +14,20 @@ import { logger } from '@nx-platform-application/node-logger';
 import { config } from './config.js';
 import { configurePassport } from './internal/auth/passport.config.js';
 import { createMainRouter } from './routes/index.js';
-import {generateJwks, jwksRouter} from './routes/jwt/jwks.js';
+import { generateJwks, jwksRouter } from './routes/jwt/jwks.js';
 // [CHANGED] Import the new e2e test-only routes
 import { e2eRoutes } from './routes/e2e/e2e.routes.js';
 import { validateJwtConfiguration } from './internal/services/jwt-validator.service.js';
 import { centralErrorHandler } from './internal/middleware/error.middleware.js';
+
+// --- 1. Import new Policy framework ---
+import {
+  IAuthorizationPolicy,
+} from './internal/auth/policies/authorization.policy.js';
+import { AllowAllPolicy } from './internal/auth/policies/allow-all.policy.js';
+import { MembershipPolicy } from './internal/auth/policies/membership.policy.js';
+import { BlockPolicy } from './internal/auth/policies/block.policy.js';
+// ---
 
 async function startServer() {
   try {
@@ -50,6 +61,26 @@ async function startServer() {
       }
       throw error;
     }
+
+    // --- 2. SELECT AND INITIALIZE AUTH POLICY ---
+    // This now reads the pre-validated policy from the config object.
+    let authPolicy: IAuthorizationPolicy;
+
+    switch (config.authPolicy) {
+      case 'MEMBERSHIP':
+        authPolicy = new MembershipPolicy(db);
+        logger.info({ component: 'AuthPolicy', policy: 'MEMBERSHIP' }, 'Using MEMBERSHIP authorization policy.');
+        break;
+      case 'BLOCK':
+        authPolicy = new BlockPolicy(db);
+        logger.info({ component: 'AuthPolicy', policy: 'BLOCK' }, 'Using BLOCK authorization policy.');
+        break;
+      case 'ALLOW_ALL':
+      default:
+        authPolicy = new AllowAllPolicy();
+        logger.info({ component: 'AuthPolicy', policy: 'ALLOW_ALL' }, 'Using ALLOW_ALL authorization policy.');
+    }
+    // ---
 
     // --- CRYPTOGRAPHIC KEY INITIALIZATION ---
     // [CHANGED] Pass the logger instance to the validation service
@@ -93,7 +124,8 @@ async function startServer() {
     // --- PASSPORT MIDDLEWARE & CONFIGURATION ---
     app.use(passport.initialize());
     app.use(passport.session());
-    configurePassport(db);
+    // --- 3. Pass the chosen policy to passport config ---
+    configurePassport(db, authPolicy);
 
     // --- RATE LIMITING ---
     if (config.enableRateLimiter) {
@@ -144,7 +176,7 @@ async function startServer() {
           port: config.port,
           state: 'listening',
         },
-        'Server started successfully'
+        `Server started successfully on port ${config.port}`
       );
     });
   } catch (error: unknown) {

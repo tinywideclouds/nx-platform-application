@@ -1,8 +1,11 @@
+// apps/platform/node-identity-service/src/config.test.ts
 
 // Mock the pino logger
 const mockFatal = vi.fn();
+const mockWarn = vi.fn();
 const mockLogger = {
   fatal: mockFatal,
+  warn: mockWarn,
 };
 vi.mock('pino', () => ({
   // Default export
@@ -31,7 +34,8 @@ const baselineRequiredEnv = {
   INTERNAL_API_KEY: 'test-internal-key',
   SESSION_SECRET: 'a-real-session-secret',
   CLIENT_URL: 'http://test-client',
-  JWT_PRIVATE_KEY: 'a-crypto-lib-private-key-from-public-private-pair',
+  // --- 1. FIX: Use a non-default key for the baseline ---
+  JWT_PRIVATE_KEY: 'a-secure-production-ready-private-key',
 };
 // --- End Mocks ---
 
@@ -39,7 +43,8 @@ describe('Application Configuration (config.ts)', () => {
   beforeEach(() => {
     vi.resetModules();
     exitMock.mockClear();
-    mockFatal.mockClear(); // [CHANGED] Clear the logger mock
+    mockFatal.mockClear();
+    mockWarn.mockClear();
     process.exit = exitMock;
 
     process.env = {
@@ -58,12 +63,14 @@ describe('Application Configuration (config.ts)', () => {
     beforeEach(() => {
       process.env.NODE_ENV = 'production';
       delete process.env.E2E_TEST_SECRET;
+      // --- 2. FIX: Ensure a secure key is set for tests *not* checking this ---
+      process.env.JWT_PRIVATE_KEY = 'a-secure-production-ready-private-key';
     });
 
     it('should load successfully with valid production config', async () => {
       const { config } = await import('./config.js');
       expect(exitMock).not.toHaveBeenCalled();
-      expect(mockFatal).not.toHaveBeenCalled(); // [CHANGED] Check logger mock
+      expect(mockFatal).not.toHaveBeenCalled();
       expect(config.gcpProjectId).toBe('test-project');
     });
 
@@ -73,7 +80,7 @@ describe('Application Configuration (config.ts)', () => {
       await expect(() => import('./config.js')).rejects.toThrow(
         'process.exit(1) called'
       );
-      // [CHANGED] Check that the logger's fatal method was called
+      // --- 3. FIX: Assert the *correct* error message ---
       expect(mockFatal).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'ConfigValidation' }),
         expect.stringContaining(
@@ -88,12 +95,25 @@ describe('Application Configuration (config.ts)', () => {
       await expect(() => import('./config.js')).rejects.toThrow(
         'process.exit(1) called'
       );
-      // [CHANGED] Check logger mock
       expect(mockFatal).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'ConfigValidation' }),
         expect.stringContaining('INSECURE: The default SESSION_SECRET')
       );
     });
+
+    // --- 4. FIX: Add a test for the default JWT_PRIVATE_KEY ---
+    it('should FATAL and exit if default JWT_PRIVATE_KEY is used', async () => {
+      process.env.JWT_PRIVATE_KEY = 'a-crypto-lib-private-key-from-public-private-pair';
+
+      await expect(() => import('./config.js')).rejects.toThrow(
+        'process.exit(1) called'
+      );
+      expect(mockFatal).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'ConfigValidation' }),
+        expect.stringContaining('INSECURE: The default JWT_PRIVATE_KEY')
+      );
+    });
+
 
     it('should FATAL and exit if a required variable is missing', async () => {
       delete process.env.GCP_PROJECT_ID;
@@ -101,7 +121,6 @@ describe('Application Configuration (config.ts)', () => {
       await expect(() => import('./config.js')).rejects.toThrow(
         'process.exit(1) called'
       );
-      // [CHANGED] Check logger mock
       expect(mockFatal).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'ConfigValidation' }),
         expect.stringContaining(
@@ -121,7 +140,7 @@ describe('Application Configuration (config.ts)', () => {
     it('should load successfully with E2E_TEST_SECRET', async () => {
       const { config } = await import('./config.js');
       expect(exitMock).not.toHaveBeenCalled();
-      expect(mockFatal).not.toHaveBeenCalled(); // [CHANGED] Check logger mock
+      expect(mockFatal).not.toHaveBeenCalled();
       expect(config.e2eTestSecret).toBe('a-safe-dev-secret');
     });
 
@@ -131,7 +150,6 @@ describe('Application Configuration (config.ts)', () => {
       await expect(() => import('./config.js')).rejects.toThrow(
         'process.exit(1) called'
       );
-      // [CHANGED] Check logger mock
       expect(mockFatal).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'ConfigValidation' }),
         expect.stringContaining(
@@ -145,8 +163,47 @@ describe('Application Configuration (config.ts)', () => {
 
       const { config } = await import('./config.js');
       expect(exitMock).not.toHaveBeenCalled();
-      expect(mockFatal).not.toHaveBeenCalled(); // [CHANGED] Check logger mock
+      expect(mockFatal).not.toHaveBeenCalled();
       expect(config.sessionSecret).toBe('a-very-secret-key-for-dev');
+    });
+  });
+
+  // --- Authorization Policy Tests (Unchanged) ---
+  describe('Authorization Policy (AUTH_POLICY)', () => {
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development';
+      process.env.E2E_TEST_SECRET = 'a-safe-dev-secret';
+    });
+
+    it('should default to "ALLOW_ALL" if AUTH_POLICY is not set', async () => {
+      delete process.env.AUTH_POLICY;
+      const { config } = await import('./config.js');
+      expect(config.authPolicy).toBe('ALLOW_ALL');
+      expect(mockWarn).not.toHaveBeenCalled();
+    });
+
+    it('should use "MEMBERSHIP" if AUTH_POLICY is set to MEMBERSHIP', async () => {
+      process.env.AUTH_POLICY = 'MEMBERSHIP';
+      const { config } = await import('./config.js');
+      expect(config.authPolicy).toBe('MEMBERSHIP');
+      expect(mockWarn).not.toHaveBeenCalled();
+    });
+
+    it('should use "BLOCK" if AUTH_POLICY is set to BLOCK', async () => {
+      process.env.AUTH_POLICY = 'BLOCK';
+      const { config } = await import('./config.js');
+      expect(config.authPolicy).toBe('BLOCK');
+      expect(mockWarn).not.toHaveBeenCalled();
+    });
+
+    it('should default to "ALLOW_ALL" and warn if AUTH_POLICY is invalid', async () => {
+      process.env.AUTH_POLICY = 'INVALID_VALUE';
+      const { config } = await import('./config.js');
+      
+      expect(config.authPolicy).toBe('ALLOW_ALL');
+      expect(mockWarn).toHaveBeenCalledWith(
+        'Invalid AUTH_POLICY "INVALID_VALUE". Defaulting to "ALLOW_ALL".'
+      );
     });
   });
 });

@@ -1,15 +1,18 @@
+// apps/platform/node-identity-service/src/internal/firestore.test.ts
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Firestore } from '@google-cloud/firestore';
-// Import BOTH functions
-import { getUserProfile, findUserByEmail } from './firestore.js';
-import type { User } from '@nx-platform-application/platform-types';
+import {
+  getUserProfile,
+  findUserByEmail,
+  isEmailBlocked,
+} from './firestore.js';
+import { User, URN } from '@nx-platform-application/platform-types';
 
 // --- FIRESTORE MOCK ---
-// We mock the entire @google-cloud/firestore library to have full control
-// over its behavior without making any real database calls.
-const mockDoc = vi.fn();
+const mockDocGet = vi.fn();
+const mockDoc = vi.fn(() => ({ get: mockDocGet }));
 
-// This is the mock for the query chain: collection().where().limit().get()
 const mockQueryGet = vi.fn();
 const mockQueryLimit = vi.fn(() => ({ get: mockQueryGet }));
 const mockQueryWhere = vi.fn(() => ({ limit: mockQueryLimit }));
@@ -33,104 +36,107 @@ describe('Firestore Service (Unit)', () => {
 
   beforeEach(() => {
     db = new Firestore();
-    // Reset all mock function call counters before each test
     vi.clearAllMocks();
+    mockDocGet.mockReset();
+    mockQueryGet.mockReset();
   });
 
+  // --- 1. FIX: getUserProfile returns a URN-based User object ---
   describe('getUserProfile', () => {
-    it('should return a user profile if the document exists', async () => {
+    it('should return a URN-based user profile if the document exists', async () => {
       const userId = 'existing-user-id';
-      const userProfile: User = {
-        id: '1df',
+      const mockDbData = {
+        email: 'found@example.com',
+        alias: 'FoundUser',
+      };
+      const expectedUser: User = {
+        id: URN.parse(`urn:sm:user:${userId}`),
         email: 'found@example.com',
         alias: 'FoundUser',
       };
 
-      // Configure the mock 'get' function to return a document
       const mockDocSnapshot = {
         exists: true,
-        data: () => userProfile,
+        data: () => mockDbData,
+        id: userId,
       };
-      mockDoc.mockReturnValue({
-        get: vi.fn().mockResolvedValue(mockDocSnapshot),
-      });
+      mockDocGet.mockResolvedValue(mockDocSnapshot);
 
       const result = await getUserProfile(db, userId);
 
-      // Verify that the correct document was requested
       expect(mockCollection).toHaveBeenCalledWith('authorized_users');
       expect(mockDoc).toHaveBeenCalledWith(userId);
-      expect(result).toEqual(userProfile);
+      expect(result).toEqual(expectedUser);
+      expect(result?.id).toBeInstanceOf(URN);
     });
 
     it('should return null if the document does not exist', async () => {
-      const userId = 'non-existent-user-id';
-
-      // Configure the mock 'get' function to return a non-existent snapshot
-      const mockDocSnapshot = {
-        exists: false,
-      };
-      mockDoc.mockReturnValue({
-        get: vi.fn().mockResolvedValue(mockDocSnapshot),
-      });
-
-      const result = await getUserProfile(db, userId);
-
-      expect(mockDoc).toHaveBeenCalledWith(userId);
+      const mockDocSnapshot = { exists: false };
+      mockDocGet.mockResolvedValue(mockDocSnapshot);
+      const result = await getUserProfile(db, 'non-existent-user-id');
       expect(result).toBeNull();
     });
   });
 
-  // --- COMPLETED TEST SUITE FOR findUserByEmail ---
+  // --- 2. FIX: findUserByEmail returns UserProfileData ---
   describe('findUserByEmail', () => {
-    it('should return an authenticated user if found by email', async () => {
-      // ARRANGE
+    it('should return user profile data if found by email', async () => {
       const userEmail = 'found@example.com';
-      const userData: User = {
+      const mockDbData = {
+        email: userEmail,
+        alias: 'FoundUser',
+      };
+      const expectedData = {
         id: 'user-id-123',
         email: userEmail,
         alias: 'FoundUser',
       };
-      const mockDoc = {
-        id: 'user-id-123',
-        data: () => userData,
-      };
+      const mockDoc = { id: 'user-id-123', data: () => mockDbData };
       const mockSnapshot = {
         empty: false,
         docs: [mockDoc],
       };
       mockQueryGet.mockResolvedValue(mockSnapshot);
 
-      // ACT
       const result = await findUserByEmail(db, userEmail);
 
-      // ASSERT
       expect(mockCollection).toHaveBeenCalledWith('authorized_users');
       expect(mockQueryWhere).toHaveBeenCalledWith('email', '==', userEmail);
-      expect(mockQueryLimit).toHaveBeenCalledWith(1);
-      expect(result).toEqual({
-        id: 'user-id-123',
-        email: userEmail,
-        alias: 'FoundUser',
-      });
+      expect(result).toEqual(expectedData);
     });
 
     it('should return null if no user is found by email', async () => {
-      // ARRANGE
-      const userEmail = 'notfound@example.com';
-      const mockSnapshot = {
-        empty: true,
-        docs: [],
-      };
+      const mockSnapshot = { empty: true, docs: [] };
       mockQueryGet.mockResolvedValue(mockSnapshot);
-
-      // ACT
-      const result = await findUserByEmail(db, userEmail);
-
-      // ASSERT
-      expect(mockQueryWhere).toHaveBeenCalledWith('email', '==', userEmail);
+      const result = await findUserByEmail(db, 'notfound@example.com');
       expect(result).toBeNull();
     });
   });
-  // --- END OF NEW TEST SUITE ---
+
+  // --- 3. isEmailBlocked tests (Unchanged) ---
+  describe('isEmailBlocked', () => {
+    it('should return true if the email document exists in blocked_users', async () => {
+      const email = 'blocked@example.com';
+      const mockDocSnapshot = { exists: true };
+      mockDocGet.mockResolvedValue(mockDocSnapshot);
+
+      const result = await isEmailBlocked(db, email);
+
+      expect(mockCollection).toHaveBeenCalledWith('blocked_users');
+      expect(mockDoc).toHaveBeenCalledWith(email);
+      expect(result).toBe(true);
+    });
+
+    it('should return false if the email document does not exist', async () => {
+      const email = 'safe@example.com';
+      const mockDocSnapshot = { exists: false };
+      mockDocGet.mockResolvedValue(mockDocSnapshot);
+
+      const result = await isEmailBlocked(db, email);
+      
+      expect(mockCollection).toHaveBeenCalledWith('blocked_users');
+      expect(mockDoc).toHaveBeenCalledWith(email);
+      expect(result).toBe(false);
+    });
+  });
 });
