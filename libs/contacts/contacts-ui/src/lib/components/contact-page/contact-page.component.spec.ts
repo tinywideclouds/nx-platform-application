@@ -4,94 +4,88 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { vi } from 'vitest';
 import { ContactPageComponent } from './contact-page.component';
-import {
-  ContactsStorageService,
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
-import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
-import {
-  URN,
-} from '@nx-platform-application/platform-types';
-
+import { URN } from '@nx-platform-application/platform-types';
 import { RouterTestingModule } from '@angular/router/testing';
-import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { MatChipsModule } from '@angular/material/chips';
+import { Component, Input, Output, EventEmitter, signal } from '@angular/core';
 
-// --- Fixtures ---
-const mockContactUrn = URN.parse('urn:sm:user:user-123');
-const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
-const mockAuthUrn = URN.parse('urn:auth:google:bob-123');
+// --- 1. Import Real Components for Removal ---
+// We need these references to tell TestBed to remove them
+import { ContactDetailComponent } from '../contact-detail/contact-detail.component';
+import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
-const mockContact: Contact = {
-  id: mockContactUrn,
-  alias: 'testuser',
-  email: 'test@example.com',
-  firstName: 'Test',
-  surname: 'User',
-  phoneNumbers: ['+15550100'],
-  emailAddresses: ['test@example.com'],
-  serviceContacts: {},
-} as Contact;
+// --- 2. Define Mocks ---
 
-const MOCK_GROUP: ContactGroup = {
-  id: mockGroupUrn,
-  name: 'Test Group',
-  contactIds: [mockContactUrn],
-};
+@Component({
+  selector: 'contacts-page-toolbar',
+  standalone: true,
+  template: '<ng-content></ng-content>',
+  exportAs: 'toolbar'
+})
+class MockContactsPageToolbarComponent {
+  @Input() title = '';
+  mode = signal<'full' | 'compact'>('full');
+}
 
-// --- Mocks ---
-const { mockContactsService } = vi.hoisted(() => {
-  return {
-    mockContactsService: {
-      getContact: vi.fn(),
-      saveContact: vi.fn(),
-      getGroupsForContact: vi.fn(),
-      getLinkedIdentities: vi.fn(), // <-- Added mock
-    },
-  };
-});
+@Component({
+  selector: 'contacts-detail',
+  standalone: true,
+  template: '<div>Mock Detail</div>'
+})
+class MockContactDetailComponent {
+  @Input() contactId!: URN;
+  @Input() startInEditMode = false;
+  @Output() saved = new EventEmitter<void>();
+}
 
+const mockContactUrnString = 'urn:sm:user:user-123';
 const mockActivatedRoute = {
   paramMap: new Subject(),
 };
 
-describe('ContactPageComponent (RxJS-based)', () => {
+describe('ContactPageComponent (Router Wrapper)', () => {
   let fixture: ComponentFixture<ContactPageComponent>;
   let component: ContactPageComponent;
   let router: Router;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    mockContactsService.getContact.mockResolvedValue(mockContact);
-    mockContactsService.saveContact.mockResolvedValue(undefined);
-    mockContactsService.getGroupsForContact.mockResolvedValue([MOCK_GROUP]);
-    mockContactsService.getLinkedIdentities.mockResolvedValue([mockAuthUrn]); // <-- Default return
 
     await TestBed.configureTestingModule({
       imports: [
         RouterTestingModule.withRoutes([]),
         NoopAnimationsModule,
-        ContactPageComponent,
-        ContactFormComponent,
-        ContactsPageToolbarComponent,
-        MatChipsModule,
+        ContactPageComponent, 
       ],
       providers: [
-        { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
       ],
-    }).compileComponents();
+    })
+    .overrideComponent(ContactPageComponent, {
+      // FIX: Explicitly remove the real components
+      remove: { 
+        imports: [
+          ContactDetailComponent,
+          ContactsPageToolbarComponent 
+        ] 
+      },
+      // Add the mocks in their place
+      add: { 
+        imports: [
+          MockContactDetailComponent, 
+          MockContactsPageToolbarComponent
+        ] 
+      }
+    })
+    .compileComponents();
 
     fixture = TestBed.createComponent(ContactPageComponent);
     component = fixture.componentInstance;
-
     router = TestBed.inject(Router);
     vi.spyOn(router, 'navigate');
-
+    
     fixture.detectChanges();
   });
 
@@ -99,71 +93,26 @@ describe('ContactPageComponent (RxJS-based)', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should be in ADD MODE', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => null });
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    expect(mockContactsService.getContact).not.toHaveBeenCalled();
-    expect(component.contactToEdit()).toBeTruthy();
-    expect(component.contactToEdit()?.id).toBeInstanceOf(URN);
-  });
-
-  it('should be in EDIT MODE and fetch linked identities', async () => {
-    const idString = mockContactUrn.toString();
-    mockActivatedRoute.paramMap.next({ get: () => idString });
+  it('should navigate on (close) from TOOLBAR', () => {
+    mockActivatedRoute.paramMap.next({ get: () => mockContactUrnString });
     fixture.detectChanges();
     
-    // 1. Wait for 'getContact' to resolve and update the contactToEdit signal
-    await fixture.whenStable();
-    fixture.detectChanges(); 
+    const closeBtn = fixture.debugElement.query(By.css('[data-testid="close-button"]'));
+    expect(closeBtn).toBeTruthy();
 
-    // Verify Contact fetch (This was already passing)
-    expect(mockContactsService.getContact).toHaveBeenCalledWith(mockContactUrn);
-    expect(component.contactToEdit()).toEqual(mockContact);
-
-    // 2. Wait for 'toObservable' to react and 'getLinkedIdentities' to resolve
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    // Verify Linked Identities fetch (This should now pass)
-    expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(mockContactUrn);
-    expect(component.linkedIdentities()).toEqual([mockAuthUrn]);
+    closeBtn.nativeElement.click();
+    expect(router.navigate).toHaveBeenCalledWith(['/contacts'], expect.anything());
   });
 
-  it('should fetch and display groups for the contact in EDIT MODE', async () => {
-    const idString = mockContactUrn.toString();
-    mockActivatedRoute.paramMap.next({ get: () => idString });
-    fixture.detectChanges();
-    await fixture.whenStable(); // Contact
-    await fixture.whenStable(); // Groups & Links
+  it('should navigate on (saved) from CHILD', () => {
+    mockActivatedRoute.paramMap.next({ get: () => mockContactUrnString });
     fixture.detectChanges();
 
-    expect(mockContactsService.getGroupsForContact).toHaveBeenCalledWith(
-      mockContactUrn
-    );
-    expect(component.groupsForContact()).toEqual([MOCK_GROUP]);
+    const detail = fixture.debugElement.query(By.directive(MockContactDetailComponent));
+    expect(detail).toBeTruthy();
+    
+    detail.triggerEventHandler('saved', null);
 
-    const chips = fixture.nativeElement.querySelectorAll(
-      '[data-testid="group-chip"]'
-    );
-    expect(chips.length).toBe(1);
-  });
-
-  it('should call saveContact and navigate on (save) event', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => null });
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const formComponent = fixture.debugElement.query(
-      By.directive(ContactFormComponent)
-    );
-    formComponent.triggerEventHandler('save', mockContact);
-    await fixture.whenStable();
-
-    expect(mockContactsService.saveContact).toHaveBeenCalledWith(mockContact);
-    expect(router.navigate).toHaveBeenCalledWith(['/contacts'], {
-      queryParams: { tab: 'contacts' },
-    });
+    expect(router.navigate).toHaveBeenCalledWith(['/contacts'], expect.anything());
   });
 });

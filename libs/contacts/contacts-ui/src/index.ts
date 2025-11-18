@@ -8,4 +8,7 @@ export * from './lib/components/contact-group-list/contact-group-list.component'
 export * from './lib/components/contact-group-page-form/contact-group-form.component';
 export * from './lib/components/contact-group-page/contact-group-page.component';
 
+export * from './lib/components/contact-detail/contact-detail.component';
+
 export * from '@nx-platform-application/contacts-data-access';
+
