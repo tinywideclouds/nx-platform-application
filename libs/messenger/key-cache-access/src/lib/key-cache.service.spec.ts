@@ -156,4 +156,24 @@ describe('KeyCacheService', () => {
     expect(mockChatStorageService.storeKey).not.toHaveBeenCalled();
     expect(result).toBe(mockPublicKeys);
   });
+
+  describe('hasKeys', () => {
+    it('should return true if keys are found (cache or network)', async () => {
+      // Simulate success
+      mockChatStorageService.getKey.mockResolvedValue(undefined); // Cache miss
+      mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys); // Net success
+
+      const result = await service.hasKeys(mockUserUrn);
+      expect(result).toBe(true);
+    });
+
+    it('should return false if fetch throws error', async () => {
+      // Simulate 404
+      mockChatStorageService.getKey.mockResolvedValue(undefined);
+      mockSecureKeyService.getKey.mockRejectedValue(new Error('404 Not Found'));
+
+      const result = await service.hasKeys(mockUserUrn);
+      expect(result).toBe(false);
+    });
+  });
 });

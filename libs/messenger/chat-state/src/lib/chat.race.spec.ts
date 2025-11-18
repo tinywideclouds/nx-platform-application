@@ -101,9 +101,10 @@ const mockChatMessage: ChatMessage = {
   id: 'msg-1',
   conversationUrn: mockSenderUrn,
   senderId: mockSenderUrn,
-  timestamp: new Date(mockDecryptedPayload.sentTimestamp),
+  typeId: mockDecryptedPayload.typeId,
+  sentTimestamp: mockDecryptedPayload.sentTimestamp,
+  payloadBytes: mockDecryptedPayload.payloadBytes,
   textContent: mockTextContent,
-  type: 'text',
 };
 
 let mockCurrentUser: WritableSignal<User | null>;

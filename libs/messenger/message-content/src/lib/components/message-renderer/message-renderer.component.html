@@ -1,0 +1,19 @@
+@switch (content().type) {
+  
+  @case ('text') {
+    <p class="text-sm whitespace-pre-wrap">{{ $any(content()).text }}</p>
+  }
+
+  @case ('contact-share') {
+    <messenger-contact-share-card
+      [data]="$any(content()).data"
+      (action)="onViewContact($event)"
+    />
+  }
+
+  @case ('unknown') {
+    <div class="p-2 bg-gray-100 rounded border border-gray-300 text-xs text-gray-500 italic">
+      Unsupported message type: {{ $any(content()).rawType }}
+    </div>
+  }
+}

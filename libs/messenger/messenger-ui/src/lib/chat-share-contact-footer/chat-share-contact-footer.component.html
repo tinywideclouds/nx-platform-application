@@ -1,0 +1,36 @@
+<footer class="flex-shrink-0 p-3 border-t bg-white">
+  <div class="flex items-center space-x-2">
+    
+    <div class="relative flex-grow">
+      <input
+        type="text"
+        [formControl]="searchControl"
+        [matAutocomplete]="auto"
+        placeholder="Share with..."
+        class="w-full p-3 border rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      
+      <mat-autocomplete #auto="matAutocomplete" [displayWith]="displayFn" (optionSelected)="onOptionSelected($event)">
+        @for (contact of filteredContacts(); track contact.id.toString()) {
+          <mat-option [value]="contact">
+            <span class="font-medium">{{ contact.alias }}</span>
+            <span class="text-xs text-gray-500 ml-2">
+              {{ contact.firstName }} {{ contact.surname }}
+            </span>
+          </mat-option>
+        }
+      </mat-autocomplete>
+    </div>
+
+    <button
+      (click)="onSend()"
+      [disabled]="!selectedRecipient()"
+      class="flex-shrink-0 p-3 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+    >
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+      </svg>
+    </button>
+
+  </div>
+</footer>

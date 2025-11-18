@@ -1,5 +1,4 @@
-// --- FILE: libs/messenger/key-cache-access/src/lib/key-cache.service.ts ---
-// (NEW FILE)
+// libs/messenger/key-cache-access/src/lib/key-cache.service.ts
 
 import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
@@ -13,63 +12,39 @@ import {
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 
-/**
- * A "repository" service that provides a persistent, TTL-based
- * cache for user public keys.
- *
- * It orchestrates fetching from the network (via SecureKeyService)
- * and caching in IndexedDB (via ChatStorageService).
- *
- * The ChatService should inject THIS service, not SecureKeyService directly.
- */
 @Injectable({
   providedIn: 'root',
 })
 export class KeyCacheService {
-  // --- Dependencies ---
   private secureKeyService = inject(SecureKeyService);
   private chatStorageService = inject(ChatStorageService);
 
-  // Set a Time-To-Live (TTL) for keys, e.g., 16 or 24 hours
   private readonly hours = 16;
   private readonly KEY_TTL_MS = this.hours * 60 * 60 * 1000;
 
-  /**
-   * Gets a user's public keys, using a persistent cache.
-   *
-   * 1. Checks IndexedDB for a "fresh" key.
-   * 2. If not found or expired, fetches from the network.
-   * 3. Stores the newly fetched key in IndexedDB.
-   */
   public async getPublicKey(urn: URN): Promise<PublicKeys> {
     const keyUrn = urn.toString();
 
     // 1. Check persistent cache
     const cachedEntry = await this.chatStorageService.getKey(keyUrn);
 
-    // 2. Check if it's "fresh" (using Temporal)
+    // 2. Check if it's "fresh"
     if (cachedEntry) {
       const now = Temporal.Now.instant();
       const entryInstant = Temporal.Instant.from(cachedEntry.timestamp);
-      
-      // Calculate age in milliseconds
       const ageMs = now.since(entryInstant, { largestUnit: 'milliseconds' }).milliseconds;
 
       if (ageMs < this.KEY_TTL_MS) {
-        // Cache is fresh. Deserialize and return.
         return deserializeJsonToPublicKeys(cachedEntry.keys);
       }
     }
 
-    // 3. Not in cache or expired: Fetch from network
-    // (This uses SecureKeyService, which has its own L1 in-memory cache)
+    // 3. Fetch from network
     const newKeys: PublicKeys = await this.secureKeyService.getKey(urn);
-
-    // Get a new ISO timestamp from Temporal
     const newTimestamp = Temporal.Now.instant().toString() as ISODateTimeString;
-    // 4. Store in persistent cache
+
+    // 4. Store
     if (newKeys) {
-      // Serialize (PublicKeys -> JSON) before storing
       const serializableKeys = serializePublicKeysToJson(newKeys);
       await this.chatStorageService.storeKey(
         keyUrn,
@@ -79,5 +54,21 @@ export class KeyCacheService {
     }
 
     return newKeys;
+  }
+
+  /**
+   * Checks if public keys exist for a user without throwing an error.
+   * Useful for UI status checks (e.g., enabling/disabling send button).
+   */
+  public async hasKeys(urn: URN): Promise<boolean> {
+    try {
+      // We reuse getPublicKey because it handles the caching logic perfectly.
+      // If it returns keys (from cache or network), we are good.
+      const keys = await this.getPublicKey(urn);
+      return !!keys;
+    } catch (error) {
+      // 404 or Network Error means keys are missing/inaccessible
+      return false;
+    }
   }
 }

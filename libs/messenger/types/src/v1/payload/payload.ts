@@ -11,12 +11,11 @@ import {
   EncryptedMessagePayloadPbSchema,
 } from '@nx-platform-application/messenger-protos/message/v1/payload_pb.js';
 
+import { Message } from '../../lib/chat.model';
+
 // --- Smart Interface ---
-// This is the "smart" object our services will use.
-export interface EncryptedMessagePayload {
-  senderId: URN;
-  sentTimestamp: ISODateTimeString;
-  typeId: URN;
+// This is the "smart" object our services will use. It overlaps the lib chat.model.ts 
+export interface EncryptedMessagePayload extends Message {
   payloadBytes: Uint8Array;
 }
 
