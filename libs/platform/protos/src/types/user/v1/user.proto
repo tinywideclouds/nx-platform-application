@@ -14,6 +14,6 @@ message UserPb {
   string name  = 3;
   // The contact's primary email address.
   string email = 4;
-  // We like structured UIDS
-//  string urn = 5;
+  // Using 'optional' allows you to distinguish between a missing URL and an empty string.
+  optional string profile_url = 5;
 }

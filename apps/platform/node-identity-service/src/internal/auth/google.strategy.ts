@@ -53,6 +53,7 @@ export function configureGoogleStrategy(
     const email = profile.emails?.[0]?.value;
     const idToken = params.id_token;
     const googleId = profile.id; // The provider-specific ID
+    const pictureUrl = profile.photos?.[0]?.value;
 
     if (!email || !idToken || !googleId) {
       const err = new Error('Email, ID token, or Google ID missing from profile.');
@@ -71,6 +72,7 @@ export function configureGoogleStrategy(
         const user: User = {
           id: federatedUrn,
           email: email,
+          profileUrl: pictureUrl,
           alias: decision.alias, // Use alias from the policy decision
         };
 

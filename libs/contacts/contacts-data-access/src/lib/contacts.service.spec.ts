@@ -41,6 +41,7 @@ const {
     equals: vi.fn(() => tableMock),
     toArray: vi.fn(),
     first: vi.fn(),
+    clear: vi.fn(),
   };
 
   const groupTableMock = {
@@ -51,6 +52,7 @@ const {
     where: vi.fn(() => groupTableMock),
     equals: vi.fn(() => groupTableMock),
     toArray: vi.fn(),
+    clear: vi.fn(),
   };
 
   // Mock for the identity_links table
@@ -60,6 +62,7 @@ const {
     equals: vi.fn(() => linksTableMock),
     toArray: vi.fn(),
     first: vi.fn(),
+    clear: vi.fn(),
   };
 
   // Mock for blocked_identities table
@@ -69,6 +72,7 @@ const {
     equals: vi.fn(() => blockedTableMock),
     toArray: vi.fn(),
     bulkDelete: vi.fn(),
+    clear: vi.fn(),
   };
 
   // Mock for pending_identities table
@@ -79,6 +83,7 @@ const {
     first: vi.fn(),
     toArray: vi.fn(),
     bulkDelete: vi.fn(),
+    clear: vi.fn(),
   };
 
   return {
@@ -489,6 +494,19 @@ describe('ContactsStorageService', () => {
 
     it('should create pending$ stream', () => {
       expect(service.pending$).toBeTruthy();
+    });
+  });
+
+  describe('clearDatabase', () => {
+    it('should clear all tables in a transaction', async () => {
+      await service.clearDatabase();
+
+      expect(mockContactsDb.transaction).toHaveBeenCalled();
+      expect(mockDbTable.clear).toHaveBeenCalled();
+      expect(mockDbGroupTable.clear).toHaveBeenCalled();
+      expect(mockDbLinksTable.clear).toHaveBeenCalled();
+      expect(mockDbBlockedTable.clear).toHaveBeenCalled();
+      expect(mockDbPendingTable.clear).toHaveBeenCalled();
     });
   });
 });

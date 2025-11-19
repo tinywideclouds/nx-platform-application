@@ -39,4 +39,8 @@ export class WebKeyDbStore extends PlatformDexieService implements WebKeyStorage
   async deleteJwk(id: string): Promise<void> {
     await this.jwks.delete(id);
   }
+
+   async clearDatabase(): Promise<void> {
+    await this.jwks.clear();
+  }
 }

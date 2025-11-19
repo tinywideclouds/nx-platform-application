@@ -26,18 +26,24 @@ const mockOutboundService = { send: vi.fn() }; // NEW
 const mockMapper = { toView: vi.fn() };
 const mockContactsService = { 
   getAllIdentityLinks: vi.fn().mockResolvedValue([]),
-  getAllBlockedIdentityUrns: vi.fn().mockResolvedValue([])
+  getAllBlockedIdentityUrns: vi.fn().mockResolvedValue([]),
+  clearDatabase: vi.fn().mockResolvedValue(undefined)
 };
 const mockStorageService = {
   loadConversationSummaries: vi.fn().mockResolvedValue([]),
   loadHistory: vi.fn().mockResolvedValue([]),
-  saveMessage: vi.fn()
+  saveMessage: vi.fn(),
+  clearDatabase: vi.fn().mockResolvedValue(undefined)
 };
-const mockCryptoService = { loadMyKeys: vi.fn().mockResolvedValue({}) };
+const mockCryptoService = { 
+  loadMyKeys: vi.fn().mockResolvedValue({}),
+  clearKeys: vi.fn().mockResolvedValue(undefined)
+ };
 
 const mockKeyService = { 
   getPublicKey: vi.fn(), 
-  hasKeys: vi.fn().mockResolvedValue(true) 
+  hasKeys: vi.fn().mockResolvedValue(true),
+  clear: vi.fn().mockResolvedValue(undefined)
 };
 
 // Auth Mock
@@ -45,8 +51,23 @@ const mockUser: User = { id: URN.parse('urn:sm:user:me'), alias: 'Me', email: 'm
 const mockAuthService = {
   sessionLoaded$: new BehaviorSubject<AuthStatusResponse>({ authenticated: true, user: mockUser, token: 'token' }),
   currentUser: signal(mockUser),
-  getJwtToken: vi.fn(() => 'token')
+  getJwtToken: vi.fn(() => 'token'),
+  logout: vi.fn(),
 };
+
+const mockLiveService = {
+  connect: vi.fn(), 
+  status$: new Subject(), 
+  incomingMessage$: new Subject(), 
+  disconnect: vi.fn(),
+}
+
+const mockLogger = {
+  info: vi.fn(), 
+  warn: vi.fn(), 
+  debug: vi.fn(), 
+  error: vi.fn()
+}
 
 describe('ChatService (Orchestrator)', () => {
   let service: ChatService;
@@ -71,8 +92,8 @@ describe('ChatService (Orchestrator)', () => {
         { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: KeyCacheService, useValue: mockKeyService },
-        { provide: Logger, useValue: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() } },
-        { provide: ChatLiveDataService, useValue: { connect: vi.fn(), status$: new Subject(), incomingMessage$: new Subject(), disconnect: vi.fn() } },
+        { provide: Logger, useValue: mockLogger},
+        { provide: ChatLiveDataService, useValue: mockLiveService },
         { provide: KeyCacheService, useValue: {} },
         { provide: ChatDataService, useValue: {} },
         { provide: ChatSendService, useValue: {} }
@@ -154,6 +175,27 @@ describe('ChatService (Orchestrator)', () => {
 
     expect(mockKeyService.hasKeys).not.toHaveBeenCalled();
     expect(service.isRecipientKeyMissing()).toBe(false);
+  });
+
+  it('should orchestrate a secure logout', async () => {
+    await service.logout();
+
+    // 1. Stop Network
+    expect(mockLiveService.disconnect).toHaveBeenCalled();
+
+    // 2. Wipe Data
+    expect(mockStorageService.clearDatabase).toHaveBeenCalled();
+    expect(mockContactsService.clearDatabase).toHaveBeenCalled();
+    expect(mockKeyService.clear).toHaveBeenCalled();
+    expect(mockCryptoService.clearKeys).toHaveBeenCalled();
+
+    // 3. Clear State (Verify signals are reset)
+    expect((service as any).myKeys()).toBeNull();
+    expect(service.activeConversations()).toEqual([]);
+    expect(service.messages()).toEqual([]);
+
+    // 4. Auth Logout
+    expect(mockAuthService.logout).toHaveBeenCalled();
   });
 
 });

@@ -38,6 +38,7 @@ export default [
             '@nx-platform-application/platform-protos/**',
             '@nx-platform-application/messenger-protos/**',
             '@nx-platform-application/platform-auth-data-access/testing',
+            '@nx-platform-application/platform-auth-ui/mocks',
           ],
           /**
            * THE "GATEKEEPER"

@@ -49,11 +49,20 @@
       "@nx-platform-application/key-cache-access": [
         "libs/messenger/key-cache-access/src/index.ts"
       ],
+      "@nx-platform-application/message-content": [
+        "libs/messenger/message-content/src/index.ts"
+      ],
       "@nx-platform-application/messenger-crypto-access": [
-        "libs/messenger/messenger-crypto-access/src/index.ts"
+        "libs/messenger/crypto-access/src/index.ts"
       ],
       "@nx-platform-application/messenger-key-access": [
-        "libs/messenger/messenger-key-access/src/index.ts"
+        "libs/messenger/key-access/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-key-storage": [
+        "libs/messenger/key-storage/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-private-storage": [
+        "libs/messenger/private-storage/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"

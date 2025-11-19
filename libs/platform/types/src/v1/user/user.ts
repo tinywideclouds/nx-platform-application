@@ -10,6 +10,7 @@ import { Resource } from '../../lib/resource';
 export interface User extends Resource {
   alias: string;
   email: string;
+  profileUrl?: string;
 }
 
 export function userToPb(user: User): UserPb {
@@ -17,6 +18,7 @@ export function userToPb(user: User): UserPb {
     id: user.id.toString(),
     alias: user.alias,
     email: user.email,
+    profileUrl: user.profileUrl,
   });
 }
 
@@ -25,5 +27,6 @@ export function userFromPb(userPb: UserPb): User {
     id: URN.parse(userPb.id),
     alias: userPb.alias,
     email: userPb.email,
+    profileUrl: userPb.profileUrl,
   };
 }

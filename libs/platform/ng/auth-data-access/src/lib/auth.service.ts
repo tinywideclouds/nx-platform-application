@@ -11,9 +11,10 @@ import { AUTH_API_URL } from './auth-data.config';
 interface AuthStatusResponseDTO {
   authenticated: boolean;
   user: {
-    id: string; // <-- The ID is a string here
+    id: string; // <-- The ID is a string but MUST be parsable as an URN
     alias: string;
     email: string;
+    profileUrl: string;
   } | null;
   token: string | null;
 }
@@ -69,6 +70,7 @@ export class AuthService implements IAuthService {
               id: URN.parse(dto.user.id), // <-- PARSE THE STRING
               alias: dto.user.alias,
               email: dto.user.email,
+              profileUrl: dto.user.profileUrl,
             };
 
             return {

@@ -10,14 +10,15 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+// FIX: Inject the new KeyStorageService instead of ChatStorageService
+import { KeyStorageService } from '@nx-platform-application/messenger-key-storage';
 
 @Injectable({
   providedIn: 'root',
 })
 export class KeyCacheService {
   private secureKeyService = inject(SecureKeyService);
-  private chatStorageService = inject(ChatStorageService);
+  private keyStorage = inject(KeyStorageService);
 
   private readonly hours = 16;
   private readonly KEY_TTL_MS = this.hours * 60 * 60 * 1000;
@@ -25,8 +26,8 @@ export class KeyCacheService {
   public async getPublicKey(urn: URN): Promise<PublicKeys> {
     const keyUrn = urn.toString();
 
-    // 1. Check persistent cache
-    const cachedEntry = await this.chatStorageService.getKey(keyUrn);
+    // 1. Check persistent cache (using new service)
+    const cachedEntry = await this.keyStorage.getKey(keyUrn);
 
     // 2. Check if it's "fresh"
     if (cachedEntry) {
@@ -46,7 +47,7 @@ export class KeyCacheService {
     // 4. Store
     if (newKeys) {
       const serializableKeys = serializePublicKeysToJson(newKeys);
-      await this.chatStorageService.storeKey(
+      await this.keyStorage.storeKey(
         keyUrn,
         serializableKeys,
         newTimestamp
@@ -56,19 +57,20 @@ export class KeyCacheService {
     return newKeys;
   }
 
-  /**
-   * Checks if public keys exist for a user without throwing an error.
-   * Useful for UI status checks (e.g., enabling/disabling send button).
-   */
   public async hasKeys(urn: URN): Promise<boolean> {
     try {
-      // We reuse getPublicKey because it handles the caching logic perfectly.
-      // If it returns keys (from cache or network), we are good.
       const keys = await this.getPublicKey(urn);
       return !!keys;
     } catch (error) {
-      // 404 or Network Error means keys are missing/inaccessible
       return false;
     }
+  }
+
+  /**
+   * Wipes the public key cache.
+   * Used on Logout.
+   */
+  public async clear(): Promise<void> {
+    await this.keyStorage.clearDatabase();
   }
 }

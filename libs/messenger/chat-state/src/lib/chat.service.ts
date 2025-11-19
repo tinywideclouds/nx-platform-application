@@ -194,17 +194,36 @@ export class ChatService implements OnDestroy {
       
       if (!urn) {
         this.messages.set([]);
-        this.isRecipientKeyMissing.set(false); // Reset
+        this.isRecipientKeyMissing.set(false);
         return;
       }
 
-      // 1. Check Key Availability (Fire and Forget / Non-blocking for load)
+      // 1. Check Key Availability
       this.checkRecipientKeys(urn);
 
       // 2. Load History
       const history = await this.storageService.loadHistory(urn);
       const viewMessages = history.map(msg => this.mapper.toView(msg));
       this.messages.set(viewMessages);
+
+      // --- FIX: Optimistic Conversation List Update ---
+      // If this conversation isn't in the sidebar list yet, add a placeholder.
+      const urnString = urn.toString();
+      const exists = this.activeConversations().some(
+        c => c.conversationUrn.toString() === urnString
+      );
+
+      if (!exists) {
+        const newSummary: ConversationSummary = {
+          conversationUrn: urn,
+          latestSnippet: '', // Empty start
+          timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+          unreadCount: 0
+        };
+        
+        // Prepend to top of list
+        this.activeConversations.update(list => [newSummary, ...list]);
+      }
     });
   }
 
@@ -304,6 +323,51 @@ export class ChatService implements OnDestroy {
 
   private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
     return urn1.toString() === myUrn.toString() ? urn2 : urn1;
+  }
+
+  /**
+   * Performs a secure logout:
+   * 1. Disconnects WebSocket / Stops Polling.
+   * 2. Wipes Local Database (Messages, Contacts, Public Keys, Private Keys).
+   * 3. Clears State Signals.
+   * 4. Calls AuthService to revoke token.
+   */
+  public async logout(): Promise<void> {
+    this.logger.info('ChatService: Logging out and wiping local data...');
+
+    // 1. Stop Network
+    this.liveService.disconnect();
+    this.destroy$.next(); // Kills interval pollers
+
+    // 2. Wipe Data (Scorched Earth)
+    try {
+      await Promise.all([
+        // Wipe Messages & Conversations
+        this.storageService.clearDatabase(),
+        // Wipe Contacts, Groups, Links, Blocklists
+        this.contactsService.clearDatabase(),
+        // Wipe Cached Public Keys
+        this.keyService.clear(),
+        // Wipe Private Keys (The most important part!)
+        this.cryptoService.clearKeys()
+      ]);
+    } catch (e) {
+      this.logger.error('Logout cleanup failed', e);
+      // We continue with logout even if DB wipe fails to ensure user is at least signed out of Auth
+    }
+
+    // 3. Clear Memory State
+    this.myKeys.set(null);
+    this.identityLinkMap.set(new Map());
+    this.blockedSet.set(new Set());
+    
+    this.activeConversations.set([]);
+    this.messages.set([]);
+    this.selectedConversation.set(null);
+    this.isRecipientKeyMissing.set(false);
+
+    // 4. Auth Logout
+    this.authService.logout();
   }
 
   ngOnDestroy(): void {

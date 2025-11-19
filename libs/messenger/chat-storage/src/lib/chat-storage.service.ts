@@ -1,10 +1,11 @@
+// libs/messenger/chat-storage/src/lib/chat-storage.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import {
   DecryptedMessage,
   ConversationSummary,
-  MessageRecord,
-  PublicKeyRecord
+  MessageRecord
 } from './chat-storage.models';
 import { MessengerDatabase } from './db/messenger.database';
 
@@ -14,21 +15,13 @@ import { MessengerDatabase } from './db/messenger.database';
 export class ChatStorageService {
   private readonly db = inject(MessengerDatabase);
 
-  async storeKey(
-    urn: string,
-    keys: Record<string, string>,
-    timestamp: ISODateTimeString
-  ): Promise<void> {
-    const record: PublicKeyRecord = { urn, keys, timestamp };
-    await this.db.publicKeys.put(record);
-  }
+  // Key methods REMOVED
 
-  async getKey(urn: string): Promise<PublicKeyRecord | null> {
-    const record = await this.db.publicKeys.get(urn);
-    return record || null;
-  }
-
-  async clearAllMessages(): Promise<void> {
+  /**
+   * Wipes all message history.
+   * Used on Logout.
+   */
+  async clearDatabase(): Promise<void> {
     await this.db.messages.clear();
   }
 
@@ -55,7 +48,6 @@ export class ChatStorageService {
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     const newestMessages = new Map<string, MessageRecord>();
     
-    // Use the strongly typed 'messages' table directly
     await this.db.messages
       .orderBy('sentTimestamp')
       .reverse()
@@ -70,8 +62,10 @@ export class ChatStorageService {
       summaries.push({
         conversationUrn: URN.parse(record.conversationUrn),
         timestamp: record.sentTimestamp,
-        latestSnippet: new TextDecoder().decode(record.payloadBytes),
-        unreadCount: 0, // Stubbed for now
+        // TODO: Use the MessageContentParser service here eventually for "Smart Snippets"
+        // For now, naive text decoding is a safe fallback
+        latestSnippet: this.decodeSnippet(record.payloadBytes),
+        unreadCount: 0, 
       });
     }
     return summaries;
@@ -85,5 +79,13 @@ export class ChatStorageService {
       typeId: URN.parse(record.typeId),
       conversationUrn: URN.parse(record.conversationUrn),
     };
+  }
+
+  private decodeSnippet(bytes: Uint8Array): string {
+    try {
+      return new TextDecoder().decode(bytes);
+    } catch {
+      return 'Message';
+    }
   }
 }

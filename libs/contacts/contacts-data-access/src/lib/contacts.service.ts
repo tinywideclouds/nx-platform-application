@@ -333,4 +333,27 @@ export class ContactsStorageService {
         await this.db.pending_identities.bulkDelete(idsToDelete);
     }
   }
+
+  
+  /**
+   * Wipes all contact data from the local device.
+   * Used on Logout.
+   */
+  async clearDatabase(): Promise<void> {
+    await this.db.transaction('rw', 
+      [this.db.contacts, 
+      this.db.contactGroups, 
+      this.db.identity_links, 
+      this.db.blocked_identities,
+      this.db.pending_identities], 
+      () => {
+        return Promise.all([
+          this.db.contacts.clear(),
+          this.db.contactGroups.clear(),
+          this.db.identity_links.clear(),
+          this.db.blocked_identities.clear(),
+          this.db.pending_identities.clear()
+        ]);
+    });
+  }
 }

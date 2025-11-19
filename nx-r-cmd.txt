@@ -1,0 +1,10 @@
+// the contacts in isolation
+nx serve contacts-app     
+
+// the messenger app with no services running
+nx serve messenger-app -c mock
+
+//Live services init
+gcloud auth application-default login
+// the messenger app with local services running
+nx serve messenger-app -c development

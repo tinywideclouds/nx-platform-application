@@ -33,6 +33,7 @@ export function configurePassport(
       id: u.id.toString(), // Store the stringified URN
       email: u.email,
       alias: u.alias,
+      profileUrl: u.profileUrl,
       token: token,
     };
     done(null, sessionData);

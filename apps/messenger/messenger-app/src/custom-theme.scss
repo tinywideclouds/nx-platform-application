@@ -65,6 +65,14 @@ html {
   ));
 }
 
+.short-toolbar {
+  @include mat.toolbar-overrides((
+    container-background-color: orange,
+    container-text-color: red,
+    standard-height: 3rem,
+  ));
+}
+
 .form-view-mode {
   
   // Call the same mixin, but scoped to this class

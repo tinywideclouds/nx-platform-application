@@ -23,4 +23,6 @@ export interface WebKeyStorageProvider {
    * @param id The unique ID of the key to delete.
    */
   deleteJwk(id: string): Promise<void>;
+
+   clearDatabase(): Promise<void>;
 }

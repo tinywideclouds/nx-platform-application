@@ -1,7 +1,8 @@
+// apps/messenger/messenger-app/src/app/app.routes.ts
+
 import { Routes } from '@angular/router';
 import {
-  MessengerHomePageComponent,
-  ChatWindowComponent,
+  MESSENGER_ROUTES, // <-- Import from lib
 } from '@nx-platform-application/messenger-ui';
 
 import {
@@ -28,15 +29,10 @@ export const appRoutes: Routes = [
   },
   {
     path: '', // Main app route
-    component: MessengerHomePageComponent,
-    canActivate: [authGuard], // Protect this route
-    children: [
-      {
-        path: 'chat/:id',
-        component: ChatWindowComponent,
-        // No extra guard needed, parent is already protected
-      },
-    ],
+    // We remove the explicit component here because MESSENGER_ROUTES 
+    // already defines the top-level component at its path: ''
+    canActivate: [authGuard],
+    children: MESSENGER_ROUTES // <-- Delegate to Lib Routes
   },
   // Fallback route
   { path: '**', redirectTo: '' },

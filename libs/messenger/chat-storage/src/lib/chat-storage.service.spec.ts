@@ -1,9 +1,11 @@
+// libs/messenger/chat-storage/src/lib/chat-storage.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
 import { Temporal } from '@js-temporal/polyfill';
 import { vi } from 'vitest';
 import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import { ChatStorageService } from './chat-storage.service';
-import { DecryptedMessage, PublicKeyRecord } from './chat-storage.models';
+import { DecryptedMessage } from './chat-storage.models';
 import { MessengerDatabase } from './db/messenger.database';
 
 // --- Mocks ---
@@ -21,10 +23,9 @@ const { mockDbTable, mockMessengerDb } = vi.hoisted(() => {
   };
   return {
     mockDbTable: tableMock,
-    // Mock the Database Class Instance
     mockMessengerDb: {
       messages: tableMock,
-      publicKeys: tableMock,
+      // publicKeys REMOVED from mock
     }
   };
 });
@@ -54,12 +55,6 @@ const mockMessageRecord = {
   conversationUrn: mockConvoUrn.toString(),
 };
 
-const mockKeyRecord: PublicKeyRecord = {
-  urn: mockRecipientUrn.toString(),
-  keys: { encKey: 'b64...', sigKey: 'b64...' },
-  timestamp: mockTimestamp,
-};
-
 describe('ChatStorageService', () => {
   let service: ChatStorageService;
 
@@ -69,7 +64,6 @@ describe('ChatStorageService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatStorageService,
-        // Provide the mock DB instead of the real MessengerDatabase
         { provide: MessengerDatabase, useValue: mockMessengerDb },
       ],
     });
@@ -78,7 +72,6 @@ describe('ChatStorageService', () => {
 
     // Default mock implementations
     mockDbTable.put.mockResolvedValue(undefined);
-    mockDbTable.get.mockResolvedValue(mockKeyRecord);
     mockDbTable.sortBy.mockResolvedValue([mockMessageRecord]);
     mockDbTable.each.mockImplementation((callback: any) => {
       callback(mockMessageRecord);
@@ -90,28 +83,12 @@ describe('ChatStorageService', () => {
     expect(service).toBeTruthy();
   });
 
-  // --- Key Methods ---
-
-  it('should store a public key record', async () => {
-    await service.storeKey(
-      mockKeyRecord.urn,
-      mockKeyRecord.keys,
-      mockKeyRecord.timestamp
-    );
-    // Verify we accessed the publicKeys table specifically
-    expect(mockMessengerDb.publicKeys.put).toHaveBeenCalledWith(mockKeyRecord);
-  });
-
-  it('should get a public key record by URN', async () => {
-    const result = await service.getKey(mockKeyRecord.urn);
-    expect(mockMessengerDb.publicKeys.get).toHaveBeenCalledWith(mockKeyRecord.urn);
-    expect(result).toBe(mockKeyRecord);
-  });
+  // Key tests REMOVED
 
   // --- Message Methods ---
 
-  it('should clear all messages', async () => {
-    await service.clearAllMessages();
+  it('should clear database (messages only)', async () => {
+    await service.clearDatabase();
     expect(mockMessengerDb.messages.clear).toHaveBeenCalled();
   });
 

@@ -57,4 +57,5 @@ export class ContactsDatabase extends PlatformDexieService {
     this.blocked_identities = this.table('blocked_identities');
     this.pending_identities = this.table('pending_identities');
   }
+
 }

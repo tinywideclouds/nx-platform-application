@@ -1,5 +1,3 @@
-// libs/messenger/messenger-ui/src/lib/messenger-home-page/messenger-home-page.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
@@ -13,23 +11,18 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterOutlet, Event, NavigationEnd } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
 
-// --- Our Services ---
+// Services
 import { ChatService } from '@nx-platform-application/chat-state';
 import {
   ContactsStorageService,
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { URN } from '@nx-platform-application/platform-types';
+import { Logger } from '@nx-platform-application/console-logger';
 
-import {
-  URN,
-} from '@nx-platform-application/platform-types';
-
-import {
-  Logger
-} from '@nx-platform-application/console-logger';
-
-// --- Our "Dumb" UI Libs ---
+// Components
 import {
   ChatConversationListComponent,
   ConversationViewItem,
@@ -38,6 +31,11 @@ import {
   ContactListComponent,
   ContactGroupListComponent,
 } from '@nx-platform-application/contacts-ui';
+import { MessengerToolbarComponent } from '../messenger-toolbar/messenger-toolbar.component';
+import { LogoutDialogComponent } from '../logout-dialog/logout-dialog.component'; // <-- Import
+
+// Modules
+import { MatDialog, MatDialogModule } from '@angular/material/dialog'; // <-- Import
 
 @Component({
   selector: 'messenger-home-page',
@@ -48,6 +46,8 @@ import {
     ChatConversationListComponent,
     ContactListComponent,
     ContactGroupListComponent,
+    MessengerToolbarComponent,
+    MatDialogModule, // <-- Add Module
   ],
   templateUrl: './messenger-home-page.component.html',
   styleUrl: './messenger-home-page.component.scss',
@@ -56,48 +56,33 @@ import {
 export class MessengerHomePageComponent {
   private chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
+  private authService = inject(IAuthService);
   private router = inject(Router);
   private logger = inject(Logger);
+  private dialog = inject(MatDialog); // <-- Inject
 
+  currentUser = this.authService.currentUser;
+  
   private routerEvents$ = this.router.events;
-
   isChatActive = toSignal(
     this.routerEvents$.pipe(
-      filter((event: Event): event is NavigationEnd => 
-        event instanceof NavigationEnd
-      ),
-      map((event: NavigationEnd) => 
-        event.urlAfterRedirects.includes('/chat/')
-      )
+      filter((event: Event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event: NavigationEnd) => event.urlAfterRedirects.includes('/chat/'))
     ),
     { initialValue: this.router.url.includes('/chat/') }
   );
 
-  // --- 1. Get State from Services ---
   private conversations = this.chatService.activeConversations;
-  contacts = toSignal(this.contactsService.contacts$, {
-    initialValue: [] as Contact[],
-  });
-  groups = toSignal(this.contactsService.groups$, {
-    initialValue: [] as ContactGroup[],
-  });
-  selectedConversationId = computed(() =>
-    this.chatService.selectedConversation()?.toString()
-  );
+  contacts = toSignal(this.contactsService.contacts$, { initialValue: [] });
+  groups = toSignal(this.contactsService.groups$, { initialValue: [] });
+  selectedConversationId = computed(() => this.chatService.selectedConversation()?.toString());
 
+  showNewChatPicker = signal(false);
   startChatView: WritableSignal<'contacts' | 'groups'> = signal('contacts');
 
-  // --- 3. Create Lookups (for mapping) ---
-  private contactsMap = computed(() =>
-    // Create map with STRING keys
-    new Map(this.contacts().map((c) => [c.id.toString(), c]))
-  );
-  private groupsMap = computed(() =>
-    // Create map with STRING keys
-    new Map(this.groups().map((g) => [g.id.toString(), g]))
-  );
+  private contactsMap = computed(() => new Map(this.contacts().map((c) => [c.id.toString(), c])));
+  private groupsMap = computed(() => new Map(this.groups().map((g) => [g.id.toString(), g])));
 
-  // --- 4. Compute the "View Model" ---
   conversationViewItems = computed<ConversationViewItem[]>(() => {
     const contactsMap = this.contactsMap();
     const groupsMap = this.groupsMap();
@@ -105,22 +90,20 @@ export class MessengerHomePageComponent {
 
     return this.conversations().map((summary) => {
       const conversationUrn = summary.conversationUrn;
-      // --- FIX: Use string for map lookup ---
       const conversationUrnString = conversationUrn.toString();
       let name = 'Unknown';
       let initials = '?';
       let profilePictureUrl: string | undefined;
 
       if (summary.conversationUrn.entityType == 'user') {
-        const contact = contactsMap.get(conversationUrnString); // <-- FIX
+        const contact = contactsMap.get(conversationUrnString);
         if (contact) {
           name = contact.alias;
           initials = (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
-          profilePictureUrl =
-            contact.serviceContacts['messenger']?.profilePictureUrl;
+          profilePictureUrl = contact.serviceContacts['messenger']?.profilePictureUrl;
         }
       } else if (summary.conversationUrn.entityType == 'group') {
-        const group = groupsMap.get(conversationUrnString); // <-- FIX
+        const group = groupsMap.get(conversationUrnString);
         if (group) {
           name = group.name;
           initials = 'G';
@@ -135,51 +118,55 @@ export class MessengerHomePageComponent {
         initials: initials.toUpperCase() || '?',
         profilePictureUrl: profilePictureUrl,
         unreadCount: summary.unreadCount,
-        // --- FIX: Compare two strings ---
         isActive: selectedId === conversationUrnString,
       };
     });
   });
 
-  // --- 5. Compute the View Mode ---
-  viewMode = computed(() => {
-    if (this.conversations().length > 0) {
-      return 'conversations';
-    }
-    if (this.contacts().length > 0) {
-      return 'start_conversation';
-    }
-    return 'new_user_welcome';
-  });
+  // --- Actions ---
 
-  // --- 6. Event Handlers ---
-  
-  // --- FIX: Event is now a URN ---
+  onComposeClick(): void {
+    this.showNewChatPicker.set(true);
+  }
+
+  onAddressBookClick(): void {
+    this.router.navigate(['/contacts']);
+  }
+
+  // --- LOGOUT LOGIC ---
+  onLogoutClick(): void {
+    // 1. Open Dialog
+    const dialogRef = this.dialog.open(LogoutDialogComponent);
+
+    // 2. Wait for result
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result === true) {
+        this.performLogout();
+      }
+    });
+  }
+
+  private performLogout(): void {
+    // 3. Call Service to wipe data
+    this.chatService.logout().then(() => {
+      // 4. Navigate to login
+      this.router.navigate(['/login']);
+    });
+  }
+
   onSelectConversation(urn: URN): void {
     if (urn) {
+      this.showNewChatPicker.set(false);
       this.chatService.loadConversation(urn);
-      // --- FIX: Navigate with string ---
       this.router.navigate(['', 'chat', urn.toString()]);
     }
   }
 
   onSelectContactToChat(contact: Contact): void {
-    const urn = contact.id; // Get URN directly
-  
-    if (urn) {
-      this.chatService.loadConversation(urn); 
-      // --- FIX: Navigate with string ---
-      this.router.navigate(['', 'chat', urn.toString()]);
-    }
+    this.onSelectConversation(contact.id);
   }
 
   onSelectGroupToChat(group: ContactGroup): void {
-    const urn = group.id; // Get URN directly
-    
-    if (urn) {
-      this.chatService.loadConversation(urn);
-      // --- FIX: Navigate with string ---
-      this.router.navigate(['', 'chat', urn.toString()]);
-    }
+    this.onSelectConversation(group.id);
   }
 }

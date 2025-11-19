@@ -14,8 +14,12 @@ import {
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 import {
   ChatStorageService,
-  PublicKeyRecord,
 } from '@nx-platform-application/chat-storage';
+
+import { 
+  PublicKeyRecord
+} from '@nx-platform-application/messenger-key-storage';
+
 
 import { KeyCacheService } from './key-cache.service';
 
@@ -36,6 +40,7 @@ const mockSecureKeyService = {
 const mockChatStorageService = {
   getKey: vi.fn(),
   storeKey: vi.fn(),
+  clearDatabase: vi.fn(),
 };
 
 // --- Fixtures (Refactored for Temporal) ---
@@ -174,6 +179,13 @@ describe('KeyCacheService', () => {
 
       const result = await service.hasKeys(mockUserUrn);
       expect(result).toBe(false);
+    });
+  });
+
+  describe('clear', () => {
+    it('should call clearDatabase on storage service', async () => {
+      await service.clear();
+      expect(mockChatStorageService.clearDatabase).toHaveBeenCalled();
     });
   });
 });

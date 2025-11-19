@@ -21,6 +21,7 @@ const { mockDexieTable, mockConstructorSpy } = vi.hoisted(() => ({
     get: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
+    clear: vi.fn(),
   },
   // We use this spy to verify the super() call arguments
   mockConstructorSpy: vi.fn(),
@@ -88,6 +89,13 @@ describe('WebKeyDbStore', () => {
     it('should call the delete method on the table', async () => {
       await service.deleteJwk('user-to-delete');
       expect(mockDexieTable.delete).toHaveBeenCalledWith('user-to-delete');
+    });
+  });
+
+  describe('clear', () => {
+    it('should call clear on the table', async () => {
+      await service.clearDatabase();
+      expect(mockDexieTable.clear).toHaveBeenCalled();
     });
   });
 });
