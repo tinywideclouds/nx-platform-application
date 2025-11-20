@@ -1,28 +1,55 @@
-import { HttpInterceptorFn, HttpHandlerFn, HttpRequest } from '@angular/common/http';
+// libs/platform/ng/auth-data-access/src/lib/auth.interceptor.ts
+
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { IAuthService } from './auth.service'; // <-- Import the interface
+import { catchError, switchMap, throwError } from 'rxjs';
+import { IAuthService } from './auth.service';
 import { AUTH_API_URL } from './auth-data.config';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const authService = inject(IAuthService); // <-- Inject the interface
-  const authApiUrl = inject(AUTH_API_URL); // Inject the token
-  let authReq = req;
-
-  // Check if the request is going to the auth service itself
-  if (req.url.startsWith(authApiUrl)) {
-    authReq = req.clone({
-      withCredentials: true,
-    });
-  } else {
-    // This is for all other API calls (like to key-service)
-    const token = authService.getJwtToken(); // Use the correct method
+  const authService = inject(IAuthService);
+  const authApiUrl = inject(AUTH_API_URL);
+  
+  // Helper to clone request with current token
+  const addToken = (request: typeof req) => {
+    const token = authService.getJwtToken();
     if (token) {
-      authReq = req.clone({
-        setHeaders: {
-          Authorization: `Bearer ${token}`,
-        },
+      return request.clone({
+        setHeaders: { Authorization: `Bearer ${token}` },
       });
     }
+    return request;
+  };
+
+  let authReq = req;
+
+  // 1. Handle Auth API requests (Session/Login)
+  if (req.url.startsWith(authApiUrl)) {
+    authReq = req.clone({ withCredentials: true });
+    // Pass through without retry logic to avoid infinite loops on /status 401s
+    return next(authReq); 
   }
-  return next(authReq);
+
+  // 2. Handle Service requests (Keys/Messages)
+  authReq = addToken(req);
+
+  return next(authReq).pipe(
+    catchError((error) => {
+      // 3. Intercept 401s
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        // 4. Attempt Silent Refresh
+        return authService.checkAuthStatus().pipe(
+          switchMap((status) => {
+            if (status?.token) {
+              // 5. Refresh Successful: Retry original request with new token
+              return next(addToken(req));
+            }
+            // 6. Refresh Failed: Propagate error (AuthGuard will likely catch this later)
+            return throwError(() => error);
+          })
+        );
+      }
+      return throwError(() => error);
+    })
+  );
 };

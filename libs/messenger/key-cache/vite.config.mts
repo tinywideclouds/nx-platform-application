@@ -17,7 +17,8 @@ export default defineConfig(() => ({
     },
     // You also must externalize your dependencies
     rollupOptions: {
-      external: ['@angular/core',
+      external: [
+        '@angular/core',
         '@angular/common/http',
         'rxjs',
 
@@ -27,7 +28,7 @@ export default defineConfig(() => ({
         '@nx-platform-application/platform-types',
         '@nx-platform-application/platform-storage',
         '@nx-platform-application/messenger-key-access',
-        '@nx-platform-application/chat-storage'
+        '@nx-platform-application/chat-storage',
       ],
     },
   },

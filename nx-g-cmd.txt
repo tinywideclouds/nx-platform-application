@@ -41,11 +41,13 @@ nx g @nx/angular:application --directory=apps/messenger/messenger-app --tags="sc
 
 nx g @nx/angular:library --name=message-content --directory=libs/messenger/message-content --tags="scope:messenger"    
 
-
 nx g @nx/angular:library --name=messenger-key-storage --directory=libs/messenger/key-storage --tags="scope:messenger"  
-
 
 nx g @nx/angular:library --name=messenger-private-storage --directory=libs/messenger/messenger-private-storage --tags="scope:messenger"   
 
+
+nx g @nx/workspace:move --project=key-cache-access --destination=libs/messenger/key-cache
+
+nx g @nx/workspace:move --project=key-cache-access --newProjectName=key-cache
 
 

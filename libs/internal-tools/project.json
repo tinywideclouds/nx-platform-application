@@ -10,7 +10,6 @@
       "outputs": ["{options.outputPath}"],
       "options": {
         "outputPath": "dist/libs/internal-tools",
-        "main": "libs/internal-tools/src/index.ts",
         "tsConfig": "libs/internal-tools/tsconfig.lib.json",
         "assets": [
           "libs/internal-tools/*.md",

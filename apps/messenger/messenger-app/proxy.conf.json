@@ -20,11 +20,14 @@
       "^/api/messenger": "/api"
     }
   },
-  "/keys": {
+  "/api/keys": {
     "target": "http://localhost:8081",
     "secure": false,
     "logLevel": "debug",
-    "changeOrigin": true
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api/keys": "/keys"
+    }
   },
   "/connect": {
     "target": "ws://localhost:8083",

@@ -47,7 +47,7 @@
         "libs/internal-tools/src/index.ts"
       ],
       "@nx-platform-application/key-cache-access": [
-        "libs/messenger/key-cache-access/src/index.ts"
+        "libs/messenger/key-cache/src/index.ts"
       ],
       "@nx-platform-application/message-content": [
         "libs/messenger/message-content/src/index.ts"

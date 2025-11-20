@@ -1,10 +1,7 @@
 import '@angular/compiler';
 // Import the setup-snapshots for compatibility instead of setup-zone
 import '@analogjs/vitest-angular/setup-snapshots';
-import {
-  provideZonelessChangeDetection,
-  NgModule
-} from '@angular/core';
+import { provideZonelessChangeDetection, NgModule } from '@angular/core';
 import { getTestBed } from '@angular/core/testing';
 import {
   BrowserTestingModule,

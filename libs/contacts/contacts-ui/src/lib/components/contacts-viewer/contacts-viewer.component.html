@@ -1,4 +1,4 @@
-<contacts-page-toolbar #toolbar>
+<contacts-page-toolbar #toolbar [forceIconMode]="forceToolbarIcons()">
   @if (!toolbar.mode()) {
 
   }
@@ -77,30 +77,25 @@
 
   <mat-tab>
     <ng-template mat-tab-label>
-      <div class="button-icon-outer">
-        <mat-icon 
-          class="text-gray-600" 
-          matTooltip="Manage Requests & Blocks"
-        >
-          add_moderator
-        </mat-icon>
-      </div>
+      <mat-icon 
+        class="text-gray-600" 
+        matTooltip="Manage Requests & Blocks"
+      >
+        shield
+      </mat-icon>
     </ng-template>
 
     <ng-template matTabContent>
       <div class="p-4 space-y-6">
-        
         <contacts-pending-list 
           [pending]="pending()"
           (approve)="approveIdentity($event)"
           (block)="blockPending($event)"
         />
-
         <contacts-blocked-list
           [blocked]="blocked()"
           (unblock)="unblockIdentity($event)"
         />
-
       </div>
     </ng-template>
   </mat-tab>

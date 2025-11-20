@@ -10,7 +10,6 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
-// FIX: Inject the new KeyStorageService instead of ChatStorageService
 import { KeyStorageService } from '@nx-platform-application/messenger-key-storage';
 
 @Injectable({
@@ -33,7 +32,9 @@ export class KeyCacheService {
     if (cachedEntry) {
       const now = Temporal.Now.instant();
       const entryInstant = Temporal.Instant.from(cachedEntry.timestamp);
-      const ageMs = now.since(entryInstant, { largestUnit: 'milliseconds' }).milliseconds;
+      const ageMs = now.since(entryInstant, {
+        largestUnit: 'milliseconds',
+      }).milliseconds;
 
       if (ageMs < this.KEY_TTL_MS) {
         return deserializeJsonToPublicKeys(cachedEntry.keys);
@@ -47,11 +48,7 @@ export class KeyCacheService {
     // 4. Store
     if (newKeys) {
       const serializableKeys = serializePublicKeysToJson(newKeys);
-      await this.keyStorage.storeKey(
-        keyUrn,
-        serializableKeys,
-        newTimestamp
-      );
+      await this.keyStorage.storeKey(keyUrn, serializableKeys, newTimestamp);
     }
 
     return newKeys;
@@ -66,6 +63,18 @@ export class KeyCacheService {
     }
   }
 
+  /**
+   * Uploads public keys to the backend via the SecureKeyService.
+   * Used during key generation and handle claiming.
+   */
+  public async storeKeys(urn: URN, keys: PublicKeys): Promise<void> {
+    await this.secureKeyService.storeKeys(urn, keys);
+
+    // Optional: We could also cache them locally immediately to avoid a round-trip read later.
+    const serializableKeys = serializePublicKeysToJson(keys);
+    const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
+    await this.keyStorage.storeKey(urn.toString(), serializableKeys, timestamp);
+  }
   /**
    * Wipes the public key cache.
    * Used on Logout.

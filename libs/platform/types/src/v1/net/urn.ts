@@ -24,14 +24,16 @@ export class URN {
    * @param entityId The unique identifier for the entity.
    * @throws {Error} if entityType or entityId are empty.
    */
-  public static create(entityType: string, entityId: string): URN {
+  public static create(entityType: string, entityId: string, namespace?: string): URN {
     if (!entityType) {
       throw new Error('Invalid URN format: entityType cannot be empty');
     }
     if (!entityId) {
       throw new Error('Invalid URN format: entityId cannot be empty');
     }
-    return new URN(URN.NAMESPACE, entityType, entityId);
+    if (!namespace)
+      namespace = URN.NAMESPACE
+    return new URN(namespace, entityType, entityId);
   }
 
   /**

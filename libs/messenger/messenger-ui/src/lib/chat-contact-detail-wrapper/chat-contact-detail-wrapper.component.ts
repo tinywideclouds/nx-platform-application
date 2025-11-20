@@ -39,27 +39,42 @@ export class ChatContactDetailWrapperComponent {
   async onShare(recipientUrn: URN): Promise<void> {
     const sharedContactUrn = this.contactId();
     
-    // 1. Fetch details of the contact we are sharing
-    // (We need the alias and avatar to populate the snapshot)
     const contact = await this.contactsService.getContact(sharedContactUrn);
+    if (!contact) return;
+
+    // CHANGED STRATEGY: Share the Email Lookup URN
+    // This is the most robust "Public Address" for a user.
+    // We don't need to find a linked identity anymore; we construct the address
+    // that the target user *should* have keys for (if they onboarded correctly).
     
-    if (!contact) {
-      this.logger.error('Cannot share contact: Contact not found');
-      return;
+    let shareUrnString = '';
+    
+    if (contact.email) {
+        // Construct: urn:lookup:email:bob@gmail.com
+        const lookupUrn = URN.create('email', contact.email, 'lookup');
+        shareUrnString = lookupUrn.toString();
+    } else {
+        // Fallback: Try to find a linked Identity URN if no email
+        const identities = await this.contactsService.getLinkedIdentities(sharedContactUrn);
+        if (identities.length > 0) {
+            shareUrnString = identities[0].toString();
+        }
     }
 
-    this.logger.info(`Sharing contact ${contact.alias} with ${recipientUrn}`);
+    if (!shareUrnString) {
+         this.logger.warn('Cannot share contact: No email or linked identity found.');
+         return;
+    }
 
-    // 2. Construct Payload (JSON Schema)
+    this.logger.info(`Sharing ${shareUrnString} (Alias: ${contact.alias}) with ${recipientUrn}`);
+
     const payload: ContactSharePayload = {
-      urn: contact.id.toString(),
+      urn: shareUrnString,
       alias: contact.alias,
-      // Optional: grab avatar from 'messenger' service profile if exists
       avatarUrl: contact.serviceContacts['messenger']?.profilePictureUrl,
       text: 'Shared via Messenger'
     };
 
-    // 3. Send Rich Message
     await this.chatService.sendContactShare(recipientUrn, payload);
   }
 }

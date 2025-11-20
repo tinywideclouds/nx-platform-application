@@ -1,17 +1,17 @@
-// --- File: libs/messenger/key-v2-access/src/key-service.spec.ts ---
+// libs/messenger/messenger-key-access/src/lib/key-service.spec.ts
 
 import { TestBed } from '@angular/core/testing';
 import {
   HttpClientTestingModule,
   HttpTestingController,
 } from '@angular/common/http/testing';
-import { Mock } from 'vitest';
+import { Mock, vi } from 'vitest';
 
 import {
   URN,
   PublicKeys,
   deserializeJsonToPublicKeys,
-  serializePublicKeysToJson, // <-- ADDED
+  serializePublicKeysToJson,
 } from '@nx-platform-application/platform-types';
 
 // --- Mock the platform-types lib ---
@@ -19,8 +19,8 @@ vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
     ...actual, // Keep URN and other real types
-    deserializeJsonToPublicKeys: vi.fn(), // <-- MOCK THE DESERIALIZER
-    serializePublicKeysToJson: vi.fn(), // <-- MOCK THE SERIALIZER
+    deserializeJsonToPublicKeys: vi.fn(),
+    serializePublicKeysToJson: vi.fn(),
   };
 });
 
@@ -37,7 +37,8 @@ describe('SecureKeyService', () => {
 
   // --- Fixtures ---
   const mockUserUrn = URN.parse('urn:sm:user:test-user');
-  const mockApiUrl = '/api/v2/keys/urn:sm:user:test-user';
+  // Corrected URL (No /v2)
+  const mockApiUrl = 'api/keys/urn:sm:user:test-user';
 
   // "Read" fixtures
   const mockJsonResponse = { encKey: 'b64...', sigKey: 'b64...' };
@@ -58,11 +59,12 @@ describe('SecureKeyService', () => {
     service = TestBed.inject(SecureKeyService);
     httpMock = TestBed.inject(HttpTestingController);
 
-    // Assign mocks (style note applied)
+    // Assign mocks
     mockDeserialize = deserializeJsonToPublicKeys as Mock;
     mockSerialize = serializePublicKeysToJson as Mock;
 
-    // Default mock behavior
+    // Reset and Default behavior
+    vi.clearAllMocks();
     mockDeserialize.mockReturnValue(mockPublicKeys);
     mockSerialize.mockReturnValue(mockSerializedJson);
   });
@@ -78,7 +80,7 @@ describe('SecureKeyService', () => {
 
   // --- GET KEY (Read) ---
   describe('getKey', () => {
-    it('should fetch keys from the v2 API and use the deserializer', async () => {
+    it('should fetch keys from the API and use the deserializer', async () => {
       // Act
       const promise = service.getKey(mockUserUrn);
 
@@ -122,7 +124,7 @@ describe('SecureKeyService', () => {
 
   // --- STORE KEYS (Write) ---
   describe('storeKeys', () => {
-    it('should serialize, POST to v2 API, and clear cache on success', async () => {
+    it('should serialize, POST to API, and clear cache on success', async () => {
       // --- 1. (Optional) Populate cache to verify clearing ---
       const p1 = service.getKey(mockUserUrn);
       httpMock.expectOne(mockApiUrl).flush(mockJsonResponse);

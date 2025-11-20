@@ -9,6 +9,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { User } from '@nx-platform-application/platform-types';
 
+export type SidebarView = 'conversations' | 'compose' | 'contacts';
+
 @Component({
   selector: 'messenger-toolbar',
   standalone: true,
@@ -25,15 +27,19 @@ import { User } from '@nx-platform-application/platform-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessengerToolbarComponent {
-  // The current authenticated user
   currentUser = input.required<User | null>();
-
-
+  activeView = input<SidebarView>('conversations');
   isComposeActive = input(false);
-  // Actions
-  compose = output<void>();
-  openAddressBook = output<void>();
+
+  // Sidebar Navigation Actions
+  viewConversations = output<void>();
+  viewCompose = output<void>();
+  viewContacts = output<void>();
+  
+  // User Menu Actions
   logout = output<void>();
+  resetKeys = output<void>(); // <-- NEW
+  // Removed openAddressBook output
 
   get initials(): string {
     const user = this.currentUser();

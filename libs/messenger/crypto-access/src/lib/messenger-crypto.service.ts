@@ -18,6 +18,7 @@ import {
   serializePayloadToProtoBytes,
   deserializeProtoBytesToPayload,
 } from '@nx-platform-application/messenger-types';
+import { Logger } from '@nx-platform-application/console-logger';
 
 // --- Local Imports ---
 import { CryptoEngine } from './crypto';
@@ -38,6 +39,7 @@ const rsaPssImportParams: RsaHashedImportParams = {
 })
 export class MessengerCryptoService {
   private crypto = inject(CryptoEngine);
+  private logger = inject(Logger);
   // StorageProvider is now the "dumb" JWK store
   private storage: WebKeyStorageProvider = inject(WebKeyDbStore);
   private keyService = inject(SecureKeyService);
@@ -51,6 +53,7 @@ export class MessengerCryptoService {
   public async generateAndStoreKeys(
     userUrn: URN
   ): Promise<{ privateKeys: PrivateKeys; publicKeys: PublicKeys }> {
+    this.logger.debug(`CryptoService: Generating NEW keys for ${userUrn}`);
     // 1. Generate both key pairs in parallel
     const [encKeyPair, sigKeyPair] = await Promise.all([
       this.crypto.generateEncryptionKeys(),
@@ -78,12 +81,14 @@ export class MessengerCryptoService {
       sigKey: sigKeyPair.privateKey,
     };
 
+    this.logger.debug('CryptoService: Saving private keys to IndexedDB...');
     // 3. Save *private* key JWKs to IndexedDB using the new "dumb" method
     await Promise.all([
       this.storage.saveJwk(this.getEncKeyUrn(userUrn), encPrivKeyJwk),
       this.storage.saveJwk(this.getSigKeyUrn(userUrn), sigPrivKeyJwk),
     ]);
 
+    this.logger.debug('CryptoService: Uploading public keys to backend...');
     // 4. Upload public keys
     await this.keyService.storeKeys(userUrn, publicKeys);
 

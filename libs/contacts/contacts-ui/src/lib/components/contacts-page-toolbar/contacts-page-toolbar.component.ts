@@ -8,6 +8,7 @@ import {
   signal,
   ElementRef,
   OnDestroy,
+  input,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -30,13 +31,23 @@ export class ContactsPageToolbarComponent implements OnDestroy {
   private elementWidth = signal(0);
   private compactBreakpointPx = 0;
 
+  forceIconMode = input(false);
+
   /** The internal mode, computed from the component's own width. */
   public readonly mode = computed<pageMode>(() => {
+    //quick check for forced mode
+    if (this.forceIconMode()) {
+      return 'compact';
+    }
+
     const width = this.elementWidth();
 
     // If width is not yet set, mode is undefined
-    if (!width){ //should accurately replace if (width === undefined || width === null || width === 0) {
-      return undefined;
+    // if (!width){ //should accurately replace if (width === undefined || width === null || width === 0) {
+    //   return undefined;
+    // }
+    if (width === null || width === 0) {
+      return 'full';
     }
 
     return width < this.compactBreakpointPx ? 'compact' : 'full';

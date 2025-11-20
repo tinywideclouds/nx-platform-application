@@ -12,14 +12,9 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
-import {
-  ChatStorageService,
-} from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
 
-import { 
-  PublicKeyRecord
-} from '@nx-platform-application/messenger-key-storage';
-
+import { PublicKeyRecord } from '@nx-platform-application/messenger-key-storage';
 
 import { KeyCacheService } from './key-cache.service';
 
@@ -99,7 +94,7 @@ describe('KeyCacheService', () => {
     mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys);
     mockChatStorageService.storeKey.mockResolvedValue(undefined);
   });
-  
+
   afterAll(() => {
     temporalNowSpy.mockRestore(); // Restore Temporal.Now
   });
@@ -113,7 +108,9 @@ describe('KeyCacheService', () => {
 
     const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(mockUserUrnString);
+    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(
+      mockUserUrnString
+    );
     expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
     expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
     expect(mockChatStorageService.storeKey).toHaveBeenCalledWith(
@@ -134,7 +131,9 @@ describe('KeyCacheService', () => {
 
     const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(mockUserUrnString);
+    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(
+      mockUserUrnString
+    );
     expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
     expect(mockChatStorageService.storeKey).toHaveBeenCalledWith(
       mockUserUrnString,
@@ -155,7 +154,9 @@ describe('KeyCacheService', () => {
 
     const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(mockUserUrnString);
+    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(
+      mockUserUrnString
+    );
     expect(mockDeserialize).toHaveBeenCalledWith(mockJsonKeys);
     expect(mockSecureKeyService.getKey).not.toHaveBeenCalled();
     expect(mockChatStorageService.storeKey).not.toHaveBeenCalled();

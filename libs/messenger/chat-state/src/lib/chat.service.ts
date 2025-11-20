@@ -100,8 +100,38 @@ export class ChatService implements OnDestroy {
 
       const senderUrn = this.currentUserUrn();
       if (senderUrn) {
-        const keys = await this.cryptoService.loadMyKeys(senderUrn);
-        this.myKeys.set(keys);
+        let keys = await this.cryptoService.loadMyKeys(senderUrn);
+
+        if (!keys) {
+          const existsOnServer = await this.keyService.hasKeys(senderUrn);
+
+          if (existsOnServer) {
+            this.logger.warn('New device detected. Keys exist on server but not locally.');
+          } else {
+            this.logger.info('New user detected. Generating keys...');
+            try {
+              // 1. Generate & Upload for Identity (urn:auth:...)
+              const result = await this.cryptoService.generateAndStoreKeys(senderUrn);
+              keys = result.privateKeys;
+
+              // 2. NEW: Upload for Lookup Handle (urn:lookup:email:...)
+              // This allows people to find/message us using our email address.
+              if (currentUser.email) {
+                // We use the namespace 'lookup' and type 'email'
+                // Note: Ensure URN.create supports the 3rd arg (namespace) per your update
+                const handleUrn = URN.create('email', currentUser.email, 'lookup');
+                
+                this.logger.info(`Claiming public handle: ${handleUrn.toString()}`);
+                await this.keyService.storeKeys(handleUrn, result.publicKeys);
+              }
+
+            } catch (genError) {
+              this.logger.error('Failed to generate initial keys', genError);
+            }
+          }
+        }
+        
+        if (keys) this.myKeys.set(keys);
       }
 
       this.liveService.connect(authToken!);
@@ -112,6 +142,34 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  public async resetIdentityKeys(): Promise<void> {
+    const userUrn = this.currentUserUrn();
+    const currentUser = this.authService.currentUser(); // Get full user for email
+    
+    if (!userUrn || !currentUser) return;
+
+    this.logger.info('Manual Key Reset Triggered...');
+    
+    await this.cryptoService.clearKeys();
+    this.myKeys.set(null);
+
+    try {
+      // 1. Generate & Upload for Identity
+      const result = await this.cryptoService.generateAndStoreKeys(userUrn);
+      this.myKeys.set(result.privateKeys);
+      
+      // 2. NEW: Upload for Lookup Handle
+      if (currentUser.email) {
+         const handleUrn = URN.create('email', currentUser.email, 'lookup');
+         this.logger.info(`Re-claiming public handle: ${handleUrn.toString()}`);
+         await this.keyService.storeKeys(handleUrn, result.publicKeys);
+      }
+
+      this.logger.info('New Identity Keys Generated & Uploaded (Identity + Handle).');
+    } catch (e) {
+      this.logger.error('Failed to reset keys', e);
+    }
+  }
   // --- Orchestration Logic ---
 
   public async fetchAndProcessMessages(): Promise<void> {
