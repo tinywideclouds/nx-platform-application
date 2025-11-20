@@ -15,7 +15,7 @@ import {
   authInterceptor,
   IAuthService,
   AuthService,
-} from '@nx-platform-application/platform-auth-data-access';
+} from '@nx-platform-application/platform-auth-access';
 import { MockAuthService } from './auth/mocks/mock-auth.service';
 import { LOG_LEVEL, LogLevel } from '@nx-platform-application/console-logger';
 

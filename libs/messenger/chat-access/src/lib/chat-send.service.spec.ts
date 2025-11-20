@@ -22,9 +22,7 @@ vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   };
 });
 
-import {
-  SecureEnvelope,
-} from '@nx-platform-application/platform-types';
+import { SecureEnvelope } from '@nx-platform-application/platform-types';
 // --- End Mock ---
 
 // --- Mock Data ---
@@ -55,7 +53,9 @@ describe('ChatSendService', () => {
     httpMock = TestBed.inject(HttpTestingController);
 
     // Assign mock
-    const platformTypes = await import('@nx-platform-application/platform-types');
+    const platformTypes = await import(
+      '@nx-platform-application/platform-types'
+    );
     mockSerialize = platformTypes.serializeEnvelopeToJson as Mock;
 
     // Reset mocks

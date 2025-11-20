@@ -19,8 +19,8 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@nx-platform-application/chat-data-access": [
-        "libs/messenger/chat-data-access/src/index.ts"
+      "@nx-platform-application/chat-access": [
+        "libs/messenger/chat-access/src/index.ts"
       ],
       "@nx-platform-application/chat-live-data": [
         "libs/messenger/chat-live-data/src/index.ts"
@@ -46,9 +46,6 @@
       "@nx-platform-application/internal-tools": [
         "libs/internal-tools/src/index.ts"
       ],
-      "@nx-platform-application/key-cache-access": [
-        "libs/messenger/key-cache/src/index.ts"
-      ],
       "@nx-platform-application/message-content": [
         "libs/messenger/message-content/src/index.ts"
       ],
@@ -57,6 +54,9 @@
       ],
       "@nx-platform-application/messenger-key-access": [
         "libs/messenger/key-access/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-key-cache": [
+        "libs/messenger/key-cache/src/index.ts"
       ],
       "@nx-platform-application/messenger-key-storage": [
         "libs/messenger/key-storage/src/index.ts"
@@ -82,8 +82,8 @@
       "@nx-platform-application/node-logger": [
         "libs/platform/node/node-logger/src/index.ts"
       ],
-      "@nx-platform-application/platform-auth-data-access": [
-        "libs/platform/ng/auth-data-access/src/index.ts"
+      "@nx-platform-application/platform-auth-access": [
+        "libs/platform/ng/auth-access/src/index.ts"
       ],
       "@nx-platform-application/platform-auth-data-access/testing": [
         "libs/platform/ng/auth-data-access/src/testing.ts"
@@ -106,7 +106,7 @@
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
       ],
-      "@nx-platform-application/web-key-storage": [
+      "@nx-platform-application/platform-web-key-storage": [
         "libs/platform/ng/web-key-storage/src/index.ts"
       ]
     }

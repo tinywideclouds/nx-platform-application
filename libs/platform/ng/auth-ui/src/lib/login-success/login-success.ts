@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 // 1. Import firstValueFrom for modern promise conversion
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';

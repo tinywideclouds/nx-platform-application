@@ -9,7 +9,7 @@ import { AUTH_API_URL } from './auth-data.config';
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(IAuthService);
   const authApiUrl = inject(AUTH_API_URL);
-  
+
   // Helper to clone request with current token
   const addToken = (request: typeof req) => {
     const token = authService.getJwtToken();
@@ -27,7 +27,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.url.startsWith(authApiUrl)) {
     authReq = req.clone({ withCredentials: true });
     // Pass through without retry logic to avoid infinite loops on /status 401s
-    return next(authReq); 
+    return next(authReq);
   }
 
   // 2. Handle Service requests (Keys/Messages)

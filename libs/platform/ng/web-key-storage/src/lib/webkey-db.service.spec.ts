@@ -32,15 +32,15 @@ const { mockDexieTable, mockConstructorSpy } = vi.hoisted(() => ({
 vi.mock('@nx-platform-application/platform-dexie-storage', () => {
   const MockPlatformDexieService = vi.fn(function (this: any, dbName: string) {
     mockConstructorSpy(dbName); // Capture the argument
-    
+
     // Mock methods expected by the child class constructor
     this.version = vi.fn(() => ({
       stores: vi.fn(),
     }));
-    
+
     this.table = vi.fn((tableName: string) => {
       if (tableName === 'jwks') return mockDexieTable;
-      return {}; 
+      return {};
     });
   });
 

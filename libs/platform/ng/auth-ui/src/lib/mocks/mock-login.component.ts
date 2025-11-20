@@ -22,15 +22,17 @@ import { MOCK_USERS_TOKEN } from './mock-auth.config';
         </mat-card-header>
         <mat-card-content class="user-buttons">
           @for (user of mockUsers; track user.id.toString()) {
-            <button mat-raised-button color="primary" (click)="login(user)">
-              Login as {{ user.alias }}
-            </button>
+          <button mat-raised-button color="primary" (click)="login(user)">
+            Login as {{ user.alias }}
+          </button>
           }
         </mat-card-content>
       </mat-card>
     </div>
   `,
-  styles: [ /* ... styles ... */ ]
+  styles: [
+    /* ... styles ... */
+  ],
 })
 export class MockLoginComponent {
   private authService = inject(MockAuthService) as MockAuthService;

@@ -3,7 +3,10 @@ import { Router } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { User } from '@nx-platform-application/platform-types';
 // Import the IAuthService contract and the response type
-import { IAuthService, AuthStatusResponse } from '@nx-platform-application/platform-auth-data-access';
+import {
+  IAuthService,
+  AuthStatusResponse,
+} from '@nx-platform-application/platform-auth-access';
 
 export const MOCK_USERS: User[] = [
   { id: 'user-123', email: 'user@local.mock', alias: 'Regular User' },
@@ -14,15 +17,19 @@ export const MOCK_USERS: User[] = [
 @Injectable()
 export class MockAuthService implements IAuthService {
   private readonly _currentUser = signal<User | null>(null);
-  public readonly currentUser: Signal<User | null> = this._currentUser.asReadonly();
-  public readonly isAuthenticated: Signal<boolean> = computed(() => !!this._currentUser());
+  public readonly currentUser: Signal<User | null> =
+    this._currentUser.asReadonly();
+  public readonly isAuthenticated: Signal<boolean> = computed(
+    () => !!this._currentUser()
+  );
 
   // REMOVED: The old authStateLoaded signal is obsolete.
 
   // ADDED: Implement the sessionLoaded$ observable.
   // In a mock environment, there's no async loading, so we can use an observable
   // that emits immediately to unblock the guards.
-  public readonly sessionLoaded$: Observable<AuthStatusResponse | null> = of(null);
+  public readonly sessionLoaded$: Observable<AuthStatusResponse | null> =
+    of(null);
 
   private router = inject(Router);
 

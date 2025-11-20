@@ -1,9 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  provideHttpClient,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
 import { URN } from '@nx-platform-application/platform-types';
 import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 
-import { KeyCacheService } from '@nx-platform-application/key-cache-access';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 
 // --- Import ALL the services we've built ---
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -12,7 +15,7 @@ import {
   IAuthService,
   provideAuth,
   AUTH_API_URL,
-} from '@nx-platform-application/platform-auth-data-access';
+} from '@nx-platform-application/platform-auth-access';
 import {
   MessengerCryptoService,
   CryptoEngine,
@@ -21,7 +24,7 @@ import {
   ChatDataService,
   ChatSendService,
   ROUTING_SERVICE_URL,
-} from '@nx-platform-application/chat-data-access';
+} from '@nx-platform-application/chat-access';
 import {
   ChatLiveDataService,
   WSS_URL_TOKEN,
@@ -33,7 +36,7 @@ import {
   KEY_SERVICE_URL,
 } from '@nx-platform-application/messenger-key-access';
 import { Logger } from '@nx-platform-application/console-logger';
-import { WebKeyDbStore } from '@nx-platform-application/web-key-storage';
+import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
 import { TestClient } from './test-helpers';
 
 const identityUrl = 'http://localhost:3000/api/auth';

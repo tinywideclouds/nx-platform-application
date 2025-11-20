@@ -6,7 +6,7 @@ import { Mock, Mocked } from 'vitest';
 import { webcrypto } from 'node:crypto';
 
 // --- (FIX) Import the correct "dumb" storage service ---
-import { WebKeyDbStore } from '@nx-platform-application/web-key-storage';
+import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
 import {
   URN,
   PublicKeys,
@@ -132,7 +132,7 @@ describe('MessengerCryptoService', () => {
     // Get mocked instances
     const { CryptoEngine } = await import('./crypto');
     const { WebKeyDbStore } = await import(
-      '@nx-platform-application/web-key-storage'
+      '@nx-platform-application/platform-web-key-storage'
     );
     const msgTypes = await import('@nx-platform-application/messenger-types');
 

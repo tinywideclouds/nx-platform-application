@@ -1,4 +1,4 @@
-// In libs/platform/auth-data-access/vite.config.mts
+// In libs/platform/auth-access/vite.config.mts
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
@@ -7,7 +7,7 @@ import * as path from 'path';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/platform/auth-data-access',
+  cacheDir: '../../../../node_modules/.vite/libs/platform/auth-access',
   plugins: [
     // 2. Tell the plugin to use your library tsconfig for the build
     angular({
@@ -25,7 +25,7 @@ export default defineConfig(() => ({
     },
     lib: {
       entry: 'src/index.ts',
-      name: 'auth-data-access',
+      name: 'auth-access',
       fileName: 'index',
       formats: ['es' as const],
     },

@@ -8,8 +8,8 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoginSuccessComponent } from './login-success';
 import { User, URN } from '@nx-platform-application/platform-types';
 
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
-import { MockTestingAuthService } from '@nx-platform-application/platform-auth-data-access/testing';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { MockTestingAuthService } from '@nx-platform-application/platform-auth-access/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 const mockUser: User = {

@@ -3,7 +3,10 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 
-import { IAuthService, AUTH_API_URL } from '@nx-platform-application/platform-auth-data-access';
+import {
+  IAuthService,
+  AUTH_API_URL,
+} from '@nx-platform-application/platform-auth-access';
 
 @Component({
   selector: 'aui-login',

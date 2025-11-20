@@ -2,12 +2,7 @@
 
 import { TestBed } from '@angular/core/testing';
 import { Subject, BehaviorSubject, of, Observable } from 'rxjs';
-import {
-  signal,
-  WritableSignal,
-  Signal,
-  computed,
-} from '@angular/core';
+import { signal, WritableSignal, Signal, computed } from '@angular/core';
 import {
   URN,
   PublicKeys,
@@ -26,7 +21,7 @@ import { ChatService } from './chat.service';
 import {
   IAuthService,
   AuthStatusResponse,
-} from '@nx-platform-application/platform-auth-data-access';
+} from '@nx-platform-application/platform-auth-access';
 import {
   MessengerCryptoService,
   PrivateKeys,
@@ -40,11 +35,11 @@ import {
   ChatLiveDataService,
   ConnectionStatus,
 } from '@nx-platform-application/chat-live-data';
-import { KeyCacheService } from '@nx-platform-application/key-cache-access';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import {
   ChatDataService,
   ChatSendService,
-} from '@nx-platform-application/chat-data-access';
+} from '@nx-platform-application/chat-access';
 // --- NEW IMPORT ---
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
 import { vi, Mocked } from 'vitest';
@@ -87,7 +82,10 @@ const mockEnvelope: SecureEnvelope = {
   encryptedSymmetricKey: new Uint8Array([4, 5, 6]),
   signature: new Uint8Array([7, 8, 9]),
 };
-const mockQueuedMessage: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
+const mockQueuedMessage: QueuedMessage = {
+  id: 'msg-1',
+  envelope: mockEnvelope,
+};
 
 const mockTextContent = 'Test Payload';
 const mockDecryptedPayload: EncryptedMessagePayload = {
@@ -97,7 +95,7 @@ const mockDecryptedPayload: EncryptedMessagePayload = {
   payloadBytes: new TextEncoder().encode(mockTextContent),
 };
 
-const mockChatMessage: ChatMessage = { 
+const mockChatMessage: ChatMessage = {
   id: 'msg-1',
   conversationUrn: mockSenderUrn,
   senderId: mockSenderUrn,
@@ -126,8 +124,19 @@ const mockStorageService = {
   storeKey: vi.fn(),
   clearAllMessages: vi.fn(),
 };
-const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
-const mockLiveService = { connect: vi.fn(), disconnect: vi.fn(), status$: new Subject(), incomingMessage$: new Subject(), ngOnDestroy: vi.fn() };
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+};
+const mockLiveService = {
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  status$: new Subject(),
+  incomingMessage$: new Subject(),
+  ngOnDestroy: vi.fn(),
+};
 const mockKeyService = { getPublicKey: vi.fn() };
 const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
 const mockSendService = { sendMessage: vi.fn() };
@@ -220,11 +229,11 @@ describe('ChatService (Race Condition Test)', () => {
 
     mockStorageService.loadHistory.mockResolvedValue(staleHistory);
     mockDataService.getMessageBatch.mockReturnValue(of([newQueuedMessage]));
-    
+
     // Need to allow unknown senders (or mock links) for this test
     // Since the payload sender is not linked, it will hit addToPending
     // which is mocked to resolve safely.
-    
+
     await initializeService();
 
     const selectPromise = service.loadConversation(mockSenderUrn);
@@ -236,8 +245,10 @@ describe('ChatService (Race Condition Test)', () => {
     expect(service.messages()).toEqual([expectedChatMessage]);
     expect(mockStorageService.loadHistory).toHaveBeenCalled();
     expect(mockDataService.getMessageBatch).toHaveBeenCalled();
-    
+
     // Verify Gatekeeper was called for unknown sender
-    expect(mockContactsService.addToPending).toHaveBeenCalledWith(mockSenderUrn);
+    expect(mockContactsService.addToPending).toHaveBeenCalledWith(
+      mockSenderUrn
+    );
   });
 });

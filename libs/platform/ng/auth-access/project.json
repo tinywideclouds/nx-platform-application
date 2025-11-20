@@ -1,7 +1,7 @@
 {
-  "name": "auth-data-access",
+  "name": "platform-auth-access",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/platform/ng/auth-data-access/src",
+  "sourceRoot": "libs/platform/ng/auth-access/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:platform"],
@@ -10,10 +10,10 @@
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/libs/platform/ng/auth-data-access",
-        "configFile": "libs/platform/ng/auth-data-access/vite.config.mts",
-        "main": "libs/platform/ng/auth-data-access/src/index.ts",
-        "assets": ["libs/platform/ng/auth-data-access/*.md"]
+        "outputPath": "dist/libs/platform/ng/auth-access",
+        "configFile": "libs/platform/ng/auth-access/vite.config.mts",
+        "main": "libs/platform/ng/auth-access/src/index.ts",
+        "assets": ["libs/platform/ng/auth-access/*.md"]
       }
     },
     "test": {
@@ -23,9 +23,9 @@
         "{options.htmlReportDirectory}"
       ],
       "options": {
-        "reportsDirectory": "coverage/libs/platform/ng/auth-data-access",
+        "reportsDirectory": "coverage/libs/platform/ng/auth-access",
         "htmlReportDirectory": "dist/test-reports/platform/ng/auth-data-access",
-        "configFile": "libs/platform/ng/auth-data-access/vitest.config.mts"
+        "configFile": "libs/platform/ng/auth-access/vitest.config.mts"
       }
     },
     "lint": {

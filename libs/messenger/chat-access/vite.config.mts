@@ -6,7 +6,7 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-data-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-access',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   // Uncomment this if you are using workers.
   // worker: {
@@ -15,7 +15,7 @@ export default defineConfig(() => ({
   build: {
     lib: {
       entry: 'src/index.ts',
-      name: 'chat-data-access',
+      name: 'chat-access',
       fileName: (format: any) => `index.${format}.js`,
       formats: ['es' as const],
     },
@@ -25,7 +25,7 @@ export default defineConfig(() => ({
         '@angular/core',
         '@angular/common/http',
         'rxjs',
-        '@nx-platform-application/platform-types'
+        '@nx-platform-application/platform-types',
       ],
     },
   },

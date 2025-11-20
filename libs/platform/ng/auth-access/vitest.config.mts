@@ -7,10 +7,10 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/auth-data-access',
+  cacheDir: '../../../../node_modules/.vite/libs/auth-access',
   plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'auth-data-access',
+    name: 'auth-access',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -20,11 +20,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/platform/ng/auth-data-access/index.html'
+        '../../../../dist/test-reports/platform/ng/auth-access/index.html'
       ),
     },
     coverage: {
-      reportsDirectory: '../../../../coverage/libs/platform/ng/auth-data-access',
+      reportsDirectory:
+        '../../../../coverage/libs/platform/ng/auth-access',
       provider: 'v8' as const,
     },
   },

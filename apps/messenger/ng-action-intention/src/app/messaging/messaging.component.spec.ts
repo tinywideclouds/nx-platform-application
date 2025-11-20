@@ -5,7 +5,7 @@ import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { User } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { MessagingComponent } from './messaging.component';
 
 const testUser: User = {
@@ -83,4 +83,3 @@ describe('MessagingComponent (Zoneless + Globals)', () => {
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/login']);
   });
 });
-

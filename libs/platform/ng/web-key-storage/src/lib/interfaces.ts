@@ -24,5 +24,5 @@ export interface WebKeyStorageProvider {
    */
   deleteJwk(id: string): Promise<void>;
 
-   clearDatabase(): Promise<void>;
+  clearDatabase(): Promise<void>;
 }

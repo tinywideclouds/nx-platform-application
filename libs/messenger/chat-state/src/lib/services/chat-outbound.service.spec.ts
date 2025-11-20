@@ -1,15 +1,18 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatOutboundService } from './chat-outbound.service';
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
 // Services
-import { ChatSendService } from '@nx-platform-application/chat-data-access';
+import { ChatSendService } from '@nx-platform-application/chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
-import { KeyCacheService } from '@nx-platform-application/key-cache-access';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { Logger } from '@nx-platform-application/console-logger';
 
 // Mocks
@@ -22,7 +25,7 @@ const mockLogger = { error: vi.fn() };
 
 describe('ChatOutboundService', () => {
   let service: ChatOutboundService;
-  
+
   const myUrn = URN.parse('urn:auth:me');
   const contactUrn = URN.parse('urn:sm:user:bob');
   const authUrn = URN.parse('urn:auth:bob');
@@ -32,12 +35,12 @@ describe('ChatOutboundService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Defaults
     mockContactsService.getLinkedIdentities.mockResolvedValue([authUrn]);
     mockKeyService.getPublicKey.mockResolvedValue({});
     mockCryptoService.encryptAndSign.mockResolvedValue(mockEnvelope);
-    
+
     TestBed.configureTestingModule({
       providers: [
         ChatOutboundService,
@@ -47,16 +50,24 @@ describe('ChatOutboundService', () => {
         { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: Logger, useValue: mockLogger },
-      ]
+      ],
     });
     service = TestBed.inject(ChatOutboundService);
   });
 
   it('should resolve identity, encrypt, send, and save', async () => {
-    const result = await service.send({} as any, myUrn, contactUrn, typeId, payloadBytes);
+    const result = await service.send(
+      {} as any,
+      myUrn,
+      contactUrn,
+      typeId,
+      payloadBytes
+    );
 
     // 1. Resolve Identity (Contact -> Auth)
-    expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(contactUrn);
+    expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(
+      contactUrn
+    );
     expect(mockKeyService.getPublicKey).toHaveBeenCalledWith(authUrn);
 
     // 2. Encrypt (using resolved Auth URN)
@@ -75,7 +86,7 @@ describe('ChatOutboundService', () => {
       expect.objectContaining({
         senderId: myUrn,
         recipientId: contactUrn, // Preserved
-        status: 'sent'
+        status: 'sent',
       })
     );
 
@@ -83,12 +94,23 @@ describe('ChatOutboundService', () => {
   });
 
   it('should fail gracefully if crypto fails', async () => {
-    mockCryptoService.encryptAndSign.mockRejectedValue(new Error('Crypto Fail'));
+    mockCryptoService.encryptAndSign.mockRejectedValue(
+      new Error('Crypto Fail')
+    );
 
-    const result = await service.send({} as any, myUrn, contactUrn, typeId, payloadBytes);
+    const result = await service.send(
+      {} as any,
+      myUrn,
+      contactUrn,
+      typeId,
+      payloadBytes
+    );
 
     expect(result).toBeNull();
-    expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to send'), expect.any(Error));
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to send'),
+      expect.any(Error)
+    );
     expect(mockSendService.sendMessage).not.toHaveBeenCalled();
   });
 });

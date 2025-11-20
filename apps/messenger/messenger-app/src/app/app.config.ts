@@ -19,8 +19,11 @@ import {
   IAuthService,
   AuthService,
   AUTH_API_URL,
-} from '@nx-platform-application/platform-auth-data-access';
-import { MOCK_USERS_TOKEN, MockAuthService } from '@nx-platform-application/platform-auth-ui/mocks';
+} from '@nx-platform-application/platform-auth-access';
+import {
+  MOCK_USERS_TOKEN,
+  MockAuthService,
+} from '@nx-platform-application/platform-auth-ui/mocks';
 
 // --- Mock Providers ---
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -28,15 +31,18 @@ import { MockChatService } from './mocks/mock-chat.service';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
 // 1. Import the new mock user list
-import { MESSENGER_MOCK_USERS } from './mocks/users'; 
+import { MESSENGER_MOCK_USERS } from './mocks/users';
 
 // --- Service Tokens ---
-import { ROUTING_SERVICE_URL } from '@nx-platform-application/chat-data-access';
+import { ROUTING_SERVICE_URL } from '@nx-platform-application/chat-access';
 import { WSS_URL_TOKEN } from '@nx-platform-application/chat-live-data';
 import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-key-access';
 
 import { CryptoEngine } from '@nx-platform-application/messenger-crypto-access';
-import { LOGGER_CONFIG, LogLevel } from '@nx-platform-application/console-logger';
+import {
+  LOGGER_CONFIG,
+  LogLevel,
+} from '@nx-platform-application/console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 
@@ -101,7 +107,7 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
 
     provideRouter(appRoutes, withComponentInputBinding()),
-    
+
     provideAnimations(),
     provideHttpClient(withInterceptors([authInterceptor])),
 
@@ -113,7 +119,7 @@ export const appConfig: ApplicationConfig = {
     contactsProvider,
     ...devProviders,
     mockUserProvider, // <-- Provider remains
-    
+
     {
       provide: LOGGER_CONFIG,
       useValue: {

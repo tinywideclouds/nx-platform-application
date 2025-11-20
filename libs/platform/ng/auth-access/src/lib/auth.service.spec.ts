@@ -100,7 +100,9 @@ describe('AuthService', () => {
 
     service.logout().subscribe();
 
-    const logoutReq = httpTestingController.expectOne(`${MOCK_AUTH_URL}/logout`);
+    const logoutReq = httpTestingController.expectOne(
+      `${MOCK_AUTH_URL}/logout`
+    );
     expect(logoutReq.request.method).toBe('POST');
     logoutReq.flush({});
 
@@ -128,7 +130,7 @@ describe('MockAuthService Contract', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useClass: MockTestingAuthService },
-        { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL }
+        { provide: AUTH_API_URL, useValue: MOCK_AUTH_URL },
       ],
     });
 

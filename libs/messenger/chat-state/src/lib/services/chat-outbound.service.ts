@@ -6,14 +6,23 @@ import { Logger } from '@nx-platform-application/console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 
 // Services
-import { ChatSendService } from '@nx-platform-application/chat-data-access';
-import { MessengerCryptoService, PrivateKeys } from '@nx-platform-application/messenger-crypto-access';
-import { ChatStorageService, DecryptedMessage } from '@nx-platform-application/chat-storage';
+import { ChatSendService } from '@nx-platform-application/chat-access';
+import {
+  MessengerCryptoService,
+  PrivateKeys,
+} from '@nx-platform-application/messenger-crypto-access';
+import {
+  ChatStorageService,
+  DecryptedMessage,
+} from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
-import { KeyCacheService } from '@nx-platform-application/key-cache-access';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 
 // Types
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
 
 @Injectable({ providedIn: 'root' })
@@ -66,7 +75,7 @@ export class ChatOutboundService {
       const optimisticMsg: DecryptedMessage = {
         messageId: `local-${crypto.randomUUID()}`,
         senderId: myUrn,
-        recipientId: recipientUrn, 
+        recipientId: recipientUrn,
         sentTimestamp: payload.sentTimestamp,
         typeId: payload.typeId,
         payloadBytes: payload.payloadBytes,
@@ -75,9 +84,8 @@ export class ChatOutboundService {
       };
 
       await this.storageService.saveMessage(optimisticMsg);
-      
-      return optimisticMsg;
 
+      return optimisticMsg;
     } catch (error) {
       this.logger.error('Outbound: Failed to send message', error);
       return null;
@@ -92,14 +100,16 @@ export class ChatOutboundService {
       return recipientUrn;
     }
     // If it's a Contact, get linked identities
-    const identities = await this.contactsService.getLinkedIdentities(recipientUrn);
-    
+    const identities = await this.contactsService.getLinkedIdentities(
+      recipientUrn
+    );
+
     // TODO: Add logic to pick the "active" or "primary" identity.
     // For now, pick the first one.
     if (identities.length > 0) {
       return identities[0];
     }
-    
+
     // Fallback: Assume the URN is usable as-is (legacy/testing)
     return recipientUrn;
   }

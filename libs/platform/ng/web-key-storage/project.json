@@ -1,5 +1,5 @@
 {
-  "name": "web-key-storage",
+  "name": "platform-web-key-storage",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/platform/ng/web-key-storage/src",
   "prefix": "lib",

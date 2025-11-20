@@ -10,7 +10,7 @@ import { MessengerHomePageComponent } from './messenger-home-page.component';
 // Mocks
 import { ChatService } from '@nx-platform-application/chat-state';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MatDialog } from '@angular/material/dialog';

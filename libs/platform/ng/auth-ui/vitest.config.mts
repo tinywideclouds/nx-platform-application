@@ -19,7 +19,10 @@ export default defineConfig({
     setupFiles: ['src/test-setup.ts'],
     reporters: ['default', 'html'],
     outputFile: {
-      html: join(__dirname, '../../../../dist/test-reports/platform/ng/auth-ui/index.html'),
+      html: join(
+        __dirname,
+        '../../../../dist/test-reports/platform/ng/auth-ui/index.html'
+      ),
     },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {

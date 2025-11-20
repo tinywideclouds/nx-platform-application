@@ -1,11 +1,14 @@
 import { Injectable, signal, inject } from '@angular/core';
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { ConversationSummary } from '@nx-platform-application/chat-storage';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { MessageTypeText } from '@nx-platform-application/message-content';
 import { computed } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 // --- Mock Data ---
 
 // 1. Define the mock users
@@ -19,19 +22,25 @@ const MOCK_CONVOS: ConversationSummary[] = [
   {
     conversationUrn: MOCK_CONTACT_1,
     latestSnippet: 'Hey, are you free for the meeting?',
-    timestamp: Temporal.Instant.from('2025-11-16T14:30:00Z').toString() as ISODateTimeString,
+    timestamp: Temporal.Instant.from(
+      '2025-11-16T14:30:00Z'
+    ).toString() as ISODateTimeString,
     unreadCount: 2,
   },
   {
     conversationUrn: MOCK_CONTACT_2,
     latestSnippet: 'You: Sounds good, see you then.',
-    timestamp: Temporal.Instant.from('2025-11-15T10:15:00Z').toString() as ISODateTimeString,
+    timestamp: Temporal.Instant.from(
+      '2025-11-15T10:15:00Z'
+    ).toString() as ISODateTimeString,
     unreadCount: 0,
   },
   {
     conversationUrn: MOCK_GROUP_1,
     latestSnippet: 'Bob: Can someone review my PR?',
-    timestamp: Temporal.Instant.from('2025-11-16T13:00:00Z').toString() as ISODateTimeString,
+    timestamp: Temporal.Instant.from(
+      '2025-11-16T13:00:00Z'
+    ).toString() as ISODateTimeString,
     unreadCount: 1,
   },
 ];
@@ -48,7 +57,9 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         id: 'msg-a-1',
         conversationUrn: MOCK_CONTACT_1,
         senderId: MOCK_CONTACT_1,
-        sentTimestamp: Temporal.Instant.from('2025-11-16T14:29:00Z').toString() as ISODateTimeString,
+        sentTimestamp: Temporal.Instant.from(
+          '2025-11-16T14:29:00Z'
+        ).toString() as ISODateTimeString,
         textContent: 'Hey, are you free for the meeting?',
         typeId: textType,
       },
@@ -56,8 +67,10 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         id: 'msg-a-2',
         conversationUrn: MOCK_CONTACT_1,
         senderId: MOCK_CONTACT_1,
-        sentTimestamp: Temporal.Instant.from('2025-11-16T14:30:00Z').toString() as ISODateTimeString,
-        textContent: 'It\'s about the new deployment.',
+        sentTimestamp: Temporal.Instant.from(
+          '2025-11-16T14:30:00Z'
+        ).toString() as ISODateTimeString,
+        textContent: "It's about the new deployment.",
         typeId: textType,
       },
     ],
@@ -70,7 +83,9 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         id: 'msg-b-1',
         conversationUrn: MOCK_CONTACT_2,
         senderId: MOCK_CONTACT_2,
-        sentTimestamp: Temporal.Instant.from('2025-11-15T10:14:00Z').toString() as ISODateTimeString,
+        sentTimestamp: Temporal.Instant.from(
+          '2025-11-15T10:14:00Z'
+        ).toString() as ISODateTimeString,
         textContent: 'Project update is ready for review.',
         typeId: textType,
       },
@@ -78,7 +93,9 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         id: 'msg-b-2',
         conversationUrn: MOCK_CONTACT_2,
         senderId: MOCK_USER,
-        sentTimestamp: Temporal.Instant.from('2025-11-15T10:15:00Z').toString() as ISODateTimeString,
+        sentTimestamp: Temporal.Instant.from(
+          '2025-11-15T10:15:00Z'
+        ).toString() as ISODateTimeString,
         textContent: 'Sounds good, see you then.',
         typeId: textType,
       },
@@ -92,7 +109,9 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         id: 'msg-g-1',
         conversationUrn: MOCK_GROUP_1,
         senderId: MOCK_CONTACT_2, // Bob
-        sentTimestamp: Temporal.Instant.from('2025-11-16T13:00:00Z').toString() as ISODateTimeString,
+        sentTimestamp: Temporal.Instant.from(
+          '2025-11-16T13:00:00Z'
+        ).toString() as ISODateTimeString,
         textContent: 'Can someone review my PR?',
         typeId: textType,
       },
@@ -118,7 +137,7 @@ export class MockChatService {
 
   /** The current mock user's URN. */
   public readonly currentUserUrn = signal(MOCK_USER);
-  
+
   public readonly isRecipientKeyMissing = signal<boolean>(false);
   /**
    * A computed signal that returns the correct message history
@@ -137,28 +156,28 @@ export class MockChatService {
   /** Simulates loading a conversation. */
   loadConversation(urn: URN | null): Promise<void> {
     if (this.selectedConversation()?.toString() === urn?.toString()) {
-      return Promise.resolve(); 
+      return Promise.resolve();
     }
     this.selectedConversation.set(urn);
     this.isRecipientKeyMissing.set(false);
 
     // --- Mock Optimistic Update ---
     if (urn) {
-        const urnString = urn.toString();
-        const exists = this.activeConversations().some(
-            c => c.conversationUrn.toString() === urnString
-        );
-        if (!exists) {
-            this.activeConversations.update(list => [
-                {
-                    conversationUrn: urn,
-                    latestSnippet: '',
-                    timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
-                    unreadCount: 0
-                },
-                ...list
-            ]);
-        }
+      const urnString = urn.toString();
+      const exists = this.activeConversations().some(
+        (c) => c.conversationUrn.toString() === urnString
+      );
+      if (!exists) {
+        this.activeConversations.update((list) => [
+          {
+            conversationUrn: urn,
+            latestSnippet: '',
+            timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+            unreadCount: 0,
+          },
+          ...list,
+        ]);
+      }
     }
 
     return Promise.resolve();
@@ -171,7 +190,7 @@ export class MockChatService {
     );
 
     const recipientId = recipientUrn.toString();
-    
+
     // 1. Create the new mock message
     const newMessage: ChatMessage = {
       id: `mock-msg-${crypto.randomUUID()}`,
@@ -184,7 +203,7 @@ export class MockChatService {
 
     // 2. Get the current history for this convo
     const currentHistory = MOCK_MESSAGES_DB.get(recipientId) || [];
-    
+
     // 3. Add the new message to the mock DB
     MOCK_MESSAGES_DB.set(recipientId, [...currentHistory, newMessage]);
 
@@ -192,9 +211,11 @@ export class MockChatService {
     // This forces the `computed` signal to re-evaluate.
     this.selectedConversation.set(null); // Deselect
     this.selectedConversation.set(recipientUrn); // Reselect
-    
+
     // 5. Update the conversation summary
-    const convo = this.activeConversations().find(c => c.conversationUrn.toString() === recipientId);
+    const convo = this.activeConversations().find(
+      (c) => c.conversationUrn.toString() === recipientId
+    );
     if (convo) {
       convo.latestSnippet = `You: ${plaintext}`;
       convo.timestamp = newMessage.sentTimestamp;
@@ -206,16 +227,16 @@ export class MockChatService {
 
   logout(): Promise<void> {
     console.log('[MockChatService] Logging out... Wiping mock state.');
-    
+
     // 1. Clear Chat State
     this.activeConversations.set([]);
-    
+
     this.selectedConversation.set(null);
     this.isRecipientKeyMissing.set(false);
 
     // 2. Clear Auth State (So the Router Guard lets us go to /login)
     this.authService.logout();
-    
+
     return Promise.resolve();
   }
 }

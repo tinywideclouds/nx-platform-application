@@ -1,5 +1,5 @@
 {
-  "name": "key-cache-access",
+  "name": "messenger-key-cache",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/messenger/key-cache/src",
   "prefix": "lib",

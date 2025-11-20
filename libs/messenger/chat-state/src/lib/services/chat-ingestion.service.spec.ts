@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ChatIngestionService } from './chat-ingestion.service';
 import { ChatMessageMapper } from './chat-message.mapper';
-import { ChatDataService } from '@nx-platform-application/chat-data-access';
+import { ChatDataService } from '@nx-platform-application/chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
@@ -38,7 +38,7 @@ describe('ChatIngestionService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Default Mock Behavior
     mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
@@ -61,15 +61,25 @@ describe('ChatIngestionService', () => {
   });
 
   it('should do nothing if queue is empty', async () => {
-    const result = await service.process({} as any, mockMyUrn, createIdentityMap(), createBlockedSet());
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createIdentityMap(),
+      createBlockedSet()
+    );
     expect(result).toEqual([]);
     expect(mockCryptoService.verifyAndDecrypt).not.toHaveBeenCalled();
   });
 
   it('should decrypt, map, save, and ack a valid message', async () => {
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-    
-    const result = await service.process({} as any, mockMyUrn, createIdentityMap(), createBlockedSet());
+
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createIdentityMap(),
+      createBlockedSet()
+    );
 
     // 1. Decrypt
     expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalled();
@@ -90,7 +100,12 @@ describe('ChatIngestionService', () => {
     const blocked = createBlockedSet();
     blocked.add(mockSenderUrn.toString());
 
-    const result = await service.process({} as any, mockMyUrn, createIdentityMap(), blocked);
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createIdentityMap(),
+      blocked
+    );
 
     // Should Ack (to remove from queue)
     expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
@@ -104,9 +119,16 @@ describe('ChatIngestionService', () => {
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
     // Identity map is empty -> Unknown
 
-    await service.process({} as any, mockMyUrn, createIdentityMap(), createBlockedSet());
+    await service.process(
+      {} as any,
+      mockMyUrn,
+      createIdentityMap(),
+      createBlockedSet()
+    );
 
-    expect(mockContactsService.addToPending).toHaveBeenCalledWith(mockSenderUrn);
+    expect(mockContactsService.addToPending).toHaveBeenCalledWith(
+      mockSenderUrn
+    );
     // Unknowns are still saved (just filtered in UI)
     expect(mockStorageService.saveMessage).toHaveBeenCalled();
   });
@@ -115,9 +137,15 @@ describe('ChatIngestionService', () => {
     // First call returns [msg1], limit 1
     mockDataService.getMessageBatch
       .mockReturnValueOnce(of([mockQueuedMsg])) // Batch 1 (Full)
-      .mockReturnValueOnce(of([]));             // Batch 2 (Empty)
+      .mockReturnValueOnce(of([])); // Batch 2 (Empty)
 
-    const result = await service.process({} as any, mockMyUrn, createIdentityMap(), createBlockedSet(), 1);
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createIdentityMap(),
+      createBlockedSet(),
+      1
+    );
 
     // Expect 2 fetch calls
     expect(mockDataService.getMessageBatch).toHaveBeenCalledTimes(2);

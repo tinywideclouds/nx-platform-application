@@ -11,57 +11,72 @@ import { URN, User } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 // Dependencies
-import { IAuthService, AuthStatusResponse } from '@nx-platform-application/platform-auth-data-access';
+import {
+  IAuthService,
+  AuthStatusResponse,
+} from '@nx-platform-application/platform-auth-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
-import { KeyCacheService } from '@nx-platform-application/key-cache-access';
-import { ChatDataService, ChatSendService } from '@nx-platform-application/chat-data-access';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import {
+  ChatDataService,
+  ChatSendService,
+} from '@nx-platform-application/chat-access';
 
 // --- Mocks ---
 const mockIngestionService = { process: vi.fn() };
 const mockOutboundService = { send: vi.fn() };
 const mockMapper = { toView: vi.fn() };
-const mockContactsService = { 
+const mockContactsService = {
   getAllIdentityLinks: vi.fn().mockResolvedValue([]),
   getAllBlockedIdentityUrns: vi.fn().mockResolvedValue([]),
   getLinkedIdentities: vi.fn().mockResolvedValue([]),
-  clearDatabase: vi.fn().mockResolvedValue(undefined)
+  clearDatabase: vi.fn().mockResolvedValue(undefined),
 };
 const mockStorageService = {
   loadConversationSummaries: vi.fn().mockResolvedValue([]),
   loadHistory: vi.fn().mockResolvedValue([]),
   saveMessage: vi.fn(),
-  clearDatabase: vi.fn().mockResolvedValue(undefined)
+  clearDatabase: vi.fn().mockResolvedValue(undefined),
 };
-const mockCryptoService = { 
+const mockCryptoService = {
   loadMyKeys: vi.fn().mockResolvedValue({}),
   generateAndStoreKeys: vi.fn(),
-  clearKeys: vi.fn().mockResolvedValue(undefined)
+  clearKeys: vi.fn().mockResolvedValue(undefined),
 };
-const mockKeyService = { 
-  getPublicKey: vi.fn(), 
+const mockKeyService = {
+  getPublicKey: vi.fn(),
   hasKeys: vi.fn().mockResolvedValue(true),
-  clear: vi.fn().mockResolvedValue(undefined)
+  clear: vi.fn().mockResolvedValue(undefined),
 };
-const mockLiveService = { 
-  connect: vi.fn(), 
-  status$: new Subject(), 
-  incomingMessage$: new Subject(), 
-  disconnect: vi.fn() 
+const mockLiveService = {
+  connect: vi.fn(),
+  status$: new Subject(),
+  incomingMessage$: new Subject(),
+  disconnect: vi.fn(),
 };
 const mockAuthService = {
   sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
   currentUser: signal<User | null>(null),
   getJwtToken: vi.fn(() => 'token'),
-  logout: vi.fn()
+  logout: vi.fn(),
 };
-const mockLogger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+};
 
 // Fixtures
-const mockUser: User = { id: URN.parse('urn:sm:user:me'), alias: 'Me', email: 'me@test.com' };
+const mockUser: User = {
+  id: URN.parse('urn:sm:user:me'),
+  alias: 'Me',
+  email: 'me@test.com',
+};
 const mockPrivateKeys = { encKey: 'priv' } as any;
 const mockGeneratedKeys = { privateKeys: mockPrivateKeys, publicKeys: {} };
 
@@ -71,7 +86,11 @@ describe('ChatService (Orchestrator)', () => {
   // Helper to boot the service
   async function initializeService() {
     mockAuthService.currentUser.set(mockUser);
-    mockAuthService.sessionLoaded$.next({ authenticated: true, user: mockUser, token: 'token' });
+    mockAuthService.sessionLoaded$.next({
+      authenticated: true,
+      user: mockUser,
+      token: 'token',
+    });
     // Wait for init promises
     await vi.runOnlyPendingTimersAsync();
   }
@@ -79,11 +98,14 @@ describe('ChatService (Orchestrator)', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    
+
     // Default Returns
     mockIngestionService.process.mockResolvedValue([]);
     mockOutboundService.send.mockResolvedValue({ messageId: 'opt-1' });
-    mockMapper.toView.mockReturnValue({ id: 'opt-1', conversationUrn: URN.parse('urn:sm:user:bob') });
+    mockMapper.toView.mockReturnValue({
+      id: 'opt-1',
+      conversationUrn: URN.parse('urn:sm:user:bob'),
+    });
 
     await TestBed.configureTestingModule({
       providers: [
@@ -99,8 +121,8 @@ describe('ChatService (Orchestrator)', () => {
         { provide: Logger, useValue: mockLogger },
         { provide: ChatLiveDataService, useValue: mockLiveService },
         { provide: ChatDataService, useValue: {} },
-        { provide: ChatSendService, useValue: {} }
-      ]
+        { provide: ChatSendService, useValue: {} },
+      ],
     });
 
     service = TestBed.inject(ChatService);
@@ -115,9 +137,9 @@ describe('ChatService (Orchestrator)', () => {
   it('should initialize and load identity links and EXISTING keys', async () => {
     // Setup: Keys exist locally
     mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-    
+
     await initializeService();
-    
+
     expect(mockContactsService.getAllIdentityLinks).toHaveBeenCalled();
     expect(mockCryptoService.loadMyKeys).toHaveBeenCalled();
     // Should NOT check server or generate
@@ -138,7 +160,9 @@ describe('ChatService (Orchestrator)', () => {
     // 2. Check server
     expect(mockKeyService.hasKeys).toHaveBeenCalled();
     // 3. Generate
-    expect(mockCryptoService.generateAndStoreKeys).toHaveBeenCalledWith(mockUser.id);
+    expect(mockCryptoService.generateAndStoreKeys).toHaveBeenCalledWith(
+      mockUser.id
+    );
     // 4. State updated
     expect((service as any).myKeys()).toEqual(mockPrivateKeys);
   });
@@ -157,7 +181,9 @@ describe('ChatService (Orchestrator)', () => {
     // 3. DO NOT Generate
     expect(mockCryptoService.generateAndStoreKeys).not.toHaveBeenCalled();
     // 4. Warn logged
-    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('New device detected'));
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('New device detected')
+    );
   });
 
   // --- Worker Delegation Tests ---
@@ -167,7 +193,10 @@ describe('ChatService (Orchestrator)', () => {
     mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
     await initializeService();
 
-    const mockViewMsg = { id: '123', conversationUrn: URN.parse('urn:sm:user:bob') };
+    const mockViewMsg = {
+      id: '123',
+      conversationUrn: URN.parse('urn:sm:user:bob'),
+    };
     mockIngestionService.process.mockResolvedValue([mockViewMsg]);
 
     await service.loadConversation(URN.parse('urn:sm:user:bob'));
@@ -184,7 +213,7 @@ describe('ChatService (Orchestrator)', () => {
 
     const recipient = URN.parse('urn:sm:user:bob');
     await service.loadConversation(recipient);
-    
+
     await service.sendMessage(recipient, 'hello');
 
     expect(mockOutboundService.send).toHaveBeenCalledWith(
@@ -192,9 +221,9 @@ describe('ChatService (Orchestrator)', () => {
       expect.anything(), // myUrn
       recipient,
       expect.anything(), // typeId
-      expect.anything()  // payload
+      expect.anything() // payload
     );
-    
+
     // Verify UI update from optimistic return
     expect(mockMapper.toView).toHaveBeenCalled();
     expect(service.messages().length).toBeGreaterThan(0);
@@ -222,7 +251,7 @@ describe('ChatService (Orchestrator)', () => {
     await initializeService();
 
     const groupUrn = URN.parse('urn:sm:group:devs');
-    
+
     await service.loadConversation(groupUrn);
 
     expect(mockKeyService.hasKeys).not.toHaveBeenCalled();
@@ -230,7 +259,7 @@ describe('ChatService (Orchestrator)', () => {
   });
 
   // --- Logout Test ---
-  
+
   it('should orchestrate a secure logout', async () => {
     await initializeService();
     await service.logout();

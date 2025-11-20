@@ -5,7 +5,7 @@ import { Injectable, inject } from '@angular/core';
 import {
   WebKeyStorageProvider,
   WebKeyDbStore,
-} from '@nx-platform-application/web-key-storage';
+} from '@nx-platform-application/platform-web-key-storage';
 import {
   URN,
   PublicKeys,
@@ -143,7 +143,6 @@ export class MessengerCryptoService {
   }
 
   // --- 2. OUTGOING (Encrypt & Sign) ---
-  // (This method is unchanged, it was already correct)
   public async encryptAndSign(
     payload: EncryptedMessagePayload,
     recipientId: URN,
@@ -184,7 +183,6 @@ export class MessengerCryptoService {
   }
 
   // --- 3. INCOMING (Verify & Decrypt) ---
-  // (This method is unchanged, it was already correct)
   public async verifyAndDecrypt(
     envelope: SecureEnvelope,
     myPrivateKeys: PrivateKeys

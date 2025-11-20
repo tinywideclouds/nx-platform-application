@@ -7,10 +7,10 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-data-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-access',
   plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'chat-data-access',
+    name: 'chat-access',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -20,11 +20,11 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/messenger/chat-data-access/index.html'
+        '../../../dist/test-reports/libs/messenger/chat-access/index.html'
       ),
     },
     coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/chat-data-access',
+      reportsDirectory: '../../../coverage/libs/messenger/chat-access',
       provider: 'v8' as const,
     },
   },

@@ -6,12 +6,12 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/key-cache-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/key-cache',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   build: {
     lib: {
       entry: 'src/index.ts',
-      name: 'key-cache-access',
+      name: 'key-cache',
       fileName: (format: any) => `index.${format}.js`,
       formats: ['es' as const],
     },

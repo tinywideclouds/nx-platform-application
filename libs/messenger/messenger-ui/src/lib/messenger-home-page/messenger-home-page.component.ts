@@ -10,7 +10,13 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router, RouterOutlet, Event, NavigationEnd, ActivatedRoute } from '@angular/router';
+import {
+  Router,
+  RouterOutlet,
+  Event,
+  NavigationEnd,
+  ActivatedRoute,
+} from '@angular/router';
 import { filter, map } from 'rxjs/operators';
 
 // Services
@@ -20,7 +26,7 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-data-access';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 
@@ -35,7 +41,10 @@ import {
   ContactsViewerComponent,
 } from '@nx-platform-application/contacts-ui';
 
-import { MessengerToolbarComponent, SidebarView } from '../messenger-toolbar/messenger-toolbar.component';
+import {
+  MessengerToolbarComponent,
+  SidebarView,
+} from '../messenger-toolbar/messenger-toolbar.component';
 import { LogoutDialogComponent } from '../logout-dialog/logout-dialog.component';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
@@ -66,19 +75,21 @@ export class MessengerHomePageComponent {
   private dialog = inject(MatDialog);
 
   currentUser = this.authService.currentUser;
-  
+
   // --- Router & View State ---
   private routerEvents$ = this.router.events;
   isChatActive = toSignal(
     this.routerEvents$.pipe(
-      filter((event: Event): event is NavigationEnd => event instanceof NavigationEnd),
+      filter(
+        (event: Event): event is NavigationEnd => event instanceof NavigationEnd
+      ),
       map((event: NavigationEnd) => event.urlAfterRedirects.includes('/chat/'))
     ),
     { initialValue: this.router.url.includes('/chat/') }
   );
 
   private queryParams = toSignal(this.route.queryParams);
-  
+
   sidebarView = computed<SidebarView>(() => {
     const view = this.queryParams()?.['view'];
     if (view === 'compose' || view === 'contacts') {
@@ -91,12 +102,18 @@ export class MessengerHomePageComponent {
   private conversations = this.chatService.activeConversations;
   contacts = toSignal(this.contactsService.contacts$, { initialValue: [] });
   groups = toSignal(this.contactsService.groups$, { initialValue: [] });
-  selectedConversationId = computed(() => this.chatService.selectedConversation()?.toString());
+  selectedConversationId = computed(() =>
+    this.chatService.selectedConversation()?.toString()
+  );
 
   startChatView: WritableSignal<'contacts' | 'groups'> = signal('contacts');
 
-  private contactsMap = computed(() => new Map(this.contacts().map((c) => [c.id.toString(), c])));
-  private groupsMap = computed(() => new Map(this.groups().map((g) => [g.id.toString(), g])));
+  private contactsMap = computed(
+    () => new Map(this.contacts().map((c) => [c.id.toString(), c]))
+  );
+  private groupsMap = computed(
+    () => new Map(this.groups().map((g) => [g.id.toString(), g]))
+  );
 
   conversationViewItems = computed<ConversationViewItem[]>(() => {
     const contactsMap = this.contactsMap();
@@ -114,8 +131,10 @@ export class MessengerHomePageComponent {
         const contact = contactsMap.get(conversationUrnString);
         if (contact) {
           name = contact.alias;
-          initials = (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
-          profilePictureUrl = contact.serviceContacts['messenger']?.profilePictureUrl;
+          initials =
+            (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
+          profilePictureUrl =
+            contact.serviceContacts['messenger']?.profilePictureUrl;
         }
       } else if (summary.conversationUrn.entityType == 'group') {
         const group = groupsMap.get(conversationUrnString);
@@ -145,24 +164,24 @@ export class MessengerHomePageComponent {
   // resetting the main window to the default state (empty) while changing the sidebar view.
 
   onViewConversations(): void {
-    this.router.navigate(['.'], { 
-      relativeTo: this.route, 
-      queryParams: { view: 'conversations' }
+    this.router.navigate(['.'], {
+      relativeTo: this.route,
+      queryParams: { view: 'conversations' },
       // We generally don't need queryParamsHandling: 'merge' here if we are resetting the view
     });
   }
 
   onViewCompose(): void {
-    this.router.navigate(['.'], { 
-      relativeTo: this.route, 
-      queryParams: { view: 'compose' }
+    this.router.navigate(['.'], {
+      relativeTo: this.route,
+      queryParams: { view: 'compose' },
     });
   }
 
   onViewContacts(): void {
-    this.router.navigate(['.'], { 
-      relativeTo: this.route, 
-      queryParams: { view: 'contacts' }
+    this.router.navigate(['.'], {
+      relativeTo: this.route,
+      queryParams: { view: 'contacts' },
     });
   }
 
@@ -186,9 +205,9 @@ export class MessengerHomePageComponent {
       // If we are selecting a conversation, we usually want to switch back to the list view
       // so the user sees their active chat in context.
       this.chatService.loadConversation(urn);
-      this.router.navigate(['', 'chat', urn.toString()], { 
+      this.router.navigate(['', 'chat', urn.toString()], {
         // Reset view to conversations when entering a chat
-        queryParams: { view: 'conversations' } 
+        queryParams: { view: 'conversations' },
       });
     }
   }
@@ -199,7 +218,7 @@ export class MessengerHomePageComponent {
       // Action: Open Contact Details (Card).
       // This loads the details route, which displays the card in the main window.
       this.router.navigate(['', 'chat', contact.id.toString(), 'details'], {
-        queryParamsHandling: 'preserve'
+        queryParamsHandling: 'preserve',
       });
     } else {
       // MODE: COMPOSE
@@ -219,7 +238,11 @@ export class MessengerHomePageComponent {
 
   onResetKeysClick(): void {
     // Basic confirmation
-    if (confirm('Are you sure? This will generate new keys and upload them. Existing chats might break.')) {
+    if (
+      confirm(
+        'Are you sure? This will generate new keys and upload them. Existing chats might break.'
+      )
+    ) {
       this.chatService.resetIdentityKeys();
     }
   }

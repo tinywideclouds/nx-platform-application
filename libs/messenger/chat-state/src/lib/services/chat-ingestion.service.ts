@@ -5,15 +5,28 @@ import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
 
 // Services
-import { ChatDataService } from '@nx-platform-application/chat-data-access';
-import { MessengerCryptoService, PrivateKeys } from '@nx-platform-application/messenger-crypto-access';
-import { ChatStorageService, DecryptedMessage } from '@nx-platform-application/chat-storage';
+import { ChatDataService } from '@nx-platform-application/chat-access';
+import {
+  MessengerCryptoService,
+  PrivateKeys,
+} from '@nx-platform-application/messenger-crypto-access';
+import {
+  ChatStorageService,
+  DecryptedMessage,
+} from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
 import { ChatMessageMapper } from './chat-message.mapper';
 
 // Types
-import { URN, QueuedMessage, ISODateTimeString } from '@nx-platform-application/platform-types';
-import { EncryptedMessagePayload, ChatMessage } from '@nx-platform-application/messenger-types';
+import {
+  URN,
+  QueuedMessage,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import {
+  EncryptedMessagePayload,
+  ChatMessage,
+} from '@nx-platform-application/messenger-types';
 
 @Injectable({ providedIn: 'root' })
 export class ChatIngestionService {
@@ -35,7 +48,6 @@ export class ChatIngestionService {
     blockedSet: Set<string>,
     batchLimit = 50
   ): Promise<ChatMessage[]> {
-    
     // 1. Fetch
     const queuedMessages = await firstValueFrom(
       this.dataService.getMessageBatch(batchLimit)
@@ -43,7 +55,9 @@ export class ChatIngestionService {
 
     if (queuedMessages.length === 0) return [];
 
-    this.logger.info(`Ingestion: Processing ${queuedMessages.length} messages...`);
+    this.logger.info(
+      `Ingestion: Processing ${queuedMessages.length} messages...`
+    );
 
     const processedIds: string[] = [];
     const validViewMessages: ChatMessage[] = [];
@@ -60,14 +74,16 @@ export class ChatIngestionService {
 
         // 3. Gatekeeper: Block Check
         if (blockedSet.has(senderStr)) {
-          this.logger.info(`Dropped message from blocked identity: ${senderStr}`);
+          this.logger.info(
+            `Dropped message from blocked identity: ${senderStr}`
+          );
           processedIds.push(msg.id); // Ack to remove from queue
-          continue; 
+          continue;
         }
 
         // 4. Gatekeeper: Identity Resolution / Pending
         let resolvedSenderUrn = decrypted.senderId;
-        
+
         if (identityMap.has(senderStr)) {
           // Trusted Contact
           resolvedSenderUrn = identityMap.get(senderStr)!;
@@ -84,13 +100,12 @@ export class ChatIngestionService {
           resolvedSenderUrn,
           myUrn
         );
-        
+
         await this.storageService.saveMessage(newDecryptedMsg);
 
         // 6. Convert to View Model
         validViewMessages.push(this.mapper.toView(newDecryptedMsg));
         processedIds.push(msg.id);
-
       } catch (error) {
         this.logger.error('Ingestion: Failed to process message', error, msg);
         // Ack failed messages so we don't loop forever on bad data
@@ -106,7 +121,13 @@ export class ChatIngestionService {
     // 8. Recursive Pull (if batch was full)
     if (queuedMessages.length === batchLimit) {
       this.logger.info('Ingestion: Queue full, triggering recursive pull.');
-      const nextBatch = await this.process(myKeys, myUrn, identityMap, blockedSet, batchLimit);
+      const nextBatch = await this.process(
+        myKeys,
+        myUrn,
+        identityMap,
+        blockedSet,
+        batchLimit
+      );
       return [...validViewMessages, ...nextBatch];
     }
 

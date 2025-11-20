@@ -5,7 +5,10 @@ import { JwkRecord } from './models';
 import { WebKeyStorageProvider } from './interfaces';
 
 @Injectable({ providedIn: 'root' })
-export class WebKeyDbStore extends PlatformDexieService implements WebKeyStorageProvider {
+export class WebKeyDbStore
+  extends PlatformDexieService
+  implements WebKeyStorageProvider
+{
   /**
    * A generic table for storing JsonWebKeys.
    */
@@ -40,7 +43,7 @@ export class WebKeyDbStore extends PlatformDexieService implements WebKeyStorage
     await this.jwks.delete(id);
   }
 
-   async clearDatabase(): Promise<void> {
+  async clearDatabase(): Promise<void> {
     await this.jwks.clear();
   }
 }

@@ -4,7 +4,7 @@ import { of, Observable, BehaviorSubject } from 'rxjs';
 import {
   AuthStatusResponse,
   IAuthService,
-} from '@nx-platform-application/platform-auth-data-access';
+} from '@nx-platform-application/platform-auth-access';
 
 // Note: MOCK_USERS are no longer defined or exported from this file.
 // They will be provided by the application via an InjectionToken.

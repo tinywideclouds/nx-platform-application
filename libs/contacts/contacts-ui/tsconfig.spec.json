@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
     "outDir": "../../../out-tsc/spec",
     "types": ["vitest/globals", "vitest/importMeta", "vite/client", "vitest"],
     "target": "esNext"

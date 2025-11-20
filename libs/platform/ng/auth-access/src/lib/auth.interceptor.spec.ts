@@ -17,7 +17,7 @@ import { AUTH_API_URL } from './auth-data.config';
 describe('authInterceptor', () => {
   let httpMock: HttpTestingController;
   let httpClient: HttpClient;
-  
+
   let authServiceMock: Partial<IAuthService>; // <-- Use the new AuthService
 
   // Use a constant for the test, just like the old 'environment' variable
@@ -46,7 +46,9 @@ describe('authInterceptor', () => {
     httpClient.get('/api/data').subscribe();
     const req = httpMock.expectOne('/api/data');
     expect(req.request.headers.has('Authorization')).toBe(true);
-    expect(req.request.headers.get('Authorization')).toBe('Bearer test-jwt-token');
+    expect(req.request.headers.get('Authorization')).toBe(
+      'Bearer test-jwt-token'
+    );
     req.flush({});
   });
 

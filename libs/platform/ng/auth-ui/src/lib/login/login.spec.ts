@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { User, URN } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-data-access';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { LoginComponent } from './login';
 
 // --- Mock Data ---

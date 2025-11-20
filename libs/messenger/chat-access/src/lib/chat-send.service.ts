@@ -23,10 +23,11 @@ import { ROUTING_SERVICE_URL } from './chat-data.config';
 export class ChatSendService {
   private readonly http = inject(HttpClient);
 
-  private readonly baseApiUrl = inject(ROUTING_SERVICE_URL, {optional: true}) ?? '/api';
+  private readonly baseApiUrl =
+    inject(ROUTING_SERVICE_URL, { optional: true }) ?? '/api';
   // 3. Construct the full URL
   private readonly sendUrl = `${this.baseApiUrl}/send`;
-  
+
   /**
    * Sends a fully formed "smart" SecureEnvelope.
    *

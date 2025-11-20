@@ -48,6 +48,12 @@ nx g @nx/angular:library --name=messenger-private-storage --directory=libs/messe
 
 nx g @nx/workspace:move --project=key-cache-access --destination=libs/messenger/key-cache
 
-nx g @nx/workspace:move --project=key-cache-access --newProjectName=key-cache
+nx g @nx/workspace:move --project=key-cache-access --newProjectName=messenger-key-cache --destination=libs/messenger/key-cache --importPath=@nx-platform-application/messenger-key-cache
+
+nx g @nx/workspace:move --project=chat-data-access --newProjectName=messenger-chat-access --destination=libs/messenger/chat-access --importPath=@nx-platform-application/messenger-chat-access
+
+nx g @nx/workspace:move --project=auth-ui --newProjectName=platform-auth-ui --destination=libs/platform/ng/auth-ui --importPath=@nx-platform-application/platform-auth-ui
+
+nx g @nx/workspace:move --project=web-key-storage --newProjectName=platform-web-key-storage --destination=libs/platform/ng/web-key-storage-tmp --importPath=@nx-platform-application/platform-web-key-storage
 
 

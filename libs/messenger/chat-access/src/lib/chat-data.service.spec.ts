@@ -47,7 +47,14 @@ const mockSmartQueuedMessages: QueuedMessage[] = [
 // --- THIS IS THE FIX ---
 const mockMessagesJsonResponse: object = {
   // --- END FIX ---
-  messages: [{ id: 'ack-id-1', envelope: { /* ... */ } }],
+  messages: [
+    {
+      id: 'ack-id-1',
+      envelope: {
+        /* ... */
+      },
+    },
+  ],
 };
 const baseApiUrl = '/api/messages';
 
@@ -66,7 +73,9 @@ describe('ChatDataService (Refactored)', () => {
     httpMock = TestBed.inject(HttpTestingController);
 
     // Assign mock
-    const platformTypes = await import('@nx-platform-application/platform-types');
+    const platformTypes = await import(
+      '@nx-platform-application/platform-types'
+    );
     mockDeserialize = platformTypes.deserializeJsonToQueuedMessages as Mock;
 
     // Reset mocks

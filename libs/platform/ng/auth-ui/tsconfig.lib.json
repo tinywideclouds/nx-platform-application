@@ -13,12 +13,10 @@
     "src/test-setup.ts",
     "jest.config.ts",
     "src/**/*.test.ts",
-    "vite.config.ts", 
+    "vite.config.ts",
     "vite.config.mts",
     "vitest.config.ts",
     "vitest.config.mts"
   ],
-  "include": [
-    "src/**/*.ts"  
-  ]
+  "include": ["src/**/*.ts"]
 }

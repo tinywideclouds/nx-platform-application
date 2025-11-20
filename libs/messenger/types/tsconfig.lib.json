@@ -1,8 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "../../../dist/out-tsc",
+    "composite": true,
     "declaration": true,
+    "declarationMap": true,
+    "outDir": "../../../dist/out-tsc",
   },
   "files": ["src/index.ts"],
   "exclude": [

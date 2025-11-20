@@ -7,10 +7,10 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/key-cache-access',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/key-cache',
   plugins: [angular(), nxViteTsPaths()],
   test: {
-    name: 'key-cache-access',
+    name: 'key-cache',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -20,11 +20,11 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/messenger/key-cache-access/index.html'
+        '../../../dist/test-reports/libs/messenger/key-cache/index.html'
       ),
     },
     coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/key-cache-access',
+      reportsDirectory: '../../../coverage/libs/messenger/key-cache',
       provider: 'v8' as const,
     },
   },

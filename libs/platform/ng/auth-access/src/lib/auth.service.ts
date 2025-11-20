@@ -56,45 +56,47 @@ export class AuthService implements IAuthService {
   }
 
   public checkAuthStatus(): Observable<AuthStatusResponse | null> {
-    return this.http
-      // --- 4. Get the DTO, not the domain object ---
-      .get<AuthStatusResponseDTO>(`${this.authApiUrl}/status`, {
-        withCredentials: true,
-      })
-      .pipe(
-        // --- 5. Map the DTO to the domain AuthStatusResponse ---
-        map((dto): AuthStatusResponse | null => {
-          if (dto && dto.authenticated && dto.user && dto.token) {
-            // This is the transformation
-            const domainUser: User = {
-              id: URN.parse(dto.user.id), // <-- PARSE THE STRING
-              alias: dto.user.alias,
-              email: dto.user.email,
-              profileUrl: dto.user.profileUrl,
-            };
-
-            return {
-              authenticated: true,
-              user: domainUser,
-              token: dto.token,
-            };
-          }
-          // If not authenticated or data is missing, return null
-          return null;
-        }),
-        // 'response' is now the mapped AuthStatusResponse or null
-        tap((response) => {
-          if (response) {
-            this.setAuthState(response.user, response.token);
-          } else {
-            this.clearAuthState();
-          }
-        }),
-        catchError(() => {
-          this.clearAuthState();
-          return of(null);
+    return (
+      this.http
+        // --- 4. Get the DTO, not the domain object ---
+        .get<AuthStatusResponseDTO>(`${this.authApiUrl}/status`, {
+          withCredentials: true,
         })
-      );
+        .pipe(
+          // --- 5. Map the DTO to the domain AuthStatusResponse ---
+          map((dto): AuthStatusResponse | null => {
+            if (dto && dto.authenticated && dto.user && dto.token) {
+              // This is the transformation
+              const domainUser: User = {
+                id: URN.parse(dto.user.id), // <-- PARSE THE STRING
+                alias: dto.user.alias,
+                email: dto.user.email,
+                profileUrl: dto.user.profileUrl,
+              };
+
+              return {
+                authenticated: true,
+                user: domainUser,
+                token: dto.token,
+              };
+            }
+            // If not authenticated or data is missing, return null
+            return null;
+          }),
+          // 'response' is now the mapped AuthStatusResponse or null
+          tap((response) => {
+            if (response) {
+              this.setAuthState(response.user, response.token);
+            } else {
+              this.clearAuthState();
+            }
+          }),
+          catchError(() => {
+            this.clearAuthState();
+            return of(null);
+          })
+        )
+    );
   }
 
   public logout() {

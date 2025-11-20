@@ -1,5 +1,5 @@
 {
-  "name": "auth-ui",
+  "name": "platform-auth-ui",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/platform/ng/auth-ui/src",
   "prefix": "aui",
