@@ -1,20 +1,12 @@
-// libs/contacts/contacts-ui/src/lib/contact-list-item/contact-list-item.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactListItemComponent } from './contact-list-item.component';
 import { Contact } from '@nx-platform-application/contacts-access';
-// --- 1. Import URN and ISODateTimeString ---
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
+import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
 import { By } from '@angular/platform-browser';
 import { Component } from '@angular/core';
-
-// Import the avatar component, as it's a dependency
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
-// --- 2. Update Mock Contact to use URNs ---
+// --- Mock Data ---
 const MOCK_CONTACT: Contact = {
   id: URN.parse('urn:sm:user:user-123'),
   alias: 'johndoe',
@@ -33,11 +25,10 @@ const MOCK_CONTACT: Contact = {
   },
 };
 
-// --- Mock Host Component (for testing click event) ---
+// --- Test Host ---
 @Component({
   standalone: true,
-  // The host must also import the components
-  imports: [ContactListItemComponent, ContactAvatarComponent],
+  imports: [ContactListItemComponent],
   template: `
     <contacts-list-item [contact]="contact" (select)="onSelected($event)" />
   `,
@@ -51,48 +42,55 @@ class TestHostComponent {
 }
 
 describe('ContactListItemComponent', () => {
+  
+  // --- Test 1: Isolated Component Test (Rendering) ---
   it('should display the contact alias and avatar', async () => {
-    // --- Simple Test (no host) for content checking ---
     await TestBed.configureTestingModule({
-      // Import both components for this test
       imports: [ContactListItemComponent, ContactAvatarComponent],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(ContactListItemComponent);
     const component = fixture.componentInstance;
-    component.contact = MOCK_CONTACT;
+    
+    // FIX: Use setInput for Signal Inputs
+    fixture.componentRef.setInput('contact', MOCK_CONTACT);
+    
+    // Trigger change detection to update computed signals and template
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    // Check that the avatar is rendered
+    
+    // Check Avatar presence
     const avatar = el.querySelector('contacts-avatar');
     expect(avatar).toBeTruthy();
 
-    // Check that the alias is rendered
+    // Check Alias text
     const alias = el.querySelector('[data-testid="alias"]');
     expect(alias?.textContent).toContain('johndoe');
 
-    // We can also test the component's internal logic
-    expect(component.initials).toBe('JD');
-    expect(component.profilePictureUrl).toBe('http://messenger.com/img.png');
+    // Check Logic: Call computed signals directly
+    expect(component.initials()).toBe('JD');
+    expect(component.profilePictureUrl()).toBe('http://messenger.com/img.png');
   });
 
+  // --- Test 2: Integration Test (Events) ---
   it('should emit the contact when clicked', async () => {
-    // --- Host Test for event checking ---
     await TestBed.configureTestingModule({
       imports: [TestHostComponent],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(TestHostComponent);
     const hostComponent = fixture.componentInstance;
+    
+    // Initial render
     fixture.detectChanges();
 
     const listItem = fixture.debugElement.query(By.css('contacts-list-item'));
-
-    // Simulate the click (this test was already correct)
+    
+    // Simulate User Click
     listItem.triggerEventHandler('click', null);
 
-    // Check if the host component received the event
+    // Check Output
     expect(hostComponent.selectedContact).toBe(MOCK_CONTACT);
   });
 });

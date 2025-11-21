@@ -2,17 +2,16 @@
   class="relative flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gray-600 text-white"
   role="img"
 >
-  <!-- 1. Image Case: Render if profilePictureUrl input exists -->
+  <!-- FIX: Invoke the signal function in the *ngIf condition -->
   <img
-    *ngIf="profilePictureUrl"
+    *ngIf="profilePictureUrl()"
     class="h-full w-full object-cover"
     [src]="profilePictureUrl()"
     alt="Contact Avatar"
   />
 
-  <!-- 2. Initials Case: Render if no profilePictureUrl -->
   <span
-    *ngIf="!profilePictureUrl"
+    *ngIf="!profilePictureUrl()"
     class="text-base font-medium"
     data-testid="initials"
   >

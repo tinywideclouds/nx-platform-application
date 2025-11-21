@@ -1,8 +1,11 @@
 <div class="flex flex-col">
-  @if (contacts.length > 0) {
-    @for (contact of contacts; track trackContactById($index, contact)) {
+  @if (contacts().length > 0) {
+    @for (contact of contacts(); track trackContactById($index, contact)) {
       <contacts-list-item
         [contact]="contact"
+        [class.bg-blue-50]="selectedId() === contact.id.toString()"
+        [class.border-l-4]="selectedId() === contact.id.toString()"
+        [class.border-blue-600]="selectedId() === contact.id.toString()"
         (select)="onSelect($event)"
       />
     }

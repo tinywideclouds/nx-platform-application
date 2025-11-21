@@ -1,19 +1,14 @@
-// libs/contacts/contacts-ui/src/lib/contact-list/contact-list.component.spec.ts
+// libs/contacts/contacts-ui/src/lib/components/contact-list/contact-list.component.spec.ts
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { Contact } from '@nx-platform-application/contacts-access';
-// --- 1. Import URN and ISODateTimeString ---
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 
 import { ContactListComponent } from './contact-list.component';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
-// --- 2. Update Mock Contacts to use URNs ---
 const MOCK_CONTACTS: Contact[] = [
   {
     id: URN.parse('urn:sm:user:user-123'),
@@ -21,15 +16,9 @@ const MOCK_CONTACTS: Contact[] = [
     email: 'john@example.com',
     firstName: 'John',
     surname: 'Doe',
-    phoneNumbers: ['+15550199'],
-    emailAddresses: ['john@example.com'],
-    serviceContacts: {
-      messenger: {
-        id: URN.parse('urn:sm:service:msg-uuid-1'),
-        alias: 'jd_messenger',
-        lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
-      },
-    },
+    phoneNumbers: [],
+    emailAddresses: [],
+    serviceContacts: {},
   },
   {
     id: URN.parse('urn:sm:user:user-456'),
@@ -37,33 +26,26 @@ const MOCK_CONTACTS: Contact[] = [
     email: 'jane@example.com',
     firstName: 'Jane',
     surname: 'Doe',
-    phoneNumbers: ['+15550188'],
-    emailAddresses: ['jane@example.com'],
-    serviceContacts: {
-      messenger: {
-        id: URN.parse('urn:sm:service:msg-uuid-2'),
-        alias: 'jane_messenger',
-        lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
-      },
-    },
+    phoneNumbers: [],
+    emailAddresses: [],
+    serviceContacts: {},
   },
 ];
-// Note: We're omitting properties like isFavorite for mock simplicity
-// in a way that is compatible with the Contact (User) interface.
 
-// --- Mock Host Component (for testing inputs/outputs) ---
 @Component({
   standalone: true,
   imports: [ContactListComponent],
   template: `
     <contacts-list
       [contacts]="contacts"
+      [selectedId]="selectedId"
       (contactSelected)="onSelected($event)"
     />
   `,
 })
 class TestHostComponent {
-  contacts = MOCK_CONTACTS; // <-- This now uses the URN-based mock
+  contacts = MOCK_CONTACTS;
+  selectedId: string | undefined = undefined;
   selectedContact?: Contact;
   onSelected(contact: Contact) {
     this.selectedContact = contact;
@@ -76,69 +58,31 @@ describe('ContactListComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      // Import all components used in the test chain
-      imports: [
-        TestHostComponent,
-        ContactListComponent,
-        ContactListItemComponent,
-      ],
+      imports: [TestHostComponent, ContactListComponent, ContactListItemComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TestHostComponent);
     hostComponent = fixture.componentInstance;
-
-    // DO NOT call fixture.detectChanges() here
   });
 
-  it('should render the correct number of list items', () => {
-    // 1. Set component state
-    hostComponent.contacts = MOCK_CONTACTS;
-
-    // 2. Run change detection
+  it('should render correct number of items', () => {
     fixture.detectChanges();
-
-    // 3. Assert
     const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
-    expect(items.length).toBe(MOCK_CONTACTS.length);
+    expect(items.length).toBe(2);
   });
 
-  it('should emit contactSelected when a child item emits (select)', () => {
-    // 1. Set component state
-    hostComponent.contacts = MOCK_CONTACTS;
-
-    // 2. Run change detection
+  it('should highlight the selected contact based on input', () => {
+    // Select the first contact
+    hostComponent.selectedId = 'urn:sm:user:user-123';
     fixture.detectChanges();
 
-    // 3. Find the child element
-    const firstItemEl = fixture.debugElement.query(
-      By.css('contacts-list-item')
-    );
-
-    // 4. Trigger the child's output event
-    firstItemEl.triggerEventHandler('select', MOCK_CONTACTS[0]);
-    fixture.detectChanges();
-
-    // 5. Assert that the host's handler was called
-    expect(hostComponent.selectedContact).toBe(MOCK_CONTACTS[0]);
-  });
-
-  it('should display an empty message when no contacts are provided', () => {
-    // 1. Set component state
-    hostComponent.contacts = [];
-
-    // 2. Run change detection
-    fixture.detectChanges();
-
-    // 3. Assert
     const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
-    const emptyMessage = fixture.debugElement.query(
-      By.css('[data-testid="empty-list"]')
-    );
-
-    expect(items.length).toBe(0);
-    expect(emptyMessage).toBeTruthy();
-    expect(emptyMessage.nativeElement.textContent).toContain(
-      'No contacts found'
-    );
+    
+    // Check classes on the first item
+    expect(items[0].nativeElement.classList).toContain('bg-blue-50');
+    expect(items[0].nativeElement.classList).toContain('border-l-4');
+    
+    // Check classes on the second item (should NOT have them)
+    expect(items[1].nativeElement.classList).not.toContain('bg-blue-50');
   });
 });

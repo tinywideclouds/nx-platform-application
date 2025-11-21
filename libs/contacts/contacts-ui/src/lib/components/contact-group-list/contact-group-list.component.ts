@@ -19,6 +19,9 @@ import { ContactGroupListItemComponent } from '../contact-group-list-item/contac
 export class ContactGroupListComponent {
   groups = input.required<ContactGroup[]>();
   
+  /** The ID of the currently selected group */
+  selectedId = input<string | undefined>(undefined);
+  
   groupSelected = output<ContactGroup>();
 
   onSelect(group: ContactGroup): void {

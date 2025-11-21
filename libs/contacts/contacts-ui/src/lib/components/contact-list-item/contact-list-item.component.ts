@@ -1,12 +1,10 @@
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
   ChangeDetectionStrategy,
   HostListener,
   computed,
-  signal,
+  input,
+  output
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Contact } from '@nx-platform-application/contacts-access';
@@ -21,30 +19,31 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactListItemComponent {
-  @Input({ required: true }) contact!: Contact;
-  @Output() select = new EventEmitter<Contact>();
+  // 1. Modern Signal Input (Replaces @Input)
+  // This creates a Signal<Contact> which is reactive.
+  contact = input.required<Contact>();
+  
+  // 2. Modern Output Function (Replaces @Output)
+  // This creates an OutputEmitterRef<Contact> which is optimized for the new core.
+  select = output<Contact>();
 
-  // 1. Create a signal to hold the input value
-  // (This bridges the gap between @Input and Signals)
-  private _contact = signal<Contact | null>(null);
-
-  // 2. Derive values using computed()
-  // These are now cached. They only run when _contact updates.
+  // 3. Derived State (Computed Signals)
+  // These update automatically when the 'contact' input signal changes.
   initials = computed(() => {
-    const c = this._contact();
-    if (!c) return '?';
+    const c = this.contact();
     const first = c.firstName?.[0] || '';
     const last = c.surname?.[0] || '';
     return (first + last).toUpperCase() || '?';
   });
 
   profilePictureUrl = computed(() => {
-    const c = this._contact();
-    return c?.serviceContacts['messenger']?.profilePictureUrl;
+    const c = this.contact();
+    return c.serviceContacts['messenger']?.profilePictureUrl;
   });
 
   @HostListener('click')
   onHostClick(): void {
-    this.select.emit(this.contact);
+    // We emit the value of the signal
+    this.select.emit(this.contact());
   }
 }

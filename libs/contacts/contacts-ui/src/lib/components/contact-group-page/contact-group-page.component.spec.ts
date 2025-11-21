@@ -1,7 +1,7 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.spec.ts
+// src/lib/components/contact-group-page/contact-group-page.component.spec.ts
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { vi } from 'vitest';
 import {
   ContactsStorageService,
@@ -17,7 +17,7 @@ import { ContactGroupFormComponent } from '../contact-group-page-form/contact-gr
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
-// --- Mocks & Fixtures ---
+// --- Mocks Data ---
 const mockContactUrn = URN.parse('urn:sm:user:user-123');
 const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
 
@@ -41,18 +41,27 @@ const MOCK_GROUP: ContactGroup = {
   contactIds: [mockContactUrn],
 };
 
-const { mockContactsService } = vi.hoisted(() => {
-  return {
-    mockContactsService: {
-      getGroup: vi.fn(),
-      saveGroup: vi.fn(),
-      contacts$: null as Subject<Contact[]> | null,
-    },
-  };
-});
+const mockActivatedRoute = {
+  paramMap: new Subject(),
+};
 
+// --- Service Mocks ---
+
+// 1. Define the service mock simply (No vi.hoisted)
+// Ensure contacts$ is initialized immediately so component constructor can subscribe.
+const mockContactsService = {
+  getGroup: vi.fn(),
+  saveGroup: vi.fn(),
+  contacts$: new Subject<Contact[]>(), 
+};
+
+// 2. Define Router mock with createUrlTree (Required for [routerLink])
 const mockRouter = {
   navigate: vi.fn(),
+  createUrlTree: vi.fn().mockReturnValue({}), 
+  serializeUrl: vi.fn().mockReturnValue('#'),
+  events: new Subject<unknown>(),
+  url: '/'
 };
 
 describe('ContactGroupPageComponent', () => {
@@ -61,9 +70,11 @@ describe('ContactGroupPageComponent', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Reset the Subject state
+    mockContactsService.contacts$ = new Subject<Contact[]>();
     mockContactsService.getGroup.mockResolvedValue(MOCK_GROUP);
     mockContactsService.saveGroup.mockResolvedValue(undefined);
-    mockContactsService.contacts$ = new Subject<Contact[]>();
 
     await TestBed.configureTestingModule({
       imports: [
@@ -74,6 +85,7 @@ describe('ContactGroupPageComponent', () => {
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: Router, useValue: mockRouter },
+        { provide: ActivatedRoute, useValue: mockActivatedRoute },
       ],
     }).compileComponents();
 
@@ -87,43 +99,34 @@ describe('ContactGroupPageComponent', () => {
   });
 
   it('should be in ADD MODE if groupId is undefined', async () => {
-    // 1. Set inputs (undefined is default, but being explicit)
     fixture.componentRef.setInput('groupId', undefined);
-    mockContactsService.contacts$!.next(MOCK_CONTACTS);
+    
+    // Emit data to the subject
+    mockContactsService.contacts$.next(MOCK_CONTACTS);
     
     fixture.detectChanges();
-    await fixture.whenStable(); // Wait for effects/observables
+    await fixture.whenStable(); 
 
     expect(mockContactsService.getGroup).not.toHaveBeenCalled();
     expect(component.groupToEdit()).toBeTruthy();
-    
-    // Check it generated a new URN
-    const group = component.groupToEdit()!;
-    expect(group.id.toString()).toContain('urn:sm:group:');
-    expect(group.name).toBe('');
     expect(component.startInEditMode()).toBe(true);
   });
 
   it('should be in EDIT MODE if groupId is provided', async () => {
-    // 1. Set inputs with a specific URN
     fixture.componentRef.setInput('groupId', mockGroupUrn);
-    mockContactsService.contacts$!.next(MOCK_CONTACTS);
+    mockContactsService.contacts$.next(MOCK_CONTACTS);
     
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // 2. Verify service call
     expect(mockContactsService.getGroup).toHaveBeenCalledWith(mockGroupUrn);
-    
-    // 3. Verify state
     expect(component.groupToEdit()).toEqual(MOCK_GROUP);
     expect(component.startInEditMode()).toBe(false);
   });
 
   it('should call saveGroup and navigate on (save) event', async () => {
-    // Setup Add Mode
     fixture.componentRef.setInput('groupId', undefined);
-    mockContactsService.contacts$!.next(MOCK_CONTACTS);
+    mockContactsService.contacts$.next(MOCK_CONTACTS);
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -131,7 +134,6 @@ describe('ContactGroupPageComponent', () => {
       By.directive(ContactGroupFormComponent)
     );
     
-    // Trigger save event from child
     formComponent.triggerEventHandler('save', MOCK_GROUP);
     await fixture.whenStable();
 

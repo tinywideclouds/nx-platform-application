@@ -1,10 +1,7 @@
-// libs/contacts/contacts-ui/src/lib/contact-list/contact-list.component.ts
-
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
+  input,
+  output,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -20,18 +17,20 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactListComponent {
-  @Input({ required: true }) contacts!: Contact[];
-  @Output() contactSelected = new EventEmitter<Contact>();
+  contacts = input.required<Contact[]>();
+  
+  /** * The ID of the currently selected contact (as a string).
+   * Used to apply active styling to the row.
+   */
+  selectedId = input<string | undefined>(undefined);
+
+  contactSelected = output<Contact>();
 
   onSelect(contact: Contact): void {
     this.contactSelected.emit(contact);
   }
 
-  // --- 1. ADD THIS METHOD ---
-  /**
-   * Provides a stable, primitive value for Angular's @for loop tracking.
-   */
   trackContactById(index: number, contact: Contact): string {
-    return contact.id.toString(); // Convert URN to string for tracking
+    return contact.id.toString();
   }
 }

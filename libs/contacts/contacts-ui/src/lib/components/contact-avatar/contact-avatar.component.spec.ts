@@ -1,4 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/contact-avatar/contact-avatar.component.spec.ts
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactAvatarComponent } from './contact-avatar.component';
 
@@ -16,9 +15,9 @@ describe('ContactAvatarComponent', () => {
   });
 
   it('should display initials when profilePictureUrl is missing', () => {
-    // Set the inputs directly
-    component.initials = 'JD';
-    component.profilePictureUrl = undefined;
+    // FIX: Use setInput for signals
+    fixture.componentRef.setInput('initials', 'JD');
+    fixture.componentRef.setInput('profilePictureUrl', undefined);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -31,9 +30,9 @@ describe('ContactAvatarComponent', () => {
   });
 
   it('should display image when profilePictureUrl is present', () => {
-    // Set the inputs directly
-    component.initials = 'JD';
-    component.profilePictureUrl = 'http://example.com/img.png';
+    // FIX: Use setInput for signals
+    fixture.componentRef.setInput('initials', 'JD');
+    fixture.componentRef.setInput('profilePictureUrl', 'http://example.com/img.png');
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
