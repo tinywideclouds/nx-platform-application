@@ -6,7 +6,7 @@
   <img
     *ngIf="profilePictureUrl"
     class="h-full w-full object-cover"
-    [src]="profilePictureUrl"
+    [src]="profilePictureUrl()"
     alt="Contact Avatar"
   />
 
@@ -16,6 +16,6 @@
     class="text-base font-medium"
     data-testid="initials"
   >
-    {{ initials }}
+    {{ initials() }}
   </span>
 </div>

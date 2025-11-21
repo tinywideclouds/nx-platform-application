@@ -16,7 +16,7 @@
             
             @if (item.vouchedBy) {
               <div class="text-sm text-blue-600 flex items-center gap-1" data-testid="vouch-badge">
-                <mat-icon class="text-xs h-4 w-4 text-blue-600" style="font-size: 16px; width: 16px; height: 16px;">verified</mat-icon>
+                <mat-icon class="text text-sm w-4 h-4-blue-600">verified</mat-icon>
                 Vouched by {{ formatUrn(item.vouchedBy) }}
               </div>
               @if (item.note) {

@@ -1,6 +1,6 @@
 <div class="flex flex-col">
   @if (groups.length > 0) {
-    @for (group of groups; track trackGroupById($index, group)) {
+    @for (group of groups(); track trackGroupById($index, group)) {
       <contacts-group-list-item
         [group]="group"
         (select)="onSelect($event)"

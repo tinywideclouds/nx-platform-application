@@ -1,6 +1,5 @@
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-// No longer imports Contact
 
 @Component({
   selector: 'contacts-avatar',
@@ -11,7 +10,7 @@ import { CommonModule } from '@angular/common';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactAvatarComponent {
-  // New simplified API
-  @Input() profilePictureUrl?: string;
-  @Input({ required: true }) initials!: string;
+  // Upgrade to Signal Inputs
+  profilePictureUrl = input<string | undefined>(undefined);
+  initials = input.required<string>();
 }

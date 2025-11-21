@@ -204,7 +204,8 @@ export class MessengerHomePageComponent {
     if (urn) {
       // If we are selecting a conversation, we usually want to switch back to the list view
       // so the user sees their active chat in context.
-      this.chatService.loadConversation(urn);
+      // we no longer need to load manually
+      // this.chatService.loadConversation(urn);
       this.router.navigate(['', 'chat', urn.toString()], {
         // Reset view to conversations when entering a chat
         queryParams: { view: 'conversations' },

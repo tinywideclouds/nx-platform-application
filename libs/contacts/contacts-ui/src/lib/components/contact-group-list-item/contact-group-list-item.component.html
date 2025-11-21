@@ -30,10 +30,10 @@
       class="font-medium text-gray-900 truncate"
       data-testid="group-name"
     >
-      {{ group.name }}
+      {{ group().name }}
     </div>
     <div class="text-sm text-gray-500 truncate">
-      {{ memberCount }} {{ memberCount === 1 ? 'member' : 'members' }}
+      {{ memberCount() }} {{ memberCount() === 1 ? 'member' : 'members' }}
     </div>
   </div>
 </div>

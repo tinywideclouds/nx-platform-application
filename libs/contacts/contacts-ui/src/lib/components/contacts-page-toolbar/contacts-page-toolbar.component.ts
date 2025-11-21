@@ -49,6 +49,8 @@ export class ContactsPageToolbarComponent implements OnDestroy {
     return width < this.compactBreakpointPx ? 'compact' : 'full';
   });
 
+  private rafId: number | null = null;
+
   constructor() {
     try {
       const rootFontSizePx = parseFloat(
@@ -60,16 +62,22 @@ export class ContactsPageToolbarComponent implements OnDestroy {
     }
 
     this.resizeObserver = new ResizeObserver((entries) => {
-      if (entries[0]) {
-        this.elementWidth.set(entries[0].contentRect.width);
-      }
+      // Cancel any pending frame to avoid stacking
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      
+      // Schedule update for the next paint
+      this.rafId = requestAnimationFrame(() => {
+          this.elementWidth.set(entries[0].contentRect.width);
+          this.rafId = null;
+      });
     });
 
     this.resizeObserver.observe(this.elRef.nativeElement);
   }
 
   ngOnDestroy(): void {
-    this.resizeObserver.unobserve(this.elRef.nativeElement);
+    if (this.rafId) 
+      cancelAnimationFrame(this.rafId);
     this.resizeObserver.disconnect();
   }
 }

@@ -8,7 +8,7 @@
   <mat-list>
     @for (item of blocked(); track trackByUrn($index, item)) {
       <mat-list-item>
-        <mat-icon matListItemIcon class="text-red-500">block</mat-icon>
+        <mat-icon matListItemIcon color="warn">block</mat-icon>
         <div matListItemTitle>{{ formatUrn(item.urn) }}</div>
         <div matListItemLine>{{ item.reason || 'No reason provided' }}</div>
         <button 

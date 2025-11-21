@@ -1,24 +1,23 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.spec.ts
+
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { vi } from 'vitest';
 import {
   ContactsStorageService,
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-access';
-// --- 1. Import URN and other types ---
 import { URN } from '@nx-platform-application/platform-types';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
 
 import { ContactGroupPageComponent } from './contact-group-page.component';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
-
-import { RouterTestingModule } from '@angular/router/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
-// --- 2. Update Fixtures to use URNs ---
+// --- Mocks & Fixtures ---
 const mockContactUrn = URN.parse('urn:sm:user:user-123');
 const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
 
@@ -32,7 +31,7 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
     phoneNumbers: [],
     emailAddresses: [],
-  } as Contact, // Use 'as Contact' for simplicity in mock
+  } as Contact,
 ];
 
 const MOCK_GROUP: ContactGroup = {
@@ -41,7 +40,6 @@ const MOCK_GROUP: ContactGroup = {
   description: 'A test group',
   contactIds: [mockContactUrn],
 };
-// --- END CHANGES ---
 
 const { mockContactsService } = vi.hoisted(() => {
   return {
@@ -53,14 +51,13 @@ const { mockContactsService } = vi.hoisted(() => {
   };
 });
 
-const mockActivatedRoute = {
-  paramMap: new Subject(),
+const mockRouter = {
+  navigate: vi.fn(),
 };
 
 describe('ContactGroupPageComponent', () => {
   let fixture: ComponentFixture<ContactGroupPageComponent>;
   let component: ContactGroupPageComponent;
-  let router: Router;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -70,78 +67,78 @@ describe('ContactGroupPageComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        RouterTestingModule.withRoutes([]),
-        NoopAnimationsModule,
         ContactGroupPageComponent,
         ContactsPageToolbarComponent,
+        NoopAnimationsModule
       ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
-        { provide: ActivatedRoute, useValue: mockActivatedRoute },
+        { provide: Router, useValue: mockRouter },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactGroupPageComponent);
     component = fixture.componentInstance;
-
-    router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate');
   });
 
   it('should create', () => {
-    mockActivatedRoute.paramMap.next({ get: () => null });
-    mockContactsService.contacts$!.next([]);
     fixture.detectChanges();
     expect(component).toBeTruthy();
   });
 
-  it('should be in ADD MODE if no :id is present', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => null });
+  it('should be in ADD MODE if groupId is undefined', async () => {
+    // 1. Set inputs (undefined is default, but being explicit)
+    fixture.componentRef.setInput('groupId', undefined);
     mockContactsService.contacts$!.next(MOCK_CONTACTS);
+    
     fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await fixture.whenStable(); // Wait for effects/observables
 
     expect(mockContactsService.getGroup).not.toHaveBeenCalled();
     expect(component.groupToEdit()).toBeTruthy();
-    // Check that the ID is a URN object
-    expect(component.groupToEdit()?.id).toBeInstanceOf(URN);
-    expect(component.groupToEdit()?.id.toString()).toContain('urn:sm:group:');
-    expect(component.allContacts()).toEqual(MOCK_CONTACTS);
+    
+    // Check it generated a new URN
+    const group = component.groupToEdit()!;
+    expect(group.id.toString()).toContain('urn:sm:group:');
+    expect(group.name).toBe('');
+    expect(component.startInEditMode()).toBe(true);
   });
 
-  it('should be in EDIT MODE if :id is present', async () => {
-    // --- 3. Pass the string version of the URN, as the router would ---
-    const idString = mockGroupUrn.toString();
-    mockActivatedRoute.paramMap.next({ get: () => idString });
+  it('should be in EDIT MODE if groupId is provided', async () => {
+    // 1. Set inputs with a specific URN
+    fixture.componentRef.setInput('groupId', mockGroupUrn);
     mockContactsService.contacts$!.next(MOCK_CONTACTS);
+    
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    // --- 4. Expect the service to be called with the PARSED URN object ---
+    // 2. Verify service call
     expect(mockContactsService.getGroup).toHaveBeenCalledWith(mockGroupUrn);
+    
+    // 3. Verify state
     expect(component.groupToEdit()).toEqual(MOCK_GROUP);
-    expect(component.allContacts()).toEqual(MOCK_CONTACTS);
+    expect(component.startInEditMode()).toBe(false);
   });
 
   it('should call saveGroup and navigate on (save) event', async () => {
-    mockActivatedRoute.paramMap.next({ get: () => null });
+    // Setup Add Mode
+    fixture.componentRef.setInput('groupId', undefined);
     mockContactsService.contacts$!.next(MOCK_CONTACTS);
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
 
     const formComponent = fixture.debugElement.query(
       By.directive(ContactGroupFormComponent)
     );
-    // Trigger with the URN-based mock
+    
+    // Trigger save event from child
     formComponent.triggerEventHandler('save', MOCK_GROUP);
     await fixture.whenStable();
 
     expect(mockContactsService.saveGroup).toHaveBeenCalledWith(MOCK_GROUP);
-    expect(router.navigate).toHaveBeenCalledWith(['/contacts'], {
+    expect(mockRouter.navigate).toHaveBeenCalledWith(['/contacts'], {
       queryParams: { tab: 'groups' },
+      queryParamsHandling: 'merge'
     });
   });
 });

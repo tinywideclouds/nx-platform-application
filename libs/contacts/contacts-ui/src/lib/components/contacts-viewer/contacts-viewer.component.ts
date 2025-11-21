@@ -109,6 +109,7 @@ export class ContactsViewerComponent {
     // aggressively, but keeping it synced allows deep linking.
     this.router.navigate([], {
       relativeTo: this.route,
+      replaceUrl: true,
       queryParams: { tab },
       queryParamsHandling: 'merge',
     });
@@ -150,9 +151,5 @@ export class ContactsViewerComponent {
     await this.contactsService.unblockIdentity(blocked.urn);
   }
 
-  formatUrn(urn: any): string {
-    const s = urn.toString();
-    const parts = s.split(':');
-    return parts.length > 2 ? `${parts[2]}:${parts[3]}` : s;
-  }
+  
 }

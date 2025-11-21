@@ -1,10 +1,7 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-list/contact-group-list.component.ts
-
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
+  input,
+  output,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -20,22 +17,15 @@ import { ContactGroupListItemComponent } from '../contact-group-list-item/contac
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactGroupListComponent {
-  @Input({ required: true }) groups!: ContactGroup[];
-  @Output() groupSelected = new EventEmitter<ContactGroup>();
+  groups = input.required<ContactGroup[]>();
+  
+  groupSelected = output<ContactGroup>();
 
-  /**
-   * This method acts as a pass-through, bubbling the event
-   * from the list item up to the parent component.
-   */
   onSelect(group: ContactGroup): void {
     this.groupSelected.emit(group);
   }
 
-  // --- 1. ADD THIS METHOD ---
-  /**
-   * Provides a stable, primitive value for Angular's @for loop tracking.
-   */
   trackGroupById(index: number, group: ContactGroup): string {
-    return group.id.toString(); // Convert URN to string for tracking
+    return group.id.toString();
   }
 }

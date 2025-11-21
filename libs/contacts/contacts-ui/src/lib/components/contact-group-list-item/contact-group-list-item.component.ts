@@ -2,11 +2,10 @@
 
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
-  ChangeDetectionStrategy,
-  HostListener,
+  input,
+  output,
+  computed,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ContactGroup } from '@nx-platform-application/contacts-access';
@@ -16,23 +15,26 @@ import { ContactGroup } from '@nx-platform-application/contacts-access';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './contact-group-list-item.component.html',
-  // We'll create a new .scss file for this
   styleUrl: './contact-group-list-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // v20: Bind click directly on the host
+  host: {
+    '(click)': 'onHostClick()',
+    'class': 'block' // You can even move the :host { display: block } here via Tailwind
+  }
 })
 export class ContactGroupListItemComponent {
-  @Input({ required: true }) group!: ContactGroup;
-  @Output() select = new EventEmitter<ContactGroup>();
+  // v20: Signal Input
+  group = input.required<ContactGroup>();
 
-  @HostListener('click')
+  // v20: Output Function
+  select = output<ContactGroup>();
+
+  // v20: Computed Signal (Memoized)
+  // Replaces the 'get memberCount()' which runs on every CD cycle
+  memberCount = computed(() => this.group().contactIds.length);
+
   onHostClick(): void {
-    this.select.emit(this.group);
-  }
-
-  /**
-   * Getter for displaying the member count.
-   */
-  get memberCount(): number {
-    return this.group.contactIds.length;
+    this.select.emit(this.group());
   }
 }

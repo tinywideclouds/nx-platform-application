@@ -1,4 +1,4 @@
-// libs/contacts/contacts-data-access/src/lib/contacts.service.ts
+// libs/contacts/contacts-access/src/lib/contacts.service.ts
 
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';
@@ -33,17 +33,17 @@ export class ContactsStorageService {
   // --- Mappers ---
   private mapStorableToContact(c: StorableContact): Contact {
     const serviceContacts: Record<string, ServiceContact> = {};
-    if (c.serviceContacts) {
-      for (const key in c.serviceContacts) {
-        const s = c.serviceContacts[key];
-        if (s) {
-          serviceContacts[key] = {
-            ...s,
-            id: URN.parse(s.id),
-          };
-        }
+
+    // usage: Object.entries(obj || {}) avoids "cannot convert undefined to object" errors
+    for (const [key, s] of Object.entries(c.serviceContacts || {})) {
+      if (s) {
+        serviceContacts[key] = {
+          ...s,
+          id: URN.parse(s.id),
+        };
       }
     }
+
     return {
       ...c,
       id: URN.parse(c.id),
@@ -53,17 +53,16 @@ export class ContactsStorageService {
 
   private mapContactToStorable(c: Contact): StorableContact {
     const serviceContacts: Record<string, StorableServiceContact> = {};
-    if (c.serviceContacts) {
-      for (const key in c.serviceContacts) {
-        const s = c.serviceContacts[key];
-        if (s) {
-          serviceContacts[key] = {
-            ...s,
-            id: s.id.toString(),
-          };
-        }
+
+    for (const [key, s] of Object.entries(c.serviceContacts || {})) {
+      if (s) {
+        serviceContacts[key] = {
+          ...s,
+          id: s.id.toString(),
+        };
       }
     }
+
     return {
       ...c,
       id: c.id.toString(),

@@ -1,140 +1,119 @@
-// apps/contacts/contacts-app/src/custom-theme.scss
-
 @use '@angular/material' as mat;
 
+// 1. Define the theme
+// This generates the palette and typography configurations
+$theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$azure-palette,
+    tertiary: mat.$blue-palette,
+  ),
+  typography: (
+    brand-family: 'Roboto',
+    plain-family: 'Roboto',
+  ),
+  density: (
+    scale: 0
+  )
+));
+
 html {
-  @include mat.theme((
-    color: (
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
-    ),
-    typography: Roboto,
-    density: 0,
-  ));
+  // 2. Apply the theme
+  // This outputs the standard --mat-sys-* and --mdc-* variables to the DOM
+  @include mat.all-component-themes($theme);
 
-  @include mat.form-field-overrides((
-    // These tokens control the height and internal padding for all appearances.
-    container-height: 2.8em,
-    container-text-line-height: 1.2em,
-    container-vertical-padding: .3em,
+  // ==========================================================================
+  // 3. GLOBAL OVERRIDES (The "Mixin" Replacement)
+  // ==========================================================================
+  
+  // --- FORM FIELDS (Simulating your 'container-height' and 'shape' mixins) ---
+  // Force specific heights (Standard M3 is 56px, ~3.5em)
+  --mdc-filled-text-field-container-height: 2.8em;
+  --mdc-outlined-text-field-container-height: 2.8em;
 
-    // --- These are still good to use ---
-    container-text-size: 1em,
-    subscript-text-size: .6em,
+  // Force corner radius (Shape)
+  --mdc-filled-text-field-container-shape: 2px;
+  --mdc-outlined-text-field-container-shape: 2px;
 
-    // --- You can also control the border-radius here ---
-    filled-container-shape: 2px,
-    outlined-container-shape: 2px
-  ));
+  // Text Sizing
+  --mdc-filled-text-field-label-text-size: 1em;
+  --mdc-outlined-text-field-label-text-size: 1em;
+  --mdc-filled-text-field-input-text-size: 1em;
+  --mdc-outlined-text-field-input-text-size: 1em;
 
-  // --- 1. GLOBAL BUTTON RADIUS OVERRIDE ---
-  // This is what you asked for: reduce the "radius effect".
-  // We apply it here inside 'html' to make it global.
-  @include mat.button-overrides((
-    // The 'container-shape' token controls border-radius.
-    // The default M3 value is 'full' (which looks like a pill).
-    // Let's set them all to 8px for a more traditional, squared-off look.
-
-    filled-container-shape: 4px,
-    outlined-container-shape: 4px,
-    text-container-shape: 4px,
-    tonal-container-shape: 4px,
-    protected-container-shape: 4px // This styles the old 'mat-raised-button'
-  ));
+  // --- BUTTONS (Simulating your 'button-overrides' mixin) ---
+  // M3 defaults to 'full' (pill shape). We override to 4px for the square look.
+  --mdc-filled-button-container-shape: 4px;
+  --mdc-outlined-button-container-shape: 4px;
+  --mdc-text-button-container-shape: 4px;
+  --mdc-protected-button-container-shape: 4px; // The 'raised' button equivalent
+  --mdc-filled-tonal-button-container-shape: 4px;
 }
 
-// --- 2. SPECIFIC TONAL BUTTON OVERRIDE ---
-// Here is the "specific option" for your Tonal button.
-// We create a custom CSS class that you can apply whenever
-// you want to use these colors.
+// ==========================================================================
+// 4. SCOPED CLASS OVERRIDES
+// ==========================================================================
+
+// "View Mode" - Flattens disabled inputs to look readable
+// Instead of mixins, we remap the 'disabled' tokens to 'enabled' (surface) colors.
+.form-view-mode {
+  // Text Colors -> Use standard "On Surface" color instead of grayed out
+  --mdc-filled-text-field-disabled-input-text-color: var(--mat-sys-on-surface);
+  --mdc-filled-text-field-disabled-label-text-color: var(--mat-sys-on-surface-variant);
+  --mdc-outlined-text-field-disabled-input-text-color: var(--mat-sys-on-surface);
+  --mdc-outlined-text-field-disabled-label-text-color: var(--mat-sys-on-surface-variant);
+
+  // Container/Outline -> Match the background to look seamless
+  --mdc-filled-text-field-disabled-container-color: var(--mat-sys-surface-container-highest);
+  --mdc-outlined-text-field-disabled-outline-color: var(--mat-sys-outline);
+  
+  // Hide icons/placeholders if disabled
+  --mdc-filled-text-field-disabled-leading-icon-color: transparent;
+  --mdc-filled-text-field-disabled-trailing-icon-color: transparent;
+}
+
+// "Toolbar Tonal Button" - Custom colors for your toolbar actions
+// We override the specific --mdc-filled-tonal-* tokens just for this class.
+.toolbar-tonal-button {
+  // Container & Text
+  --mdc-filled-tonal-button-container-color: #eaddff;
+  --mdc-filled-tonal-button-label-text-color: #2c3845;
+
+  // State Layers (Hover/Focus/Press) - M3 overlays a color with opacity
+  --mdc-filled-tonal-button-hover-state-layer-color: #3b4e64;
+  --mdc-filled-tonal-button-focus-state-layer-color: #3b4e64;
+  --mdc-filled-tonal-button-pressed-state-layer-color: #3b4e64;
+}
+
+// "Save/Update Tonal Button" (If you need the purple variant)
 .save-update-tonal-button {
-  @include mat.button-overrides((
-    // Example: A custom purple color scheme
-    tonal-container-color: #eaddff,
-    tonal-label-text-color: #21005d,
-
-    // -- THIS IS THE CORRECTED PART --
-
-    // 1. Set the COLOR for the state layer (used on hover, focus, press)
-    tonal-state-layer-color: #21005d,
-
-    // 2. Set the OPACITY for each state (adjust as needed)
-    tonal-hover-state-layer-opacity: 0.08,  // 8% opacity on hover
-    tonal-focus-state-layer-opacity: 0.12,  // 12% opacity on focus
-    tonal-pressed-state-layer-opacity: 0.12 // 12% opacity on press
-  ));
+  --mdc-filled-tonal-button-container-color: #eaddff;
+  --mdc-filled-tonal-button-label-text-color: #21005d;
+  --mdc-filled-tonal-button-hover-state-layer-color: #21005d;
+  --mdc-filled-tonal-button-focus-state-layer-color: #21005d;
+  --mdc-filled-tonal-button-pressed-state-layer-color: #21005d;
 }
 
-// Applies to a <mat-tab-group>. 
-// It forces the LAST tab to shrink to icon-width.
+// ==========================================================================
+// 5. COMPONENT TWEAKS & GLOBAL STYLES
+// ==========================================================================
+
+// Tab Group Override: Shrink the last tab (Manage/Shield icon)
 .mat-tab-icon-button {
   .mat-mdc-tab-header .mat-mdc-tab-labels {
-    // Target the last tab (Manage/Gatekeeper)
     .mat-mdc-tab:last-child {
-      min-width: 64px !important; // Override Material min-width
-      padding: 0 12px;           // Reduce padding
-      flex-grow: 0;              // Prevent expanding
+      min-width: 64px !important; 
+      padding: 0 12px;           
+      flex-grow: 0;              
     }
   }
 }
 
-.form-view-mode {
-  
-  // Call the same mixin, but scoped to this class
-  @include mat.form-field-overrides((
-    
-    // --- FILLED APPEARANCE ---
-    // Set disabled label color TO the normal enabled label color
-    filled-disabled-label-text-color: var(--mat-sys-on-surface-variant),
-    // Set disabled input text TO the normal enabled input text color
-    filled-disabled-input-text-color: var(--mat-sys-on-surface),
-    // Set disabled container color TO the normal enabled container color
-    filled-disabled-container-color: var(--mat-sys-surface-container-highest),
-
-    // --- OUTLINED APPEARANCE ---
-    // Set disabled label color TO the normal enabled label color
-    outlined-disabled-label-text-color: var(--mat-sys-on-surface-variant),
-    // Set disabled input text TO the normal enabled input text color
-    outlined-disabled-input-text-color: var(--mat-sys-on-surface),
-    // Set disabled outline color TO the normal enabled outline color
-    outlined-disabled-outline-color: var(--mat-sys-outline),
-
-    // --- OTHER UI ELEMENTS ---
-    disabled-input-text-placeholder-color: var(--mat-sys-on-surface-variant),
-    disabled-leading-icon-color: var(--mat-sys-on-surface-variant),
-    disabled-trailing-icon-color: var(--mat-sys-on-surface-variant),
-    disabled-select-arrow-color: var(--mat-sys-on-surface-variant)
-  ));
-}
-
-.toolbar-tonal-button {
-  @include mat.button-overrides((
-    tonal-container-color: #eaddff,
-    tonal-label-text-color: #2c3845,
-
-    // 1. Set the COLOR for the state layer (used on hover, focus, press)
-    tonal-state-layer-color: #3b4e64,
-
-    // 2. Set the OPACITY for each state (adjust as needed)
-    tonal-hover-state-layer-opacity: 0.08,  // 8% opacity on hover
-    tonal-focus-state-layer-opacity: 0.12,  // 12% opacity on focus
-    tonal-pressed-state-layer-opacity: 0.12 // 12% opacity on press
-  ));
-}
-
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
+  // System-level defaults mapped to Material System tokens
   color-scheme: light;
-
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
   background-color: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
-
-  // Reset the user agent margin.
   margin: 0;
 }
