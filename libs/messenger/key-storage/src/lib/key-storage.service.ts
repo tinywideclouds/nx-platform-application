@@ -1,10 +1,12 @@
-// libs/messenger/key-storage/src/lib/key-storage.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 import { PublicKeyRecord } from './key-storage.models';
 import { KeyDatabase } from './db/key.database';
 
+/**
+ * Service responsible for the persistent storage of Public Keys.
+ * Acts as a wrapper around the IndexedDB 'publicKeys' table.
+ */
 @Injectable({
   providedIn: 'root',
 })
@@ -13,6 +15,9 @@ export class KeyStorageService {
 
   /**
    * Caches a public key record.
+   * @param urn The URN of the entity (user/device).
+   * @param keys The key set (serialized).
+   * @param timestamp The fetch timestamp for TTL calculations.
    */
   async storeKey(
     urn: string,
@@ -25,6 +30,7 @@ export class KeyStorageService {
 
   /**
    * Retrieves a cached public key record by URN.
+   * @returns The record if found, or null.
    */
   async getKey(urn: string): Promise<PublicKeyRecord | null> {
     const record = await this.db.publicKeys.get(urn);

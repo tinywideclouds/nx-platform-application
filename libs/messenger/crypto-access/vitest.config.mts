@@ -9,7 +9,12 @@ export default defineConfig({
   root: __dirname,
   cacheDir:
     '../../../node_modules/.vite/libs/messenger/messenger-crypto-access',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths(),
+  ],
   test: {
     name: 'messenger-crypto-access',
     watch: false,

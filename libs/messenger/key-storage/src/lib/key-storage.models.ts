@@ -1,5 +1,3 @@
-// libs/messenger/key-storage/src/lib/key-storage.models.ts
-
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 /**

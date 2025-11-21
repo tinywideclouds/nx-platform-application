@@ -5,11 +5,14 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
+// THIS IS THE FIX: Importing the module
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+
 import { MessengerHomePageComponent } from './messenger-home-page.component';
 
 // Mocks
 import { ChatService } from '@nx-platform-application/chat-state';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -19,7 +22,7 @@ const mockChatService = {
   activeConversations: signal([]),
   selectedConversation: signal(null),
   loadConversation: vi.fn(),
-  logout: vi.fn().mockResolvedValue(undefined), // Mock logout
+  logout: vi.fn().mockResolvedValue(undefined),
 };
 
 const mockContactsService = {
@@ -45,7 +48,12 @@ describe('MessengerHomePageComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [MessengerHomePageComponent, RouterTestingModule],
+      // THIS IS THE FIX: Added NoopAnimationsModule to imports
+      imports: [
+        MessengerHomePageComponent, 
+        RouterTestingModule, 
+        NoopAnimationsModule
+      ],
       providers: [
         { provide: ChatService, useValue: mockChatService },
         { provide: ContactsStorageService, useValue: mockContactsService },
@@ -65,17 +73,16 @@ describe('MessengerHomePageComponent', () => {
   });
 
   it('should open dialog on logout click', () => {
-    mockDialogRef.afterClosed.mockReturnValue(of(false)); // Cancelled
+    mockDialogRef.afterClosed.mockReturnValue(of(false));
 
     component.onLogoutClick();
 
     expect(mockDialog.open).toHaveBeenCalled();
-    // Should NOT logout if cancelled
     expect(mockChatService.logout).not.toHaveBeenCalled();
   });
 
   it('should perform logout only if dialog confirms', () => {
-    mockDialogRef.afterClosed.mockReturnValue(of(true)); // Confirmed
+    mockDialogRef.afterClosed.mockReturnValue(of(true));
 
     component.onLogoutClick();
 

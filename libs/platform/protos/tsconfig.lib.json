@@ -4,7 +4,7 @@
     "outDir": "../dist/out-tsc",
     "declaration": true,
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "dist/ts/**/*.ts"],
   "exclude": [
     "vite.config.ts",
     "vite.config.mts",

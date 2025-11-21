@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { PendingListComponent } from './pending-list.component';
-import { PendingIdentity } from '@nx-platform-application/contacts-data-access';
+import { PendingIdentity } from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
@@ -43,8 +43,12 @@ describe('PendingListComponent', () => {
     fixture.componentRef.setInput('pending', [MOCK_STRANGER]);
     fixture.detectChanges();
 
-    const urnDisplay = fixture.debugElement.query(By.css('[data-testid="urn-display"]'));
-    const vouchBadge = fixture.debugElement.query(By.css('[data-testid="vouch-badge"]'));
+    const urnDisplay = fixture.debugElement.query(
+      By.css('[data-testid="urn-display"]')
+    );
+    const vouchBadge = fixture.debugElement.query(
+      By.css('[data-testid="vouch-badge"]')
+    );
 
     expect(urnDisplay.nativeElement.textContent).toContain('google:stranger');
     expect(vouchBadge).toBeFalsy();
@@ -54,17 +58,23 @@ describe('PendingListComponent', () => {
     fixture.componentRef.setInput('pending', [MOCK_VOUCHED]);
     fixture.detectChanges();
 
-    const vouchBadge = fixture.debugElement.query(By.css('[data-testid="vouch-badge"]'));
+    const vouchBadge = fixture.debugElement.query(
+      By.css('[data-testid="vouch-badge"]')
+    );
     expect(vouchBadge).toBeTruthy();
-    expect(vouchBadge.nativeElement.textContent).toContain('Vouched by user:bob');
+    expect(vouchBadge.nativeElement.textContent).toContain(
+      'Vouched by user:bob'
+    );
   });
 
   it('should emit block event', () => {
     fixture.componentRef.setInput('pending', [MOCK_STRANGER]);
     fixture.detectChanges();
-    
+
     const blockSpy = vi.spyOn(component.block, 'emit');
-    const btn = fixture.debugElement.query(By.css('[data-testid="block-button"]'));
+    const btn = fixture.debugElement.query(
+      By.css('[data-testid="block-button"]')
+    );
     btn.nativeElement.click();
 
     expect(blockSpy).toHaveBeenCalledWith(MOCK_STRANGER);
@@ -73,9 +83,11 @@ describe('PendingListComponent', () => {
   it('should emit approve event', () => {
     fixture.componentRef.setInput('pending', [MOCK_STRANGER]);
     fixture.detectChanges();
-    
+
     const approveSpy = vi.spyOn(component.approve, 'emit');
-    const btn = fixture.debugElement.query(By.css('[data-testid="approve-button"]'));
+    const btn = fixture.debugElement.query(
+      By.css('[data-testid="approve-button"]')
+    );
     btn.nativeElement.click();
 
     expect(approveSpy).toHaveBeenCalledWith(MOCK_STRANGER);

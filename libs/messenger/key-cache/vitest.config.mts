@@ -8,7 +8,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/key-cache',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths(),
+  ],
   test: {
     name: 'key-cache',
     watch: false,

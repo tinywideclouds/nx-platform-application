@@ -27,7 +27,6 @@ describe('ChatWindowHeaderComponent', () => {
     fixture = TestBed.createComponent(ChatWindowHeaderComponent);
     component = fixture.componentInstance;
     
-    // Set required input
     fixture.componentRef.setInput('participant', MOCK_PARTICIPANT);
     fixture.detectChanges();
   });
@@ -82,11 +81,13 @@ describe('ChatWindowHeaderComponent', () => {
 
     const infoBtn = fixture.debugElement.query(By.css('[data-testid="info-button"]'));
     
-    // Verify the badge class or attribute exists. 
-    // Material adds 'mat-badge-hidden' class when hidden.
-    // We check that it is NOT hidden.
+    // 1. Check it is not hidden
     expect(infoBtn.nativeElement.classList).not.toContain('mat-badge-hidden');
-    expect(infoBtn.attributes['ng-reflect-content']).toBe('!'); // Check content if possible, or use visual check logic
+    
+    // 2. Check that the badge content is actually rendered in the DOM
+    const badgeContent = fixture.debugElement.query(By.css('.mat-badge-content'));
+    expect(badgeContent).toBeTruthy();
+    expect(badgeContent.nativeElement.textContent).toContain('!');
   });
 
   it('should hide warning badge when hasKeyIssue is false', () => {
@@ -94,6 +95,7 @@ describe('ChatWindowHeaderComponent', () => {
     fixture.detectChanges();
 
     const infoBtn = fixture.debugElement.query(By.css('[data-testid="info-button"]'));
+    // Material adds this class when the badge is hidden
     expect(infoBtn.nativeElement.classList).toContain('mat-badge-hidden');
   });
 });

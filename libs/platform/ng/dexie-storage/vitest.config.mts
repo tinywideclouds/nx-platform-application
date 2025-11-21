@@ -8,7 +8,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../../node_modules/.vite/libs/platform/ng/dexie-storage',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths()
+  ],
   test: {
     name: 'platform-dexie-storage',
     watch: false,

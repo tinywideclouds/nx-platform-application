@@ -1,5 +1,4 @@
 import '@angular/compiler';
-// Import the setup-snapshots for compatibility instead of setup-zone
 import '@analogjs/vitest-angular/setup-snapshots';
 import {
   provideZonelessChangeDetection,

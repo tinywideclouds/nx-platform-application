@@ -20,7 +20,7 @@ import {
 import {
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';

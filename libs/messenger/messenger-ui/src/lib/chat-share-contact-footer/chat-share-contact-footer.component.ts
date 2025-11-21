@@ -18,7 +18,7 @@ import { startWith } from 'rxjs/operators';
 import {
   ContactsStorageService,
   Contact,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
 
 @Component({
@@ -41,22 +41,28 @@ export class ChatShareContactFooterComponent {
   share = output<URN>();
 
   searchControl = new FormControl<string | Contact>('');
-  
+
   private searchText = toSignal(
-    this.searchControl.valueChanges.pipe(startWith('')), 
+    this.searchControl.valueChanges.pipe(startWith('')),
     { initialValue: '' }
   );
 
-  private allContacts = toSignal(this.contactsService.contacts$, { initialValue: [] });
+  private allContacts = toSignal(this.contactsService.contacts$, {
+    initialValue: [],
+  });
 
   filteredContacts = computed(() => {
     const rawValue = this.searchText();
-    
+
     // FIX: Handle case where value is a Contact object (after selection)
     let term = '';
     if (typeof rawValue === 'string') {
       term = rawValue.toLowerCase();
-    } else if (rawValue && typeof rawValue === 'object' && 'alias' in rawValue) {
+    } else if (
+      rawValue &&
+      typeof rawValue === 'object' &&
+      'alias' in rawValue
+    ) {
       // If a contact is selected, we can either show all or filter by that contact.
       // Let's filter by the selected name to keep the view consistent.
       term = (rawValue as Contact).alias.toLowerCase();
@@ -65,12 +71,14 @@ export class ChatShareContactFooterComponent {
     const all = this.allContacts();
     const ignoreId = this.contactToShare()?.toString();
 
-    return all.filter(c => {
+    return all.filter((c) => {
       if (c.id.toString() === ignoreId) return false;
-      
-      return c.alias.toLowerCase().includes(term) || 
-             c.firstName.toLowerCase().includes(term) || 
-             c.surname.toLowerCase().includes(term);
+
+      return (
+        c.alias.toLowerCase().includes(term) ||
+        c.firstName.toLowerCase().includes(term) ||
+        c.surname.toLowerCase().includes(term)
+      );
     });
   });
 

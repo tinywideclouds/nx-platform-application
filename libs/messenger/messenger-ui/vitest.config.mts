@@ -9,12 +9,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/messenger-ui',
-
   plugins: [
-    angular({ }),
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
     nxViteTsPaths()
   ],
-
   test: {
     name: 'messenger-ui',
     watch: false,

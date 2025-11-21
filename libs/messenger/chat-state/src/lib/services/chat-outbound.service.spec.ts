@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { ChatOutboundService } from './chat-outbound.service';
 import {
   URN,
-  ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
@@ -11,7 +10,7 @@ import { vi } from 'vitest';
 import { ChatSendService } from '@nx-platform-application/chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { Logger } from '@nx-platform-application/console-logger';
 
@@ -26,9 +25,11 @@ const mockLogger = { error: vi.fn() };
 describe('ChatOutboundService', () => {
   let service: ChatOutboundService;
 
-  const myUrn = URN.parse('urn:auth:me');
+  // Valid 4-part URNs required by URN.parse()
+  const myUrn = URN.parse('urn:auth:user:me');
   const contactUrn = URN.parse('urn:sm:user:bob');
-  const authUrn = URN.parse('urn:auth:bob');
+  const authUrn = URN.parse('urn:auth:user:bob');
+  
   const typeId = URN.parse('urn:sm:type:text');
   const payloadBytes = new Uint8Array([1, 2, 3]);
   const mockEnvelope = { signature: new Uint8Array([9]) };
@@ -72,8 +73,8 @@ describe('ChatOutboundService', () => {
 
     // 2. Encrypt (using resolved Auth URN)
     expect(mockCryptoService.encryptAndSign).toHaveBeenCalledWith(
-      expect.objectContaining({ typeId }), // Payload check
-      authUrn, // Recipient
+      expect.objectContaining({ typeId }), 
+      authUrn,
       expect.anything(),
       expect.anything()
     );

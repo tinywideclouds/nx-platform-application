@@ -1,7 +1,7 @@
 // libs/messenger/chat-state/src/lib/chat.service.spec.ts
 
 import { TestBed } from '@angular/core/testing';
-import { Subject, BehaviorSubject, of } from 'rxjs';
+import { Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import { ChatService } from './chat.service';
 import { ChatIngestionService } from './services/chat-ingestion.service';
@@ -16,7 +16,7 @@ import {
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
@@ -58,12 +58,17 @@ const mockLiveService = {
   incomingMessage$: new Subject(),
   disconnect: vi.fn(),
 };
+
+// FIX: Use a Subject instead of BehaviorSubject(null).
+// This prevents firstValueFrom() in init() from resolving immediately with null,
+// which allows the test helper to set the user before the auth event emits.
 const mockAuthService = {
-  sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
+  sessionLoaded$: new Subject<AuthStatusResponse | null>(),
   currentUser: signal<User | null>(null),
   getJwtToken: vi.fn(() => 'token'),
   logout: vi.fn(),
 };
+
 const mockLogger = {
   info: vi.fn(),
   warn: vi.fn(),
@@ -80,10 +85,13 @@ const mockUser: User = {
 const mockPrivateKeys = { encKey: 'priv' } as any;
 const mockGeneratedKeys = { privateKeys: mockPrivateKeys, publicKeys: {} };
 
-describe('ChatService (Orchestrator)', () => {
+describe('ChatService', () => {
   let service: ChatService;
 
-  // Helper to boot the service
+  /**
+   * Helper to boot the service.
+   * Handles the async initialization chain triggered by the sessionLoaded$ emission.
+   */
   async function initializeService() {
     mockAuthService.currentUser.set(mockUser);
     mockAuthService.sessionLoaded$.next({
@@ -91,8 +99,10 @@ describe('ChatService (Orchestrator)', () => {
       user: mockUser,
       token: 'token',
     });
-    // Wait for init promises
-    await vi.runOnlyPendingTimersAsync();
+    
+    // FIX: We use fake timers, so 'setTimeout' is mocked and paused.
+    // We must manually advance time to flush the async operations in init().
+    await vi.advanceTimersByTimeAsync(1);
   }
 
   beforeEach(async () => {

@@ -12,7 +12,6 @@ import {
 import {
   ISODateTimeString,
   URN,
-  User,
 } from '@nx-platform-application/platform-types';
 import { Subject, filter, takeUntil, firstValueFrom, interval } from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
@@ -28,11 +27,10 @@ import { ChatSendService } from '@nx-platform-application/chat-access';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
   ChatStorageService,
-  DecryptedMessage,
   ConversationSummary,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatMessageMapper } from './services/chat-message.mapper';
 import { ChatOutboundService } from './services/chat-outbound.service';

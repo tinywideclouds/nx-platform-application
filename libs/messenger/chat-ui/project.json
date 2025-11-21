@@ -22,9 +22,9 @@
         "{options.htmlReportDirectory}"
       ],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/chat-state",
-        "htmlReportDirectory": "dist/test-reports/libs/messenger/chat-state",
-        "configFile": "libs/messenger/chat-state/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/chat-ui",
+        "htmlReportDirectory": "dist/test-reports/libs/messenger/chat-ui",
+        "configFile": "libs/messenger/chat-ui/vitest.config.mts"
       }
     },
     "lint": {

@@ -17,7 +17,7 @@ import {
   FormArray,
   Validators,
 } from '@angular/forms';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types'; // <-- Import URN
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -74,7 +74,9 @@ export class ContactFormComponent {
       if (currentContact) {
         this.form.patchValue(currentContact);
         this.phoneNumbers.clear();
-        currentContact.phoneNumbers.forEach((phone) => this.addPhoneNumber(phone));
+        currentContact.phoneNumbers.forEach((phone) =>
+          this.addPhoneNumber(phone)
+        );
         this.emailAddresses.clear();
         currentContact.emailAddresses.forEach((email) =>
           this.addEmailAddress(email)
@@ -146,7 +148,7 @@ export class ContactFormComponent {
     const parts = urn.toString().split(':');
     return parts.length > 2 ? parts[2] : 'Unknown';
   }
-  
+
   getProviderId(urn: URN): string {
     const parts = urn.toString().split(':');
     return parts.length > 3 ? parts.slice(3).join(':') : urn.toString();

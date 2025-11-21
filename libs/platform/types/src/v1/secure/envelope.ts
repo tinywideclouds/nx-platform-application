@@ -1,4 +1,4 @@
-import { create, toJsonString, fromJson } from "@bufbuild/protobuf";
+import { create, toJson, fromJson } from "@bufbuild/protobuf";
 import { URN } from '../net/urn';
 
 // --- Protobuf Imports (This is the *only* file allowed to do this) ---\
@@ -57,14 +57,14 @@ export function secureEnvelopeFromProto(envelopePb: SecureEnvelopePb): SecureEnv
 
 /**
  * PUBLIC API:
- * Serializes a "smart" SecureEnvelope object into a JSON string
+ * Serializes a "smart" SecureEnvelope object into a JSON object
  * ready for transport.
  */
-export function serializeEnvelopeToJson(envelope: SecureEnvelope): string {
+export function serializeEnvelopeToJson(envelope: SecureEnvelope): any {
   // 1. Smart -> Proto
   const protoEnvelope = secureEnvelopeToProto(envelope);
   // 2. Proto -> JSON String
-  return toJsonString(SecureEnvelopePbSchema, protoEnvelope);
+  return toJson(SecureEnvelopePbSchema, protoEnvelope);
 }
 
 /**

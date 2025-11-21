@@ -4,7 +4,7 @@ import { Component, signal } from '@angular/core';
 import {
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
@@ -76,7 +76,7 @@ class TestHostComponent {
   startInEditMode = signal(false);
 
   savedGroup: ContactGroup | null = null;
-  
+
   onSave(group: ContactGroup) {
     this.savedGroup = group;
   }
@@ -113,7 +113,7 @@ describe('ContactGroupFormComponent', () => {
   it('should be in "add mode" with an empty form', () => {
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
-    
+
     const nameInput = componentEl.querySelector(
       'input[formControlName="name"]'
     ) as HTMLInputElement;
@@ -169,7 +169,7 @@ describe('ContactGroupFormComponent', () => {
   // --- 7. Update Assertions for "save" ---
   it('should emit (save) with form data', async () => {
     const saveSpy = vi.spyOn(hostComponent, 'onSave');
-    
+
     hostComponent.group.set(MOCK_GROUP); // Set the group so the ID is preserved
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
@@ -202,7 +202,7 @@ describe('ContactGroupFormComponent', () => {
     hostComponent.startInEditMode.set(true);
     fixture.detectChanges();
     expect(formComponent.isEditing()).toBe(true);
-    
+
     const cancelButton = fixture.debugElement.query(
       By.css('[data-testid="cancel-button"]')
     ).nativeElement as HTMLButtonElement;
@@ -228,7 +228,7 @@ describe('ContactGroupFormComponent', () => {
 
     expect(saveButton.disabled).toBe(false);
   });
-  
+
   it('should switch from view mode to edit mode when "Edit" is clicked', () => {
     hostComponent.group.set(MOCK_GROUP);
     hostComponent.startInEditMode.set(false);

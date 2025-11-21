@@ -15,7 +15,7 @@ import {
   ChatStorageService,
   DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 
 // Types

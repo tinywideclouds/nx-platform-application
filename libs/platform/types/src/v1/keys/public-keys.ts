@@ -1,15 +1,8 @@
-//
 import {
   PublicKeysPbSchema,
   PublicKeysPb,
 } from '@nx-platform-application/platform-protos/key/v1/key_pb';
-// 1. Import 'toJson' from the protobuf library
 import { create, fromJson, toJson } from '@bufbuild/protobuf';
-
-// 2. --- REMOVE THIS HELPER ---
-// const b64Encode = (bytes: Uint8Array) =>
-//   btoa(String.fromCharCode.apply(null, Array.from(bytes)));
-// ---
 
 /**
  * The "smart" public-facing interface for the KeyService.
@@ -55,9 +48,7 @@ export function deserializeJsonToPublicKeys(json: unknown): PublicKeys {
 
 /**
  * PUBLIC API: (Write)
- * 3. --- UPDATE THIS FUNCTION ---
  * Serializes a "smart" PublicKeys object into a JSON-safe object
- * (with Base64 strings) ready for a POST body.
  */
 export function serializePublicKeysToJson(
   keys: PublicKeys

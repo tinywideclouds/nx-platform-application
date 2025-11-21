@@ -8,7 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
 @Component({

@@ -9,7 +9,12 @@ import {
   untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterOutlet, NavigationEnd } from '@angular/router';
+import {
+  ActivatedRoute,
+  Router,
+  RouterOutlet,
+  NavigationEnd,
+} from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
 
@@ -19,22 +24,21 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 
 // --- Components ---
-import { ChatWindowHeaderComponent, ChatWindowMode } from '../chat-window-header/chat-window-header.component';
+import {
+  ChatWindowHeaderComponent,
+  ChatWindowMode,
+} from '../chat-window-header/chat-window-header.component';
 import { ChatParticipant } from '@nx-platform-application/messenger-types';
 
 @Component({
   selector: 'messenger-chat-window',
   standalone: true,
-  imports: [
-    CommonModule, 
-    RouterOutlet,
-    ChatWindowHeaderComponent,
-  ],
+  imports: [CommonModule, RouterOutlet, ChatWindowHeaderComponent],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,23 +52,27 @@ export class ChatWindowComponent {
 
   // --- 1. Determine Mode from Router ---
   private routerEvents$ = this.router.events;
-  
+
   viewMode = toSignal(
     this.routerEvents$.pipe(
-      filter(e => e instanceof NavigationEnd),
+      filter((e) => e instanceof NavigationEnd),
       map(() => {
         const url = this.router.url;
-        return url.endsWith('/details') ? 'details' as ChatWindowMode : 'chat' as ChatWindowMode;
+        return url.endsWith('/details')
+          ? ('details' as ChatWindowMode)
+          : ('chat' as ChatWindowMode);
       })
     ),
-    { 
-      initialValue: this.router.url.endsWith('/details') ? 'details' as ChatWindowMode : 'chat' as ChatWindowMode 
+    {
+      initialValue: this.router.url.endsWith('/details')
+        ? ('details' as ChatWindowMode)
+        : ('chat' as ChatWindowMode),
     }
   );
 
   // --- 2. Data Loading Logic ---
   private routeParams = toSignal(this.route.paramMap);
-  
+
   conversationUrnString = computed(() => this.routeParams()?.get('id') || null);
 
   conversationUrn = computed(() => {
@@ -81,8 +89,12 @@ export class ChatWindowComponent {
   // --- 3. State Signals ---
   isKeyMissing = this.chatService.isRecipientKeyMissing;
 
-  private contacts = toSignal(this.contactsService.contacts$, { initialValue: [] as Contact[] });
-  private groups = toSignal(this.contactsService.groups$, { initialValue: [] as ContactGroup[] });
+  private contacts = toSignal(this.contactsService.contacts$, {
+    initialValue: [] as Contact[],
+  });
+  private groups = toSignal(this.contactsService.groups$, {
+    initialValue: [] as ContactGroup[],
+  });
 
   // --- 4. Participant Computation ---
   participant = computed<ChatParticipant | null>(() => {
@@ -96,12 +108,15 @@ export class ChatWindowComponent {
         urn,
         name: contact.alias,
         initials: (contact.firstName?.[0] || '') + (contact.surname?.[0] || ''),
-        profilePictureUrl: contact.serviceContacts['messenger']?.profilePictureUrl,
+        profilePictureUrl:
+          contact.serviceContacts['messenger']?.profilePictureUrl,
       };
     }
 
     if (urn.entityType === 'group') {
-      const group = this.groups().find((g) => g.id.toString() === urn.toString());
+      const group = this.groups().find(
+        (g) => g.id.toString() === urn.toString()
+      );
       if (!group) return { urn, name: 'Unknown Group', initials: 'G' };
       return { urn, name: group.name, initials: 'G' };
     }

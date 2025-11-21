@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { ContactGroup } from '@nx-platform-application/contacts-data-access';
+import { ContactGroup } from '@nx-platform-application/contacts-access';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';

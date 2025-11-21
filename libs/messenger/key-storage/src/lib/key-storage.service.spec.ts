@@ -1,5 +1,3 @@
-// libs/messenger/key-storage/src/lib/key-storage.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
@@ -9,6 +7,7 @@ import { KeyDatabase } from './db/key.database';
 import { PublicKeyRecord } from './key-storage.models';
 
 // --- Mocks ---
+// Hoist the mock setup so it can be used in the module scope if needed
 const { mockTable, mockKeyDb } = vi.hoisted(() => {
   const tableMock = {
     put: vi.fn(),

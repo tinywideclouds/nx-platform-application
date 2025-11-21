@@ -7,9 +7,12 @@ import { Logger } from '@nx-platform-application/console-logger';
 import { vi } from 'vitest';
 import { WSS_URL_TOKEN } from './live-data.config';
 
-// --- Mock WebSocket (Updated) ---
 const RealWebSocket = global.WebSocket;
 
+/**
+ * Mock implementation of WebSocket for testing RxJS webSocket behavior.
+ * Allows manual triggering of open, message, error, and close events.
+ */
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
   url: string;
@@ -32,14 +35,13 @@ class MockWebSocket {
     MockWebSocket.instances.push(this);
   }
 
-  // --- THIS IS THE SECOND FIX ---
-  // Make the close spy synchronous to avoid test race conditions.
+  // Executing close synchronously prevents race conditions in tests 
+  // where assertions happen immediately after disconnect().
   close = vi.fn(() => {
     if (this.onclose) {
       this.onclose({ wasClean: true } as CloseEvent);
     }
   });
-  // --- END FIX ---
 
   send = vi.fn();
 
@@ -55,7 +57,6 @@ class MockWebSocket {
     }
   }
 }
-// --- End Mock WebSocket ---
 
 vi.mock('@nx-platform-application/messenger-types', () => ({
   deserializeJsonToEnvelope: vi.fn(),
@@ -65,9 +66,10 @@ const mockLogger = {
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
+  debug: vi.fn(), // Added to satisfy service usage
 };
 
-describe('ChatLiveDataService (Refactored)', () => {
+describe('ChatLiveDataService', () => {
   let service: ChatLiveDataService;
   let logger: Logger;
 
@@ -78,7 +80,7 @@ describe('ChatLiveDataService (Refactored)', () => {
     global.WebSocket = MockWebSocket as any;
     MockWebSocket.instances = [];
     vi.clearAllMocks();
-    vi.useFakeTimers(); // Use fake timers for retry test
+    vi.useFakeTimers(); 
 
     TestBed.configureTestingModule({
       providers: [
@@ -95,7 +97,7 @@ describe('ChatLiveDataService (Refactored)', () => {
   afterEach(() => {
     service.ngOnDestroy();
     global.WebSocket = RealWebSocket;
-    vi.useRealTimers(); // Restore real timers
+    vi.useRealTimers();
   });
 
   it('should be created and log initialization', () => {
@@ -143,37 +145,33 @@ describe('ChatLiveDataService (Refactored)', () => {
 
   it('should log error on socket error and attempt retry', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {
-      // lint
+      // suppress console error for clean test output
     });
 
     service.connect(mockJwt);
     await Promise.resolve();
-    expect(MockWebSocket.instances.length).toBe(1); // Initial connection
+    expect(MockWebSocket.instances.length).toBe(1); 
 
     const testError = new Error('Socket failed');
     MockWebSocket.lastInstance?.triggerError(testError);
-    await Promise.resolve(); // Allow error to propagate
+    await Promise.resolve(); 
 
     expect(logger.error).toHaveBeenCalledWith(
       'ChatLiveDataService: WebSocket error',
       testError
     );
 
-    // --- THIS IS THE FIRST FIX ---
-    // The test was expecting 1000ms, but the service
-    // correctly calculates 2000ms (1000 * 2^1).
+    // Retry logic: 1000 * 2^1 = 2000ms
     expect(logger.warn).toHaveBeenCalledWith(
       'WebSocket retry attempt 1, delay 2000ms'
     );
-    // --- END FIX ---
 
-    // Advance timers to trigger the retry (using the correct delay)
+    // Advance timers to trigger the retry
     vi.advanceTimersByTime(2000);
-    await Promise.resolve(); // Allow retry to execute
+    await Promise.resolve(); 
 
-    // The retry logic (with defer()) has now fired, creating a new socket
+    // Expect a new socket instance created by the retry/defer
     expect(MockWebSocket.instances.length).toBe(2);
-    // And the new socket should have the token
     expect(MockWebSocket.lastInstance?.protocol).toEqual([mockJwt]);
   });
 
@@ -189,10 +187,8 @@ describe('ChatLiveDataService (Refactored)', () => {
     const instanceToClose = MockWebSocket.lastInstance;
     service.disconnect();
 
-    // Run all pending async logic
     await vi.runAllTicks();
 
-    // Now that the close spy is synchronous, this will pass
     expect(instanceToClose?.close).toHaveBeenCalled();
     expect(statuses.pop()).toBe('disconnected');
   });

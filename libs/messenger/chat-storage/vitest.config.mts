@@ -8,7 +8,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/chat-storage',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths(),
+  ],
   test: {
     name: 'chat-storage',
     watch: false,

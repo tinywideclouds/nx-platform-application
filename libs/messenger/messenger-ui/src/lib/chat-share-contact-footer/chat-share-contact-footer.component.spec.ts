@@ -1,8 +1,16 @@
 // libs/messenger/messenger-ui/src/lib/chat-share-contact-footer/chat-share-contact-footer.component.spec.ts
 
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+} from '@angular/core/testing';
 import { ChatShareContactFooterComponent } from './chat-share-contact-footer.component';
-import { ContactsStorageService, Contact } from '@nx-platform-application/contacts-data-access';
+import {
+  ContactsStorageService,
+  Contact,
+} from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -19,7 +27,7 @@ const mockContact1: Contact = {
   email: 'a@a.com',
   phoneNumbers: [],
   emailAddresses: [],
-  serviceContacts: {}
+  serviceContacts: {},
 };
 
 const mockContact2: Contact = {
@@ -30,11 +38,11 @@ const mockContact2: Contact = {
   email: 'b@b.com',
   phoneNumbers: [],
   emailAddresses: [],
-  serviceContacts: {}
+  serviceContacts: {},
 };
 
 const mockContactsService = {
-  contacts$: of([mockContact1, mockContact2])
+  contacts$: of([mockContact1, mockContact2]),
 };
 
 describe('ChatShareContactFooterComponent', () => {
@@ -45,8 +53,8 @@ describe('ChatShareContactFooterComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ChatShareContactFooterComponent, NoopAnimationsModule],
       providers: [
-        { provide: ContactsStorageService, useValue: mockContactsService }
-      ]
+        { provide: ContactsStorageService, useValue: mockContactsService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ChatShareContactFooterComponent);
@@ -61,7 +69,7 @@ describe('ChatShareContactFooterComponent', () => {
   it('should filter contacts based on search text', async () => {
     // Need to wait for signal initial value
     await fixture.whenStable();
-    
+
     // 1. Search for "Alice"
     component.searchControl.setValue('Alice');
     fixture.detectChanges();
@@ -73,7 +81,7 @@ describe('ChatShareContactFooterComponent', () => {
     // 2. Search for "Bob"
     component.searchControl.setValue('Bob');
     fixture.detectChanges();
-    
+
     expect(component.filteredContacts().length).toBe(1);
     expect(component.filteredContacts()[0].alias).toBe('Bob');
   });
@@ -95,7 +103,7 @@ describe('ChatShareContactFooterComponent', () => {
 
   it('should emit share event on send', () => {
     const spy = vi.spyOn(component.share, 'emit');
-    
+
     // Select Bob
     component.selectedRecipient.set(mockContact2);
     fixture.detectChanges();

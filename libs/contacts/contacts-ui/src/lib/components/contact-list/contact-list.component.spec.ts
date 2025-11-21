@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 // --- 1. Import URN and ISODateTimeString ---
 import {
   ISODateTimeString,
@@ -77,7 +77,11 @@ describe('ContactListComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       // Import all components used in the test chain
-      imports: [TestHostComponent, ContactListComponent, ContactListItemComponent],
+      imports: [
+        TestHostComponent,
+        ContactListComponent,
+        ContactListItemComponent,
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TestHostComponent);
@@ -94,9 +98,7 @@ describe('ContactListComponent', () => {
     fixture.detectChanges();
 
     // 3. Assert
-    const items = fixture.debugElement.queryAll(
-      By.css('contacts-list-item')
-    );
+    const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
     expect(items.length).toBe(MOCK_CONTACTS.length);
   });
 
@@ -128,15 +130,15 @@ describe('ContactListComponent', () => {
     fixture.detectChanges();
 
     // 3. Assert
-    const items = fixture.debugElement.queryAll(
-      By.css('contacts-list-item')
-    );
+    const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
     const emptyMessage = fixture.debugElement.query(
       By.css('[data-testid="empty-list"]')
     );
 
     expect(items.length).toBe(0);
     expect(emptyMessage).toBeTruthy();
-    expect(emptyMessage.nativeElement.textContent).toContain('No contacts found');
+    expect(emptyMessage.nativeElement.textContent).toContain(
+      'No contacts found'
+    );
   });
 });

@@ -1,0 +1,34 @@
+{
+  "name": "contacts-access",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contacts/contacts-access/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:contacts"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/contacts/contacts-access",
+        "configFile": "libs/contacts/contacts-access/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/contacts/contacts-access",
+        "htmlReportDirectory": "dist/test-reports/libs/contacts/contacts-access",
+        "configFile": "libs/contacts/contacts-access/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

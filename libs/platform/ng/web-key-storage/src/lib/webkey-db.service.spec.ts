@@ -61,7 +61,7 @@ describe('WebKeyDbStore', () => {
   it('should be created with the correct DB name', () => {
     expect(service).toBeTruthy();
     // Verify we passed the correct string to the super() constructor
-    expect(mockConstructorSpy).toHaveBeenCalledWith('tinywideclouds/platform');
+    expect(mockConstructorSpy).toHaveBeenCalledWith('platform');
   });
 
   describe('saveJwk', () => {

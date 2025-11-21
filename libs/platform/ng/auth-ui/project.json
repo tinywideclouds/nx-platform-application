@@ -1,30 +1,25 @@
 {
   "name": "platform-auth-ui",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/platform/ng/auth-ui/src",
-  "prefix": "aui",
+  "sourceRoot": "libs/platform/auth-ui/src",
+  "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:platform"],
+  "tags": ["scope:messenger"],
   "targets": {
-    "build": {
-      "executor": "@nx/vite:build",
-      "outputs": ["{options.outputPath}"],
-      "defaultConfiguration": "production",
-      "options": {
-        "outputPath": "dist/libs/platform/ng/auth-ui",
-        "configFile": "libs/platform/ng/auth-ui/vite.config.mts"
-      }
-    },
     "test": {
       "executor": "@nx/vite:test",
+      "dependsOn": [
+        "^build", 
+        { "projects": "console-logger", "target": "build" } 
+      ],
       "outputs": [
         "{options.reportsDirectory}",
-        "{options.reportsHtmlDirectory}"
+        "{options.htmlReportDirectory}"
       ],
       "options": {
-        "reportsDirectory": "coverage/libs/platform/ng/auth-ui",
-        "reportsHtmlDirectory": "dist/test-reports/platform/ng/auth-ui",
-        "configFile": "libs/platform/ng/auth-ui/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/platform/auth-ui",
+        "htmlReportDirectory": "dist/test-reports/libs/platform/auth-ui",
+        "configFile": "libs/platform/auth-ui/vitest.config.mts"
       }
     },
     "lint": {

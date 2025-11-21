@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../../dist/out-tsc",
-    "composite": true,
+    "composite": false,
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,

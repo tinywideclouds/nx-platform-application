@@ -9,7 +9,7 @@ import {
   HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 // Import the avatar component so our template can use it
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 

@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Component } from '@angular/core';
-import { ContactGroup } from '@nx-platform-application/contacts-data-access';
+import { ContactGroup } from '@nx-platform-application/contacts-access';
 import { vi } from 'vitest';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
@@ -85,10 +85,7 @@ describe('ContactGroupListItemComponent (Events)', () => {
     standalone: true,
     imports: [ContactGroupListItemComponent],
     template: `
-      <contacts-group-list-item
-        [group]="group"
-        (select)="onSelected($event)"
-      />
+      <contacts-group-list-item [group]="group" (select)="onSelected($event)" />
     `,
   })
   class TestHostComponent {

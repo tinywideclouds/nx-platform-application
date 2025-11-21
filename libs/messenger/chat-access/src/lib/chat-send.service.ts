@@ -11,7 +11,7 @@ import {
 import { ROUTING_SERVICE_URL } from './chat-data.config';
 
 /**
- * NEW: Chat Send Service (The "Command" / "Send" Service)
+ * Chat Send Service (The "Command" / "Send" Service)
  *
  * This service is responsible *only* for sending a message.
  * It serializes the "smart" SecureEnvelope into a JSON string

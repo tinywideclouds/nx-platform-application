@@ -21,55 +21,64 @@ export type ConnectionStatus =
   | 'connected'
   | 'error';
 
+/**
+ * Service responsible for managing the WebSocket connection for live chat data.
+ * Handles automatic reconnection strategies, connection status tracking, and
+ * incoming "poke" notifications.
+ */
 @Injectable({
   providedIn: 'root',
 })
 export class ChatLiveDataService implements OnDestroy {
   private readonly logger = inject(Logger);
-  private readonly baseApiUrl = inject(WSS_URL_TOKEN, {optional: true}) ?? 'api/connect';
+  private readonly baseApiUrl = inject(WSS_URL_TOKEN, { optional: true }) ?? 'api/connect';
 
   private socket$?: WebSocketSubject<unknown>;
   private subscription?: Subscription;
 
-  private readonly statusSubject = new BehaviorSubject<ConnectionStatus>(
-    'disconnected'
-  );
+  private readonly statusSubject = new BehaviorSubject<ConnectionStatus>('disconnected');
   public readonly status$ = this.statusSubject.asObservable();
 
   private readonly messageSubject = new Subject<void>();
-  public readonly incomingMessage$: Observable<void> =
-    this.messageSubject.asObservable();
+  
+  /**
+   * Emits whenever a message is received from the WebSocket.
+   * The payload is void as the message acts as a signal to refresh data.
+   */
+  public readonly incomingMessage$: Observable<void> = this.messageSubject.asObservable();
 
   constructor() {
     this.logger.info('ChatLiveDataService initialized');
   }
 
+  /**
+   * Establishes a WebSocket connection using the provided JWT.
+   * If a connection is already active, this method does nothing.
+   * * @param jwtToken The authentication token for the WebSocket protocol.
+   */
   public connect(jwtToken: string): void {
     if (this.subscription) {
       return;
     }
     this.statusSubject.next('connecting');
 
+    // defer() ensures the WebSocket is created only when subscribed to,
+    // and recreated fresh on retries.
     const stream$ = defer(() => {
-      // --- DEBUGGING: Log the connection attempt ---
-      this.logger.info(`WSS: defer() called, creating WebSocket to: ${this.baseApiUrl}`);
-      // --- END DEBUGGING ---
+      this.logger.info(`WSS: Creating WebSocket connection to: ${this.baseApiUrl}`);
+      
       this.socket$ = webSocket({
         url: this.baseApiUrl,
         protocol: [jwtToken],
         openObserver: {
           next: () => {
-            // --- DEBUGGING: Log the successful opening ---
             this.logger.debug('WSS: Connection OPENED.');
-            // --- END DEBUGGING ---
-            this.statusSubject.next('connected')
+            this.statusSubject.next('connected');
           },
         },
         closeObserver: {
           next: (closeEvent) => {
-            // --- DEBUGGING: Log the close event ---
             this.logger.debug(`WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`);
-            // --- END DEBUGGING ---
             if (this.statusSubject.value !== 'disconnected') {
               this.statusSubject.next('disconnected');
             }
@@ -86,16 +95,14 @@ export class ChatLiveDataService implements OnDestroy {
       }),
       retry({
         delay: (error, retryCount) => {
+          // Exponential backoff: 1s, 2s, 4s... capped at 30s
           const delay = Math.min(1000 * 2 ** retryCount, 30000);
           this.logger.warn(`WebSocket retry attempt ${retryCount}, delay ${delay}ms`);
           return timer(delay);
         },
       }),
       catchError((err) => {
-        this.logger.error(
-          'ChatLiveDataService: Unrecoverable WebSocket error',
-          err
-        );
+        this.logger.error('ChatLiveDataService: Unrecoverable WebSocket error', err);
         return EMPTY;
       })
     );
@@ -110,31 +117,30 @@ export class ChatLiveDataService implements OnDestroy {
         if (this.statusSubject.value !== 'disconnected') {
           this.statusSubject.next('disconnected');
         }
-        this.subscription = undefined;
-        this.socket$ = undefined; // Clear socket ref on complete
+        this.resetState();
       },
       error: () => {
         this.statusSubject.next('disconnected');
-        this.subscription = undefined;
-        this.socket$ = undefined; // Clear socket ref on error
+        this.resetState();
       },
     });
   }
 
+  /**
+   * Manually disconnects the WebSocket and cleans up subscriptions.
+   */
   public disconnect(): void {
-    // We must call .complete() on the socket subject itself.
-    // This imperatively closes the connection and will trigger
-    // our mock's .close() spy.
+    // Call .complete() on the socket subject to imperatively close the connection
     if (this.socket$) {
       this.socket$.complete();
       this.socket$ = undefined;
     }
-    // We still unsubscribe to clean up the RxJS chain.
+    
     if (this.subscription) {
       this.subscription.unsubscribe();
       this.subscription = undefined;
     }
-    // --- END FIX ---
+
     if (this.statusSubject.value !== 'disconnected') {
       this.statusSubject.next('disconnected');
     }
@@ -144,5 +150,10 @@ export class ChatLiveDataService implements OnDestroy {
     this.disconnect();
     this.statusSubject.complete();
     this.messageSubject.complete();
+  }
+
+  private resetState(): void {
+    this.subscription = undefined;
+    this.socket$ = undefined;
   }
 }

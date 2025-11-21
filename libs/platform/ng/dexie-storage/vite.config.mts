@@ -12,4 +12,20 @@ export default defineConfig(() => ({
   // worker: {
   //  plugins: [ nxViteTsPaths() ],
   // },
+  build: {
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    lib: {
+      entry: 'src/index.ts',
+      name: 'platform-dexie-storage',
+      fileName: 'index',
+      formats: ['es' as const],
+    },
+    rollupOptions: {
+      external: ['dexie', '@angular/core', '@angular/common', 'rxjs'],
+    },
+  },
 }));

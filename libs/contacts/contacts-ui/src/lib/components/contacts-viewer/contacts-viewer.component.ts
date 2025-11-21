@@ -16,7 +16,7 @@ import {
   ContactGroup,
   PendingIdentity,
   BlockedIdentity,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 import { ContactListComponent } from '../contact-list/contact-list.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTabsModule, MatTabChangeEvent } from '@angular/material/tabs';
@@ -56,14 +56,14 @@ export class ContactsViewerComponent {
   // --- NEW INPUTS ---
   /** If true, clicking a contact emits an event instead of navigating. */
   selectionMode = input(false);
-  
+
   /** Passed down to the toolbar to force icon-only buttons. */
   forceToolbarIcons = input(false);
 
   // --- NEW OUTPUTS ---
   /** Emitted when a contact is clicked in selection mode. */
   contactSelected = output<Contact>();
-  
+
   /** Emitted when a group is clicked in selection mode. */
   groupSelected = output<ContactGroup>();
 
@@ -82,7 +82,7 @@ export class ContactsViewerComponent {
   });
 
   private queryParams = toSignal(this.route.queryParamMap);
-  
+
   activeTab = computed(() => {
     // If we are embedded, we might want to control tab via input too?
     // For now, query params is still okay if we use skipLocationChange or handle it in parent.
@@ -139,7 +139,10 @@ export class ContactsViewerComponent {
   }
 
   async blockPending(pending: PendingIdentity): Promise<void> {
-    await this.contactsService.blockIdentity(pending.urn, 'Blocked via Manager');
+    await this.contactsService.blockIdentity(
+      pending.urn,
+      'Blocked via Manager'
+    );
     await this.contactsService.deletePending(pending.urn);
   }
 

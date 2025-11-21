@@ -2,28 +2,20 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../../../dist/out-tsc",
+    "composite": false,
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,
-    "composite": true,
     "types": []
   },
   "exclude": [
     "src/**/*.spec.ts",
     "src/test-setup.ts",
-    "jest.config.ts",
     "src/**/*.test.ts",
     "vite.config.ts",
     "vite.config.mts",
     "vitest.config.ts",
-    "vitest.config.mts",
-    "src/**/*.test.tsx",
-    "src/**/*.spec.tsx",
-    "src/**/*.test.js",
-    "src/**/*.spec.js",
-    "src/**/*.test.jsx",
-    "src/**/*.spec.jsx",
-    "src/lib/testing/**/*.ts"
+    "vitest.config.mts"
   ],
-  "files": ["src/index.ts"]
+  "include": ["src/**/*.ts"]
 }

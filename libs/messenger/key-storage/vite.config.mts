@@ -1,28 +1,34 @@
-/// <reference types='vitest' />
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
+import * as path from 'path';
+import dts from 'vite-plugin-dts';
 
 export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/key-storage',
-  plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
+  plugins: [
+    angular(),
+    nxViteTsPaths(),
+    nxCopyAssetsPlugin(['*.md']),
+    dts({
+      entryRoot: 'src',
+      tsconfigPath: path.join(__dirname, 'tsconfig.lib.json'),
+    }),
+  ],
   build: {
+    outDir: '../../../dist/libs/messenger/key-storage',
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
     lib: {
       entry: 'src/index.ts',
-      name: 'key-storage',
-      fileName: (format: any) => `index.${format}.js`,
+      name: 'messenger-key-storage',
+      fileName: 'index',
       formats: ['es' as const],
-    },
-    // You also must externalize your dependencies
-    rollupOptions: {
-      external: [
-        '@angular/core',
-        '@angular/common/http',
-        'rxjs',
-        '@nx-platform-application/console-logger'
-      ],
     },
   },
 }));

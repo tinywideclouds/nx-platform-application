@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactsPageToolbarComponent } from './contacts-page-toolbar.component';
 import { ElementRef } from '@angular/core';
+import { vi } from 'vitest';
 
 // Mock ResizeObserver
 class MockResizeObserver {
@@ -21,7 +22,6 @@ describe('ContactsPageToolbarComponent', () => {
   let mockObserver: MockResizeObserver;
 
   beforeEach(async () => {
-    // !! ADD THIS MOCK !!
     // Mock getComputedStyle to ensure a consistent breakpoint
     // 24rem * 16px = 384px
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
@@ -63,6 +63,6 @@ describe('ContactsPageToolbarComponent', () => {
     // With the mock, breakpoint is 384px. 300 is < 384.
     mockObserver.triggerResize(300);
     fixture.detectChanges();
-    expect(component.mode()).toBe('compact'); // This will now pass
+    expect(component.mode()).toBe('compact');
   });
 });

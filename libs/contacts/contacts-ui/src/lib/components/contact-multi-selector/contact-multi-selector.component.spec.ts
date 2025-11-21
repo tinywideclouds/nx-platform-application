@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Component, signal } from '@angular/core';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types'; // <-- 1. Import URN
 import { FormsModule } from '@angular/forms';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations'; // <-- 2. Import

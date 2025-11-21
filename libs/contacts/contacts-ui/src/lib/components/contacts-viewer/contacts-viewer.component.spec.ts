@@ -10,9 +10,14 @@ import {
   ContactGroup,
   PendingIdentity,
   BlockedIdentity,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
-import { Router, ActivatedRoute, ParamMap, convertToParamMap } from '@angular/router';
+import {
+  Router,
+  ActivatedRoute,
+  ParamMap,
+  convertToParamMap,
+} from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -30,10 +35,16 @@ import { BlockedListComponent } from '../blocked-list/blocked-list.component';
 const MOCK_CONTACTS: Contact[] = [];
 const MOCK_GROUPS: ContactGroup[] = [];
 const MOCK_PENDING: PendingIdentity[] = [
-  { urn: URN.parse('urn:auth:google:stranger'), firstSeenAt: '2023-01-01T00:00:00Z' as any }
+  {
+    urn: URN.parse('urn:auth:google:stranger'),
+    firstSeenAt: '2023-01-01T00:00:00Z' as any,
+  },
 ];
 const MOCK_BLOCKED: BlockedIdentity[] = [
-  { urn: URN.parse('urn:auth:google:spam'), blockedAt: '2023-01-01T00:00:00Z' as any }
+  {
+    urn: URN.parse('urn:auth:google:spam'),
+    blockedAt: '2023-01-01T00:00:00Z' as any,
+  },
 ];
 
 const { mockContactsService } = vi.hoisted(() => {
@@ -122,8 +133,12 @@ describe('ContactsViewerComponent', () => {
     initializeComponent(convertToParamMap({ tab: 'manage' }));
     fixture.detectChanges();
 
-    const pendingList = fixture.debugElement.query(By.directive(PendingListComponent));
-    const blockedList = fixture.debugElement.query(By.directive(BlockedListComponent));
+    const pendingList = fixture.debugElement.query(
+      By.directive(PendingListComponent)
+    );
+    const blockedList = fixture.debugElement.query(
+      By.directive(BlockedListComponent)
+    );
 
     expect(pendingList).toBeTruthy();
     expect(blockedList).toBeTruthy();
@@ -137,26 +152,30 @@ describe('ContactsViewerComponent', () => {
     initializeComponent(convertToParamMap({ tab: 'manage' }));
     fixture.detectChanges();
 
-    const pendingList = fixture.debugElement.query(By.directive(PendingListComponent));
-    
+    const pendingList = fixture.debugElement.query(
+      By.directive(PendingListComponent)
+    );
+
     // Trigger block
     pendingList.triggerEventHandler('block', MOCK_PENDING[0]);
-    
+
     // FIX: Wait for async component methods (blockIdentity + deletePending)
     await fixture.whenStable();
 
     expect(mockContactsService.blockIdentity).toHaveBeenCalledWith(
-      MOCK_PENDING[0].urn, 
+      MOCK_PENDING[0].urn,
       'Blocked via Manager'
     );
-    expect(mockContactsService.deletePending).toHaveBeenCalledWith(MOCK_PENDING[0].urn);
+    expect(mockContactsService.deletePending).toHaveBeenCalledWith(
+      MOCK_PENDING[0].urn
+    );
 
     // Trigger approve
     pendingList.triggerEventHandler('approve', MOCK_PENDING[0]);
-    
+
     // FIX: Wait for async component methods (deletePending)
     await fixture.whenStable();
-    
+
     expect(mockContactsService.deletePending).toHaveBeenCalledTimes(2);
   });
 
@@ -164,13 +183,17 @@ describe('ContactsViewerComponent', () => {
     initializeComponent(convertToParamMap({ tab: 'manage' }));
     fixture.detectChanges();
 
-    const blockedList = fixture.debugElement.query(By.directive(BlockedListComponent));
-    
+    const blockedList = fixture.debugElement.query(
+      By.directive(BlockedListComponent)
+    );
+
     blockedList.triggerEventHandler('unblock', MOCK_BLOCKED[0]);
-    
+
     // FIX: Wait for async component methods (unblockIdentity)
     await fixture.whenStable();
-    
-    expect(mockContactsService.unblockIdentity).toHaveBeenCalledWith(MOCK_BLOCKED[0].urn);
+
+    expect(mockContactsService.unblockIdentity).toHaveBeenCalledWith(
+      MOCK_BLOCKED[0].urn
+    );
   });
 });

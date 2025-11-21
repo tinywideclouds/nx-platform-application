@@ -8,7 +8,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../../node_modules/.vite/libs/platform/ng/web-key-storage',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths()
+  ],
   test: {
     name: 'platform-web-key-storage',
     watch: false,
@@ -20,12 +25,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/platform/ng/platform/web-key-storage/ng/index.html'
+        '../../../../dist/test-reports/platform/ng/platform/web-key-storage/index.html'
       ),
     },
     coverage: {
       reportsDirectory:
-        '../../../../coverage/libs/platform/ng/platform/web-key-storage/ng',
+        '../../../../coverage/libs/platform/ng/platform/web-key-storage',
       provider: 'v8' as const,
     },
   },

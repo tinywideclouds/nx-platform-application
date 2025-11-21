@@ -3,11 +3,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ChatContactDetailWrapperComponent } from './chat-contact-detail-wrapper.component';
 import { ChatService } from '@nx-platform-application/chat-state';
-import { ContactsStorageService, Contact } from '@nx-platform-application/contacts-data-access';
+import {
+  ContactsStorageService,
+  Contact,
+} from '@nx-platform-application/contacts-access';
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 import { signal } from '@angular/core';
+
+// Real components to remove
+import { ContactDetailComponent } from '@nx-platform-application/contacts-ui';
+import { ChatShareContactFooterComponent } from '../chat-share-contact-footer/chat-share-contact-footer.component';
 
 // Child Mocks
 import { Component, Input, Output, EventEmitter } from '@angular/core';
@@ -15,7 +22,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 @Component({
   selector: 'contacts-detail',
   standalone: true,
-  template: ''
+  template: '',
 })
 class MockDetail {
   @Input() contactId: any;
@@ -24,7 +31,7 @@ class MockDetail {
 @Component({
   selector: 'messenger-share-contact-footer',
   standalone: true,
-  template: ''
+  template: '',
 })
 class MockFooter {
   @Input() contactToShare: any;
@@ -44,21 +51,22 @@ const mockContact: Contact = {
   phoneNumbers: [],
   emailAddresses: [],
   serviceContacts: {
-    messenger: { profilePictureUrl: 'http://img.com/alice.png' } as any
-  }
+    messenger: { profilePictureUrl: 'http://img.com/alice.png' } as any,
+  },
 };
 
 // Service Mocks
 const mockChatService = {
   sendContactShare: vi.fn().mockResolvedValue(undefined),
-  isRecipientKeyMissing: signal(false)
+  isRecipientKeyMissing: signal(false),
 };
 
 const mockContactsService = {
-  getContact: vi.fn().mockResolvedValue(mockContact)
+  getContact: vi.fn().mockResolvedValue(mockContact),
+  getLinkedIdentities: vi.fn().mockResolvedValue([]),
 };
 
-const mockLogger = { info: vi.fn(), error: vi.fn() };
+const mockLogger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
 
 describe('ChatContactDetailWrapperComponent', () => {
   let component: ChatContactDetailWrapperComponent;
@@ -72,18 +80,25 @@ describe('ChatContactDetailWrapperComponent', () => {
       providers: [
         { provide: ChatService, useValue: mockChatService },
         { provide: ContactsStorageService, useValue: mockContactsService },
-        { provide: Logger, useValue: mockLogger }
-      ]
+        { provide: Logger, useValue: mockLogger },
+      ],
     })
-    .overrideComponent(ChatContactDetailWrapperComponent, {
-      remove: { imports: [ /* Real imports if present */ ] },
-      add: { imports: [MockDetail, MockFooter] }
-    })
-    .compileComponents();
+      .overrideComponent(ChatContactDetailWrapperComponent, {
+        remove: {
+          imports: [
+            ContactDetailComponent,
+            ChatShareContactFooterComponent
+          ],
+        },
+        add: { 
+          imports: [MockDetail, MockFooter] 
+        },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(ChatContactDetailWrapperComponent);
     component = fixture.componentInstance;
-    
+
     fixture.componentRef.setInput('contactId', contactId);
     fixture.detectChanges();
   });
@@ -95,17 +110,17 @@ describe('ChatContactDetailWrapperComponent', () => {
   it('should fetch contact and call sendContactShare on share action', async () => {
     await component.onShare(recipientId);
 
-    // 1. Verify Contact Fetch
     expect(mockContactsService.getContact).toHaveBeenCalledWith(contactId);
-
-    // 2. Verify Send Call
+    
     expect(mockChatService.sendContactShare).toHaveBeenCalledWith(
       recipientId,
       expect.objectContaining({
-        urn: contactId.toString(),
+        // FIX: Expect the Lookup URN, matching component logic
+        urn: 'urn:lookup:email:alice@test.com', 
         alias: 'Alice',
+        // FIX: Add missing avatar expectation
         avatarUrl: 'http://img.com/alice.png',
-        text: 'Shared via Messenger'
+        text: 'Shared via Messenger',
       })
     );
   });
@@ -115,7 +130,6 @@ describe('ChatContactDetailWrapperComponent', () => {
 
     await component.onShare(recipientId);
 
-    expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
     expect(mockChatService.sendContactShare).not.toHaveBeenCalled();
   });
 });

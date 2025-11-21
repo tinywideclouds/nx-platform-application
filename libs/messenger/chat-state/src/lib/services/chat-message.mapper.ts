@@ -1,18 +1,24 @@
-// libs/messenger/chat-state/src/lib/services/chat-message.mapper.ts
-
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 import { DecryptedMessage } from '@nx-platform-application/chat-storage';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
+/**
+ * Maps storage-level decrypted messages to UI-ready view models.
+ * Handles text decoding and error states for malformed payloads.
+ */
 @Injectable({ providedIn: 'root' })
 export class ChatMessageMapper {
   private logger = inject(Logger);
-  private decoder = new TextDecoder();
+  // Configured with 'fatal: true' to throw exceptions on invalid UTF-8 sequences,
+  // allowing us to catch and log malformed messages.
+  private decoder = new TextDecoder('utf-8', { fatal: true });
 
   /**
    * Maps the storage model (DecryptedMessage) to the view model (ChatMessage).
+   * @param msg The decrypted message from storage.
+   * @returns A UI-ready ChatMessage object.
    */
   toView(msg: DecryptedMessage): ChatMessage {
     let textContent = '';
@@ -22,7 +28,7 @@ export class ChatMessageMapper {
       try {
         textContent = this.decoder.decode(msg.payloadBytes);
       } catch (e) {
-        this.logger.error('Failed to decode text payload', e, msg);
+        this.logger.error('ChatMessageMapper: Failed to decode text payload', e);
         textContent = '[Error: Unreadable message]';
       }
     } else {
@@ -33,7 +39,7 @@ export class ChatMessageMapper {
       id: msg.messageId,
       conversationUrn: msg.conversationUrn,
       senderId: msg.senderId,
-      sentTimestamp: msg.sentTimestamp as ISODateTimeString, // Pass through ISO string
+      sentTimestamp: msg.sentTimestamp as ISODateTimeString, 
       
       typeId: msg.typeId,
       payloadBytes: msg.payloadBytes,

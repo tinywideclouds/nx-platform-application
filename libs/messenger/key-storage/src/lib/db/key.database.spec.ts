@@ -1,14 +1,12 @@
-// libs/messenger/key-storage/src/lib/db/key.database.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { KeyDatabase } from './key.database';
-import 'fake-indexeddb/auto';
 import { Dexie } from 'dexie';
 
 describe('KeyDatabase', () => {
   let db: KeyDatabase;
 
   beforeEach(async () => {
+    // Ensure a clean slate for IndexedDB mocks
     Dexie.delete('messenger_keys');
 
     TestBed.configureTestingModule({
@@ -20,7 +18,9 @@ describe('KeyDatabase', () => {
   });
 
   afterEach(async () => {
-    await db.close();
+    if (db) {
+      await db.close();
+    }
   });
 
   it('should be created', () => {

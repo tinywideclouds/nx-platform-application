@@ -7,7 +7,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../../node_modules/.vite/libs/platform/ng/console-logger',
-  plugins: [angular(), nxViteTsPaths()],
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths()
+  ],
   test: {
     name: 'console-logger',
     watch: false,

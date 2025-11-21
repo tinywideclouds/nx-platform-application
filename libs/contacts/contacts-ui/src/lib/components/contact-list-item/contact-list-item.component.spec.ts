@@ -2,7 +2,7 @@
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactListItemComponent } from './contact-list-item.component';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 // --- 1. Import URN and ISODateTimeString ---
 import {
   ISODateTimeString,
@@ -39,10 +39,7 @@ const MOCK_CONTACT: Contact = {
   // The host must also import the components
   imports: [ContactListItemComponent, ContactAvatarComponent],
   template: `
-    <contacts-list-item
-      [contact]="contact"
-      (select)="onSelected($event)"
-    />
+    <contacts-list-item [contact]="contact" (select)="onSelected($event)" />
   `,
 })
 class TestHostComponent {
@@ -90,9 +87,7 @@ describe('ContactListItemComponent', () => {
     const hostComponent = fixture.componentInstance;
     fixture.detectChanges();
 
-    const listItem = fixture.debugElement.query(
-      By.css('contacts-list-item')
-    );
+    const listItem = fixture.debugElement.query(By.css('contacts-list-item'));
 
     // Simulate the click (this test was already correct)
     listItem.triggerEventHandler('click', null);

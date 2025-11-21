@@ -1,10 +1,12 @@
-// libs/messenger/key-storage/src/lib/db/key.database.ts
-
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
 import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
 import { PublicKeyRecord } from '../key-storage.models';
 
+/**
+ * IndexedDB wrapper for storing public keys.
+ * Extends the platform Dexie service for consistent configuration.
+ */
 @Injectable({ providedIn: 'root' })
 export class KeyDatabase extends PlatformDexieService {
   publicKeys!: Table<PublicKeyRecord, string>;

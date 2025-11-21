@@ -1,5 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/page-toolbar/page-toolbar.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
@@ -35,19 +33,17 @@ export class ContactsPageToolbarComponent implements OnDestroy {
 
   /** The internal mode, computed from the component's own width. */
   public readonly mode = computed<pageMode>(() => {
-    //quick check for forced mode
+    // quick check for forced mode
     if (this.forceIconMode()) {
       return 'compact';
     }
 
     const width = this.elementWidth();
 
-    // If width is not yet set, mode is undefined
-    // if (!width){ //should accurately replace if (width === undefined || width === null || width === 0) {
-    //   return undefined;
-    // }
-    if (width === null || width === 0) {
-      return 'full';
+    // If width is not yet set (0), mode is undefined.
+    // This allows the UI to wait for the first measurement.
+    if (!width) {
+      return undefined;
     }
 
     return width < this.compactBreakpointPx ? 'compact' : 'full';

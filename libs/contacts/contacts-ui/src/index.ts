@@ -10,5 +10,4 @@ export * from './lib/components/contact-group-page/contact-group-page.component'
 
 export * from './lib/components/contact-detail/contact-detail.component';
 
-export * from '@nx-platform-application/contacts-data-access';
-
+export * from '@nx-platform-application/contacts-access';

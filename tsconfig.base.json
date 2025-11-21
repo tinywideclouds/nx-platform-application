@@ -37,8 +37,8 @@
       "@nx-platform-application/console-logger": [
         "libs/platform/ng/console-logger/src/index.ts"
       ],
-      "@nx-platform-application/contacts-data-access": [
-        "libs/contacts/contacts-data-access/src/index.ts"
+      "@nx-platform-application/contacts-access": [
+        "libs/contacts/contacts-access/src/index.ts"
       ],
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
@@ -61,8 +61,8 @@
       "@nx-platform-application/messenger-key-storage": [
         "libs/messenger/key-storage/src/index.ts"
       ],
-      "@nx-platform-application/messenger-private-storage": [
-        "libs/messenger/private-storage/src/index.ts"
+      "@nx-platform-application/messenger-private-key-storage": [
+        "libs/messenger/private-key-storage/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
@@ -85,8 +85,8 @@
       "@nx-platform-application/platform-auth-access": [
         "libs/platform/ng/auth-access/src/index.ts"
       ],
-      "@nx-platform-application/platform-auth-data-access/testing": [
-        "libs/platform/ng/auth-data-access/src/testing.ts"
+      "@nx-platform-application/platform-auth-access/testing": [
+        "libs/platform/ng/auth-access/src/testing.ts"
       ],
       "@nx-platform-application/platform-auth-ui": [
         "libs/platform/ng/auth-ui/src/index.ts"

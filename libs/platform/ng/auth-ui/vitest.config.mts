@@ -10,8 +10,10 @@ export default defineConfig({
   root: __dirname,
   cacheDir: '../../../../node_modules/.vite/libs/platform/ng/auth-ui',
 
-  plugins: [angular({}), nxViteTsPaths()],
-
+  plugins: [
+    angular({tsconfig: join(__dirname, 'tsconfig.test.json'),}), 
+    nxViteTsPaths()
+  ],
   test: {
     name: 'auth-ui',
     globals: true,

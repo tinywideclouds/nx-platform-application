@@ -32,20 +32,28 @@ describe('MessengerToolbarComponent', () => {
   });
 
   it('should render user initials', () => {
-    const avatar = fixture.debugElement.query(By.css('.rounded-full'));
+    // When no profile URL, it renders initials div
+    fixture.componentRef.setInput('currentUser', { ...mockUser, profileUrl: undefined });
+    fixture.detectChanges();
+
+    const avatar = fixture.debugElement.query(By.css('.rounded-full.bg-gray-600'));
     expect(avatar.nativeElement.textContent).toContain('ME');
   });
 
-  it('should emit compose event', () => {
-    const spy = vi.spyOn(component.compose, 'emit');
-    const btn = fixture.debugElement.query(By.css('button[aria-label="Compose Message"]'));
+  it('should emit viewCompose event', () => {
+    // FIX: Access the correct output property 'viewCompose'
+    const spy = vi.spyOn(component.viewCompose, 'emit');
+    const btn = fixture.debugElement.query(By.css('button[matTooltip="New Message"]'));
+    
     btn.nativeElement.click();
     expect(spy).toHaveBeenCalled();
   });
 
-  it('should emit address book event', () => {
-    const spy = vi.spyOn(component.openAddressBook, 'emit');
-    const btn = fixture.debugElement.query(By.css('button[aria-label="Open Contacts"]'));
+  it('should emit viewContacts event', () => {
+    // FIX: Access the correct output property 'viewContacts'
+    const spy = vi.spyOn(component.viewContacts, 'emit');
+    const btn = fixture.debugElement.query(By.css('button[matTooltip="Contacts"]'));
+    
     btn.nativeElement.click();
     expect(spy).toHaveBeenCalled();
   });

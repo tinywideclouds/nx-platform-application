@@ -9,7 +9,7 @@ import {
   HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ContactGroup } from '@nx-platform-application/contacts-data-access';
+import { ContactGroup } from '@nx-platform-application/contacts-access';
 
 @Component({
   selector: 'contacts-group-list-item',

@@ -1,5 +1,3 @@
-// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -14,7 +12,7 @@ import {
   ChatStorageService,
   DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { ChatMessageMapper } from './chat-message.mapper';
 
 // Types
@@ -28,6 +26,11 @@ import {
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
 
+/**
+ * Service responsible for pulling, decrypting, and processing incoming messages.
+ * Acts as the "Ingestion Pipeline" that transforms raw encrypted server data
+ * into verified, decrypted, and storage-ready local data.
+ */
 @Injectable({ providedIn: 'root' })
 export class ChatIngestionService {
   private logger = inject(Logger);
@@ -39,7 +42,13 @@ export class ChatIngestionService {
 
   /**
    * Runs the ingestion pipeline.
-   * Returns the array of NEW valid ChatMessages to update the UI state.
+   * 1. Fetches a batch of pending messages.
+   * 2. Decrypts and verifies signatures.
+   * 3. Applies Gatekeeper logic (Blocked/Pending checks).
+   * 4. Persists to local storage.
+   * 5. Acknowledges receipt to server.
+   *
+   * @returns The array of NEW valid ChatMessages to update the UI state.
    */
   async process(
     myKeys: PrivateKeys,
@@ -135,7 +144,7 @@ export class ChatIngestionService {
   }
 
   // --- Internal Mapper ---
-  // Maps the raw crypto payload + context into our Database Schema
+  
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
     payload: EncryptedMessagePayload,
@@ -160,8 +169,11 @@ export class ChatIngestionService {
     };
   }
 
+  /**
+   * Determines the canonical Conversation URN.
+   * For 1:1 chats, the conversation ID is the ID of the *other* person.
+   */
   private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
-    // 1:1 Conversation Logic
     return urn1.toString() === myUrn.toString() ? urn2 : urn1;
   }
 }

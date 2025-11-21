@@ -10,18 +10,13 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { PendingIdentity } from '@nx-platform-application/contacts-data-access';
+import { PendingIdentity } from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
 
 @Component({
   selector: 'contacts-pending-list',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatIconModule,
-    MatButtonModule,
-    MatTooltipModule,
-  ],
+  imports: [CommonModule, MatIconModule, MatButtonModule, MatTooltipModule],
   templateUrl: './pending-list.component.html',
   styleUrl: './pending-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

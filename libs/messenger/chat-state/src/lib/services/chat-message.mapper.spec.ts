@@ -59,7 +59,7 @@ describe('ChatMessageMapper', () => {
   it('should handle malformed text gracefully', () => {
     const malformedMsg = {
       ...mockDecryptedMsg,
-      // Invalid UTF-8 sequence
+      // Invalid UTF-8 sequence that causes TextDecoder(fatal=true) to throw
       payloadBytes: new Uint8Array([0xFF, 0xFF]),
     };
 

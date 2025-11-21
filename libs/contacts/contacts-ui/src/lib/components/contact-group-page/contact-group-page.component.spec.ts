@@ -5,11 +5,9 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 // --- 1. Import URN and other types ---
-import {
-  URN,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
 

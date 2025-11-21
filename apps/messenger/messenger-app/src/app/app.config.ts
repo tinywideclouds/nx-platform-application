@@ -28,7 +28,7 @@ import {
 // --- Mock Providers ---
 import { ChatService } from '@nx-platform-application/chat-state';
 import { MockChatService } from './mocks/mock-chat.service';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
 // 1. Import the new mock user list
 import { MESSENGER_MOCK_USERS } from './mocks/users';

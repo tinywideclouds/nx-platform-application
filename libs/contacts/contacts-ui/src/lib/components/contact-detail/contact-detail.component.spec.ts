@@ -8,7 +8,7 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 import { URN } from '@nx-platform-application/platform-types';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
@@ -57,7 +57,7 @@ describe('ContactDetailComponent', () => {
 
     fixture = TestBed.createComponent(ContactDetailComponent);
     component = fixture.componentInstance;
-    
+
     fixture.componentRef.setInput('contactId', mockUrn);
     fixture.detectChanges();
   });
@@ -80,10 +80,10 @@ describe('ContactDetailComponent', () => {
     fixture.detectChanges();
 
     const spy = vi.spyOn(component.saved, 'emit');
-    
+
     const form = fixture.debugElement.query(By.directive(ContactFormComponent));
     form.triggerEventHandler('save', mockContact);
-    
+
     await fixture.whenStable();
 
     expect(mockContactsService.saveContact).toHaveBeenCalledWith(mockContact);

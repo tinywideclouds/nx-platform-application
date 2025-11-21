@@ -9,9 +9,12 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-ui',
-
-  plugins: [angular({}), nxViteTsPaths()],
-
+  plugins: [
+    angular({
+      tsconfig: join(__dirname, 'tsconfig.test.json'),
+    }),
+    nxViteTsPaths(),
+  ],
   test: {
     name: 'contacts-ui',
     globals: true,

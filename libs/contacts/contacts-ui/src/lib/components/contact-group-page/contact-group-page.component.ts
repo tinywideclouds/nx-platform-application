@@ -7,7 +7,7 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-data-access';
+} from '@nx-platform-application/contacts-access';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';

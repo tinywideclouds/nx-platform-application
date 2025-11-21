@@ -5,7 +5,7 @@ import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatDataService } from '@nx-platform-application/chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-data-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';

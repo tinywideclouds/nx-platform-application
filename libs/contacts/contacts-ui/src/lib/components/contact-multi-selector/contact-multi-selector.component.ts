@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 // --- 1. URN import is no longer needed ---
 

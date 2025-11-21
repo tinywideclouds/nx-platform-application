@@ -2,23 +2,20 @@
 
 import { TestBed } from '@angular/core/testing';
 import { Mock, vi } from 'vitest';
-import { Temporal } from '@js-temporal/polyfill'; // <-- ADDED
+import { Temporal } from '@js-temporal/polyfill';
 
 import {
   URN,
   PublicKeys,
-  deserializeJsonToPublicKeys,
-  serializePublicKeysToJson,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
-
-import { PublicKeyRecord } from '@nx-platform-application/messenger-key-storage';
+// FIX: Import the correct storage service
+import { KeyStorageService, PublicKeyRecord } from '@nx-platform-application/messenger-key-storage';
 
 import { KeyCacheService } from './key-cache.service';
 
-// --- Mock the platform-types lib (same as before) ---
+// --- Mock the platform-types lib ---
 vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
@@ -28,17 +25,18 @@ vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   };
 });
 
-// --- Mock Dependencies (same as before) ---
+// --- Mock Dependencies ---
 const mockSecureKeyService = {
   getKey: vi.fn(),
 };
-const mockChatStorageService = {
+// FIX: Mock the correct KeyStorageService
+const mockKeyStorageService = {
   getKey: vi.fn(),
   storeKey: vi.fn(),
   clearDatabase: vi.fn(),
 };
 
-// --- Fixtures (Refactored for Temporal) ---
+// --- Fixtures ---
 const mockUserUrn = URN.parse('urn:sm:user:test-user');
 const mockUserUrnString = mockUserUrn.toString();
 
@@ -51,7 +49,7 @@ const isoNow = mockNowInstant.toString() as ISODateTimeString;
 const isoOneHourAgo = mockOneHourAgoInstant.toString() as ISODateTimeString;
 const isoTwoDaysAgo = mockTwoDaysAgoInstant.toString() as ISODateTimeString;
 
-// JSON/Smart object fixtures (same as before)
+// JSON/Smart object fixtures
 const mockJsonKeys: Record<string, string> = {
   encKey: 'b64...',
   sigKey: 'b64...',
@@ -78,7 +76,8 @@ describe('KeyCacheService', () => {
       providers: [
         KeyCacheService,
         { provide: SecureKeyService, useValue: mockSecureKeyService },
-        { provide: ChatStorageService, useValue: mockChatStorageService },
+        // FIX: Provide the mock for the correct token
+        { provide: KeyStorageService, useValue: mockKeyStorageService },
       ],
     });
 
@@ -92,11 +91,11 @@ describe('KeyCacheService', () => {
     mockDeserialize.mockReturnValue(mockPublicKeys);
     mockSerialize.mockReturnValue(mockJsonKeys);
     mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys);
-    mockChatStorageService.storeKey.mockResolvedValue(undefined);
+    mockKeyStorageService.storeKey.mockResolvedValue(undefined);
   });
 
   afterAll(() => {
-    temporalNowSpy.mockRestore(); // Restore Temporal.Now
+    temporalNowSpy.mockRestore(); 
   });
 
   it('should be created', () => {
@@ -104,19 +103,19 @@ describe('KeyCacheService', () => {
   });
 
   it('[Cache Miss] should fetch from network if key not in cache', async () => {
-    mockChatStorageService.getKey.mockResolvedValue(undefined);
+    mockKeyStorageService.getKey.mockResolvedValue(undefined);
 
     const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(
+    expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
       mockUserUrnString
     );
     expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
     expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
-    expect(mockChatStorageService.storeKey).toHaveBeenCalledWith(
+    expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
       mockUserUrnString,
       mockJsonKeys,
-      isoNow // Based on our Temporal.Now mock
+      isoNow 
     );
     expect(result).toBe(mockPublicKeys);
   });
@@ -127,15 +126,15 @@ describe('KeyCacheService', () => {
       keys: mockJsonKeys,
       timestamp: isoTwoDaysAgo, // 2 days ago, > 24h TTL
     };
-    mockChatStorageService.getKey.mockResolvedValue(staleRecord);
+    mockKeyStorageService.getKey.mockResolvedValue(staleRecord);
 
     const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(
+    expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
       mockUserUrnString
     );
     expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
-    expect(mockChatStorageService.storeKey).toHaveBeenCalledWith(
+    expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
       mockUserUrnString,
       mockJsonKeys,
       isoNow
@@ -150,23 +149,23 @@ describe('KeyCacheService', () => {
       keys: mockJsonKeys,
       timestamp: isoOneHourAgo, // 1 hour ago, < 24h TTL
     };
-    mockChatStorageService.getKey.mockResolvedValue(freshRecord);
+    mockKeyStorageService.getKey.mockResolvedValue(freshRecord);
 
     const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockChatStorageService.getKey).toHaveBeenCalledWith(
+    expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
       mockUserUrnString
     );
     expect(mockDeserialize).toHaveBeenCalledWith(mockJsonKeys);
     expect(mockSecureKeyService.getKey).not.toHaveBeenCalled();
-    expect(mockChatStorageService.storeKey).not.toHaveBeenCalled();
+    expect(mockKeyStorageService.storeKey).not.toHaveBeenCalled();
     expect(result).toBe(mockPublicKeys);
   });
 
   describe('hasKeys', () => {
     it('should return true if keys are found (cache or network)', async () => {
       // Simulate success
-      mockChatStorageService.getKey.mockResolvedValue(undefined); // Cache miss
+      mockKeyStorageService.getKey.mockResolvedValue(undefined); // Cache miss
       mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys); // Net success
 
       const result = await service.hasKeys(mockUserUrn);
@@ -175,7 +174,7 @@ describe('KeyCacheService', () => {
 
     it('should return false if fetch throws error', async () => {
       // Simulate 404
-      mockChatStorageService.getKey.mockResolvedValue(undefined);
+      mockKeyStorageService.getKey.mockResolvedValue(undefined);
       mockSecureKeyService.getKey.mockRejectedValue(new Error('404 Not Found'));
 
       const result = await service.hasKeys(mockUserUrn);
@@ -186,7 +185,7 @@ describe('KeyCacheService', () => {
   describe('clear', () => {
     it('should call clearDatabase on storage service', async () => {
       await service.clear();
-      expect(mockChatStorageService.clearDatabase).toHaveBeenCalled();
+      expect(mockKeyStorageService.clearDatabase).toHaveBeenCalled();
     });
   });
 });

@@ -31,13 +31,13 @@ export default [
           enforceBuildableLibDependency: true,
           /**
            * THE "SPECIAL PERMIT"
-           * Allows deep imports ONLY for the two protos libraries and the test helpers in platform-auth-data-access/testing.
+           * Allows deep imports ONLY for the two protos libraries and the test helpers in platform-auth-access/testing.
            * This rule doesn't grant access; it just bypasses the barrel file (`index.ts`) check.
            */
           allow: [
             '@nx-platform-application/platform-protos/**',
             '@nx-platform-application/messenger-protos/**',
-            '@nx-platform-application/platform-auth-data-access/testing',
+            '@nx-platform-application/platform-auth-access/testing',
             '@nx-platform-application/platform-auth-ui/mocks',
           ],
           /**

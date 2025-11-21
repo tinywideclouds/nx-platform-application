@@ -8,10 +8,11 @@
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
-      "outputs": ["{options.outputPath}"],
+      "outputs": ["{options.outputPath}", "{options.outputHtmlPath}"],
       "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/libs/messenger/key-storage",
+        "outputHtmlPath": "dist/test-reports/libs/messenger/key-storage/index.html",
         "configFile": "libs/messenger/key-storage/vite.config.mts"
       }
     },

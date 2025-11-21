@@ -54,6 +54,13 @@ nx g @nx/workspace:move --project=chat-data-access --newProjectName=messenger-ch
 
 nx g @nx/workspace:move --project=auth-ui --newProjectName=platform-auth-ui --destination=libs/platform/ng/auth-ui --importPath=@nx-platform-application/platform-auth-ui
 
-nx g @nx/workspace:move --project=web-key-storage --newProjectName=platform-web-key-storage --destination=libs/platform/ng/web-key-storage-tmp --importPath=@nx-platform-application/platform-web-key-storage
+nx g @nx/workspace:move --project=web-key-storage --newProjectName=platform-web-key-storage --destination=libs/platform/ng/web-key-storage --importPath=@nx-platform-application/platform-web-key-storage
+
+nx g @nx/workspace:move --project=contacts-data-access --newProjectName=contacts-access --destination=libs/contacts/contacts-access --importPath=@nx-platform-application/contacts-access
+
+nx g @nx/workspace:move --project=messenger-private-storage --newProjectName=messenger-private-key-storage --destination=libs/messenger/private-key-storage --importPath=@nx-platform-application/messenger-private-key-storage
+
+messenger-private-storage
 
 
+nx g @nx/workspace:move --project=auth-ui --newProjectName=platform-auth-ui --destination=libs/platform/ng/auth-ui-tmp --importPath=@nx-platform-application/platform-auth-ui

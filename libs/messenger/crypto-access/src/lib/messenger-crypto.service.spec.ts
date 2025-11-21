@@ -1,11 +1,8 @@
 // --- File: libs/messenger/crypto-access/src/messenger-crypto.service.spec.ts ---
-// (FULL CODE - Refactored for "Dumb" Storage)
-
 import { TestBed } from '@angular/core/testing';
-import { Mock, Mocked } from 'vitest';
+import { Mock, Mocked, vi } from 'vitest'; // Added 'vi' to imports just to be safe, though likely global
 import { webcrypto } from 'node:crypto';
 
-// --- (FIX) Import the correct "dumb" storage service ---
 import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
 import {
   URN,
@@ -42,8 +39,10 @@ vi.mock('./crypto', () => ({
     verify: vi.fn(),
   })),
 }));
-// --- (FIX) Mock the "dumb" storage module ---
-vi.mock('@nx-platform-application/web-key-storage', async (importOriginal) => {
+
+// --- (FIX) Mock the "dumb" storage module with the CORRECT import path ---
+// PREVIOUS ERROR: Was missing 'platform-' prefix in the package name
+vi.mock('@nx-platform-application/platform-web-key-storage', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
     ...actual,
@@ -94,7 +93,7 @@ describe('MessengerCryptoService', () => {
     sigKey: mockSigKeyRaw,
   };
 
-  // --- (NEW) JWK Fixtures for private keys ---
+  // JWK Fixtures for private keys
   const mockEncPrivKeyJwk: JsonWebKey = {
     kty: 'RSA',
     alg: 'RSA-OAEP-256',
@@ -166,7 +165,7 @@ describe('MessengerCryptoService', () => {
     mockCrypto.generateEncryptionKeys.mockResolvedValue(mockEncKeyPair);
     mockCrypto.generateSigningKeys.mockResolvedValue(mockSigKeyPair);
 
-    // (FIX) Mock the new "dumb" storage methods
+    // Mock the storage methods
     mockStorage.saveJwk.mockResolvedValue(undefined);
     mockStorage.loadJwk.mockResolvedValue(null);
 
@@ -182,7 +181,6 @@ describe('MessengerCryptoService', () => {
       providers: [
         MessengerCryptoService,
         { provide: CryptoEngine, useValue: mockCrypto },
-        // (FIX) Provide the correct "dumb" store
         { provide: WebKeyDbStore, useValue: mockStorage },
         { provide: SecureKeyService, useValue: mockSecureKeyService },
       ],
@@ -218,7 +216,7 @@ describe('MessengerCryptoService', () => {
         mockSigKeyPair.privateKey
       );
 
-      // (FIX) Check "dumb" local storage
+      // Check "dumb" local storage
       expect(mockStorage.saveJwk).toHaveBeenCalledTimes(2);
       expect(mockStorage.saveJwk).toHaveBeenCalledWith(
         mockEncKeyUrn,
@@ -241,12 +239,12 @@ describe('MessengerCryptoService', () => {
 
   describe('loadMyKeys', () => {
     it('should load JWKs from storage and import them', async () => {
-      // (FIX) Mock loadJwk to return the private key JWKs
+      // Mock loadJwk to return the private key JWKs
       mockStorage.loadJwk
         .mockResolvedValueOnce(mockEncPrivKeyJwk)
         .mockResolvedValueOnce(mockSigPrivKeyJwk);
 
-      // (FIX) Mock importKey to return the CryptoKey objects
+      // Mock importKey to return the CryptoKey objects
       vi.spyOn(mockSubtle, 'importKey').mockImplementation(
         async (format, key, alg) => {
           if (format === 'jwk' && (alg as any).name === 'RSA-OAEP')
@@ -295,7 +293,6 @@ describe('MessengerCryptoService', () => {
 
   describe('encryptAndSign', () => {
     it('should serialize, encrypt, sign, and build an envelope', async () => {
-      // (This test is mostly unchanged, just verifying importKey)
       vi.spyOn(mockSubtle, 'importKey').mockResolvedValue(
         mockEncKeyPair.publicKey
       );
@@ -322,7 +319,6 @@ describe('MessengerCryptoService', () => {
 
   describe('verifyAndDecrypt', () => {
     it('should orchestrate decryption, deserialization, key fetching, and verification', async () => {
-      // (This test is mostly unchanged, just verifying importKey)
       vi.spyOn(mockSubtle, 'importKey').mockResolvedValue(mockSigPublicKey);
 
       const result = await service.verifyAndDecrypt(

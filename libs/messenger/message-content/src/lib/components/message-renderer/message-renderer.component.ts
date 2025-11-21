@@ -30,6 +30,8 @@ export class MessageRendererComponent {
   // Parse the content lazily when the message changes
   content = computed(() => {
     const msg = this.message();
+    if (!msg.payloadBytes)
+      return "";
     return this.parser.parse(msg.typeId, msg.payloadBytes);
   });
 

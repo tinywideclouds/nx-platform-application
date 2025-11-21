@@ -44,7 +44,7 @@ export default defineConfig(() => ({
         // 2. Internal Dependencies
         // CRITICAL: Do not bundle the data access layer. 
         // Let the App provide the singleton instance.
-        '@nx-platform-application/contacts-data-access',
+        '@nx-platform-application/contacts-access',
         
         // 3. Shared Types (if used directly in components)
         '@nx-platform-application/platform-types',

@@ -5,7 +5,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 import { ContactFormComponent } from './contact-form.component';
-import { Contact } from '@nx-platform-application/contacts-data-access';
+import { Contact } from '@nx-platform-application/contacts-access';
 import {
   ISODateTimeString,
   URN,
@@ -82,7 +82,7 @@ describe('ContactFormComponent (Signal-based)', () => {
 
     // 3. Assert
     expect(chips.length).toBe(2);
-    
+
     // Check content formatting
     const firstChipText = chips[0].nativeElement.textContent;
     expect(firstChipText).toContain('Google');
