@@ -64,3 +64,6 @@ messenger-private-storage
 
 
 nx g @nx/workspace:move --project=auth-ui --newProjectName=platform-auth-ui --destination=libs/platform/ng/auth-ui-tmp --importPath=@nx-platform-application/platform-auth-ui
+
+
+nx g @nx/angular:library --name=platform-ui-toolkit --directory=libs/platform/ng/ui-toolkit --tags="scope:platform"   

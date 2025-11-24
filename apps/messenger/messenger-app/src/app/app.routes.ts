@@ -2,7 +2,7 @@
 
 import { Routes } from '@angular/router';
 import {
-  MESSENGER_ROUTES, // <-- Import from lib
+  MESSENGER_ROUTES,
 } from '@nx-platform-application/messenger-ui';
 
 import {
@@ -27,13 +27,21 @@ export const appRoutes: Routes = [
     path: 'login-success',
     component: LoginSuccessComponent, 
   },
+  
+  // === FIX STARTS HERE ===
+  // 1. Redirect root to /messenger
   {
-    path: '', // Main app route
-    // We remove the explicit component here because MESSENGER_ROUTES 
-    // already defines the top-level component at its path: ''
-    canActivate: [authGuard],
-    children: MESSENGER_ROUTES // <-- Delegate to Lib Routes
+    path: '',
+    redirectTo: 'messenger',
+    pathMatch: 'full'
   },
-  // Fallback route
-  { path: '**', redirectTo: '' },
+  // 2. Mount the library under the 'messenger' path
+  {
+    path: 'messenger', 
+    canActivate: [authGuard],
+    children: MESSENGER_ROUTES 
+  },
+  // === FIX ENDS HERE ===
+
+  { path: '**', redirectTo: 'messenger' },
 ];

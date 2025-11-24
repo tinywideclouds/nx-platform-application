@@ -1,0 +1,11 @@
+:host {
+  display: block;
+  width: 100%;
+  /* Ensure it has a minimum size to prevent collapse */
+  min-height: 2rem; 
+}
+
+/* Optional: Add transition for smooth button swapping if desired */
+mat-toolbar {
+  transition: all 0.2s ease-in-out;
+}

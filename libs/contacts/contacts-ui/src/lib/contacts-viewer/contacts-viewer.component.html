@@ -1,0 +1,55 @@
+<lib-master-detail-layout [showDetail]="!!selectedId() || !!createMode()">
+  
+  <div sidebar class="h-full bg-white">
+    <contacts-sidebar
+      [selectedId]="selectedId()"
+      [tabIndex]="tabIndex()"
+      (contactSelected)="onContactSelect($event)"
+      (groupSelected)="onGroupSelect($event)"
+      (tabChange)="onTabChange($event)"
+    />
+  </div>
+
+  <div mobile-header class="p-2 bg-white border-b flex items-center gap-2">
+    <button mat-icon-button (click)="clearSelection()">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <span class="font-medium">
+      @if (createMode()) {
+        New Item
+      } @else {
+        Back to List
+      }
+    </span>
+  </div>
+
+  <div main class="h-full bg-gray-50 relative flex flex-col">
+    
+    @if (createMode(); as mode) {
+      <div class="flex-1 overflow-y-auto">
+        @if (mode === 'group') {
+          <contacts-group-page /> 
+        } @else {
+          <contacts-page />
+        }
+      </div>
+    } 
+    @else if (selectedUrn(); as urn) {
+      <div class="flex-1 overflow-y-auto">
+        @if (activeTab() === 'groups') {
+           <contacts-group-page [groupId]="urn" />
+        } @else {
+           <contacts-detail [contactId]="urn" />
+        }
+      </div>
+    } 
+    @else {
+      <div class="h-full flex flex-col items-center justify-center text-gray-400">
+        <mat-icon class="text-6xl h-16 w-16 mb-4">contacts</mat-icon>
+        <p class="text-lg">Select an item to view details</p>
+      </div>
+    }
+
+  </div>
+
+</lib-master-detail-layout>

@@ -37,7 +37,6 @@ import { ChatOutboundService } from './services/chat-outbound.service';
 
 // Types
 import {
-  EncryptedMessagePayload,
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
 import {

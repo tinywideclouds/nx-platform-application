@@ -1,0 +1,119 @@
+@use '@angular/material' as mat;
+
+// 1. Define the theme
+// This generates the palette and typography configurations
+$theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$azure-palette,
+    tertiary: mat.$blue-palette,
+  ),
+  typography: (
+    brand-family: 'Roboto',
+    plain-family: 'Roboto',
+  ),
+  density: (
+    scale: 0
+  )
+));
+
+html {
+  // 2. Apply the theme
+  // This outputs the standard --mat-sys-* and --mdc-* variables to the DOM
+  @include mat.all-component-themes($theme);
+
+  // ==========================================================================
+  // 3. GLOBAL OVERRIDES (The "Mixin" Replacement)
+  // ==========================================================================
+  
+  // --- FORM FIELDS (Simulating your 'container-height' and 'shape' mixins) ---
+  // Force specific heights (Standard M3 is 56px, ~3.5em)
+  --mdc-filled-text-field-container-height: 2.8em;
+  --mdc-outlined-text-field-container-height: 2.8em;
+
+  // Force corner radius (Shape)
+  --mdc-filled-text-field-container-shape: 2px;
+  --mdc-outlined-text-field-container-shape: 2px;
+
+  // Text Sizing
+  --mdc-filled-text-field-label-text-size: 1em;
+  --mdc-outlined-text-field-label-text-size: 1em;
+  --mdc-filled-text-field-input-text-size: 1em;
+  --mdc-outlined-text-field-input-text-size: 1em;
+
+  // --- BUTTONS (Simulating your 'button-overrides' mixin) ---
+  // M3 defaults to 'full' (pill shape). We override to 4px for the square look.
+  --mdc-filled-button-container-shape: 4px;
+  --mdc-outlined-button-container-shape: 4px;
+  --mdc-text-button-container-shape: 4px;
+  --mdc-protected-button-container-shape: 4px; // The 'raised' button equivalent
+  --mdc-filled-tonal-button-container-shape: 4px;
+}
+
+// ==========================================================================
+// 4. SCOPED CLASS OVERRIDES
+// ==========================================================================
+
+// "View Mode" - Flattens disabled inputs to look readable
+// Instead of mixins, we remap the 'disabled' tokens to 'enabled' (surface) colors.
+.form-view-mode {
+  // Text Colors -> Use standard "On Surface" color instead of grayed out
+  --mdc-filled-text-field-disabled-input-text-color: var(--mat-sys-on-surface);
+  --mdc-filled-text-field-disabled-label-text-color: var(--mat-sys-on-surface-variant);
+  --mdc-outlined-text-field-disabled-input-text-color: var(--mat-sys-on-surface);
+  --mdc-outlined-text-field-disabled-label-text-color: var(--mat-sys-on-surface-variant);
+
+  // Container/Outline -> Match the background to look seamless
+  --mdc-filled-text-field-disabled-container-color: var(--mat-sys-surface-container-highest);
+  --mdc-outlined-text-field-disabled-outline-color: var(--mat-sys-outline);
+  
+  // Hide icons/placeholders if disabled
+  --mdc-filled-text-field-disabled-leading-icon-color: transparent;
+  --mdc-filled-text-field-disabled-trailing-icon-color: transparent;
+}
+
+// "Toolbar Tonal Button" - Custom colors for your toolbar actions
+// We override the specific --mdc-filled-tonal-* tokens just for this class.
+.toolbar-tonal-button {
+  // Container & Text
+  --mdc-filled-tonal-button-container-color: #eaddff;
+  --mdc-filled-tonal-button-label-text-color: #2c3845;
+
+  // State Layers (Hover/Focus/Press) - M3 overlays a color with opacity
+  --mdc-filled-tonal-button-hover-state-layer-color: #3b4e64;
+  --mdc-filled-tonal-button-focus-state-layer-color: #3b4e64;
+  --mdc-filled-tonal-button-pressed-state-layer-color: #3b4e64;
+}
+
+// "Save/Update Tonal Button" (If you need the purple variant)
+.save-update-tonal-button {
+  --mdc-filled-tonal-button-container-color: #eaddff;
+  --mdc-filled-tonal-button-label-text-color: #21005d;
+  --mdc-filled-tonal-button-hover-state-layer-color: #21005d;
+  --mdc-filled-tonal-button-focus-state-layer-color: #21005d;
+  --mdc-filled-tonal-button-pressed-state-layer-color: #21005d;
+}
+
+// ==========================================================================
+// 5. COMPONENT TWEAKS & GLOBAL STYLES
+// ==========================================================================
+
+// Tab Group Override: Shrink the last tab (Manage/Shield icon)
+.mat-tab-icon-button {
+  .mat-mdc-tab-header .mat-mdc-tab-labels {
+    .mat-mdc-tab:last-child {
+      min-width: 64px !important; 
+      padding: 0 12px;           
+      flex-grow: 0;              
+    }
+  }
+}
+
+body {
+  // System-level defaults mapped to Material System tokens
+  color-scheme: light;
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  margin: 0;
+}

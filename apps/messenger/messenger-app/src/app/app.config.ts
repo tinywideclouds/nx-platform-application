@@ -5,6 +5,8 @@ import {
   importProvidersFrom,
   isDevMode,
 } from '@angular/core';
+// This acts as a hint to the Nx Graph that this app explicitly depends on contacts-ui
+import '@nx-platform-application/contacts-ui';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';

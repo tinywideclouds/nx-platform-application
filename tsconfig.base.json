@@ -106,6 +106,9 @@
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
       ],
+      "@nx-platform-application/platform-ui-toolkit": [
+        "libs/platform/ng/ui-toolkit/src/index.ts"
+      ],
       "@nx-platform-application/platform-web-key-storage": [
         "libs/platform/ng/web-key-storage/src/index.ts"
       ]

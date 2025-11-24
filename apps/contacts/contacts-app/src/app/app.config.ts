@@ -1,17 +1,20 @@
-import {
-  ApplicationConfig,
-  provideZonelessChangeDetection,
-  isDevMode,
-  APP_INITIALIZER,
-} from '@angular/core';
-import { provideRouter } from '@angular/router';
-import { APP_ROUTES } from './app.routes';
+import { ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
+import { provideRouter, withComponentInputBinding, withEnabledBlockingInitialNavigation } from '@angular/router';
+import { appRoutes } from './app.routes';
+import { provideAnimations } from '@angular/platform-browser/animations';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    // CHANGE: This enables true zoneless mode
+    // 1. ENABLE ZONELESS
     provideZonelessChangeDetection(),
+    
+    // 2. ROUTER CONFIG
+    provideRouter(appRoutes, 
+      withEnabledBlockingInitialNavigation(),
+      withComponentInputBinding() // Helpful for binding URL params to Inputs
+    ),
 
-    provideRouter(APP_ROUTES),
+    // 3. MATERIAL ANIMATIONS
+    provideAnimations()
   ],
 };
