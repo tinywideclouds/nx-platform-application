@@ -2,9 +2,8 @@
 
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
+  input,
+  output,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types'
@@ -13,7 +12,6 @@ import { ChatConversationListItemComponent } from '../chat-conversation-list-ite
 
 /**
  * A "View Model" representing a single item in the conversation list.
- * This is what the "smart" parent component must provide.
  */
 export type ConversationViewItem = {
   id: URN;
@@ -38,12 +36,12 @@ export class ChatConversationListComponent {
   /**
    * The list of items to display.
    */
-  @Input({ required: true }) items!: ConversationViewItem[];
+  items = input.required<ConversationViewItem[]>();
 
   /**
    * Emits the unique ID (conversation URN string) of the selected conversation.
    */
-  @Output() conversationSelected = new EventEmitter<URN>();
+  conversationSelected = output<URN>();
 
   onSelect(item: ConversationViewItem): void {
     this.conversationSelected.emit(item.id);

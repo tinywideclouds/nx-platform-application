@@ -2,13 +2,11 @@
 
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
+  input,
+  output,
   ChangeDetectionStrategy,
   inject,
-  OnChanges,
-  SimpleChanges,
+  effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -25,9 +23,10 @@ import {
   styleUrl: './chat-message-input.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChatMessageInputComponent implements OnChanges {
-  @Input() disabled: boolean = false;
-  @Output() messageSent = new EventEmitter<string>();
+export class ChatMessageInputComponent {
+  // 1. Convert to Signals
+  disabled = input(false);
+  messageSent = output<string>();
 
   private fb = inject(FormBuilder);
   
@@ -35,14 +34,15 @@ export class ChatMessageInputComponent implements OnChanges {
     messageText: ['', [Validators.required]],
   });
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['disabled']) {
-      if (this.disabled) {
+  constructor() {
+    // 2. Replace ngOnChanges with an effect
+    effect(() => {
+      if (this.disabled()) {
         this.form.disable();
       } else {
         this.form.enable();
       }
-    }
+    });
   }
 
   /**
@@ -60,7 +60,8 @@ export class ChatMessageInputComponent implements OnChanges {
    * Emits the message and resets the form.
    */
   sendMessage(): void {
-    if (this.form.invalid || this.disabled) {
+    // 3. Update 'disabled' check to function call 'disabled()'
+    if (this.form.invalid || this.disabled()) {
       return;
     }
 

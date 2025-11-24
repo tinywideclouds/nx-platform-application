@@ -34,7 +34,7 @@
     <div class="flex items-center space-x-2">
       <input
         type="text"
-        [(ngModel)]="newMessageText"
+        [formControl]="messageControl"
         (keydown.enter)="onSendMessage()"
         placeholder="Type a message..."
         class="flex-grow p-3 border rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"

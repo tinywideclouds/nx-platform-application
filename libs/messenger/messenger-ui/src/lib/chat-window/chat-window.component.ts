@@ -123,16 +123,16 @@ export class ChatWindowComponent {
     return null;
   });
 
-  constructor() {
-    effect(() => {
-      const urn = this.conversationUrn();
-      if (urn) {
-        untracked(() => {
-          this.chatService.loadConversation(urn);
-        });
-      }
-    });
-  }
+  // --- REFACTOR: Field Initializer Effect ---
+  // Cleaned up from constructor injection
+  private conversationLoader = effect(() => {
+    const urn = this.conversationUrn();
+    if (urn) {
+      untracked(() => {
+        this.chatService.loadConversation(urn);
+      });
+    }
+  });
 
   // --- Navigation Handlers ---
 

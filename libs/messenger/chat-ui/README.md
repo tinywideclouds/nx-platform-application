@@ -1,50 +1,61 @@
-# 💬 chat-ui
+# 🎨 Library: chat-ui
 
-This library contains the standalone Angular components for the Messenger feature. It provides the "dumb" UI building blocks for rendering conversation lists and message bubbles.
+**Type:** Presentation Library (Dumb Components)
+**Framework:** Angular (Zoneless, Signal-based)
 
-This library is designed to be consumed by a "smart" parent component that will manage state and data flow.
+This library contains pure presentation components for the Chat domain. It is strictly decoupled from state management and data services.
 
------
+## 📏 Golden Rules
 
-## 🏗️ Peer Dependencies
+1.  **No State:** These components do not inject services. They receive data via **Signal Inputs** and emit events via **Outputs**.
+2.  **Zoneless:** Designed to work without `zone.js`. Uses `OnPush` change detection and Signals for reactivity.
+3.  **Styling:** Uses Tailwind CSS for layout and component-scoped SCSS for specific display logic.
 
-This library does not bundle its core dependencies. To use these components, the consuming application must have the following packages installed:
+## 📦 Components
 
-  * `@angular/core`
-  * `@angular/common`
-  * `@angular/forms` (for the message input component)
-  * `@nx-platform-application/platform-types` (for the `URN` type)
-  * `@nx-platform-application/contacts-ui` (for `<contacts-avatar>`)
+### `chat-conversation-list`
+Displays the scrollable list of active conversations on the left sidebar.
 
------
+* **Inputs:**
+    * `items: ConversationViewItem[]` (Required)
+* **Outputs:**
+    * `conversationSelected: URN` - Emitted when a user clicks a list item.
 
-## 🧩 Component Overview
+### `chat-conversation-list-item`
+A single row in the conversation list.
 
-These components are presentation-focused. They receive all data via `@Input()` and emit user events via `@Output()`.
+* **Inputs:** (All Signals)
+    * `name`, `latestMessage`, `timestamp`, `initials` (Required)
+    * `profilePictureUrl` (Optional)
+    * `unreadCount` (number, default 0)
+    * `isActive` (boolean)
+* **Outputs:**
+    * `select` - Emitted on click.
 
-  * **`ChatConversationListComponent`**:
-      * Renders a vertical list of conversations.
-      * Takes an array of `ConversationViewItem` objects as its main input.
-      * Emits the `URN` of the selected conversation.
-  * **`ChatConversationListItemComponent`**:
-      * Renders a single row in the conversation list.
-      * Displays the contact's name, latest message snippet, timestamp, and unread count.
-      * Uses `<contacts-avatar>` to display the contact's image or initials.
-  * **`ChatMessageBubbleComponent`**:
-      * Renders a single "chat bubble" containing a message.
-      * Uses the `direction` input (`'inbound'` or `'outbound'`) to apply the correct styling (e.g., gray for inbound, blue for outbound).
-  * **`ChatMessageInputComponent`**:
-      * Provides a multi-line `textarea` and a "Send" button.
-      * Emits the `string` content of the message when the user sends.
-      * Supports sending on "Enter" and creating new lines with "Shift+Enter".
-      * Can be disabled via an `@Input()`.
+### `chat-message-bubble`
+Displays a single chat message.
 
------
+* **Inputs:**
+    * `message: string` (Required)
+    * `direction: 'inbound' | 'outbound'` (Required)
 
-## 🏃‍♀️ Running Tests
+### `chat-message-input`
+The text area and send button.
 
-To run the unit tests for this library, execute the following command from the monorepo root:
+* **Inputs:**
+    * `disabled: boolean` (Default: false) - Disables the form/button via a reactive Effect.
+* **Outputs:**
+    * `messageSent: string` - Emits the text value on Submit/Enter.
 
-```sh
-nx test chat-ui
-```
+## 🧪 Testing Pattern
+
+This library uses **Vitest**.
+Because we use Signal Inputs, tests **must** use the `componentRef` API:
+
+```typescript
+// ❌ DO NOT DO THIS
+component.name = 'Test';
+
+// ✅ DO THIS
+fixture.componentRef.setInput('name', 'Test');
+fixture.detectChanges();

@@ -9,13 +9,13 @@ import {
   AfterViewChecked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { ReactiveFormsModule, FormControl } from '@angular/forms';
 import { ChatService } from '@nx-platform-application/chat-state';
 
 @Component({
   selector: 'messenger-chat-conversation',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './chat-conversation.component.html',
   styleUrl: './chat-conversation.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,7 +31,8 @@ export class ChatConversationComponent implements AfterViewChecked {
   currentUserUrn = this.chatService.currentUserUrn;
   selectedConversation = this.chatService.selectedConversation;
 
-  newMessageText = '';
+  // Refactor: Use FormControl for explicit reactivity
+  messageControl = new FormControl('', { nonNullable: true });
 
   ngAfterViewChecked(): void {
     this.scrollToBottom();
@@ -49,12 +50,12 @@ export class ChatConversationComponent implements AfterViewChecked {
   }
 
   onSendMessage(): void {
-    const text = this.newMessageText.trim();
-    const recipientUrn = this.selectedConversation(); // Uses current state
+    const text = this.messageControl.value.trim();
+    const recipientUrn = this.selectedConversation();
 
     if (text && recipientUrn) {
       this.chatService.sendMessage(recipientUrn, text);
-      this.newMessageText = '';
+      this.messageControl.reset();
       this.scrollToBottom();
     }
   }

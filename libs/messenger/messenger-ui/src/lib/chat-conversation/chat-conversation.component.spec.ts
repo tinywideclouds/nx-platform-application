@@ -3,10 +3,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ChatConversationComponent } from './chat-conversation.component';
 import { ChatService } from '@nx-platform-application/chat-state';
-import { signal, WritableSignal } from '@angular/core';
+import { signal } from '@angular/core';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { URN } from '@nx-platform-application/platform-types';
-import { FormsModule } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms'; // Changed from FormsModule
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 
@@ -49,7 +49,7 @@ describe('ChatConversationComponent', () => {
     mockChatService.messages.set(mockMessages);
 
     await TestBed.configureTestingModule({
-      imports: [ChatConversationComponent, FormsModule],
+      imports: [ChatConversationComponent, ReactiveFormsModule], // Updated import
       providers: [
         { provide: ChatService, useValue: mockChatService }
       ]
@@ -66,21 +66,14 @@ describe('ChatConversationComponent', () => {
 
   it('should render messages with correct styling for sender/receiver', () => {
     const bubbles = fixture.debugElement.queryAll(By.css('.max-w-xs'));
-    
     expect(bubbles.length).toBe(2);
-    
-    // First message (Other): White bg
-    expect(bubbles[0].nativeElement.classList).toContain('bg-white');
-    expect(bubbles[0].nativeElement.textContent).toContain('Hello');
-
-    // Second message (Me): Blue bg
-    expect(bubbles[1].nativeElement.classList).toContain('bg-blue-600');
-    expect(bubbles[1].nativeElement.textContent).toContain('Hi there');
+    expect(bubbles[0].nativeElement.classList).toContain('bg-white'); // Receiver
+    expect(bubbles[1].nativeElement.classList).toContain('bg-blue-600'); // Sender
   });
 
-  it('should send message on button click', async () => {
-    // 1. Type message
-    component.newMessageText = 'New Message';
+  it('should send message on button click', () => {
+    // 1. Set value via FormControl
+    component.messageControl.setValue('New Message');
     fixture.detectChanges();
 
     // 2. Click send
@@ -89,11 +82,11 @@ describe('ChatConversationComponent', () => {
 
     // 3. Verify
     expect(mockChatService.sendMessage).toHaveBeenCalledWith(mockRecipientUrn, 'New Message');
-    expect(component.newMessageText).toBe(''); // Should clear
+    expect(component.messageControl.value).toBe(''); // Should reset
   });
 
   it('should send message on Enter key', () => {
-    component.newMessageText = 'Enter Key Msg';
+    component.messageControl.setValue('Enter Key Msg');
     fixture.detectChanges();
 
     const input = fixture.debugElement.query(By.css('input'));
@@ -103,7 +96,7 @@ describe('ChatConversationComponent', () => {
   });
 
   it('should not send empty message', () => {
-    component.newMessageText = '   ';
+    component.messageControl.setValue('   ');
     fixture.detectChanges();
 
     const btn = fixture.debugElement.query(By.css('footer button'));

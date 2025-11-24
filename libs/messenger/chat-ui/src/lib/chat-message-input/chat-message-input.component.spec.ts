@@ -1,8 +1,7 @@
 // libs/messenger/chat-ui/src/lib/chat-message-input/chat-message-input.component.spec.ts
 
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
-import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 
 import { ChatMessageInputComponent } from './chat-message-input.component';
@@ -42,7 +41,6 @@ describe('ChatMessageInputComponent', () => {
       '[data-testid="message-textarea"]'
     ) as HTMLTextAreaElement;
 
-    // Set value and dispatch event
     textarea.value = 'Hello';
     textarea.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -51,20 +49,18 @@ describe('ChatMessageInputComponent', () => {
   });
 
   it('should emit (messageSent) and reset the form on send', () => {
+    // 1. Spy on the output signal's emit method
     const emitSpy = vi.spyOn(component.messageSent, 'emit');
 
-    // Fill form
     component.form.patchValue({ messageText: 'Test message' });
     fixture.detectChanges();
 
-    // Click send
     const sendButton = el.querySelector(
       '[data-testid="send-button"]'
     ) as HTMLButtonElement;
     sendButton.click();
     fixture.detectChanges();
 
-    // Assert
     expect(emitSpy).toHaveBeenCalledWith('Test message');
     expect(component.form.value.messageText).toBeNull();
   });
@@ -78,25 +74,21 @@ describe('ChatMessageInputComponent', () => {
     component.form.patchValue({ messageText: 'Test message' });
     fixture.detectChanges();
 
-    // 1. Test Shift+Enter (should not send)
     textarea.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true })
     );
     fixture.detectChanges();
     expect(emitSpy).not.toHaveBeenCalled();
 
-    // 2. Test Enter (should send)
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     fixture.detectChanges();
     expect(emitSpy).toHaveBeenCalledWith('Test message');
   });
 
   it('should disable the form when the disabled input is true', () => {
-    component.disabled = true;
-    component.ngOnChanges({
-      disabled: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true }
-    });
-    fixture.detectChanges();
+    // 2. Refactored Test: Use setInput to trigger the Effect
+    fixture.componentRef.setInput('disabled', true);
+    fixture.detectChanges(); // Triggers the effect
 
     const textarea = el.querySelector(
       '[data-testid="message-textarea"]'

@@ -67,3 +67,7 @@ nx g @nx/workspace:move --project=auth-ui --newProjectName=platform-auth-ui --de
 
 
 nx g @nx/angular:library --name=platform-ui-toolkit --directory=libs/platform/ng/ui-toolkit --tags="scope:platform"   
+
+
+
+nx g @nx/angular:library --name=messenger-settings-ui --directory=libs/messenger/settings-ui --tags="scope:messenger"  

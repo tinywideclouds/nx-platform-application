@@ -2,9 +2,8 @@
 
 import {
   Component,
-  Input,
-  Output,
-  EventEmitter,
+  input,
+  output,
   ChangeDetectionStrategy,
   HostListener,
 } from '@angular/core';
@@ -20,17 +19,17 @@ import { ContactAvatarComponent } from '@nx-platform-application/contacts-ui';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatConversationListItemComponent {
-  // --- NEW, SIMPLER API ---
-  @Input({ required: true }) name!: string;
-  @Input({ required: true }) latestMessage!: string;
-  @Input({ required: true }) timestamp!: string;
-  @Input({ required: true }) initials!: string;
-  @Input() profilePictureUrl?: string;
-  @Input() unreadCount: number = 0;
-  @Input() isActive: boolean = false;
+  // --- NEW SIGNALS API ---
+  name = input.required<string>();
+  latestMessage = input.required<string>();
+  timestamp = input.required<string>();
+  initials = input.required<string>();
+  profilePictureUrl = input<string | undefined>(undefined); // Optional with default
+  unreadCount = input<number>(0);
+  isActive = input<boolean>(false);
   // --- END NEW API ---
 
-  @Output() select = new EventEmitter<void>();
+  select = output<void>();
 
   @HostListener('click')
   onHostClick(): void {

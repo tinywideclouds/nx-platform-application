@@ -1,38 +1,38 @@
 <div
   class="flex items-center p-3 space-x-3 cursor-pointer transition-colors duration-150"
-  [class.hover:bg-gray-100]="!isActive"
-  [class.bg-blue-100]="isActive"
+  [class.hover:bg-gray-100]="!isActive()"
+  [class.bg-blue-100]="isActive()"
 >
   <contacts-avatar
-    [profilePictureUrl]="profilePictureUrl"
-    [initials]="initials"
+    [profilePictureUrl]="profilePictureUrl()"
+    [initials]="initials()"
   ></contacts-avatar>
 
   <div class="flex-1 min-w-0">
     <div class="flex justify-between items-center">
       <div
         class="font-medium truncate"
-        [class.text-gray-900]="!isActive"
-        [class.text-blue-800]="isActive"
+        [class.text-gray-900]="!isActive()"
+        [class.text-blue-800]="isActive()"
         data-testid="contact-name"
       >
-        {{ name }}
+        {{ name() }}
       </div>
       <div class="text-xs text-gray-500 flex-shrink-0 ml-2">
-        {{ timestamp | slice: 11:16 }}
+        {{ timestamp() | slice: 11:16 }}
       </div>
     </div>
 
     <div class="flex justify-between items-center mt-1">
       <div class="text-sm text-gray-500 truncate" data-testid="last-message">
-        {{ latestMessage }}
+        {{ latestMessage() }}
       </div>
-      @if (unreadCount > 0) {
+      @if (unreadCount() > 0) {
       <div
         class="flex-shrink-0 ml-2 bg-blue-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center"
         data-testid="unread-count"
       >
-        {{ unreadCount }}
+        {{ unreadCount() }}
       </div>
       }
     </div>

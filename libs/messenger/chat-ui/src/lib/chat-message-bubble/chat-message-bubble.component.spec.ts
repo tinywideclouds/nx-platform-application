@@ -18,8 +18,9 @@ describe('ChatMessageBubbleComponent', () => {
   });
 
   it('should render an outbound message', () => {
-    component.message = 'Hello world';
-    component.direction = 'outbound';
+    // Refactor: Use setInput for signals
+    fixture.componentRef.setInput('message', 'Hello world');
+    fixture.componentRef.setInput('direction', 'outbound');
     fixture.detectChanges();
 
     const bubble = fixture.debugElement.query(
@@ -32,8 +33,9 @@ describe('ChatMessageBubbleComponent', () => {
   });
 
   it('should render an inbound message', () => {
-    component.message = 'Hi back';
-    component.direction = 'inbound';
+    // Refactor: Use setInput for signals
+    fixture.componentRef.setInput('message', 'Hi back');
+    fixture.componentRef.setInput('direction', 'inbound');
     fixture.detectChanges();
 
     const bubble = fixture.debugElement.query(
