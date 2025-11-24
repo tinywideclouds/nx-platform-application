@@ -1,47 +1,71 @@
 <div class="space-y-6">
   
-  <div>
-    <h1 class="text-2xl font-bold text-gray-900">Encryption Keys</h1>
-    <p class="text-gray-500">Manage your cryptographic identity (OMEMO/Signal Protocol).</p>
+  <header class="pb-4 border-b border-gray-200">
+    <h1 class="text-2xl font-bold text-gray-800 m-0">Encryption Keys</h1>
+    <p class="text-sm text-gray-500 mt-1">Manage your OMEMO / Signal Protocol cryptographic identity.</p>
+  </header>
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-6 flex items-start gap-4">
+    <div class="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
+      <mat-icon>verified_user</mat-icon>
+    </div>
+    <div>
+      <h3 class="font-bold text-gray-900">End-to-End Encryption Active</h3>
+      <p class="text-sm text-gray-600 mt-1 leading-relaxed max-w-2xl">
+        Your messages are secured with local keys before transmission. Only you and your intended recipients can decrypt them.
+      </p>
+    </div>
   </div>
 
-  <mat-card class="bg-blue-50 border-blue-100 shadow-none">
-    <div class="p-4 flex items-start gap-3">
-      <mat-icon class="text-blue-600">verified_user</mat-icon>
-      <div>
-        <h3 class="font-bold text-blue-900 text-sm">End-to-End Encrypted</h3>
-        <p class="text-xs text-blue-700 mt-1">
-          Your messages are secured with local keys before they leave this device. 
-          Only you and the recipient can read them.
-        </p>
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <mat-icon class="text-blue-600">fingerprint</mat-icon>
+        <h3 class="font-bold text-gray-900 text-sm">Public Identity Fingerprint</h3>
       </div>
+      <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">SHA-256</div>
     </div>
-  </mat-card>
 
-  <div class="border-t pt-6">
-    <h3 class="text-lg font-medium text-gray-900 mb-4">Danger Zone</h3>
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm text-gray-700 break-all tracking-wide leading-relaxed select-all">
+      {{ fingerprint() }}
+    </div>
     
-    <div class="border border-orange-200 rounded-lg p-4 bg-orange-50">
-      <div class="flex items-center justify-between mb-2">
-        <h4 class="font-bold text-orange-800 text-sm flex items-center gap-2">
-          <mat-icon class="text-sm h-4 w-4">refresh</mat-icon>
-          Reset Identity Keys
-        </h4>
+    <p class="text-xs text-gray-500 mt-3">
+      This fingerprint is derived from your <strong>local private key</strong>. 
+      Compare this with what your contacts see to verify your identity.
+    </p>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+    
+    <div class="p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-grow">
+          <h4 class="font-bold text-gray-900 text-sm mb-1">Regenerate Identity</h4>
+          <p class="text-sm text-gray-500 mb-3 max-w-xl">
+            If you suspect your keys are corrupted or your device has been compromised, you can generate a new identity.
+          </p>
+          <div class="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded w-fit border border-orange-100">
+            <mat-icon class="text-sm h-4 w-4">warning</mat-icon>
+            <span>This will trigger "Safety Number Changed" warnings for your contacts.</span>
+          </div>
+        </div>
+
         <button 
           mat-stroked-button 
           color="warn"
           [disabled]="isLoading"
           (click)="onResetKeys()"
+          class="shrink-0"
         >
-          {{ isLoading ? 'Generating...' : 'Reset Keys' }}
+          <div class="flex items-center gap-2" *ngIf="!isLoading">
+            <span>Reset Keys</span>
+          </div>
+          <mat-progress-spinner *ngIf="isLoading" diameter="20" mode="indeterminate"></mat-progress-spinner>
         </button>
       </div>
-      <p class="text-xs text-orange-700">
-        Use this if your keys are corrupted or you suspect your device was compromised. 
-        This will generate a new identity and upload it to the directory.
-        Existing conversations may show trust warnings.
-      </p>
     </div>
+
   </div>
 
 </div>

@@ -1,61 +1,75 @@
 <div class="space-y-6">
   
-  <div>
-    <h1 class="text-2xl font-bold text-gray-900">Routing & Storage</h1>
-    <p class="text-gray-500">Network connection and local database management.</p>
-  </div>
+  <header class="pb-4 border-b border-gray-200">
+    <h1 class="text-2xl font-bold text-gray-800 m-0">Routing & Storage</h1>
+    <p class="text-sm text-gray-500 mt-1">Network connection status and local database metrics.</p>
+  </header>
 
-  <mat-card class="p-6">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <mat-icon [class.text-green-500]="connectionStatus() === 'connected'"
-                  [class.text-red-500]="connectionStatus() === 'disconnected'">
-          wifi
-        </mat-icon>
-        <div>
-          <h3 class="font-bold text-sm text-gray-900">Network Status</h3>
-          <p class="text-xs text-gray-500">WebSocket / Long-polling</p>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col h-full">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <mat-icon class="text-gray-400">wifi</mat-icon>
+          <h3 class="font-bold text-gray-900 text-sm">Connection</h3>
         </div>
-      </div>
-      
-      <mat-chip-set>
-        <mat-chip [color]="connectionStatus() === 'connected' ? 'accent' : 'warn'" selected>
+        <span 
+          class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+          [class.bg-green-50]="connectionStatus() === 'connected'"
+          [class.text-green-700]="connectionStatus() === 'connected'"
+          [class.border-green-200]="connectionStatus() === 'connected'"
+          [class.bg-red-50]="connectionStatus() !== 'connected'"
+          [class.text-red-700]="connectionStatus() !== 'connected'"
+        >
           {{ connectionStatus() | uppercase }}
-        </mat-chip>
-      </mat-chip-set>
-    </div>
-    
-    <div class="mt-4 flex justify-end">
-      <button mat-button (click)="onForceReconnect()">Force Reconnect</button>
-    </div>
-  </mat-card>
-
-  <mat-card class="p-6">
-    <div class="flex items-center gap-3 mb-4">
-      <mat-icon class="text-gray-600">storage</mat-icon>
-      <div>
-        <h3 class="font-bold text-sm text-gray-900">Local Database</h3>
-        <p class="text-xs text-gray-500">IndexedDB Storage</p>
+        </span>
       </div>
-    </div>
 
-    <div class="grid grid-cols-2 gap-4 mb-6">
-      <div class="bg-gray-50 p-3 rounded">
-        <div class="text-xs text-gray-500 uppercase">Messages Cached</div>
-        <div class="text-xl font-mono">{{ messageCount().length }}</div>
-      </div>
-      <div class="bg-gray-50 p-3 rounded">
-        <div class="text-xs text-gray-500 uppercase">Storage Driver</div>
-        <div class="text-xl font-mono">Dexie.js</div>
-      </div>
-    </div>
+      <p class="text-sm text-gray-500 mb-6 flex-grow">
+        Real-time socket connection to the message relay server. 
+      </p>
 
-    <div class="border-t pt-4 flex justify-between items-center">
-      <span class="text-sm text-gray-600">Free up space by deleting history</span>
-      <button mat-stroked-button color="warn" (click)="onClearHistory()">
-        Clear History
+      <button mat-stroked-button (click)="onForceReconnect()">
+        <mat-icon>refresh</mat-icon>
+        Force Reconnect
       </button>
     </div>
-  </mat-card>
 
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col h-full">
+      <div class="flex items-center gap-2 mb-4">
+        <mat-icon class="text-gray-400">storage</mat-icon>
+        <h3 class="font-bold text-gray-900 text-sm">Local Database</h3>
+      </div>
+
+      <div class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Messages</div>
+            <div class="text-2xl font-mono text-gray-800">{{ messageCount().length }}</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Driver</div>
+            <div class="text-sm font-mono text-gray-600 mt-1">IndexedDB</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-auto pt-4 border-t border-gray-100 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-gray-500">Public Key Cache</span>
+          <button mat-stroked-button (click)="onClearKeyCache()">
+            Clear Cache
+          </button>
+        </div>
+        
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-gray-500">Message History</span>
+          <button mat-stroked-button color="warn" (click)="onClearHistory()">
+            Clear History
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>

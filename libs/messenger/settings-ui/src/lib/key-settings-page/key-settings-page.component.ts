@@ -1,17 +1,19 @@
 // libs/messenger/settings-ui/src/lib/key-settings-page/key-settings-page.component.ts
 
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
 
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
 
 @Component({
   selector: 'lib-key-settings-page',
@@ -22,19 +24,49 @@ import { ConfirmationDialogComponent } from '@nx-platform-application/platform-u
     MatCardModule, 
     MatIconModule,
     MatSnackBarModule,
-    MatDialogModule
+    MatDialogModule,
+    MatProgressSpinnerModule
   ],
   templateUrl: './key-settings-page.component.html',
   styleUrl: './key-settings-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class KeySettingsPageComponent {
+export class KeySettingsPageComponent implements OnInit {
   private chatService = inject(ChatService);
+  private cryptoService = inject(MessengerCryptoService);
   private logger = inject(Logger);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
   isLoading = false;
+  fingerprint = signal<string>('Loading...');
+
+  ngOnInit(): void {
+    this.loadFingerprint();
+  }
+
+  async loadFingerprint(): Promise<void> {
+    const myUrn = this.chatService.currentUserUrn();
+    if (!myUrn) {
+      this.fingerprint.set('Unknown (Not Logged In)');
+      return;
+    }
+
+    try {
+      const keys = await this.cryptoService.loadMyPublicKeys(myUrn);
+      
+      if (keys && keys.encKey) {
+        // REFACTOR: Logic moved to service
+        const fp = await this.cryptoService.getFingerprint(keys.encKey);
+        this.fingerprint.set(fp);
+      } else {
+        this.fingerprint.set('No Local Keys Generated');
+      }
+    } catch (e) {
+      this.logger.error('Failed to load fingerprint from local storage', e);
+      this.fingerprint.set('Error loading key');
+    }
+  }
 
   async onResetKeys(): Promise<void> {
     const ref = this.dialog.open(ConfirmationDialogComponent, {
@@ -46,7 +78,6 @@ export class KeySettingsPageComponent {
       }
     });
 
-    // 1. Convert Observable to Promise to allow linear await in tests
     const confirmed = await firstValueFrom(ref.afterClosed());
 
     if (confirmed) {
@@ -56,6 +87,7 @@ export class KeySettingsPageComponent {
 
   private async executeReset(): Promise<void> {
     this.isLoading = true;
+    this.fingerprint.set('Regenerating...'); 
     try {
       await this.chatService.resetIdentityKeys();
       
@@ -66,6 +98,8 @@ export class KeySettingsPageComponent {
         panelClass: ['bg-green-600', 'text-white']
       });
 
+      await this.loadFingerprint();
+
     } catch (err) {
       this.logger.error('Failed to reset keys', err);
       
@@ -73,6 +107,7 @@ export class KeySettingsPageComponent {
         duration: 5000,
         panelClass: ['bg-red-600', 'text-white']
       });
+      this.fingerprint.set('Error');
     } finally {
       this.isLoading = false;
     }

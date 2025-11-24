@@ -19,7 +19,6 @@ import { ChatMessageMapper } from './chat-message.mapper';
 import {
   URN,
   QueuedMessage,
-  ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
   EncryptedMessagePayload,

@@ -111,7 +111,7 @@ export async function createTestClient(
   });
 
   const storageService = TestBed.inject(ChatStorageService);
-  await storageService.clearAllMessages();
+  await storageService.clearDatabase();
 
   /** ➡️ **Change 3:** Wrap the key generation logic in the new option. */
   if (options.generateKeys) {

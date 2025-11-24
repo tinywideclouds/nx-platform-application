@@ -6,10 +6,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar'; // <--- NEW
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
+// IMPORT KeyCacheService
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 
 @Component({
   selector: 'lib-routing-settings-page',
@@ -28,28 +30,36 @@ import { Logger } from '@nx-platform-application/console-logger';
 })
 export class RoutingSettingsPageComponent {
   private chatService = inject(ChatService);
+  private keyCache = inject(KeyCacheService); // <--- INJECTED
   private logger = inject(Logger);
-  private snackBar = inject(MatSnackBar); // <--- INJECTED
+  private snackBar = inject(MatSnackBar);
 
   connectionStatus = signal<'connected' | 'disconnected' | 'connecting'>('connected');
   messageCount = this.chatService.messages;
 
+  // --- NEW METHOD ---
+  async onClearKeyCache(): Promise<void> {
+    try {
+      await this.keyCache.clear();
+      this.logger.info('User manually cleared Public Key Cache.');
+      this.snackBar.open('Public Key Cache cleared. Keys will be re-fetched on next send.', 'OK', { 
+        duration: 3000 
+      });
+    } catch (e) {
+      this.logger.error('Failed to clear key cache', e);
+      this.snackBar.open('Failed to clear cache.', 'Dismiss', { duration: 3000 });
+    }
+  }
+
   onClearHistory(): void {
-    // For simple "Not Implemented" checks, we can skip the dialog and just log/notify
-    // Or add the dialog if we want to confirm the INTENT before failing.
-    this.showPendingFeature('Clear History');
+    if (confirm('Delete all message history?')) {
+      this.logger.warn('Clear History requested but not implemented.');
+      this.snackBar.open('This feature requires an update to ChatService.', 'Got it', { duration: 3000 });
+    }
   }
 
   onForceReconnect(): void {
-    this.showPendingFeature('Force Reconnect');
-  }
-
-  private showPendingFeature(name: string): void {
-    this.logger.warn(`${name} requested but not implemented.`);
-    
-    // Non-blocking notification
-    this.snackBar.open(`${name} will be available in a future update.`, 'Got it', {
-      duration: 3000
-    });
+    this.logger.warn('Reconnect requested but not implemented.');
+    this.snackBar.open('Feature pending.', 'Got it', { duration: 3000 });
   }
 }

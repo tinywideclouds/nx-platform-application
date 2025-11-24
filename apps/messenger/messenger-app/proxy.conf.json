@@ -20,6 +20,15 @@
       "^/api/messenger": "/api"
     }
   },
+  "/api/routing": {
+    "target": "http://localhost:8082",
+    "secure": false,
+    "logLevel": "debug",
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api/routing": "/api"
+    }
+  },
   "/api/keys": {
     "target": "http://localhost:8081",
     "secure": false,

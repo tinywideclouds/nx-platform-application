@@ -7,22 +7,13 @@ import { Temporal } from '@js-temporal/polyfill';
 
 // Services
 import { ChatSendService } from '@nx-platform-application/chat-access';
-import {
-  MessengerCryptoService,
-  PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-access';
-import {
-  ChatStorageService,
-  DecryptedMessage,
-} from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+import { MessengerCryptoService, PrivateKeys } from '@nx-platform-application/messenger-crypto-access';
+import { ChatStorageService, DecryptedMessage } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import { ChatKeyService } from './chat-key.service'; // <--- NEW IMPORT
 
 // Types
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
 import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
 
 @Injectable({ providedIn: 'root' })
@@ -31,8 +22,8 @@ export class ChatOutboundService {
   private sendService = inject(ChatSendService);
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
-  private contactsService = inject(ContactsStorageService);
-  private keyService = inject(KeyCacheService);
+  private keyCache = inject(KeyCacheService); // Renamed from keyService to avoid confusion
+  private keyLogic = inject(ChatKeyService); // <--- NEW INJECTION
 
   /**
    * Encrypts, signs, sends, and locally saves a message.
@@ -46,8 +37,9 @@ export class ChatOutboundService {
     payloadBytes: Uint8Array
   ): Promise<DecryptedMessage | null> {
     try {
-      // 1. Resolve Recipient (Contact -> Auth)
-      const targetAuthUrn = await this.resolveRecipientIdentity(recipientUrn);
+      // 1. Resolve Recipient (Contact -> Auth/Lookup)
+      // We use the shared logic that includes Email Discovery.
+      const targetAuthUrn = await this.keyLogic.resolveRecipientIdentity(recipientUrn);
 
       // 2. Construct Payload
       const payload: EncryptedMessagePayload = {
@@ -58,7 +50,8 @@ export class ChatOutboundService {
       };
 
       // 3. Fetch Keys & Encrypt
-      const recipientKeys = await this.keyService.getPublicKey(targetAuthUrn);
+      // Now we are querying keys for 'urn:lookup:email:bob@...' which exists!
+      const recipientKeys = await this.keyCache.getPublicKey(targetAuthUrn);
       const envelope = await this.cryptoService.encryptAndSign(
         payload,
         targetAuthUrn,
@@ -69,9 +62,8 @@ export class ChatOutboundService {
       // 4. Network Send
       await firstValueFrom(this.sendService.sendMessage(envelope));
 
-      // 5. Optimistic Save (Storage Model)
-      // Note: We store the ORIGINAL recipientUrn (Contact) for conversation grouping,
-      // even though we encrypted for targetAuthUrn.
+      // 5. Optimistic Save
+      // We store the ORIGINAL recipientUrn (Contact) for conversation grouping.
       const optimisticMsg: DecryptedMessage = {
         messageId: `local-${crypto.randomUUID()}`,
         senderId: myUrn,
@@ -92,30 +84,7 @@ export class ChatOutboundService {
     }
   }
 
-  /**
-   * Resolves a Contact URN to a specific Authentication URN for encryption.
-   */
-  private async resolveRecipientIdentity(recipientUrn: URN): Promise<URN> {
-    if (recipientUrn.toString().startsWith('urn:auth:')) {
-      return recipientUrn;
-    }
-    // If it's a Contact, get linked identities
-    const identities = await this.contactsService.getLinkedIdentities(
-      recipientUrn
-    );
-
-    // TODO: Add logic to pick the "active" or "primary" identity.
-    // For now, pick the first one.
-    if (identities.length > 0) {
-      return identities[0];
-    }
-
-    // Fallback: Assume the URN is usable as-is (legacy/testing)
-    return recipientUrn;
-  }
-
   private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
-    // Logic: If urn1 is me, conversation is urn2.
     return urn1.toString() === myUrn.toString() ? urn2 : urn1;
   }
 }

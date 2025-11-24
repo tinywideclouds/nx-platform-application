@@ -4,6 +4,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RoutingSettingsPageComponent } from './routing-settings-page.component';
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache'; // <--- Import
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { signal } from '@angular/core';
 import { vi } from 'vitest';
 
@@ -14,22 +16,28 @@ describe('RoutingSettingsPageComponent', () => {
   const mockChatService = {
     messages: signal([])
   };
-
-  const mockLogger = {
-    warn: vi.fn()
+  const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn() };
+  const mockSnackBar = { open: vi.fn() };
+  
+  // Mock KeyCacheService
+  const mockKeyCache = {
+    clear: vi.fn().mockResolvedValue(undefined)
   };
 
   beforeEach(async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await TestBed.configureTestingModule({
       imports: [RoutingSettingsPageComponent],
       providers: [
         { provide: ChatService, useValue: mockChatService },
-        { provide: Logger, useValue: mockLogger }
+        { provide: Logger, useValue: mockLogger },
+        { provide: MatSnackBar, useValue: mockSnackBar },
+        { provide: KeyCacheService, useValue: mockKeyCache } // <--- Provide
       ]
-    }).compileComponents();
+    })
+    .overrideProvider(MatSnackBar, { useValue: mockSnackBar })
+    .compileComponents();
 
     fixture = TestBed.createComponent(RoutingSettingsPageComponent);
     component = fixture.componentInstance;
@@ -40,8 +48,14 @@ describe('RoutingSettingsPageComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should log warning when clearing history', () => {
-    component.onClearHistory();
-    expect(mockLogger.warn).toHaveBeenCalled();
+  it('should call KeyCacheService.clear() on clear cache action', async () => {
+    await component.onClearKeyCache();
+    
+    expect(mockKeyCache.clear).toHaveBeenCalled();
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      expect.stringContaining('cleared'), 
+      expect.any(String), 
+      expect.any(Object)
+    );
   });
 });
