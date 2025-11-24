@@ -29,16 +29,11 @@
       </span>
     </div>
 
-    <button mat-menu-item disabled>
+    <button mat-menu-item (click)="viewSettings.emit()">
       <mat-icon>settings</mat-icon>
       <span>Settings</span>
     </button>
     
-    <button mat-menu-item (click)="resetKeys.emit()">
-      <mat-icon>vpn_key</mat-icon>
-      <span>Reset Identity Keys</span>
-    </button>
-
     <button mat-menu-item (click)="logout.emit()">
       <mat-icon>logout</mat-icon>
       <span>Log Out</span>

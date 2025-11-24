@@ -37,9 +37,10 @@ export class MessengerToolbarComponent {
   viewContacts = output<void>();
   
   // User Menu Actions
+  viewSettings = output<void>(); // <--- NEW
   logout = output<void>();
-  resetKeys = output<void>(); // <-- NEW
-  // Removed openAddressBook output
+  
+  // REMOVED: resetKeys output (moved to Settings UI)
 
   get initials(): string {
     const user = this.currentUser();

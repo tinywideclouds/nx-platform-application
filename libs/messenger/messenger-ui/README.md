@@ -1,89 +1,50 @@
-# 📚 Library: messenger-ui
+# 📱 libs/messenger/messenger-ui
 
-This library provides the high-level "smart" page components for the main Messenger application.
+**Type:** Smart / Composition Library
+**Framework:** Angular (Zoneless, Signal-based)
 
-It acts as a key integration point in the architecture, composing components from other libraries (`@nx-platform-application/chat-ui` and `@nx-platform-application/contacts-ui`) and orchestrating state between `@nx-platform-application/chat-state` and `@nx-platform-application/contacts-data-access`.
+This library is the "Feature Shell" for the Messenger application. It acts as the orchestration layer that connects the **Data/State Services** (`chat-state`, `contacts-access`) to the **Presentation Components** (`chat-ui`, `contacts-ui`).
 
-## 🏛️ Architectural Purpose
+## 🏗 Architecture
 
-This is a **"Composition Facade"** library. It contains the primary, route-level components that the `messenger-app` loads.
+This library follows a **Route-Driven State** pattern. Components derive their state (Active Conversation, View Mode) primarily from the Router URL, ensuring the UI is always syncable and deep-linkable.
 
-The core responsibility of this library is to **connect state and data** from different domains:
+### 🔑 Key Components
 
-1.  **Injects `ChatService`** (from `chat-state`) to get the active conversation list and send/receive messages.
-2.  **Injects `ContactsStorageService`** (from `contacts-data-access`) to get the user's contacts and groups.
-3.  **It "joins" this data** to create rich view models. For example, it maps a conversation's `conversationUrn` to a contact's name and profile picture.
-4.  **It passes these view models** to "dumb" list components from other UI libraries.
+#### `MessengerHomePage` (Shell)
+* **Role:** The layout container.
+* **Responsibility:** Manages the `MessengerToolbar`, handles global actions (Logout, Navigation), and contains the primary `<router-outlet>`.
 
-## 📦 Public API
+#### `MessengerChatPage` (Conversation List)
+* **Role:** The "Master" view in the Master-Detail layout.
+* **Responsibility:** Subscribes to `ChatService.activeConversations` and maps them to `ConversationViewItem` models for the `chat-ui` list.
 
-This library exports two "smart" page components:
+#### `ChatWindowComponent` (Conversation Detail)
+* **Role:** The "Detail" view.
+* **Responsibility:**
+    * Resolves the Conversation URN from the route.
+    * Triggers data loading via `ChatService`.
+    * Computes the `ChatParticipant` (joining User/Group data with Contact data).
 
-| Component | Selector | Description |
-| :--- | :--- | :--- |
-| `MessengerHomePageComponent` | `messenger-home-page` | The main layout for the application. It displays the conversation list and a `<router-outlet>` for the chat window on desktop. |
-| `ChatWindowComponent` | `messenger-chat-window` | The full-screen chat window for a single conversation. Loaded via the router. |
+#### `ChatConversationComponent`
+* **Role:** The message stream and input area.
+* **Responsibility:**
+    * Uses **Reactive Forms** (`FormControl`) for message input.
+    * Displays the list of messages via `ChatService.messages` signal.
 
------
+## 🚦 Routing
 
-## 🧩 Key Patterns & Logic
+The library exports `MESSENGER_ROUTES` which defines the following tree:
 
-### MessengerHomePageComponent
+* `/messenger`
+    * `/conversations` (List)
+        * `/:id` (Chat Window)
+            * `/details` (Contact Info Wrapper)
+    * `/compose` (Contact Selection Sidebar)
+    * `/contacts` (Lazy loaded `contacts-ui` viewer)
 
-This component is the main "hub" of the messenger.
+## 🛠 Dependencies
 
-  * **State:** Injects `ChatService` and `ContactsStorageService`.
-  * **Composition:** Its template imports and uses:
-      * `chat-conversation-list` (from `@nx-platform-application/chat-ui`)
-      * `contacts-list` (from `@nx-platform-application/contacts-ui`)
-      * `contacts-group-list` (from `@nx-platform-application/contacts-ui`)
-  * **Core Logic: Data Joining**
-    Its primary job is to create the `conversationViewItems` view model. It does this by combining `conversations()` (from `ChatService`) with `contactsMap()` and `groupsMap()` (from `ContactsStorageService`) to map a `URN` to a rich object with a name, initials, and profile picture.
-  * **State-Driven UI:** A `computed` signal (`viewMode`) determines what to show:
-      * `'conversations'`: If the user has active chats.
-      * `'start_conversation'`: If the user has no chats, but does have contacts.
-      * `'new_user_welcome'`: If the user is new and has no chats or contacts.
-  * **Navigation:** It handles selection events from the lists to navigate the user to the correct chat window (e.g., `router.navigate(['/messenger', 'chat', id])`).
-
-### ChatWindowComponent
-
-This component is the main chat interface for a single conversation.
-
-  * **State:** Injects `ActivatedRoute`, `ChatService`, `ContactsStorageService`, and `IAuthService`.
-  * **Route-Driven:** An `effect` reacts to the `:id` route parameter (which is a `URN`). When this `URN` changes, it calls `chatService.loadConversation(urn)`.
-  * **Core Logic: Participant View Model**
-    It computes a `participant: ChatParticipant` view model. It identifies if the `conversationUrn` is a `'user'` or `'group'` and then looks up the corresponding name/avatar details from the `contacts()` or `groups()` signals provided by the `ContactsStorageService`.
-  * **Functionality:**
-      * Renders the list of `messages()` from `ChatService`.
-      * Differentiates between incoming and outgoing messages by comparing the `msg.senderId` to the `currentUserUrn()`.
-      * Calls `chatService.sendMessage(urn, text)` when the user sends a message.
-      * Provides a "Back" button for mobile navigation.
-
-## 🚀 Usage Example
-
-This library's components are intended to be loaded by the main application's router:
-
-```typescript
-// in app.routes.ts
-import { Routes } from '@angular/router';
-import {
-  MessengerHomePageComponent,
-  ChatWindowComponent,
-} from '@nx-platform-application/messenger-ui';
-import { authGuard } from './auth/auth.guard';
-
-export const appRoutes: Routes = [
-  // ... login routes
-  {
-    path: '', // Main app route
-    component: MessengerHomePageComponent, // <--- From this library
-    canActivate: [authGuard],
-    children: [
-      {
-        path: 'chat/:id',
-        component: ChatWindowComponent, // <--- From this library
-      },
-    ],
-  },
-];
-```
+* **State:** `@nx-platform-application/chat-state`
+* **Data:** `@nx-platform-application/contacts-access`
+* **UI:** `@nx-platform-application/chat-ui`, `@nx-platform-application/contacts-ui`

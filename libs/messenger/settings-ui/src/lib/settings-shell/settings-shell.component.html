@@ -1,0 +1,13 @@
+<lib-master-detail-layout [showDetail]="showDetail">
+  
+  <div sidebar class="h-full w-full ">
+    <lib-settings-sidebar (closeSettings)="onClose()" />
+  </div>
+
+  <div main class="h-full bg-gray-50 overflow-y-auto w-full pad-temp">
+    <div class="max-w-4xl mx-auto min-h-full p-6 m-6">
+      <router-outlet />
+    </div>
+  </div>
+
+</lib-master-detail-layout>

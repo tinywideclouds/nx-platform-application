@@ -70,6 +70,9 @@
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/messenger/*"
       ],
+      "@nx-platform-application/messenger-settings-ui": [
+        "libs/messenger/settings-ui/src/index.ts"
+      ],
       "@nx-platform-application/messenger-types": [
         "libs/messenger/types/src/index.ts"
       ],

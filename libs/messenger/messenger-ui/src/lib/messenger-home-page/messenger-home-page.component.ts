@@ -56,6 +56,10 @@ export class MessengerHomePageComponent {
     this.router.navigate(['/messenger', 'compose']);
   }
 
+  onViewSettings() {
+    this.router.navigate(['/messenger', 'settings']);
+  }
+
   onViewContacts() {
     this.router.navigate(['/messenger', 'contacts']);
   }
@@ -68,11 +72,6 @@ export class MessengerHomePageComponent {
     });
   }
   
-  onResetKeys() {
-    console.log('Reset keys requested');
-    // Logic to reset keys would go here
-  }
-
   // --- HELPERS ---
 
   private getSidebarViewFromUrl(url: string): SidebarView {

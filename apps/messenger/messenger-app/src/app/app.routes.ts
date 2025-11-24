@@ -2,7 +2,7 @@
 
 import { Routes } from '@angular/router';
 import {
-  MESSENGER_ROUTES,
+  messengerRoutes,
 } from '@nx-platform-application/messenger-ui';
 
 import {
@@ -39,7 +39,7 @@ export const appRoutes: Routes = [
   {
     path: 'messenger', 
     canActivate: [authGuard],
-    children: MESSENGER_ROUTES 
+    children: messengerRoutes 
   },
   // === FIX ENDS HERE ===
 

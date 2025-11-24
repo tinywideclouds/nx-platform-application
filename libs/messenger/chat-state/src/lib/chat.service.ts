@@ -31,9 +31,12 @@ import {
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+
+// WORKERS & HELPERS
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatMessageMapper } from './services/chat-message.mapper';
 import { ChatOutboundService } from './services/chat-outbound.service';
+import { ChatKeyService } from './services/chat-key.service'; // <--- NEW IMPORT
 
 // Types
 import {
@@ -62,6 +65,7 @@ export class ChatService implements OnDestroy {
   // WORKERS
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly outboundService = inject(ChatOutboundService);
+  private readonly keyWorker = inject(ChatKeyService); // <--- INJECTED
   private readonly mapper = inject(ChatMessageMapper);
 
   private readonly destroy$ = new Subject<void>();
@@ -118,28 +122,8 @@ export class ChatService implements OnDestroy {
           } else {
             this.logger.info('New user detected. Generating keys...');
             try {
-              // 1. Generate & Upload for Identity (urn:auth:...)
-              const result = await this.cryptoService.generateAndStoreKeys(
-                senderUrn
-              );
-              keys = result.privateKeys;
-
-              // 2. NEW: Upload for Lookup Handle (urn:lookup:email:...)
-              // This allows people to find/message us using our email address.
-              if (currentUser.email) {
-                // We use the namespace 'lookup' and type 'email'
-                // Note: Ensure URN.create supports the 3rd arg (namespace) per your update
-                const handleUrn = URN.create(
-                  'email',
-                  currentUser.email,
-                  'lookup'
-                );
-
-                this.logger.info(
-                  `Claiming public handle: ${handleUrn.toString()}`
-                );
-                await this.keyService.storeKeys(handleUrn, result.publicKeys);
-              }
+              // Delegate generation to the KeyWorker
+              keys = await this.keyWorker.resetIdentityKeys(senderUrn, currentUser.email);
             } catch (genError) {
               this.logger.error('Failed to generate initial keys', genError);
             }
@@ -157,36 +141,25 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  /**
+   * Resets keys via the ChatKeyService and updates local state.
+   */
   public async resetIdentityKeys(): Promise<void> {
     const userUrn = this.currentUserUrn();
-    const currentUser = this.authService.currentUser(); // Get full user for email
+    const currentUser = this.authService.currentUser();
 
     if (!userUrn || !currentUser) return;
 
-    this.logger.info('Manual Key Reset Triggered...');
-
-    await this.cryptoService.clearKeys();
+    // Reset state first
     this.myKeys.set(null);
 
-    try {
-      // 1. Generate & Upload for Identity
-      const result = await this.cryptoService.generateAndStoreKeys(userUrn);
-      this.myKeys.set(result.privateKeys);
-
-      // 2. NEW: Upload for Lookup Handle
-      if (currentUser.email) {
-        const handleUrn = URN.create('email', currentUser.email, 'lookup');
-        this.logger.info(`Re-claiming public handle: ${handleUrn.toString()}`);
-        await this.keyService.storeKeys(handleUrn, result.publicKeys);
-      }
-
-      this.logger.info(
-        'New Identity Keys Generated & Uploaded (Identity + Handle).'
-      );
-    } catch (e) {
-      this.logger.error('Failed to reset keys', e);
-    }
+    // Delegate to Worker (It throws on error, allowing UI to handle it)
+    const newKeys = await this.keyWorker.resetIdentityKeys(userUrn, currentUser.email);
+    
+    // Update State
+    this.myKeys.set(newKeys);
   }
+
   // --- Orchestration Logic ---
 
   public async fetchAndProcessMessages(): Promise<void> {
@@ -199,7 +172,6 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // Delegate to Worker
       const newMessages = await this.ingestionService.process(
         myKeys,
         myUrn,
@@ -207,23 +179,16 @@ export class ChatService implements OnDestroy {
         this.blockedSet()
       );
 
-      // Update State
       this.upsertMessages(newMessages);
     });
   }
 
-  /**
-   * Sends a standard text message.
-   */
   public async sendMessage(recipientUrn: URN, text: string): Promise<void> {
     const bytes = new TextEncoder().encode(text);
     const typeId = URN.parse(MESSAGE_TYPE_TEXT);
     await this.sendGeneric(recipientUrn, typeId, bytes);
   }
 
-  /**
-   * Sends a Contact Share card (Rich Content).
-   */
   public async sendContactShare(
     recipientUrn: URN,
     data: ContactSharePayload
@@ -234,9 +199,6 @@ export class ChatService implements OnDestroy {
     await this.sendGeneric(recipientUrn, typeId, bytes);
   }
 
-  /**
-   * Internal helper to delegate to the Outbound Worker.
-   */
   private async sendGeneric(
     recipientUrn: URN,
     typeId: URN,
@@ -251,7 +213,6 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // Delegate to Worker
       const optimisticMsg = await this.outboundService.send(
         myKeys,
         myUrn,
@@ -260,12 +221,12 @@ export class ChatService implements OnDestroy {
         bytes
       );
 
-      // Update UI
       if (optimisticMsg) {
         this.upsertMessages([this.mapper.toView(optimisticMsg)]);
       }
     });
   }
+
   // --- Helpers ---
 
   public async loadConversation(urn: URN | null): Promise<void> {
@@ -280,16 +241,16 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // 1. Check Key Availability
-      this.checkRecipientKeys(urn);
+      // 1. Check Key Availability (Delegated to Worker)
+      const hasKeys = await this.keyWorker.checkRecipientKeys(urn);
+      this.isRecipientKeyMissing.set(!hasKeys);
 
       // 2. Load History
       const history = await this.storageService.loadHistory(urn);
       const viewMessages = history.map((msg) => this.mapper.toView(msg));
       this.messages.set(viewMessages);
 
-      // --- FIX: Optimistic Conversation List Update ---
-      // If this conversation isn't in the sidebar list yet, add a placeholder.
+      // 3. Optimistic Conversation List Update
       const urnString = urn.toString();
       const exists = this.activeConversations().some(
         (c) => c.conversationUrn.toString() === urnString
@@ -298,47 +259,13 @@ export class ChatService implements OnDestroy {
       if (!exists) {
         const newSummary: ConversationSummary = {
           conversationUrn: urn,
-          latestSnippet: '', // Empty start
+          latestSnippet: '',
           timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
           unreadCount: 0,
         };
-
-        // Prepend to top of list
         this.activeConversations.update((list) => [newSummary, ...list]);
       }
     });
-  }
-
-  private async checkRecipientKeys(urn: URN): Promise<void> {
-    // Only check for Users (Groups handle keys differently)
-    if (urn.entityType !== 'user') {
-      this.isRecipientKeyMissing.set(false);
-      return;
-    }
-
-    try {
-      // We must resolve Contact -> Auth URN first
-      // Note: This is duplicated logic from OutboundService.
-      // Ideally we'd expose a shared helper or use OutboundService here,
-      // but for now we can resolve it locally using contactsService.
-      let authUrn = urn;
-      if (!urn.toString().startsWith('urn:auth:')) {
-        const identities = await this.contactsService.getLinkedIdentities(urn);
-        if (identities.length > 0) authUrn = identities[0];
-      }
-
-      const hasKeys = await this.keyService.hasKeys(authUrn);
-      this.isRecipientKeyMissing.set(!hasKeys);
-
-      if (!hasKeys) {
-        this.logger.warn(
-          `Recipient ${urn} (Auth: ${authUrn}) is missing public keys.`
-        );
-      }
-    } catch (e) {
-      this.logger.error('Failed to check recipient keys', e);
-      this.isRecipientKeyMissing.set(true); // Default to error state on failure
-    }
   }
 
   private upsertMessages(messages: ChatMessage[]): void {
@@ -352,8 +279,6 @@ export class ChatService implements OnDestroy {
       this.messages.update((current) => [...current, ...relevant]);
     }
   }
-
-  // Private helpers for Identity Refresh and Connection Handling
 
   private async refreshIdentityMap(): Promise<void> {
     try {
@@ -411,50 +336,23 @@ export class ChatService implements OnDestroy {
     }
   }
 
-  private async resolveRecipientIdentity(recipientUrn: URN): Promise<URN> {
-    if (recipientUrn.toString().startsWith('urn:auth:')) return recipientUrn;
-    const identities = await this.contactsService.getLinkedIdentities(
-      recipientUrn
-    );
-    return identities.length > 0 ? identities[0] : recipientUrn;
-  }
-
-  private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
-    return urn1.toString() === myUrn.toString() ? urn2 : urn1;
-  }
-
-  /**
-   * Performs a secure logout:
-   * 1. Disconnects WebSocket / Stops Polling.
-   * 2. Wipes Local Database (Messages, Contacts, Public Keys, Private Keys).
-   * 3. Clears State Signals.
-   * 4. Calls AuthService to revoke token.
-   */
   public async logout(): Promise<void> {
     this.logger.info('ChatService: Logging out and wiping local data...');
 
-    // 1. Stop Network
     this.liveService.disconnect();
-    this.destroy$.next(); // Kills interval pollers
+    this.destroy$.next();
 
-    // 2. Wipe Data (Scorched Earth)
     try {
       await Promise.all([
-        // Wipe Messages & Conversations
         this.storageService.clearDatabase(),
-        // Wipe Contacts, Groups, Links, Blocklists
         this.contactsService.clearDatabase(),
-        // Wipe Cached Public Keys
         this.keyService.clear(),
-        // Wipe Private Keys (The most important part!)
         this.cryptoService.clearKeys(),
       ]);
     } catch (e) {
       this.logger.error('Logout cleanup failed', e);
-      // We continue with logout even if DB wipe fails to ensure user is at least signed out of Auth
     }
 
-    // 3. Clear Memory State
     this.myKeys.set(null);
     this.identityLinkMap.set(new Map());
     this.blockedSet.set(new Set());
@@ -464,7 +362,6 @@ export class ChatService implements OnDestroy {
     this.selectedConversation.set(null);
     this.isRecipientKeyMissing.set(false);
 
-    // 4. Auth Logout
     this.authService.logout();
   }
 

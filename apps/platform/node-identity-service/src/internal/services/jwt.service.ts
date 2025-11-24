@@ -4,6 +4,7 @@ import * as jose from 'jose';
 import type { CryptoKey } from 'jose';
 import type { KeyObject } from 'node:crypto'; 
 import { config } from '../../config.js';
+import { URN } from '@nx-platform-application/platform-types';
 import type { User } from '@nx-platform-application/platform-types';
 
 /**
@@ -48,11 +49,17 @@ export async function generateToken(user: User, providerToken: string): Promise<
 
   // Load the key object (runs once)
   const keyToSignWith = await loadPrivateKey();
+  let handleUrnString: string | undefined;
+  if (user.email) {
+    // Creates: urn:lookup:email:tim@xythings.com
+    handleUrnString = URN.create('email', user.email, 'lookup').toString();
+  }
 
   // 1. FIX: The 'sub' claim is set via .setSubject(), not in the payload.
   const payload = {
     email: user.email,
     alias: user.alias,
+    handle: handleUrnString,
     nonce: providerToken,
   };
 

@@ -1,0 +1,61 @@
+<div class="space-y-6">
+  
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Routing & Storage</h1>
+    <p class="text-gray-500">Network connection and local database management.</p>
+  </div>
+
+  <mat-card class="p-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <mat-icon [class.text-green-500]="connectionStatus() === 'connected'"
+                  [class.text-red-500]="connectionStatus() === 'disconnected'">
+          wifi
+        </mat-icon>
+        <div>
+          <h3 class="font-bold text-sm text-gray-900">Network Status</h3>
+          <p class="text-xs text-gray-500">WebSocket / Long-polling</p>
+        </div>
+      </div>
+      
+      <mat-chip-set>
+        <mat-chip [color]="connectionStatus() === 'connected' ? 'accent' : 'warn'" selected>
+          {{ connectionStatus() | uppercase }}
+        </mat-chip>
+      </mat-chip-set>
+    </div>
+    
+    <div class="mt-4 flex justify-end">
+      <button mat-button (click)="onForceReconnect()">Force Reconnect</button>
+    </div>
+  </mat-card>
+
+  <mat-card class="p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <mat-icon class="text-gray-600">storage</mat-icon>
+      <div>
+        <h3 class="font-bold text-sm text-gray-900">Local Database</h3>
+        <p class="text-xs text-gray-500">IndexedDB Storage</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <div class="bg-gray-50 p-3 rounded">
+        <div class="text-xs text-gray-500 uppercase">Messages Cached</div>
+        <div class="text-xl font-mono">{{ messageCount().length }}</div>
+      </div>
+      <div class="bg-gray-50 p-3 rounded">
+        <div class="text-xs text-gray-500 uppercase">Storage Driver</div>
+        <div class="text-xl font-mono">Dexie.js</div>
+      </div>
+    </div>
+
+    <div class="border-t pt-4 flex justify-between items-center">
+      <span class="text-sm text-gray-600">Free up space by deleting history</span>
+      <button mat-stroked-button color="warn" (click)="onClearHistory()">
+        Clear History
+      </button>
+    </div>
+  </mat-card>
+
+</div>

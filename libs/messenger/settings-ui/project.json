@@ -1,0 +1,21 @@
+{
+  "name": "messenger-settings-ui",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/settings-ui/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/messenger/settings-ui/vitest.config.mts",
+        "reportsDirectory": "../../../coverage/libs/messenger/settings-ui"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

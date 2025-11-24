@@ -1,0 +1,101 @@
+<div class="h-full flex flex-col bg-white border-r border-gray-200">
+  
+  <div class="p-4 border-b bg-gray-50 flex items-center gap-3 h-16 shrink-0">
+    <button mat-icon-button (click)="closeSettings.emit()" class="text-gray-600">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <h2 class="text-lg font-bold text-gray-700 m-0 leading-none">Settings</h2>
+  </div>
+
+  <mat-nav-list class="flex-grow py-2 px-2 space-y-1">
+    
+    <a mat-list-item 
+       routerLink="identity" 
+       routerLinkActive 
+       #rlaIdentity="routerLinkActive"
+       [class.bg-blue-50]="rlaIdentity.isActive"
+       class="rounded-lg transition-colors duration-200">
+      
+      <mat-icon matListItemIcon 
+        [class.text-blue-600]="rlaIdentity.isActive"
+        [class.text-gray-500]="!rlaIdentity.isActive">
+        badge
+      </mat-icon>
+      
+      <span matListItemTitle 
+        [class.text-blue-900]="rlaIdentity.isActive"
+        [class.text-gray-900]="!rlaIdentity.isActive"
+        class="font-medium">
+        Identity
+      </span>
+      
+      <span matListItemLine 
+        [class.text-blue-700]="rlaIdentity.isActive"
+        [class.text-gray-500]="!rlaIdentity.isActive"
+        class="text-xs">
+        Profile & Security
+      </span>
+    </a>
+
+    <a mat-list-item 
+       routerLink="keys" 
+       routerLinkActive 
+       #rlaKeys="routerLinkActive"
+       [class.bg-blue-50]="rlaKeys.isActive"
+       class="rounded-lg transition-colors duration-200">
+      
+      <mat-icon matListItemIcon 
+        [class.text-blue-600]="rlaKeys.isActive"
+        [class.text-gray-500]="!rlaKeys.isActive">
+        vpn_key
+      </mat-icon>
+      
+      <span matListItemTitle 
+        [class.text-blue-900]="rlaKeys.isActive"
+        [class.text-gray-900]="!rlaKeys.isActive"
+        class="font-medium">
+        Encryption Keys
+      </span>
+      
+      <span matListItemLine 
+        [class.text-blue-700]="rlaKeys.isActive"
+        [class.text-gray-500]="!rlaKeys.isActive"
+        class="text-xs">
+        Reset & Verification
+      </span>
+    </a>
+
+    <a mat-list-item 
+       routerLink="routing" 
+       routerLinkActive 
+       #rlaRouting="routerLinkActive"
+       [class.bg-blue-50]="rlaRouting.isActive"
+       class="rounded-lg transition-colors duration-200">
+      
+      <mat-icon matListItemIcon 
+        [class.text-blue-600]="rlaRouting.isActive"
+        [class.text-gray-500]="!rlaRouting.isActive">
+        hub
+      </mat-icon>
+      
+      <span matListItemTitle 
+        [class.text-blue-900]="rlaRouting.isActive"
+        [class.text-gray-900]="!rlaRouting.isActive"
+        class="font-medium">
+        Routing & Storage
+      </span>
+      
+      <span matListItemLine 
+        [class.text-blue-700]="rlaRouting.isActive"
+        [class.text-gray-500]="!rlaRouting.isActive"
+        class="text-xs">
+        Connection & Debug
+      </span>
+    </a>
+
+  </mat-nav-list>
+
+  <div class="p-4 border-t text-xs text-center text-gray-400 bg-gray-50 shrink-0">
+    Messenger {{messengerVersion}}
+  </div>
+</div>
