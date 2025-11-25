@@ -65,9 +65,9 @@ messenger-private-storage
 
 nx g @nx/workspace:move --project=auth-ui --newProjectName=platform-auth-ui --destination=libs/platform/ng/auth-ui-tmp --importPath=@nx-platform-application/platform-auth-ui
 
-
 nx g @nx/angular:library --name=platform-ui-toolkit --directory=libs/platform/ng/ui-toolkit --tags="scope:platform"   
 
-
-
 nx g @nx/angular:library --name=messenger-settings-ui --directory=libs/messenger/settings-ui --tags="scope:messenger"  
+
+
+nx g @nx/workspace:move --project=messenger-crypto-access --newProjectName=messenger-crypto-bridge --destination=libs/messenger/crypto-bridge --importPath=@nx-platform-application/messenger-crypto-bridge

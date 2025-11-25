@@ -22,7 +22,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-access';
+} from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/chat-access';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
@@ -39,9 +39,7 @@ import { ChatOutboundService } from './services/chat-outbound.service';
 import { ChatKeyService } from './services/chat-key.service'; // <--- NEW IMPORT
 
 // Types
-import {
-  ChatMessage,
-} from '@nx-platform-application/messenger-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   ContactSharePayload,
   MESSAGE_TYPE_CONTACT_SHARE,
@@ -123,7 +121,10 @@ export class ChatService implements OnDestroy {
             this.logger.info('New user detected. Generating keys...');
             try {
               // Delegate generation to the KeyWorker
-              keys = await this.keyWorker.resetIdentityKeys(senderUrn, currentUser.email);
+              keys = await this.keyWorker.resetIdentityKeys(
+                senderUrn,
+                currentUser.email
+              );
             } catch (genError) {
               this.logger.error('Failed to generate initial keys', genError);
             }
@@ -154,8 +155,11 @@ export class ChatService implements OnDestroy {
     this.myKeys.set(null);
 
     // Delegate to Worker (It throws on error, allowing UI to handle it)
-    const newKeys = await this.keyWorker.resetIdentityKeys(userUrn, currentUser.email);
-    
+    const newKeys = await this.keyWorker.resetIdentityKeys(
+      userUrn,
+      currentUser.email
+    );
+
     // Update State
     this.myKeys.set(newKeys);
   }

@@ -1,5 +1,3 @@
-// libs/messenger/crypto-access/src/lib/messenger-crypto.service.ts
-
 import { Injectable, inject } from '@angular/core';
 
 import {
@@ -36,8 +34,8 @@ const rsaPssImportParams: RsaHashedImportParams = {
   providedIn: 'root',
 })
 export class MessengerCryptoService {
-  private crypto = inject(CryptoEngine);
   private logger = inject(Logger);
+  private cryptoEngine = inject(CryptoEngine);
   private storage: WebKeyStorageProvider = inject(WebKeyDbStore);
   private keyService = inject(SecureKeyService);
 
@@ -45,9 +43,10 @@ export class MessengerCryptoService {
     userUrn: URN
   ): Promise<{ privateKeys: PrivateKeys; publicKeys: PublicKeys }> {
     this.logger.debug(`CryptoService: Generating NEW keys for ${userUrn}`);
+
     const [encKeyPair, sigKeyPair] = await Promise.all([
-      this.crypto.generateEncryptionKeys(),
-      this.crypto.generateSigningKeys(),
+      this.cryptoEngine.generateEncryptionKeys(),
+      this.cryptoEngine.generateSigningKeys(),
     ]);
 
     const [encPubKeyRaw, sigPubKeyRaw, encPrivKeyJwk, sigPrivKeyJwk] =
@@ -141,19 +140,17 @@ export class MessengerCryptoService {
     }
   }
 
-  // --- NEW: Fingerprint Calculation ---
-  /**
-   * Computes a visual fingerprint (SHA-256) of the public key for user verification.
-   * Returns a formatted hex string (e.g. "A1:B2:C3...").
-   */
   public async getFingerprint(keyBytes: Uint8Array): Promise<string> {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', new Uint8Array(keyBytes));
+    const hashBuffer = await crypto.subtle.digest(
+      'SHA-256',
+      new Uint8Array(keyBytes)
+    );
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    
+
     return hashArray
-      .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+      .map((b) => b.toString(16).padStart(2, '0').toUpperCase())
       .join(':')
-      .slice(0, 47); // Return first 16 bytes for readability
+      .slice(0, 47);
   }
 
   private async jwkToSpki(
@@ -197,12 +194,10 @@ export class MessengerCryptoService {
       ['encrypt']
     );
 
-    const { encryptedSymmetricKey, encryptedData } = await this.crypto.encrypt(
-      recipientEncKey,
-      payloadBytes
-    );
+    const { encryptedSymmetricKey, encryptedData } =
+      await this.cryptoEngine.encrypt(recipientEncKey, payloadBytes);
 
-    const signature = await this.crypto.sign(
+    const signature = await this.cryptoEngine.sign(
       myPrivateKeys.sigKey,
       encryptedData
     );
@@ -219,7 +214,7 @@ export class MessengerCryptoService {
     envelope: SecureEnvelope,
     myPrivateKeys: PrivateKeys
   ): Promise<EncryptedMessagePayload> {
-    const innerPayloadBytes = await this.crypto.decrypt(
+    const innerPayloadBytes = await this.cryptoEngine.decrypt(
       myPrivateKeys.encKey,
       envelope.encryptedSymmetricKey,
       envelope.encryptedData
@@ -230,6 +225,12 @@ export class MessengerCryptoService {
 
     const senderPublicKeys = await this.keyService.getKey(claimedSenderId);
 
+    if (!senderPublicKeys) {
+      throw new Error(
+        `Verification Failed: Could not find public keys for sender ${claimedSenderId}`
+      );
+    }
+
     const senderSigKey = await crypto.subtle.importKey(
       'spki',
       senderPublicKeys.sigKey as BufferSource,
@@ -238,7 +239,7 @@ export class MessengerCryptoService {
       ['verify']
     );
 
-    const isValid = await this.crypto.verify(
+    const isValid = await this.cryptoEngine.verify(
       senderSigKey,
       envelope.signature,
       envelope.encryptedData

@@ -40,7 +40,7 @@ import { ROUTING_SERVICE_URL } from '@nx-platform-application/chat-access';
 import { WSS_URL_TOKEN } from '@nx-platform-application/chat-live-data';
 import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-key-access';
 
-import { CryptoEngine } from '@nx-platform-application/messenger-crypto-access';
+import { CryptoEngine } from '@nx-platform-application/messenger-crypto-bridge';
 import {
   LOGGER_CONFIG,
   LogLevel,

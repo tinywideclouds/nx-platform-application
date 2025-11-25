@@ -8,14 +8,20 @@ import { URN, User } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 // Dependencies
-import { IAuthService, AuthStatusResponse } from '@nx-platform-application/platform-auth-access';
+import {
+  IAuthService,
+  AuthStatusResponse,
+} from '@nx-platform-application/platform-auth-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { ChatDataService, ChatSendService } from '@nx-platform-application/chat-access';
+import {
+  ChatDataService,
+  ChatSendService,
+} from '@nx-platform-application/chat-access';
 
 // WORKERS
 import { ChatIngestionService } from './services/chat-ingestion.service';
@@ -153,13 +159,13 @@ describe('ChatService', () => {
   it('should delegate key generation for a brand new user', async () => {
     // Setup: No local keys, No server keys
     mockCryptoService.loadMyKeys.mockResolvedValue(null);
-    mockKeyService.hasKeys.mockResolvedValue(false); 
+    mockKeyService.hasKeys.mockResolvedValue(false);
 
     await initializeService();
 
     // Verify delegation
     expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalledWith(
-      mockUser.id, 
+      mockUser.id,
       mockUser.email
     );
     // Verify state update
@@ -182,11 +188,11 @@ describe('ChatService', () => {
 
   it('should delegate explicit key reset calls', async () => {
     await initializeService();
-    
+
     await service.resetIdentityKeys();
 
     expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalledWith(
-      mockUser.id, 
+      mockUser.id,
       mockUser.email
     );
   });

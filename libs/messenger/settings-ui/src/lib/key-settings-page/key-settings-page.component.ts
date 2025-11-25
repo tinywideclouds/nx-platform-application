@@ -1,6 +1,12 @@
 // libs/messenger/settings-ui/src/lib/key-settings-page/key-settings-page.component.ts
 
-import { Component, ChangeDetectionStrategy, inject, signal, OnInit } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  inject,
+  signal,
+  OnInit,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -13,19 +19,19 @@ import { firstValueFrom } from 'rxjs';
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 
 @Component({
   selector: 'lib-key-settings-page',
   standalone: true,
   imports: [
-    CommonModule, 
-    MatButtonModule, 
-    MatCardModule, 
+    CommonModule,
+    MatButtonModule,
+    MatCardModule,
     MatIconModule,
     MatSnackBarModule,
     MatDialogModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
   ],
   templateUrl: './key-settings-page.component.html',
   styleUrl: './key-settings-page.component.scss',
@@ -54,7 +60,7 @@ export class KeySettingsPageComponent implements OnInit {
 
     try {
       const keys = await this.cryptoService.loadMyPublicKeys(myUrn);
-      
+
       if (keys && keys.encKey) {
         // REFACTOR: Logic moved to service
         const fp = await this.cryptoService.getFingerprint(keys.encKey);
@@ -72,10 +78,11 @@ export class KeySettingsPageComponent implements OnInit {
     const ref = this.dialog.open(ConfirmationDialogComponent, {
       data: {
         title: 'Reset Identity Keys?',
-        message: 'Your friends will see a "Safety Number Changed" warning. You will not be able to decrypt messages sent to your old keys.',
+        message:
+          'Your friends will see a "Safety Number Changed" warning. You will not be able to decrypt messages sent to your old keys.',
         confirmText: 'Reset Keys',
-        warn: true
-      }
+        warn: true,
+      },
     });
 
     const confirmed = await firstValueFrom(ref.afterClosed());
@@ -87,25 +94,24 @@ export class KeySettingsPageComponent implements OnInit {
 
   private async executeReset(): Promise<void> {
     this.isLoading = true;
-    this.fingerprint.set('Regenerating...'); 
+    this.fingerprint.set('Regenerating...');
     try {
       await this.chatService.resetIdentityKeys();
-      
+
       this.logger.info('User manually reset identity keys.');
-      
+
       this.snackBar.open('Identity Keys regenerated successfully.', 'OK', {
         duration: 3000,
-        panelClass: ['bg-green-600', 'text-white']
+        panelClass: ['bg-green-600', 'text-white'],
       });
 
       await this.loadFingerprint();
-
     } catch (err) {
       this.logger.error('Failed to reset keys', err);
-      
+
       this.snackBar.open('Failed to reset keys. Please try again.', 'Dismiss', {
         duration: 5000,
-        panelClass: ['bg-red-600', 'text-white']
+        panelClass: ['bg-red-600', 'text-white'],
       });
       this.fingerprint.set('Error');
     } finally {

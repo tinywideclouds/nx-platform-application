@@ -25,7 +25,7 @@ import {
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-access';
+} from '@nx-platform-application/messenger-crypto-bridge';
 import {
   ChatStorageService,
   DecryptedMessage,

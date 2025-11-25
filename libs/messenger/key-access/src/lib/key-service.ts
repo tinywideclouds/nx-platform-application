@@ -1,7 +1,7 @@
 // libs/messenger/messenger-key-access/src/lib/key-service.ts
 
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 import {
@@ -27,15 +27,16 @@ export class SecureKeyService {
   private logger = inject(Logger);
   private keyCache = new Map<string, PublicKeys>();
 
-  // FIX: Removed '/v2' from the default path
+  // Defaults to 'api/keys' (handled by proxy in production)
   private readonly baseApiUrl =
     inject(KEY_SERVICE_URL, { optional: true }) ?? 'api/keys';
 
   /**
    * (Read)
    * Fetches public keys for a user, using a local cache.
+   * Returns null if the user has not uploaded keys (404).
    */
-  public async getKey(userId: URN): Promise<PublicKeys> {
+  public async getKey(userId: URN): Promise<PublicKeys | null> {
     const userUrnString = userId.toString();
 
     if (this.keyCache.has(userUrnString)) {
@@ -43,12 +44,27 @@ export class SecureKeyService {
     }
 
     const url = this.buildUrl(userUrnString);
-    const jsonResponse = await firstValueFrom(this.http.get<unknown>(url));
 
-    const keys = deserializeJsonToPublicKeys(jsonResponse);
+    try {
+      // We expect 'unknown' because we pass it to a deserializer
+      const jsonResponse = await firstValueFrom(this.http.get<unknown>(url));
+      
+      const keys = deserializeJsonToPublicKeys(jsonResponse);
 
-    this.keyCache.set(userUrnString, keys);
-    return keys;
+      this.keyCache.set(userUrnString, keys);
+      return keys;
+
+    } catch (error: unknown) {
+      if (error instanceof HttpErrorResponse && error.status === 404) {
+        this.logger.debug(`[SecureKeyService] No keys found for ${userUrnString} (404)`);
+        // We do not cache the 'null' result here, allowing retries later.
+        return null;
+      }
+      
+      // Re-throw unexpected errors (500, Network, etc.)
+      this.logger.error(`[SecureKeyService] Error fetching keys for ${userUrnString}`, error);
+      throw error;
+    }
   }
 
   /**

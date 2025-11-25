@@ -7,7 +7,7 @@ import { ChatDataService } from '@nx-platform-application/chat-access';
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-access';
+} from '@nx-platform-application/messenger-crypto-bridge';
 import {
   ChatStorageService,
   DecryptedMessage,
@@ -16,10 +16,7 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-access
 import { ChatMessageMapper } from './chat-message.mapper';
 
 // Types
-import {
-  URN,
-  QueuedMessage,
-} from '@nx-platform-application/platform-types';
+import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
 import {
   EncryptedMessagePayload,
   ChatMessage,
@@ -143,7 +140,7 @@ export class ChatIngestionService {
   }
 
   // --- Internal Mapper ---
-  
+
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
     payload: EncryptedMessagePayload,

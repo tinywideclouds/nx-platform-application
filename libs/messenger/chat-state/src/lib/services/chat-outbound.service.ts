@@ -7,13 +7,22 @@ import { Temporal } from '@js-temporal/polyfill';
 
 // Services
 import { ChatSendService } from '@nx-platform-application/chat-access';
-import { MessengerCryptoService, PrivateKeys } from '@nx-platform-application/messenger-crypto-access';
-import { ChatStorageService, DecryptedMessage } from '@nx-platform-application/chat-storage';
+import {
+  MessengerCryptoService,
+  PrivateKeys,
+} from '@nx-platform-application/messenger-crypto-bridge';
+import {
+  ChatStorageService,
+  DecryptedMessage,
+} from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ChatKeyService } from './chat-key.service'; // <--- NEW IMPORT
 
 // Types
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
 
 @Injectable({ providedIn: 'root' })
@@ -39,7 +48,9 @@ export class ChatOutboundService {
     try {
       // 1. Resolve Recipient (Contact -> Auth/Lookup)
       // We use the shared logic that includes Email Discovery.
-      const targetAuthUrn = await this.keyLogic.resolveRecipientIdentity(recipientUrn);
+      const targetAuthUrn = await this.keyLogic.resolveRecipientIdentity(
+        recipientUrn
+      );
 
       // 2. Construct Payload
       const payload: EncryptedMessagePayload = {

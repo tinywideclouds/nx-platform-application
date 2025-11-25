@@ -1,16 +1,15 @@
 # 📖 @nx-platform-application/messenger-key-access
 
-This library provides the `SecureKeyService`, a critical component for the "Poke-then-Pull" architecture. It is the _only_ service in the Angular application responsible for communicating with the V2 `go-key-service` backend.
+This library provides the `SecureKeyService`, a critical component for the "Sealed Sender" encryption architecture. It is the _only_ service in the Angular application responsible for communicating with the `go-key-service` backend.
 
 ## Purpose
 
-This service handles the **Read (GET)** and **Write (POST)** operations for a user's public keys (`PublicKeys`) against the `/api/v2/keys/{urn}` endpoint.
+This service handles the **Read (GET)** and **Write (POST)** operations for a user's public keys (`PublicKeys`) against the `/api/keys/{urn}` endpoint.
 
-It is designed to be a "smart" client:
-
-- It speaks in terms of "smart" platform types (`URN`, `PublicKeys`).
-- It uses mappers from `@nx-platform-application/platform-types` to handle the serialization (Smart Object -> JSON) and deserialization (JSON -> Smart Object) logic.
-- It provides an in-memory cache for `getKey` requests to reduce network load.
+It is designed to be a "smart" client:  
+- **Type Safety:** It speaks in terms of platform types (`URN`, `PublicKeys`).  
+- **Serialization:** It uses shared mappers to convert `Uint8Array` keys to/from the base64 JSON format expected by the backend.  
+- **Caching:** It provides an in-memory `Map` cache for `getKey` requests to reduce network load.
 
 ## Primary API
 
@@ -18,25 +17,21 @@ It is designed to be a "smart" client:
 
 An `@Injectable` Angular service that provides the following public methods:
 
-**`getKey(userId: URN): Promise<PublicKeys>`**
+**`getKey(userId: URN): Promise<PublicKeys | null>`**  
+- Fetches the public encryption and signing keys for a given user.  
+- **Resilient 404s:** If the user has not uploaded keys yet (404), this method returns `null` instead of throwing an error.  
+- **Caching:** Checks an internal cache first. On a cache miss, performs an HTTP `GET` to `/api/keys/{urn}`.  
+- **Format:** Uses `deserializeJsonToPublicKeys` to convert the raw JSON response.
 
-- Fetches the public encryption and signing keys for a given user.
-- Checks an internal `Map` cache first.
-- On a cache miss, performs an HTTP `GET` to `/api/v2/keys/{urn}`.
-- Uses `deserializeJsonToPublicKeys` to convert the raw JSON response into a `PublicKeys` object.
-- Caches the result and returns it.
+**`storeKeys(userUrn: URN, keys: PublicKeys): Promise<void>`**  
+- Uploads a user's keys to the backend.  
+- **Endpoint:** POSTs to `/api/keys/{urn}`.  
+- **Cache Invalidation:** On success, it automatically invalidates the local cache for that user to ensure subsequent reads are fresh.  
+- **Format:** Uses `serializePublicKeysToJson` to create the payload.
 
-**`storeKeys(userUrn: URN, keys: PublicKeys): Promise<void>`**
-
-- Uploads (persists) a user's own public keys to the backend.
-- This is the "write" operation used during the initial key generation flow (see `messenger-crypto-access`).
-- Uses `serializePublicKeysToJson` to convert the `Uint8Array` keys into a JSON-safe, Base64-encoded object for the POST body.
-- On success, it automatically invalidates the local cache for that user.
-
-**`clearCache(): void`**
-
+**`clearCache(): void`**  
 - A simple utility method to clear the entire in-memory key cache.
 
 ## Running unit tests
 
-Run `nx test messenger-key-access` to execute the unit tests for this library.
+Run `nx test messenger-key-access` to execute the unit tests for this library.  

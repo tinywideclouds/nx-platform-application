@@ -1,7 +1,7 @@
 {
-  "name": "messenger-crypto-access",
+  "name": "messenger-crypto-bridge",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/crypto-access/src",
+  "sourceRoot": "libs/messenger/crypto-bridge/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:messenger"],
@@ -11,17 +11,17 @@
       "outputs": ["{options.outputPath}", "{options.outputHtmlPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/crypto-access",
-        "outputHtmlPath": "dist/test-reports/libs/messenger/crypto-access/index.html",
-        "configFile": "libs/messenger/crypto-access/vite.config.mts"
+        "outputPath": "dist/libs/messenger/crypto-bridge",
+        "outputHtmlPath": "dist/test-reports/libs/messenger/crypto-bridge/index.html",
+        "configFile": "libs/messenger/crypto-bridge/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/crypto-access",
-        "configFile": "libs/messenger/crypto-access/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/crypto-bridge",
+        "configFile": "libs/messenger/crypto-bridge/vitest.config.mts"
       }
     },
     "lint": {

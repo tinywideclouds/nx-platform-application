@@ -23,7 +23,7 @@
     "src/**/*.spec.js",
     "src/**/*.test.jsx",
     "src/**/*.spec.jsx",
-    "src/**/*.d.ts"
-, "src/lib/identity-settings-page/identity-settings-page.component.spec.ts"  ],
-  "files": ["src/test-setup.ts"]
+    "src/**/*.d.ts",
+    "src/**/*.ts",
+  ]
 }

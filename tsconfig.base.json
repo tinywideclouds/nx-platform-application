@@ -49,8 +49,8 @@
       "@nx-platform-application/message-content": [
         "libs/messenger/message-content/src/index.ts"
       ],
-      "@nx-platform-application/messenger-crypto-access": [
-        "libs/messenger/crypto-access/src/index.ts"
+      "@nx-platform-application/messenger-crypto-bridge": [
+        "libs/messenger/crypto-bridge/src/index.ts"
       ],
       "@nx-platform-application/messenger-key-access": [
         "libs/messenger/key-access/src/index.ts"

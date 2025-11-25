@@ -37,7 +37,6 @@ describe('SecureKeyService', () => {
 
   // --- Fixtures ---
   const mockUserUrn = URN.parse('urn:sm:user:test-user');
-  // Corrected URL (No /v2)
   const mockApiUrl = 'api/keys/urn:sm:user:test-user';
 
   // "Read" fixtures
@@ -81,75 +80,86 @@ describe('SecureKeyService', () => {
   // --- GET KEY (Read) ---
   describe('getKey', () => {
     it('should fetch keys from the API and use the deserializer', async () => {
-      // Act
       const promise = service.getKey(mockUserUrn);
 
-      // Assert: Check HTTP call
       const req = httpMock.expectOne(mockApiUrl);
       expect(req.request.method).toBe('GET');
-      req.flush(mockJsonResponse); // Respond with raw JSON
+      req.flush(mockJsonResponse); 
 
-      // Await result
       const keys = await promise;
 
-      // Assert: Check deserializer
       expect(mockDeserialize).toHaveBeenCalledWith(mockJsonResponse);
-
-      // Assert: Final result
       expect(keys).toBe(mockPublicKeys);
     });
 
     it('should return keys from cache on subsequent calls', async () => {
-      // --- First Call (to populate cache) ---
+      // First Call
       const promise1 = service.getKey(mockUserUrn);
       httpMock.expectOne(mockApiUrl).flush(mockJsonResponse);
       await promise1;
 
-      // Reset mocks to ensure they aren't called again
       mockDeserialize.mockClear();
 
-      // --- Second Call (should hit cache) ---
+      // Second Call
       const keys = await service.getKey(mockUserUrn);
 
-      // Assert: No HTTP call was made
       httpMock.expectNone(mockApiUrl);
-
-      // Assert: Deserializer was not called
       expect(mockDeserialize).not.toHaveBeenCalled();
-
-      // Assert: Returned cached object
       expect(keys).toBe(mockPublicKeys);
+    });
+
+    // NEW TEST CASE: 404 Handling
+    it('should return null (and not throw) when API returns 404 Not Found', async () => {
+      // Act
+      const promise = service.getKey(mockUserUrn);
+
+      // Assert HTTP
+      const req = httpMock.expectOne(mockApiUrl);
+      req.flush('Not Found', { status: 404, statusText: 'Not Found' });
+
+      // Assert Result
+      const result = await promise;
+      expect(result).toBeNull();
+      // Ensure deserializer was NOT called on error
+      expect(mockDeserialize).not.toHaveBeenCalled();
+    });
+
+    // NEW TEST CASE: 500 Handling
+    it('should re-throw errors other than 404', async () => {
+      // Act
+      const promise = service.getKey(mockUserUrn);
+
+      // Assert HTTP
+      const req = httpMock.expectOne(mockApiUrl);
+      req.flush('Internal Server Error', { status: 500, statusText: 'Error' });
+
+      // Assert Exception
+      await expect(promise).rejects.toThrow();
     });
   });
 
   // --- STORE KEYS (Write) ---
   describe('storeKeys', () => {
     it('should serialize, POST to API, and clear cache on success', async () => {
-      // --- 1. (Optional) Populate cache to verify clearing ---
+      // Populate cache
       const p1 = service.getKey(mockUserUrn);
       httpMock.expectOne(mockApiUrl).flush(mockJsonResponse);
       await p1;
 
-      // --- 2. Act: Call storeKeys ---
+      // Call storeKeys
       const storePromise = service.storeKeys(mockUserUrn, mockPublicKeys);
 
-      // Assert: Check HTTP POST call
       const req = httpMock.expectOne(mockApiUrl);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toBe(mockSerializedJson);
-      req.flush(null, { status: 200, statusText: 'OK' }); // Respond 200
+      req.flush(null, { status: 200, statusText: 'OK' }); 
 
-      // Await result
       await storePromise;
 
-      // Assert: Check Serializer
       expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
 
-      // --- 3. Verify Cache Invalidation ---
-      // Act: Call getKey again
+      // Verify Cache Invalidation
       const p2 = service.getKey(mockUserUrn);
-
-      // Assert: A *new* GET request is made, proving cache was cleared
       const req2 = httpMock.expectOne(mockApiUrl);
       expect(req2.request.method).toBe('GET');
       req2.flush(mockJsonResponse);

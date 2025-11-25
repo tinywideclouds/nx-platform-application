@@ -8,7 +8,7 @@ import { vi } from 'vitest';
 // Services
 import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
 
 describe('ChatKeyService', () => {
@@ -68,7 +68,9 @@ describe('ChatKeyService', () => {
 
       const result = await service.resolveRecipientIdentity(contactUrn);
 
-      expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(contactUrn);
+      expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(
+        contactUrn
+      );
       expect(result).toBe(authUrn);
     });
 
@@ -130,10 +132,12 @@ describe('ChatKeyService', () => {
     });
 
     it('should fail gracefully on error', async () => {
-      mockContactsService.getLinkedIdentities.mockRejectedValue(new Error('DB Error'));
-      
+      mockContactsService.getLinkedIdentities.mockRejectedValue(
+        new Error('DB Error')
+      );
+
       const result = await service.checkRecipientKeys(contactUrn);
-      
+
       expect(result).toBe(false);
       expect(mockLogger.error).toHaveBeenCalled();
     });
@@ -153,15 +157,17 @@ describe('ChatKeyService', () => {
 
       // 1. Wipe
       expect(mockCryptoService.clearKeys).toHaveBeenCalled();
-      
+
       // 2. Generate
-      expect(mockCryptoService.generateAndStoreKeys).toHaveBeenCalledWith(myUrn);
-      
+      expect(mockCryptoService.generateAndStoreKeys).toHaveBeenCalledWith(
+        myUrn
+      );
+
       // 3. Upload Handle Keys (The critical fix)
       expect(mockKeyService.storeKeys).toHaveBeenCalledWith(
-        expect.objectContaining({ 
-          nid: 'lookup', 
-          nss: 'email:me@test.com' 
+        expect.objectContaining({
+          nid: 'lookup',
+          nss: 'email:me@test.com',
         }),
         mockKeyResult.publicKeys
       );

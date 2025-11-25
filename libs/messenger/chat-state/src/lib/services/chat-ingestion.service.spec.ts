@@ -3,7 +3,7 @@ import { of } from 'rxjs';
 import { ChatIngestionService } from './chat-ingestion.service';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatDataService } from '@nx-platform-application/chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-access';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { Logger } from '@nx-platform-application/console-logger';

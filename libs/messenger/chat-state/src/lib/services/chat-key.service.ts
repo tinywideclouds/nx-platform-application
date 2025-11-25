@@ -7,7 +7,10 @@ import { URN } from '@nx-platform-application/platform-types';
 // Services
 import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { MessengerCryptoService, PrivateKeys } from '@nx-platform-application/messenger-crypto-access';
+import {
+  MessengerCryptoService,
+  PrivateKeys,
+} from '@nx-platform-application/messenger-crypto-bridge';
 
 @Injectable({ providedIn: 'root' })
 export class ChatKeyService {
@@ -26,7 +29,10 @@ export class ChatKeyService {
    */
   public async resolveRecipientIdentity(urn: URN): Promise<URN> {
     // 1. Passthrough if already specific
-    if (urn.toString().startsWith('urn:auth:') || urn.toString().startsWith('urn:lookup:')) {
+    if (
+      urn.toString().startsWith('urn:auth:') ||
+      urn.toString().startsWith('urn:lookup:')
+    ) {
       return urn;
     }
 
@@ -38,13 +44,15 @@ export class ChatKeyService {
 
     // 3. Email Discovery Fallback
     const contact = await this.contactsService.getContact(urn);
-    
+
     // FIX: Check primary 'email' property first (from User interface), then the array
     const email = contact?.email || contact?.emailAddresses?.[0];
 
     if (email) {
       const lookupUrn = URN.create('email', email, 'lookup');
-      this.logger.debug(`Resolved Contact ${urn} to Lookup Handle: ${lookupUrn}`);
+      this.logger.debug(
+        `Resolved Contact ${urn} to Lookup Handle: ${lookupUrn}`
+      );
       return lookupUrn;
     }
 
@@ -60,18 +68,20 @@ export class ChatKeyService {
   public async checkRecipientKeys(urn: URN): Promise<boolean> {
     // Groups handle keys differently (not checked here)
     if (urn.entityType !== 'user') {
-      return true; 
+      return true;
     }
 
     try {
       const targetUrn = await this.resolveRecipientIdentity(urn);
-      
+
       // This will now query /api/keys/urn:lookup:email:bob@gmail.com
       // instead of the local ID, solving the 404.
       const hasKeys = await this.keyService.hasKeys(targetUrn);
-      
+
       if (!hasKeys) {
-        this.logger.warn(`Recipient ${urn} (Target: ${targetUrn}) is missing public keys.`);
+        this.logger.warn(
+          `Recipient ${urn} (Target: ${targetUrn}) is missing public keys.`
+        );
       }
       return hasKeys;
     } catch (e) {
@@ -83,7 +93,10 @@ export class ChatKeyService {
   /**
    * Performs the "Scorched Earth" reset of the current user's identity.
    */
-  public async resetIdentityKeys(userUrn: URN, userEmail?: string): Promise<PrivateKeys> {
+  public async resetIdentityKeys(
+    userUrn: URN,
+    userEmail?: string
+  ): Promise<PrivateKeys> {
     this.logger.info('ChatKeyService: Resetting Identity Keys...');
 
     await this.cryptoService.clearKeys();
