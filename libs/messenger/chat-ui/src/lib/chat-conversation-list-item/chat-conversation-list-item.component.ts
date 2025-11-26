@@ -17,22 +17,24 @@ import { ContactAvatarComponent } from '@nx-platform-application/contacts-ui';
   templateUrl: './chat-conversation-list-item.component.html',
   styleUrl: './chat-conversation-list-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    'role': 'button',
+    'tabindex': '0',
+    '(click)': 'select.emit()',
+    '(keydown.enter)': 'select.emit()',
+    '(keydown.space)': 'select.emit($event.preventDefault())' 
+  }
 })
 export class ChatConversationListItemComponent {
-  // --- NEW SIGNALS API ---
+  
   name = input.required<string>();
   latestMessage = input.required<string>();
   timestamp = input.required<string>();
   initials = input.required<string>();
-  profilePictureUrl = input<string | undefined>(undefined); // Optional with default
+  profilePictureUrl = input<string | undefined>(undefined);
   unreadCount = input<number>(0);
   isActive = input<boolean>(false);
-  // --- END NEW API ---
 
   select = output<void>();
 
-  @HostListener('click')
-  onHostClick(): void {
-    this.select.emit();
-  }
 }

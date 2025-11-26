@@ -24,7 +24,7 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 

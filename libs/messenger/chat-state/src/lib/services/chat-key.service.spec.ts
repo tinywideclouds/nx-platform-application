@@ -1,24 +1,18 @@
-// libs/messenger/chat-state/src/lib/services/chat-key.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { ChatKeyService } from './chat-key.service';
 import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 // Services
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
+import { ContactMessengerMapper } from './contact-messenger.mapper';
 
 describe('ChatKeyService', () => {
   let service: ChatKeyService;
 
   // --- Mocks ---
-  const mockContactsService = {
-    getLinkedIdentities: vi.fn(),
-    getContact: vi.fn(),
-  };
   const mockKeyService = {
     hasKeys: vi.fn(),
     storeKeys: vi.fn(),
@@ -33,11 +27,13 @@ describe('ChatKeyService', () => {
     error: vi.fn(),
     info: vi.fn(),
   };
+  const mockMapper = {
+    resolveToHandle: vi.fn(),
+  };
 
   // --- Fixtures ---
   const contactUrn = URN.parse('urn:sm:user:alice');
-  const authUrn = URN.parse('urn:auth:google:alice-123');
-  const lookupUrn = URN.parse('urn:lookup:email:alice@test.com');
+  const handleUrn = URN.parse('urn:lookup:email:alice@test.com');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,9 +41,9 @@ describe('ChatKeyService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatKeyService,
-        { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
+        { provide: ContactMessengerMapper, useValue: mockMapper },
         { provide: Logger, useValue: mockLogger },
       ],
     });
@@ -55,72 +51,23 @@ describe('ChatKeyService', () => {
     service = TestBed.inject(ChatKeyService);
   });
 
-  // --- 1. Identity Resolution Tests ---
-
-  describe('resolveRecipientIdentity', () => {
-    it('should return Auth/Lookup URNs as-is (Pass-through)', async () => {
-      expect(await service.resolveRecipientIdentity(authUrn)).toBe(authUrn);
-      expect(await service.resolveRecipientIdentity(lookupUrn)).toBe(lookupUrn);
-    });
-
-    it('should return Linked Identity if handshake exists', async () => {
-      mockContactsService.getLinkedIdentities.mockResolvedValue([authUrn]);
-
-      const result = await service.resolveRecipientIdentity(contactUrn);
-
-      expect(mockContactsService.getLinkedIdentities).toHaveBeenCalledWith(
-        contactUrn
-      );
-      expect(result).toBe(authUrn);
-    });
-
-    it('should FALLBACK to Email Lookup if no link exists but email is known', async () => {
-      // 1. No Link
-      mockContactsService.getLinkedIdentities.mockResolvedValue([]);
-      // 2. Contact has email
-      mockContactsService.getContact.mockResolvedValue({
-        id: contactUrn,
-        emailAddresses: ['alice@test.com'],
-      });
-
-      const result = await service.resolveRecipientIdentity(contactUrn);
-
-      // Expect fallback to Lookup URN
-      expect(result.toString()).toBe('urn:lookup:email:alice@test.com');
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Resolved Contact')
-      );
-    });
-
-    it('should fallback to original URN if no link and no email', async () => {
-      mockContactsService.getLinkedIdentities.mockResolvedValue([]);
-      mockContactsService.getContact.mockResolvedValue({
-        id: contactUrn,
-        emailAddresses: [], // No email
-      });
-
-      const result = await service.resolveRecipientIdentity(contactUrn);
-      expect(result).toBe(contactUrn);
-    });
-  });
-
-  // --- 2. Key Check Tests ---
+  // --- 1. Key Check Tests ---
 
   describe('checkRecipientKeys', () => {
-    it('should resolve identity and check KeyService', async () => {
-      // Mock resolution logic manually or trust the internal call
-      // Here we simulate resolution returning a lookup URN
-      mockContactsService.getLinkedIdentities.mockResolvedValue([authUrn]);
+    it('should resolve identity via Mapper and check KeyService', async () => {
+      // Mock Mapper resolution
+      mockMapper.resolveToHandle.mockResolvedValue(handleUrn);
       mockKeyService.hasKeys.mockResolvedValue(true);
 
       const result = await service.checkRecipientKeys(contactUrn);
 
-      expect(mockKeyService.hasKeys).toHaveBeenCalledWith(authUrn);
+      expect(mockMapper.resolveToHandle).toHaveBeenCalledWith(contactUrn);
+      expect(mockKeyService.hasKeys).toHaveBeenCalledWith(handleUrn);
       expect(result).toBe(true);
     });
 
     it('should log warning if keys are missing', async () => {
-      mockContactsService.getLinkedIdentities.mockResolvedValue([authUrn]);
+      mockMapper.resolveToHandle.mockResolvedValue(handleUrn);
       mockKeyService.hasKeys.mockResolvedValue(false);
 
       const result = await service.checkRecipientKeys(contactUrn);
@@ -132,8 +79,8 @@ describe('ChatKeyService', () => {
     });
 
     it('should fail gracefully on error', async () => {
-      mockContactsService.getLinkedIdentities.mockRejectedValue(
-        new Error('DB Error')
+      mockMapper.resolveToHandle.mockRejectedValue(
+        new Error('Resolution Failed')
       );
 
       const result = await service.checkRecipientKeys(contactUrn);
@@ -143,7 +90,7 @@ describe('ChatKeyService', () => {
     });
   });
 
-  // --- 3. Reset Identity Tests ---
+  // --- 2. Reset Identity Tests ---
 
   describe('resetIdentityKeys', () => {
     it('should wipe, generate, and upload keys (including Handle)', async () => {
@@ -163,14 +110,15 @@ describe('ChatKeyService', () => {
         myUrn
       );
 
-      // 3. Upload Handle Keys (The critical fix)
+      // 3. Upload Handle Keys (Correct URN Properties)
       expect(mockKeyService.storeKeys).toHaveBeenCalledWith(
         expect.objectContaining({
-          nid: 'lookup',
-          nss: 'email:me@test.com',
+          namespace: 'lookup',
+          entityType: 'email',
+          entityId: 'me@test.com',
         }),
         mockKeyResult.publicKeys
       );
     });
   });
-});
+}); 

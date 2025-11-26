@@ -71,3 +71,9 @@ nx g @nx/angular:library --name=messenger-settings-ui --directory=libs/messenger
 
 
 nx g @nx/workspace:move --project=messenger-crypto-access --newProjectName=messenger-crypto-bridge --destination=libs/messenger/crypto-bridge --importPath=@nx-platform-application/messenger-crypto-bridge
+
+nx g @nx/workspace:move --project=contacts-access --newProjectName=contacts-storage --destination=libs/contacts/contacts-storage --importPath=@nx-platform-application/contacts-storage
+
+
+nx g @nx/angular:library --name=key-contacts-cloud-access --directory=libs/contacts/cloud-access --tags="scope:contacts"
+

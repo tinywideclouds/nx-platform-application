@@ -13,7 +13,7 @@ import {
   ContactGroup,
   PendingIdentity,
   BlockedIdentity,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 // --- MOCK DATA ---
@@ -26,12 +26,12 @@ const mockContact: Contact = {
   email: 'test@test.com',
   phoneNumbers: [],
   emailAddresses: [],
-  serviceContacts: {}
+  serviceContacts: {},
 };
 const mockGroup: ContactGroup = {
   id: URN.parse('urn:sm:group:999'),
   name: 'Test Group',
-  contactIds: []
+  contactIds: [],
 };
 
 // --- SERVICE MOCK ---
@@ -52,7 +52,7 @@ describe('ContactsSidebarComponent', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    
+
     // Reset Subjects
     mockContactsService.contacts$ = new Subject<Contact[]>();
     mockContactsService.groups$ = new Subject<ContactGroup[]>();
@@ -63,30 +63,30 @@ describe('ContactsSidebarComponent', () => {
       imports: [
         RouterTestingModule, // For routerLink in toolbar
         NoopAnimationsModule,
-        ContactsSidebarComponent
+        ContactsSidebarComponent,
       ],
       providers: [
-        { provide: ContactsStorageService, useValue: mockContactsService }
-      ]
+        { provide: ContactsStorageService, useValue: mockContactsService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactsSidebarComponent);
     component = fixture.componentInstance;
-    
+
     // Initial Render
     fixture.detectChanges();
   });
 
   // --- RENDERING & DATA ---
-  
+
   it('should render contact list when data is emitted', async () => {
     // 1. Emit data
     mockContactsService.contacts$.next([mockContact]);
-    
+
     // 2. Wait for signal update and render
     await fixture.whenStable();
     fixture.detectChanges();
-    
+
     // 3. Verify
     const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
     expect(items.length).toBe(1);
@@ -98,11 +98,13 @@ describe('ContactsSidebarComponent', () => {
     // (Though purely logic-wise, the signal updates regardless of tab)
     fixture.componentRef.setInput('tabIndex', 1);
     mockContactsService.groups$.next([mockGroup]);
-    
+
     await fixture.whenStable();
     fixture.detectChanges();
-    
-    const items = fixture.debugElement.queryAll(By.css('contacts-group-list-item'));
+
+    const items = fixture.debugElement.queryAll(
+      By.css('contacts-group-list-item')
+    );
     expect(items.length).toBe(1);
     expect(items[0].nativeElement.textContent).toContain('Test Group');
   });
@@ -121,29 +123,37 @@ describe('ContactsSidebarComponent', () => {
     // Simulate Click
     const item = fixture.debugElement.query(By.css('contacts-list-item'));
     item.triggerEventHandler('select', mockContact); // Assuming child emits 'select'
-    
+
     expect(spy).toHaveBeenCalledWith(mockContact);
   });
 
   it('should emit tabChange when tabs are switched', () => {
     const spy = vi.spyOn(component.tabChange, 'emit');
-    
+
     // Create a fake event
-    const mockEvent = { index: 1, tab: { textLabel: 'Groups' } } as MatTabChangeEvent;
-    
+    const mockEvent = {
+      index: 1,
+      tab: { textLabel: 'Groups' },
+    } as MatTabChangeEvent;
+
     // Trigger internal handler
     component.onTabChange(mockEvent);
-    
+
     expect(spy).toHaveBeenCalledWith(mockEvent);
   });
 
   // --- ACTIONS (Gatekeeper) ---
 
   it('should call deletePending when approving identity', async () => {
-    const mockPending: PendingIdentity = { urn: URN.parse('urn:sm:user:p1'), alias: 'Stranger' } as any;
-    
+    const mockPending: PendingIdentity = {
+      urn: URN.parse('urn:sm:user:p1'),
+      alias: 'Stranger',
+    } as any;
+
     await component.approveIdentity(mockPending);
-    
-    expect(mockContactsService.deletePending).toHaveBeenCalledWith(mockPending.urn);
+
+    expect(mockContactsService.deletePending).toHaveBeenCalledWith(
+      mockPending.urn
+    );
   });
 });

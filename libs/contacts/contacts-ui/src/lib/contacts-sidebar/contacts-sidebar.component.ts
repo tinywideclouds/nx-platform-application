@@ -4,7 +4,7 @@ import {
   inject,
   input,
   output,
-  viewChild
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
@@ -23,7 +23,7 @@ import {
   ContactGroup,
   PendingIdentity,
   BlockedIdentity,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 
 // UI COMPONENTS
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
@@ -37,7 +37,7 @@ import { BlockedListComponent } from '../blocked-list/blocked-list.component';
   standalone: true,
   imports: [
     CommonModule,
-    RouterModule, 
+    RouterModule,
     MatTabsModule,
     MatButtonModule,
     MatIconModule,
@@ -56,14 +56,14 @@ export class ContactsSidebarComponent {
   private contactsService = inject(ContactsStorageService);
 
   // --- INPUTS ---
-  
+
   // Highlight the active row (if any)
   selectedId = input<string | undefined>(undefined);
-  
+
   // Which tab is active? (0: Contacts, 1: Groups, 2: Manage)
   tabIndex = input(0);
 
-  // Feature Flag: Show "New Contact/Group" buttons? 
+  // Feature Flag: Show "New Contact/Group" buttons?
   showAddActions = input(true);
 
   // FIX: Added missing Input to satisfy binding
@@ -77,7 +77,7 @@ export class ContactsSidebarComponent {
   tabChange = output<MatTabChangeEvent>();
 
   // --- DATA ---
-  
+
   contacts = toSignal(this.contactsService.contacts$);
   groups = toSignal(this.contactsService.groups$);
   pending = toSignal(this.contactsService.pending$, { initialValue: [] });
@@ -92,12 +92,12 @@ export class ContactsSidebarComponent {
   async approveIdentity(pending: PendingIdentity) {
     await this.contactsService.deletePending(pending.urn);
   }
-  
+
   async blockPending(pending: PendingIdentity) {
     await this.contactsService.blockIdentity(pending.urn, 'Blocked');
     await this.contactsService.deletePending(pending.urn);
   }
-  
+
   async unblockIdentity(blocked: BlockedIdentity) {
     await this.contactsService.unblockIdentity(blocked.urn);
   }

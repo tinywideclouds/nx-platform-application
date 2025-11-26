@@ -1,4 +1,4 @@
-// libs/contacts/contacts-access/src/lib/contacts.service.spec.ts
+// libs/contacts/contacts-storage/src/lib/contacts.service.spec.ts
 
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';

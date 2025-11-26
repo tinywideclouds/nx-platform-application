@@ -1,5 +1,3 @@
-// libs/messenger/chat-state/src/lib/services/chat-outbound.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { ChatOutboundService } from './chat-outbound.service';
 import { URN } from '@nx-platform-application/platform-types';
@@ -12,7 +10,7 @@ import { MessengerCryptoService } from '@nx-platform-application/messenger-crypt
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { Logger } from '@nx-platform-application/console-logger';
-import { ChatKeyService } from './chat-key.service'; // <--- NEW IMPORT
+import { ContactMessengerMapper } from './contact-messenger.mapper';
 
 // Mocks
 const mockSendService = { sendMessage: vi.fn().mockReturnValue(of(undefined)) };
@@ -21,9 +19,10 @@ const mockStorageService = { saveMessage: vi.fn() };
 const mockKeyCache = { getPublicKey: vi.fn() };
 const mockLogger = { error: vi.fn() };
 
-// Mock the Key Logic Worker
-const mockKeyLogic = {
-  resolveRecipientIdentity: vi.fn(),
+// Mock Mapper
+const mockMapper = {
+  resolveToHandle: vi.fn(),
+  getStorageUrn: vi.fn(),
 };
 
 describe('ChatOutboundService', () => {
@@ -31,7 +30,7 @@ describe('ChatOutboundService', () => {
 
   const myUrn = URN.parse('urn:auth:user:me');
   const contactUrn = URN.parse('urn:sm:user:bob');
-  const resolvedAuthUrn = URN.parse('urn:lookup:email:bob@test.com');
+  const handleUrn = URN.parse('urn:lookup:email:bob@test.com');
 
   const typeId = URN.parse('urn:sm:type:text');
   const payloadBytes = new Uint8Array([1, 2, 3]);
@@ -41,7 +40,9 @@ describe('ChatOutboundService', () => {
     vi.clearAllMocks();
 
     // Default Behaviors
-    mockKeyLogic.resolveRecipientIdentity.mockResolvedValue(resolvedAuthUrn);
+    mockMapper.resolveToHandle.mockResolvedValue(handleUrn); // UI -> Network
+    mockMapper.getStorageUrn.mockResolvedValue(contactUrn); // UI <- Storage
+    
     mockKeyCache.getPublicKey.mockResolvedValue({});
     mockCryptoService.encryptAndSign.mockResolvedValue(mockEnvelope);
 
@@ -52,14 +53,14 @@ describe('ChatOutboundService', () => {
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
         { provide: KeyCacheService, useValue: mockKeyCache },
-        { provide: ChatKeyService, useValue: mockKeyLogic }, // <--- MOCK PROVIDED
+        { provide: ContactMessengerMapper, useValue: mockMapper },
         { provide: Logger, useValue: mockLogger },
       ],
     });
     service = TestBed.inject(ChatOutboundService);
   });
 
-  it('should resolve identity via ChatKeyService before encrypting', async () => {
+  it('should resolve handle for encryption but use contact for storage', async () => {
     const result = await service.send(
       {} as any,
       myUrn,
@@ -68,34 +69,32 @@ describe('ChatOutboundService', () => {
       payloadBytes
     );
 
-    // 1. Verify Delegation
-    expect(mockKeyLogic.resolveRecipientIdentity).toHaveBeenCalledWith(
-      contactUrn
-    );
+    // 1. Verify Resolution
+    expect(mockMapper.resolveToHandle).toHaveBeenCalledWith(contactUrn);
 
-    // 2. Verify Encryption uses the RESOLVED URN (not the contact URN)
-    expect(mockKeyCache.getPublicKey).toHaveBeenCalledWith(resolvedAuthUrn);
+    // 2. Verify Encryption uses Routing URN (Handle)
+    expect(mockKeyCache.getPublicKey).toHaveBeenCalledWith(handleUrn);
     expect(mockCryptoService.encryptAndSign).toHaveBeenCalledWith(
       expect.anything(),
-      resolvedAuthUrn, // <--- Important check
+      handleUrn, 
       expect.anything(),
       expect.anything()
     );
 
-    // 3. Verify Storage preserves the ORIGINAL Contact URN (for UI grouping)
+    // 3. Verify Storage uses Storage URN (Contact)
+    // This ensures the message appears in the current UI thread
+    expect(mockMapper.getStorageUrn).toHaveBeenCalledWith(contactUrn);
     expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        recipientId: contactUrn,
+        conversationUrn: contactUrn,
       })
     );
 
     expect(result).toBeTruthy();
   });
 
-  it('should fail gracefully if resolution fails', async () => {
-    mockKeyLogic.resolveRecipientIdentity.mockRejectedValue(
-      new Error('Resolution Failed')
-    );
+  it('should fail gracefully if mapper throws', async () => {
+    mockMapper.resolveToHandle.mockRejectedValue(new Error('Resolution Failed'));
 
     const result = await service.send(
       {} as any,

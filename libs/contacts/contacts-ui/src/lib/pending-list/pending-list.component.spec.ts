@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { PendingListComponent } from './pending-list.component';
-import { PendingIdentity } from '@nx-platform-application/contacts-access';
+import { PendingIdentity } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';

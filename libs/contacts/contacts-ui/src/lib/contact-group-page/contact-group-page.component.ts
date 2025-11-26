@@ -7,7 +7,7 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
@@ -90,13 +90,13 @@ export class ContactGroupPageComponent {
   private getGroup(urn: URN): Observable<ContactGroup | null> {
     // Reset edit mode when switching to an existing group
     this.startInEditMode.set(false);
-    
+
     return from(this.contactsService.getGroup(urn)).pipe(
       map((group) => {
         if (!group) {
           // Handle Not Found: Redirect or return null
           // For now, we'll return null which keeps the loading state or could show an error
-          return null; 
+          return null;
         }
         return group;
       })
@@ -109,8 +109,8 @@ export class ContactGroupPageComponent {
   private getNewGroup(): Observable<ContactGroup> {
     // Force edit mode when creating new
     this.startInEditMode.set(true);
-    
-    const newGroupUrn = URN.create('group', crypto.randomUUID());
+
+    const newGroupUrn = URN.create('group', crypto.randomUUID(), 'contacts');
     return of({
       id: newGroupUrn,
       name: '',

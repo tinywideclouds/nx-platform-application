@@ -5,7 +5,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Contact } from '@nx-platform-application/contacts-access';
+import { Contact } from '@nx-platform-application/contacts-storage';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
 @Component({
@@ -18,7 +18,7 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
 })
 export class ContactListComponent {
   contacts = input.required<Contact[]>();
-  
+
   /** * The ID of the currently selected contact (as a string).
    * Used to apply active styling to the row.
    */

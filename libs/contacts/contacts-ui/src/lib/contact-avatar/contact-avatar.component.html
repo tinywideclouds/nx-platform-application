@@ -2,19 +2,18 @@
   class="relative flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gray-600 text-white"
   role="img"
 >
-  <!-- FIX: Invoke the signal function in the *ngIf condition -->
-  <img
-    *ngIf="profilePictureUrl()"
-    class="h-full w-full object-cover"
-    [src]="profilePictureUrl()"
-    alt="Contact Avatar"
-  />
-
-  <span
-    *ngIf="!profilePictureUrl()"
-    class="text-base font-medium"
-    data-testid="initials"
-  >
-    {{ initials() }}
-  </span>
+  @if (profilePictureUrl(); as url) {
+    <img
+      class="h-full w-full object-cover"
+      [src]="url"
+      alt="Contact Avatar"
+    />
+  } @else {
+    <span
+      class="text-base font-medium"
+      data-testid="initials"
+    >
+      {{ initials() }}
+    </span>
+  }
 </div>

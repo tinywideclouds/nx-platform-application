@@ -12,8 +12,9 @@ import {
   ChatStorageService,
   DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { ChatMessageMapper } from './chat-message.mapper';
+import { ContactMessengerMapper } from './contact-messenger.mapper';
 
 // Types
 import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
@@ -34,22 +35,24 @@ export class ChatIngestionService {
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
   private contactsService = inject(ContactsStorageService);
-  private mapper = inject(ChatMessageMapper);
+  private mapper = inject(ContactMessengerMapper);
+  private viewMapper = inject(ChatMessageMapper);
 
   /**
    * Runs the ingestion pipeline.
    * 1. Fetches a batch of pending messages.
    * 2. Decrypts and verifies signatures.
-   * 3. Applies Gatekeeper logic (Blocked/Pending checks).
-   * 4. Persists to local storage.
-   * 5. Acknowledges receipt to server.
+   * 3. RESOLVES IDENTITY (Handle -> Contact).
+   * 4. Applies Gatekeeper logic (Blocked/Pending checks).
+   * 5. Persists to local storage.
+   * 6. Acknowledges receipt to server.
    *
    * @returns The array of NEW valid ChatMessages to update the UI state.
    */
   async process(
     myKeys: PrivateKeys,
     myUrn: URN,
-    identityMap: Map<string, URN>,
+    // REMOVED: identityMap is no longer needed; the Mapper handles resolution.
     blockedSet: Set<string>,
     batchLimit = 50
   ): Promise<ChatMessage[]> {
@@ -70,35 +73,39 @@ export class ChatIngestionService {
     for (const msg of queuedMessages) {
       try {
         // 2. Decrypt
+        // Result.senderId is the Network Handle (e.g. urn:lookup:email:bob@...)
         const decrypted = await this.cryptoService.verifyAndDecrypt(
           msg.envelope,
           myKeys
         );
 
-        const senderStr = decrypted.senderId.toString();
+        // 3. Identity Resolution (Handle -> Contact)
+        // If this handle belongs to "Bob", this returns "urn:sm:user:bob"
+        const resolvedSenderUrn = await this.mapper.resolveToContact(
+          decrypted.senderId
+        );
+        const resolvedSenderStr = resolvedSenderUrn.toString();
 
-        // 3. Gatekeeper: Block Check
-        if (blockedSet.has(senderStr)) {
+        // 4. Gatekeeper: Block Check (Check against Resolved Identity)
+        if (blockedSet.has(resolvedSenderStr)) {
           this.logger.info(
-            `Dropped message from blocked identity: ${senderStr}`
+            `Dropped message from blocked identity: ${resolvedSenderStr}`
           );
           processedIds.push(msg.id); // Ack to remove from queue
           continue;
         }
 
-        // 4. Gatekeeper: Identity Resolution / Pending
-        let resolvedSenderUrn = decrypted.senderId;
-
-        if (identityMap.has(senderStr)) {
-          // Trusted Contact
-          resolvedSenderUrn = identityMap.get(senderStr)!;
-        } else {
+        // 5. Gatekeeper: Pending Check
+        // If the resolved URN is still a Handle (meaning no Contact found),
+        // we add it to the Waiting Room.
+        if (resolvedSenderUrn.entityType !== 'user') {
           // Unknown -> Waiting Room
-          await this.contactsService.addToPending(decrypted.senderId);
-          this.logger.info(`Added ${senderStr} to pending list.`);
+          await this.contactsService.addToPending(resolvedSenderUrn);
+          this.logger.info(`Added ${resolvedSenderStr} to pending list.`);
         }
 
-        // 5. Map & Save (Storage Model)
+        // 6. Map & Save (Storage Model)
+        // We save using the RESOLVED sender URN.
         const newDecryptedMsg = this.mapPayloadToDecrypted(
           msg,
           decrypted,
@@ -108,8 +115,8 @@ export class ChatIngestionService {
 
         await this.storageService.saveMessage(newDecryptedMsg);
 
-        // 6. Convert to View Model
-        validViewMessages.push(this.mapper.toView(newDecryptedMsg));
+        // 7. Convert to View Model
+        validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
         processedIds.push(msg.id);
       } catch (error) {
         this.logger.error('Ingestion: Failed to process message', error, msg);
@@ -118,18 +125,17 @@ export class ChatIngestionService {
       }
     }
 
-    // 7. Ack Batch
+    // 8. Ack Batch
     if (processedIds.length > 0) {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
     }
 
-    // 8. Recursive Pull (if batch was full)
+    // 9. Recursive Pull (if batch was full)
     if (queuedMessages.length === batchLimit) {
       this.logger.info('Ingestion: Queue full, triggering recursive pull.');
       const nextBatch = await this.process(
         myKeys,
         myUrn,
-        identityMap,
         blockedSet,
         batchLimit
       );

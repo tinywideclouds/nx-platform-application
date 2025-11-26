@@ -50,4 +50,4 @@ An `@Injectable` Angular service that provides the application's core cryptograp
 
 ## Running unit tests
 
-Run `nx test messenger-crypto-bridge` to execute the unit tests for this library.
+Run `nx test  ` to execute the unit tests for this library.

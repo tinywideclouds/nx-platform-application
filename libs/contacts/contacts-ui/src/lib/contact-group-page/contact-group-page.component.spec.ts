@@ -7,7 +7,7 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
@@ -52,16 +52,16 @@ const mockActivatedRoute = {
 const mockContactsService = {
   getGroup: vi.fn(),
   saveGroup: vi.fn(),
-  contacts$: new Subject<Contact[]>(), 
+  contacts$: new Subject<Contact[]>(),
 };
 
 // 2. Define Router mock with createUrlTree (Required for [routerLink])
 const mockRouter = {
   navigate: vi.fn(),
-  createUrlTree: vi.fn().mockReturnValue({}), 
+  createUrlTree: vi.fn().mockReturnValue({}),
   serializeUrl: vi.fn().mockReturnValue('#'),
   events: new Subject<unknown>(),
-  url: '/'
+  url: '/',
 };
 
 describe('ContactGroupPageComponent', () => {
@@ -80,7 +80,7 @@ describe('ContactGroupPageComponent', () => {
       imports: [
         ContactGroupPageComponent,
         ContactsPageToolbarComponent,
-        NoopAnimationsModule
+        NoopAnimationsModule,
       ],
       providers: [
         { provide: ContactsStorageService, useValue: mockContactsService },
@@ -100,12 +100,12 @@ describe('ContactGroupPageComponent', () => {
 
   it('should be in ADD MODE if groupId is undefined', async () => {
     fixture.componentRef.setInput('groupId', undefined);
-    
+
     // Emit data to the subject
     mockContactsService.contacts$.next(MOCK_CONTACTS);
-    
+
     fixture.detectChanges();
-    await fixture.whenStable(); 
+    await fixture.whenStable();
 
     expect(mockContactsService.getGroup).not.toHaveBeenCalled();
     expect(component.groupToEdit()).toBeTruthy();
@@ -115,7 +115,7 @@ describe('ContactGroupPageComponent', () => {
   it('should be in EDIT MODE if groupId is provided', async () => {
     fixture.componentRef.setInput('groupId', mockGroupUrn);
     mockContactsService.contacts$.next(MOCK_CONTACTS);
-    
+
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -133,14 +133,14 @@ describe('ContactGroupPageComponent', () => {
     const formComponent = fixture.debugElement.query(
       By.directive(ContactGroupFormComponent)
     );
-    
+
     formComponent.triggerEventHandler('save', MOCK_GROUP);
     await fixture.whenStable();
 
     expect(mockContactsService.saveGroup).toHaveBeenCalledWith(MOCK_GROUP);
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/contacts'], {
       queryParams: { tab: 'groups' },
-      queryParamsHandling: 'merge'
+      queryParamsHandling: 'merge',
     });
   });
 });

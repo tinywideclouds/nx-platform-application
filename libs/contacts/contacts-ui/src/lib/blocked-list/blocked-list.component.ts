@@ -11,7 +11,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatExpansionModule } from '@angular/material/expansion';
-import { BlockedIdentity } from '@nx-platform-application/contacts-access';
+import { BlockedIdentity } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 @Component({

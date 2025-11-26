@@ -1,4 +1,4 @@
-// libs/contacts/contacts-access/src/lib/contacts.service.ts
+// libs/contacts/contacts-storage/src/lib/contacts.service.ts
 
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';

@@ -10,7 +10,7 @@ import {
   ContactsStorageService,
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';

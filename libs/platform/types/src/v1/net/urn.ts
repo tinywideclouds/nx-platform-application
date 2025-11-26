@@ -11,7 +11,7 @@ import {
  */
 export class URN {
   private static readonly SCHEME = 'urn';
-  private static readonly NAMESPACE = 'sm'; // Secure Messaging
+  private static readonly DEFAULT_NAMESPACE = 'app';
   private static readonly DELIMITER = ':';
 
   // --- Public, readonly properties ---
@@ -31,9 +31,9 @@ export class URN {
     if (!entityId) {
       throw new Error('Invalid URN format: entityId cannot be empty');
     }
-    if (!namespace)
-      namespace = URN.NAMESPACE
-    return new URN(namespace, entityType, entityId);
+    const ns = namespace || URN.DEFAULT_NAMESPACE;
+    
+    return new URN(ns, entityType, entityId);
   }
 
   /**

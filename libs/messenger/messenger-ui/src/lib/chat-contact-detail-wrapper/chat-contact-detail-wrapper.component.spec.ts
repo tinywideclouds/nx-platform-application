@@ -6,7 +6,7 @@ import { ChatService } from '@nx-platform-application/chat-state';
 import {
   ContactsStorageService,
   Contact,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
@@ -85,13 +85,10 @@ describe('ChatContactDetailWrapperComponent', () => {
     })
       .overrideComponent(ChatContactDetailWrapperComponent, {
         remove: {
-          imports: [
-            ContactDetailComponent,
-            ChatShareContactFooterComponent
-          ],
+          imports: [ContactDetailComponent, ChatShareContactFooterComponent],
         },
-        add: { 
-          imports: [MockDetail, MockFooter] 
+        add: {
+          imports: [MockDetail, MockFooter],
         },
       })
       .compileComponents();
@@ -111,12 +108,12 @@ describe('ChatContactDetailWrapperComponent', () => {
     await component.onShare(recipientId);
 
     expect(mockContactsService.getContact).toHaveBeenCalledWith(contactId);
-    
+
     expect(mockChatService.sendContactShare).toHaveBeenCalledWith(
       recipientId,
       expect.objectContaining({
         // FIX: Expect the Lookup URN, matching component logic
-        urn: 'urn:lookup:email:alice@test.com', 
+        urn: 'urn:lookup:email:alice@test.com',
         alias: 'Alice',
         // FIX: Add missing avatar expectation
         avatarUrl: 'http://img.com/alice.png',

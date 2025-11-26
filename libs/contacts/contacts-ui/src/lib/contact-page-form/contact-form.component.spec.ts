@@ -5,7 +5,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 import { ContactFormComponent } from './contact-form.component';
-import { Contact } from '@nx-platform-application/contacts-access';
+import { Contact } from '@nx-platform-application/contacts-storage';
 import {
   ISODateTimeString,
   URN,

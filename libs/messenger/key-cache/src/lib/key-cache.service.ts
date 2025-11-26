@@ -11,6 +11,7 @@ import {
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 import { KeyStorageService } from '@nx-platform-application/messenger-key-storage';
+import { throwError } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
@@ -42,14 +43,15 @@ export class KeyCacheService {
     }
 
     // 3. Fetch from network
-    const newKeys: PublicKeys = await this.secureKeyService.getKey(urn);
+    const newKeys = await this.secureKeyService.getKey(urn);
+    if (!newKeys) {
+      throw new Error(`Public key not found for URN: ${urn}`);
+    }
     const newTimestamp = Temporal.Now.instant().toString() as ISODateTimeString;
 
     // 4. Store
-    if (newKeys) {
-      const serializableKeys = serializePublicKeysToJson(newKeys);
-      await this.keyStorage.storeKey(keyUrn, serializableKeys, newTimestamp);
-    }
+    const serializableKeys = serializePublicKeysToJson(newKeys);
+    await this.keyStorage.storeKey(keyUrn, serializableKeys, newTimestamp);
 
     return newKeys;
   }

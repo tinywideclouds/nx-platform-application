@@ -1,4 +1,9 @@
-import { Component, inject, ChangeDetectionStrategy, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  ChangeDetectionStrategy,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -10,7 +15,10 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 
 // TYPES
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-access';
+import {
+  Contact,
+  ContactGroup,
+} from '@nx-platform-application/contacts-storage';
 
 @Component({
   selector: 'messenger-compose-page',
@@ -19,18 +27,18 @@ import { Contact, ContactGroup } from '@nx-platform-application/contacts-access'
     CommonModule,
     MatIconModule,
     MasterDetailLayoutComponent,
-    ContactsSidebarComponent
+    ContactsSidebarComponent,
   ],
   templateUrl: './messenger-compose-page.component.html',
   styleUrl: './messenger-compose-page.component.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessengerComposePageComponent {
   private router = inject(Router);
 
   // We are always in "Detail" mode visually because the sidebar is purely for selection
   // and the main area explains what to do.
-  showDetail = signal(false); 
+  showDetail = signal(false);
 
   onContactSelected(contact: Contact): void {
     this.startChat(contact.id.toString());

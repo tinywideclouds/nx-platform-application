@@ -3,7 +3,10 @@ import { MessengerComposePageComponent } from './messenger-compose-page.componen
 import { Router } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { URN } from '@nx-platform-application/platform-types';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-access';
+import {
+  Contact,
+  ContactGroup,
+} from '@nx-platform-application/contacts-storage';
 import { vi } from 'vitest';
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { By } from '@angular/platform-browser';
@@ -18,7 +21,7 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 @Component({
   selector: 'contacts-sidebar',
   standalone: true,
-  template: ''
+  template: '',
 })
 class StubContactsSidebarComponent {
   @Input() selectionMode = false;
@@ -30,16 +33,17 @@ class StubContactsSidebarComponent {
 @Component({
   selector: 'lib-master-detail-layout',
   standalone: true,
-  template: '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>'
+  template:
+    '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>',
 })
 class StubLayoutComponent {
   @Input() showDetail = false;
 }
 
 // --- MOCK DATA ---
-const mockContact = { 
-  id: URN.parse('urn:sm:user:test'), 
-  alias: 'Test User' 
+const mockContact = {
+  id: URN.parse('urn:sm:user:test'),
+  alias: 'Test User',
 } as Contact;
 
 describe('MessengerComposePageComponent', () => {
@@ -50,24 +54,22 @@ describe('MessengerComposePageComponent', () => {
   beforeEach(async () => {
     // Mock Router
     const routerMock = {
-      navigate: vi.fn()
+      navigate: vi.fn(),
     };
 
     await TestBed.configureTestingModule({
       imports: [MessengerComposePageComponent, NoopAnimationsModule],
-      providers: [
-        { provide: Router, useValue: routerMock }
-      ]
+      providers: [{ provide: Router, useValue: routerMock }],
     })
-    .overrideComponent(MessengerComposePageComponent, {
-      remove: { 
-        imports: [ContactsSidebarComponent, MasterDetailLayoutComponent] 
-      },
-      add: { 
-        imports: [StubContactsSidebarComponent, StubLayoutComponent] 
-      }
-    })
-    .compileComponents();
+      .overrideComponent(MessengerComposePageComponent, {
+        remove: {
+          imports: [ContactsSidebarComponent, MasterDetailLayoutComponent],
+        },
+        add: {
+          imports: [StubContactsSidebarComponent, StubLayoutComponent],
+        },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(MessengerComposePageComponent);
     component = fixture.componentInstance;
@@ -81,15 +83,19 @@ describe('MessengerComposePageComponent', () => {
 
   it('should navigate to conversation when a contact is selected via the sidebar stub', () => {
     // 1. Find the Stub
-    const sidebarStub = fixture.debugElement.query(By.directive(StubContactsSidebarComponent));
+    const sidebarStub = fixture.debugElement.query(
+      By.directive(StubContactsSidebarComponent)
+    );
     expect(sidebarStub).toBeTruthy();
 
     // 2. Emit the event from the Stub
     sidebarStub.componentInstance.contactSelected.emit(mockContact);
 
     // 3. Verify Router Navigation
-    expect(router.navigate).toHaveBeenCalledWith(
-      ['/messenger', 'conversations', 'urn:sm:user:test']
-    );
+    expect(router.navigate).toHaveBeenCalledWith([
+      '/messenger',
+      'conversations',
+      'urn:sm:user:test',
+    ]);
   });
 });

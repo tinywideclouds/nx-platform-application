@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { ContactGroup } from '@nx-platform-application/contacts-access';
+import { ContactGroup } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 import { ContactGroupListComponent } from './contact-group-list.component';
@@ -46,7 +46,11 @@ describe('ContactGroupListComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [TestHostComponent, ContactGroupListComponent, ContactGroupListItemComponent],
+      imports: [
+        TestHostComponent,
+        ContactGroupListComponent,
+        ContactGroupListItemComponent,
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TestHostComponent);
@@ -55,7 +59,9 @@ describe('ContactGroupListComponent', () => {
 
   it('should render correct number of items', () => {
     fixture.detectChanges();
-    const items = fixture.debugElement.queryAll(By.css('contacts-group-list-item'));
+    const items = fixture.debugElement.queryAll(
+      By.css('contacts-group-list-item')
+    );
     expect(items.length).toBe(2);
   });
 
@@ -63,11 +69,13 @@ describe('ContactGroupListComponent', () => {
     hostComponent.selectedId = 'urn:sm:group:grp-456'; // Select the second one
     fixture.detectChanges();
 
-    const items = fixture.debugElement.queryAll(By.css('contacts-group-list-item'));
-    
+    const items = fixture.debugElement.queryAll(
+      By.css('contacts-group-list-item')
+    );
+
     // First item (not selected)
     expect(items[0].nativeElement.classList).not.toContain('bg-blue-50');
-    
+
     // Second item (selected)
     expect(items[1].nativeElement.classList).toContain('bg-blue-50');
     expect(items[1].nativeElement.classList).toContain('border-l-4');

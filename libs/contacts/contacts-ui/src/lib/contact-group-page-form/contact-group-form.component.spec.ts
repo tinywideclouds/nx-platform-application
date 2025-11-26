@@ -4,7 +4,7 @@ import { Component, signal } from '@angular/core';
 import {
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';

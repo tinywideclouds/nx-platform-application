@@ -1,4 +1,4 @@
-// libs/contacts/contacts-access/src/lib/db/contacts.database.spec.ts
+// libs/contacts/contacts-storage/src/lib/db/contacts.database.spec.ts
 
 import { TestBed } from '@angular/core/testing';
 import { ContactsDatabase } from './contacts.database';

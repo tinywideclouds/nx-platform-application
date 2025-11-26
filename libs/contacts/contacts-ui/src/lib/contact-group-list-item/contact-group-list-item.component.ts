@@ -5,10 +5,10 @@ import {
   input,
   output,
   computed,
-  ChangeDetectionStrategy
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ContactGroup } from '@nx-platform-application/contacts-access';
+import { ContactGroup } from '@nx-platform-application/contacts-storage';
 
 @Component({
   selector: 'contacts-group-list-item',
@@ -20,8 +20,8 @@ import { ContactGroup } from '@nx-platform-application/contacts-access';
   // v20: Bind click directly on the host
   host: {
     '(click)': 'onHostClick()',
-    'class': 'block' // You can even move the :host { display: block } here via Tailwind
-  }
+    class: 'block', // You can even move the :host { display: block } here via Tailwind
+  },
 })
 export class ContactGroupListItemComponent {
   // v20: Signal Input

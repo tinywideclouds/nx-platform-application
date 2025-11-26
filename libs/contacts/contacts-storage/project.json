@@ -1,7 +1,7 @@
 {
-  "name": "contacts-access",
+  "name": "contacts-storage",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/contacts/contacts-access/src",
+  "sourceRoot": "libs/contacts/contacts-storage/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:contacts"],
@@ -11,8 +11,8 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/contacts/contacts-access",
-        "configFile": "libs/contacts/contacts-access/vite.config.mts"
+        "outputPath": "dist/libs/contacts/contacts-storage",
+        "configFile": "libs/contacts/contacts-storage/vite.config.mts"
       }
     },
     "test": {
@@ -22,9 +22,9 @@
         "{options.htmlReportDirectory}"
       ],
       "options": {
-        "reportsDirectory": "coverage/libs/contacts/contacts-access",
-        "htmlReportDirectory": "dist/test-reports/libs/contacts/contacts-access",
-        "configFile": "libs/contacts/contacts-access/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/contacts/contacts-storage",
+        "htmlReportDirectory": "dist/test-reports/libs/contacts/contacts-storage",
+        "configFile": "libs/contacts/contacts-storage/vitest.config.mts"
       }
     },
     "lint": {

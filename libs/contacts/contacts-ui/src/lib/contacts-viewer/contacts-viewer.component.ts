@@ -17,7 +17,7 @@ import { MatTabChangeEvent } from '@angular/material/tabs';
 import {
   Contact,
   ContactGroup,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 // LAYOUT & UI
@@ -100,7 +100,7 @@ export class ContactsViewerComponent {
     let tab = 'contacts';
     if (event.index === 1) tab = 'groups';
     if (event.index === 2) tab = 'manage';
-    
+
     // Clear selection AND creation mode when switching tabs
     this.updateUrl({ tab, selectedId: null, new: null });
   }

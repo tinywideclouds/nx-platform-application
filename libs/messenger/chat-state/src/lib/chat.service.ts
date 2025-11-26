@@ -1,5 +1,3 @@
-// libs/messenger/chat-state/src/lib/chat.service.ts
-
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
   Injectable,
@@ -30,13 +28,13 @@ import {
   ConversationSummary,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
 // WORKERS & HELPERS
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatMessageMapper } from './services/chat-message.mapper';
 import { ChatOutboundService } from './services/chat-outbound.service';
-import { ChatKeyService } from './services/chat-key.service'; // <--- NEW IMPORT
+import { ChatKeyService } from './services/chat-key.service';
 
 // Types
 import { ChatMessage } from '@nx-platform-application/messenger-types';
@@ -60,10 +58,10 @@ export class ChatService implements OnDestroy {
   private readonly keyService = inject(KeyCacheService);
   private readonly contactsService = inject(ContactsStorageService);
 
-  // WORKERS
+  // WORKERS (The Refactored Logic Lives Here)
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly outboundService = inject(ChatOutboundService);
-  private readonly keyWorker = inject(ChatKeyService); // <--- INJECTED
+  private readonly keyWorker = inject(ChatKeyService);
   private readonly mapper = inject(ChatMessageMapper);
 
   private readonly destroy$ = new Subject<void>();
@@ -74,12 +72,18 @@ export class ChatService implements OnDestroy {
   private blockedSet = signal(new Set<string>());
   private operationLock = Promise.resolve();
 
-  // --- Public State ---
+  // --- Public State (Signals) ---
+  
+  // The list of active threads (keyed by Contact URN)
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
+    
+  // The messages for the CURRENTLY selected conversation
   public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
 
   public readonly selectedConversation = signal<URN | null>(null);
+  
+  // Guard: Can we send to this person? (Delegated to ChatKeyService)
   public readonly isRecipientKeyMissing = signal<boolean>(false);
 
   public readonly currentUserUrn = computed(() => {
@@ -101,16 +105,22 @@ export class ChatService implements OnDestroy {
 
       const authToken = this.authService.getJwtToken();
 
+      // Load Gatekeeper Rules
       await Promise.all([this.refreshIdentityMap(), this.refreshBlockedSet()]);
 
+      // Load Conversations
       const summaries = await this.storageService.loadConversationSummaries();
       this.activeConversations.set(summaries);
 
+      // Identity & Keys
       const senderUrn = this.currentUserUrn();
       if (senderUrn) {
         let keys = await this.cryptoService.loadMyKeys(senderUrn);
 
         if (!keys) {
+          // Check if keys exist on server (New Device scenario)
+          // Note: Ideally we resolve the Handle first, but for 'self' checks, 
+          // Auth URN is often acceptable/stored.
           const existsOnServer = await this.keyService.hasKeys(senderUrn);
 
           if (existsOnServer) {
@@ -120,7 +130,7 @@ export class ChatService implements OnDestroy {
           } else {
             this.logger.info('New user detected. Generating keys...');
             try {
-              // Delegate generation to the KeyWorker
+              // Delegate generation/binding to the KeyWorker
               keys = await this.keyWorker.resetIdentityKeys(
                 senderUrn,
                 currentUser.email
@@ -134,6 +144,7 @@ export class ChatService implements OnDestroy {
         if (keys) this.myKeys.set(keys);
       }
 
+      // Live Data Connection
       this.liveService.connect(authToken!);
       this.handleConnectionStatus();
       this.initLiveSubscriptions();
@@ -151,7 +162,6 @@ export class ChatService implements OnDestroy {
 
     if (!userUrn || !currentUser) return;
 
-    // Reset state first
     this.myKeys.set(null);
 
     // Delegate to Worker (It throws on error, allowing UI to handle it)
@@ -160,7 +170,6 @@ export class ChatService implements OnDestroy {
       currentUser.email
     );
 
-    // Update State
     this.myKeys.set(newKeys);
   }
 
@@ -176,10 +185,11 @@ export class ChatService implements OnDestroy {
         return;
       }
 
+      // Ingestion Worker handles Decryption -> Mapper -> Storage
+      // It returns messages mapped to VIEW models
       const newMessages = await this.ingestionService.process(
         myKeys,
         myUrn,
-        this.identityLinkMap(),
         this.blockedSet()
       );
 
@@ -217,6 +227,8 @@ export class ChatService implements OnDestroy {
         return;
       }
 
+      // Outbound Worker handles Mapper (Contact->Handle) -> Encrypt -> Send -> Save (Contact)
+      // It returns the Optimistic Message mapped to the Contact Thread
       const optimisticMsg = await this.outboundService.send(
         myKeys,
         myUrn,
@@ -226,6 +238,7 @@ export class ChatService implements OnDestroy {
       );
 
       if (optimisticMsg) {
+        // Immediate UI Update
         this.upsertMessages([this.mapper.toView(optimisticMsg)]);
       }
     });
@@ -245,11 +258,13 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // 1. Check Key Availability (Delegated to Worker)
+      // 1. Check Key Availability (Delegated to Worker + Mapper)
+      // This checks if the HANDLE associated with this contact has keys.
       const hasKeys = await this.keyWorker.checkRecipientKeys(urn);
       this.isRecipientKeyMissing.set(!hasKeys);
 
       // 2. Load History
+      // Storage is indexed by Contact URN, so this matches the View.
       const history = await this.storageService.loadHistory(urn);
       const viewMessages = history.map((msg) => this.mapper.toView(msg));
       this.messages.set(viewMessages);
@@ -276,6 +291,9 @@ export class ChatService implements OnDestroy {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
+    // Filter ensures we only show messages for the Active Contact
+    // Since Outbound/Ingestion now guarantee storage under Contact URN,
+    // this filter works correctly.
     const relevant = messages.filter(
       (msg) => msg.conversationUrn.toString() === activeConvo.toString()
     );
@@ -286,6 +304,8 @@ export class ChatService implements OnDestroy {
 
   private async refreshIdentityMap(): Promise<void> {
     try {
+      // Note: Identity Links are now mostly handled inside the Mapper,
+      // but we keep this state if we need quick synchronous lookups later.
       const links = await this.contactsService.getAllIdentityLinks();
       const newMap = new Map<string, URN>();
       links.forEach((link) => {

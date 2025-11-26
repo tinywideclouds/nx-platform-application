@@ -1,5 +1,3 @@
-// libs/messenger/chat-state/src/lib/services/chat-outbound.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -16,7 +14,7 @@ import {
   DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { ChatKeyService } from './chat-key.service'; // <--- NEW IMPORT
+import { ContactMessengerMapper } from './contact-messenger.mapper';
 
 // Types
 import {
@@ -31,8 +29,8 @@ export class ChatOutboundService {
   private sendService = inject(ChatSendService);
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
-  private keyCache = inject(KeyCacheService); // Renamed from keyService to avoid confusion
-  private keyLogic = inject(ChatKeyService); // <--- NEW INJECTION
+  private keyCache = inject(KeyCacheService);
+  private mapper = inject(ContactMessengerMapper);
 
   /**
    * Encrypts, signs, sends, and locally saves a message.
@@ -46,11 +44,10 @@ export class ChatOutboundService {
     payloadBytes: Uint8Array
   ): Promise<DecryptedMessage | null> {
     try {
-      // 1. Resolve Recipient (Contact -> Auth/Lookup)
-      // We use the shared logic that includes Email Discovery.
-      const targetAuthUrn = await this.keyLogic.resolveRecipientIdentity(
-        recipientUrn
-      );
+      // 1. Resolve Recipient to Handle (for Routing/Encryption)
+      // If recipientUrn is a Contact, this returns the Handle.
+      // If recipientUrn is a Handle, it returns it as-is.
+      const targetRoutingUrn = await this.mapper.resolveToHandle(recipientUrn);
 
       // 2. Construct Payload
       const payload: EncryptedMessagePayload = {
@@ -60,12 +57,11 @@ export class ChatOutboundService {
         payloadBytes: payloadBytes,
       };
 
-      // 3. Fetch Keys & Encrypt
-      // Now we are querying keys for 'urn:lookup:email:bob@...' which exists!
-      const recipientKeys = await this.keyCache.getPublicKey(targetAuthUrn);
+      // 3. Fetch Keys & Encrypt (using Routing URN)
+      const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
       const envelope = await this.cryptoService.encryptAndSign(
         payload,
-        targetAuthUrn,
+        targetRoutingUrn,
         myKeys,
         recipientKeys
       );
@@ -74,16 +70,19 @@ export class ChatOutboundService {
       await firstValueFrom(this.sendService.sendMessage(envelope));
 
       // 5. Optimistic Save
-      // We store the ORIGINAL recipientUrn (Contact) for conversation grouping.
+      // Determine the Canonical Storage ID.
+      // If we are chatting with a Contact, this ensures the message saves to the Contact thread.
+      const storageUrn = await this.mapper.getStorageUrn(recipientUrn);
+
       const optimisticMsg: DecryptedMessage = {
         messageId: `local-${crypto.randomUUID()}`,
         senderId: myUrn,
-        recipientId: recipientUrn,
+        recipientId: recipientUrn, // Keep original input for reference
         sentTimestamp: payload.sentTimestamp,
         typeId: payload.typeId,
         payloadBytes: payload.payloadBytes,
         status: 'sent',
-        conversationUrn: this.getConversationUrn(myUrn, recipientUrn, myUrn),
+        conversationUrn: storageUrn, // <-- The Fix: Canonical ID via Mapper
       };
 
       await this.storageService.saveMessage(optimisticMsg);
@@ -94,8 +93,4 @@ export class ChatOutboundService {
       return null;
     }
   }
-
-  private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
-    return urn1.toString() === myUrn.toString() ? urn2 : urn1;
-  }
-}
+} 

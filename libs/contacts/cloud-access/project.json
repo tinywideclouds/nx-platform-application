@@ -1,0 +1,13 @@
+{
+  "name": "key-contacts-cloud-access",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contacts/cloud-access/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:contacts"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

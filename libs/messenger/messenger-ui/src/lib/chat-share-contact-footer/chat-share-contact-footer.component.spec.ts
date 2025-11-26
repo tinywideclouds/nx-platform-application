@@ -10,7 +10,7 @@ import { ChatShareContactFooterComponent } from './chat-share-contact-footer.com
 import {
   ContactsStorageService,
   Contact,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';

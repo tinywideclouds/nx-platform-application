@@ -4,10 +4,10 @@ import {
   HostListener,
   computed,
   input,
-  output
+  output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Contact } from '@nx-platform-application/contacts-access';
+import { Contact } from '@nx-platform-application/contacts-storage';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
@@ -22,7 +22,7 @@ export class ContactListItemComponent {
   // 1. Modern Signal Input (Replaces @Input)
   // This creates a Signal<Contact> which is reactive.
   contact = input.required<Contact>();
-  
+
   // 2. Modern Output Function (Replaces @Output)
   // This creates an OutputEmitterRef<Contact> which is optimized for the new core.
   select = output<Contact>();

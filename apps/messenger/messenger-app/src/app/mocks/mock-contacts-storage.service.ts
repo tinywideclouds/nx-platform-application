@@ -7,7 +7,7 @@ import {
   PendingIdentity,
   BlockedIdentity,
   IdentityLink,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import {
   ISODateTimeString,
   URN,

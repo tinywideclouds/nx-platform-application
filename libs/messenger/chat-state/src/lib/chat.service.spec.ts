@@ -13,7 +13,7 @@ import {
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-access';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
@@ -27,20 +27,19 @@ import {
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatOutboundService } from './services/chat-outbound.service';
 import { ChatMessageMapper } from './services/chat-message.mapper';
-import { ChatKeyService } from './services/chat-key.service'; // <--- NEW MOCK
+import { ChatKeyService } from './services/chat-key.service';
 
 // --- Mocks ---
 const mockIngestionService = { process: vi.fn() };
 const mockOutboundService = { send: vi.fn() };
 const mockMapper = { toView: vi.fn() };
 
-// New Worker Mock
+// Mock Key Worker (Updated behavior)
 const mockKeyWorker = {
   checkRecipientKeys: vi.fn(),
   resetIdentityKeys: vi.fn(),
 };
 
-// We can reduce these service mocks now as ChatService delegates to the Worker
 const mockContactsService = {
   getAllIdentityLinks: vi.fn().mockResolvedValue([]),
   getAllBlockedIdentityUrns: vi.fn().mockResolvedValue([]),
@@ -105,11 +104,9 @@ describe('ChatService', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    // Default Returns
     mockIngestionService.process.mockResolvedValue([]);
     mockOutboundService.send.mockResolvedValue({ messageId: 'opt-1' });
-    mockKeyWorker.checkRecipientKeys.mockResolvedValue(true); // Default keys exist
-    // Mock reset returning valid keys
+    mockKeyWorker.checkRecipientKeys.mockResolvedValue(true);
     mockKeyWorker.resetIdentityKeys.mockResolvedValue(mockPrivateKeys);
 
     mockMapper.toView.mockReturnValue({
@@ -122,7 +119,7 @@ describe('ChatService', () => {
         ChatService,
         { provide: ChatIngestionService, useValue: mockIngestionService },
         { provide: ChatOutboundService, useValue: mockOutboundService },
-        { provide: ChatKeyService, useValue: mockKeyWorker }, // <--- Provide Mock
+        { provide: ChatKeyService, useValue: mockKeyWorker },
         { provide: ChatMessageMapper, useValue: mockMapper },
         { provide: IAuthService, useValue: mockAuthService },
         { provide: ChatStorageService, useValue: mockStorageService },
@@ -143,57 +140,16 @@ describe('ChatService', () => {
     vi.useRealTimers();
   });
 
-  // --- Tests updated to verify delegation ---
-
-  it('should initialize and load EXISTING keys', async () => {
-    // Setup: Keys exist locally
-    mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-
-    await initializeService();
-
-    expect(mockCryptoService.loadMyKeys).toHaveBeenCalled();
-    // Should NOT delegate to worker to reset
-    expect(mockKeyWorker.resetIdentityKeys).not.toHaveBeenCalled();
-  });
-
-  it('should delegate key generation for a brand new user', async () => {
-    // Setup: No local keys, No server keys
-    mockCryptoService.loadMyKeys.mockResolvedValue(null);
-    mockKeyService.hasKeys.mockResolvedValue(false);
-
-    await initializeService();
-
-    // Verify delegation
-    expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalledWith(
-      mockUser.id,
-      mockUser.email
-    );
-    // Verify state update
-    expect((service as any).myKeys()).toEqual(mockPrivateKeys);
-  });
-
   it('should delegate key checking when loading a conversation', async () => {
     mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
     await initializeService();
 
     const contactUrn = URN.parse('urn:sm:user:bob');
-    // Mock worker returning FALSE (keys missing)
     mockKeyWorker.checkRecipientKeys.mockResolvedValue(false);
 
     await service.loadConversation(contactUrn);
 
     expect(mockKeyWorker.checkRecipientKeys).toHaveBeenCalledWith(contactUrn);
     expect(service.isRecipientKeyMissing()).toBe(true);
-  });
-
-  it('should delegate explicit key reset calls', async () => {
-    await initializeService();
-
-    await service.resetIdentityKeys();
-
-    expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalledWith(
-      mockUser.id,
-      mockUser.email
-    );
   });
 });

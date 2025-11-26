@@ -1,6 +1,6 @@
 # 答 Library: contacts-ui
 
-This library provides a comprehensive, standalone, and signal-based component toolkit for managing contacts and contact groups in an Angular application.
+This library provides a comprehensive, standalone, and signal-based component toolkit for managing contacts, contact groups, and identity security (The Gatekeeper) in an Angular application.
 
 It is built with a "smart/dumb" component architecture, is fully signal-based for zoneless change detection (`OnPush`), and uses a hybrid styling approach with TailwindCSS for layout and Angular Material for form controls and core UI elements.
 
@@ -27,41 +27,42 @@ The library re-exports the entire public API of the data-access layer.
 
 ### Smart / Container Components
 
-These are "page-level" components intended to be loaded by the Angular Router. They are responsible for fetching data, managing state, and composing dumb components.
+These are "page-level" components intended to be loaded by the Angular Router or used as major orchestrators.
 
 | Component | Selector | Role & Description |
 | :--- | :--- | :--- |
-| `ContactsViewerComponent` | `contacts-viewer` | **Main List Page.** Acts as the shell for the contacts feature. Renders `MatTabs` to switch between the "Contacts" list and "Groups" list. It handles navigation to the edit/new pages. |
-| `ContactPageComponent` | `contacts-page` | **Add/Edit Contact Page.** Manages the "add" vs. "edit" state for a single `Contact` based on the `:id` route param. It provides the `Contact` data to the `contacts-form` and also displays a list of groups that the contact is a member of. |
-| `ContactGroupPageComponent`| `contacts-group-page`| **Add/Edit Group Page.** Manages the "add" vs. "edit" state for a `ContactGroup` based on the `:id` route param. It provides the `ContactGroup` and the list of `allContacts` to the `contacts-group-form`. |
+| `ContactsViewerComponent` | `contacts-viewer` | **Main List Page.** Acts as the shell for the contacts feature. Handles routing state, tab navigation, and layout. |
+| `ContactsSidebarComponent` | `contacts-sidebar` | **Navigation & List Container.** Orchestrates the "Contacts", "Groups", and "Security" tabs. It consumes live data streams and handles selection events. |
+| `ContactPageComponent` | `contacts-page` | **Add/Edit Contact Page.** Manages the "add" vs. "edit" state for a single `Contact` based on the `:id` route param. |
+| `ContactGroupPageComponent`| `contacts-group-page`| **Add/Edit Group Page.** Manages the "add" vs. "edit" state for a `ContactGroup` based on the `:id` route param. |
 
 ### Dumb / Presentational Components
 
-These components are reusable, state-less, and receive all data via `@Input()` and emit changes via `@Output()`.
+These components are reusable, state-less, and receive all data via `input()` and emit changes via `output()`.
 
 #### Form Components
 
 | Component | Selector | Role & Description |
 | :--- | :--- | :--- |
-| `ContactFormComponent` | `contacts-form` | **Contact Edit Form.** A full-featured `ReactiveForm` for all `Contact` properties, including `FormArray` logic for phone numbers and email addresses. It manages its *own* internal "view" vs. "edit" state via a signal. |
-| `ContactGroupFormComponent`| `contacts-group-form`| **Group Edit Form.** A `ReactiveForm` for `ContactGroup` properties. It composes the `contacts-multi-selector` to manage the group's `contactIds`. It also manages its own internal "view" vs. "edit" state. |
+| `ContactFormComponent` | `contacts-form` | **Contact Edit Form.** A full-featured `ReactiveForm` for `Contact` properties. Displays linked identities (federated logins). |
+| `ContactGroupFormComponent`| `contacts-group-form`| **Group Edit Form.** A `ReactiveForm` for `ContactGroup` properties. Composes the `contacts-multi-selector`. |
 
-#### List Components
+#### List & Gatekeeper Components
 
 | Component | Selector | Role & Description |
 | :--- | :--- | :--- |
-| `ContactListComponent` | `contacts-list` | Renders a list of `contacts-list-item` components. Handles the "No contacts found" empty state. |
-| `ContactListItemComponent` | `contacts-list-item` | Renders a single row in the contact list. Composes `contacts-avatar` and handles click events. |
-| `ContactGroupListComponent`| `contacts-group-list` | Renders a list of `contacts-group-list-item` components. Handles the "No groups found" empty state. |
-| `ContactGroupListItemComponent`| `contacts-group-list-item`| Renders a single row in the group list, displaying the group name and member count. |
+| `ContactListComponent` | `contacts-list` | Renders a list of contacts with selection support. |
+| `ContactGroupListComponent`| `contacts-group-list` | Renders a list of groups with selection support. |
+| `PendingListComponent` | `contacts-pending-list`| **The Waiting Room.** Displays unknown or vouched identities waiting for approval. |
+| `BlockedListComponent` | `contacts-blocked-list`| **The Block List.** Displays blocked identities with options to unblock. |
 
 #### Utility Components
 
 | Component | Selector | Role & Description |
 | :--- | :--- | :--- |
-| `ContactAvatarComponent` | `contacts-avatar` | A simple, highly reusable component that displays either an image (`profilePictureUrl`) or text (`initials`). |
-| `ContactMultiSelectorComponent`|`contacts-multi-selector`| A sophisticated, filterable, scrolling list of contacts with checkboxes. Uses `[(ngModel)]` for two-way binding of selected IDs. |
-| `ContactsPageToolbarComponent`| `contacts-page-toolbar`| A responsive `MatToolbar` that uses a `ResizeObserver` to compute its display mode (`'full'` or `'compact'`). It provides a content-projection slot for actions. |
+| `ContactAvatarComponent` | `contacts-avatar` | Displays either an image (`profilePictureUrl`) or text (`initials`). |
+| `ContactMultiSelectorComponent`|`contacts-multi-selector`| A filterable, scrolling list of contacts with checkboxes for group management. |
+| `ContactsPageToolbarComponent`| `contacts-page-toolbar`| A responsive, resize-aware toolbar. |
 
 -----
 
@@ -74,27 +75,26 @@ This section details the public API for the most significant components.
 This component encapsulates all logic for editing a `Contact`.
 
   * `@Input() contact = input<Contact | null>(null)`: The `Contact` object to populate the form with.
-  * `@Input() startInEditMode = input(false)`: A boolean that signals the form to initialize in "edit" mode (e.g., for creating a new contact) or "view" mode.
-  * `@Output() save = output<Contact>()`: Emits the complete, updated `Contact` object when the form is saved.
-  * **Internal State**: Manages an internal `isEditing = signal(false)`. It switches from "view" to "edit" mode when the "Edit" button is clicked. It uses `effect()` to enable/disable the `ReactiveForm` based on this signal.
+  * `@Input() linkedIdentities = input<URN[]>([])`: A list of federated identities (e.g., Google, Apple) linked to this contact.
+  * `@Input() startInEditMode = input(false)`: Signals the form to initialize in "edit" mode.
+  * `@Output() save = output<Contact>()`: Emits the updated `Contact` object when saved.
 
-### `ContactGroupFormComponent`
+### `ContactsSidebarComponent`
 
-This component encapsulates all logic for editing a `ContactGroup`.
+The primary navigation component used inside the Viewer.
 
-  * `@Input() group = input<ContactGroup | null>(null)`: The `ContactGroup` object to populate the form with.
-  * `@Input() allContacts = input.required<Contact[]>()`: The complete list of all contacts, required by the `contacts-multi-selector`.
-  * `@Input() startInEditMode = input(false)`: Signals the form to initialize in "edit" mode or "view" mode.
-  * `@Output() save = output<ContactGroup>()`: Emits the complete, updated `ContactGroup` object when the form is saved.
-  * **Internal State**: Manages an internal `isEditing = signal(false)` just like the `ContactFormComponent`.
+  * `@Input() selectedId = input<string | undefined>()`: Highlights the currently selected contact/group.
+  * `@Input() tabIndex = input(0)`: Controls which tab is active (0: Contacts, 1: Groups, 2: Security).
+  * `@Output() contactSelected = output<Contact>()`: Emits when a user clicks a contact row.
+  * `@Output() groupSelected = output<ContactGroup>()`: Emits when a user clicks a group row.
 
-### `ContactMultiSelectorComponent`
+### `PendingListComponent` (Gatekeeper)
 
-This component is a self-contained widget for selecting contacts.
+Displays identities in the "Waiting Room".
 
-  * `@Input() allContacts = input.required<Contact[]>()`: The list of all contacts to display and filter.
-  * `@Input()/model() selectedIds = model<string[]>([])`: A two-way model binding (`[(selectedIds)]`) for the array of selected contact IDs.
-  * **Internal State**: Manages its own `filterText = signal('')` and uses `computed()` signals to derive the `filteredContacts` list and a `selectionSet` for fast lookups.
+  * `@Input() pending = input.required<PendingIdentity[]>()`: The list of pending requests.
+  * `@Output() approve = output<PendingIdentity>()`: Emits when the user accepts a request (clears pending status).
+  * `@Output() block = output<PendingIdentity>()`: Emits when the user blocks a request (moves to blocklist).
 
 -----
 
@@ -109,14 +109,13 @@ This library's components are styled using a hybrid approach:
 The components are designed to work with a global stylesheet (like the app's `custom-theme.scss`) that provides:
 
   * **A custom Angular Material theme.**
-  * **`.form-view-mode`:** A global CSS class used by `ContactFormComponent` and `ContactGroupFormComponent` to style their `MatFormField` elements in "view" mode, making them appear flat and non-interactive.
-  * **`.toolbar-tonal-button`:** A global CSS class applied to `matButton="tonal"` in toolbars to give them a specific, theme-consistent appearance.
+  * **`.form-view-mode`:** A global CSS class used by `ContactFormComponent` to style `MatFormField` elements in "view" mode.
 
 -----
 
 ## 🚀 Usage Example (Routing)
 
-To use this library, import its components into your application's routes. The smart components are designed to be loaded directly.
+To use this library, import its components into your application's routes.
 
 ```typescript
 // In your app.routes.ts or a feature-routing.ts file
@@ -134,7 +133,6 @@ export const CONTACTS_ROUTES: Routes = [
   },
   {
     path: 'new',
-    // 2. The 'new' path loads the Contact page component.
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactPageComponent
@@ -142,27 +140,11 @@ export const CONTACTS_ROUTES: Routes = [
   },
   {
     path: 'edit/:id',
-    // 3. The 'edit' path re-uses the same page component.
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactPageComponent
       ),
   },
-  {
-    path: 'group-new',
-    // 4. The 'group-new' path loads the Group page component.
-    loadComponent: () =>
-      import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactGroupPageComponent
-      ),
-  },
-  {
-    path: 'group-edit/:id',
-    // 5. The 'group-edit' path re-uses the same group page.
-    loadComponent: () =>
-      import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactGroupPageComponent
-      ),
-  },
+  // ... Group routes
 ];
-```
+````

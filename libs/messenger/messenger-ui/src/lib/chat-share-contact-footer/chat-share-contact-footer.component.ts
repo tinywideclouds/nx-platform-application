@@ -18,7 +18,7 @@ import { startWith } from 'rxjs/operators';
 import {
   ContactsStorageService,
   Contact,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 @Component({

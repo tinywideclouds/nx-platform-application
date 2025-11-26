@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { Contact } from '@nx-platform-application/contacts-access';
+import { Contact } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 import { ContactListComponent } from './contact-list.component';
@@ -58,7 +58,11 @@ describe('ContactListComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [TestHostComponent, ContactListComponent, ContactListItemComponent],
+      imports: [
+        TestHostComponent,
+        ContactListComponent,
+        ContactListItemComponent,
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TestHostComponent);
@@ -77,11 +81,11 @@ describe('ContactListComponent', () => {
     fixture.detectChanges();
 
     const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
-    
+
     // Check classes on the first item
     expect(items[0].nativeElement.classList).toContain('bg-blue-50');
     expect(items[0].nativeElement.classList).toContain('border-l-4');
-    
+
     // Check classes on the second item (should NOT have them)
     expect(items[1].nativeElement.classList).not.toContain('bg-blue-50');
   });

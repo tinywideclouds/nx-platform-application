@@ -41,7 +41,7 @@ import {
   ChatSendService,
 } from '@nx-platform-application/chat-access';
 // --- NEW IMPORT ---
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { vi, Mocked } from 'vitest';
 
 vi.mock('@js-temporal/polyfill', () => ({

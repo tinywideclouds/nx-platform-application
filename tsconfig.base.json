@@ -37,14 +37,17 @@
       "@nx-platform-application/console-logger": [
         "libs/platform/ng/console-logger/src/index.ts"
       ],
-      "@nx-platform-application/contacts-access": [
-        "libs/contacts/contacts-access/src/index.ts"
+      "@nx-platform-application/contacts-storage": [
+        "libs/contacts/contacts-storage/src/index.ts"
       ],
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
       "@nx-platform-application/internal-tools": [
         "libs/internal-tools/src/index.ts"
+      ],
+      "@nx-platform-application/key-contacts-cloud-access": [
+        "libs/contacts/cloud-access/src/index.ts"
       ],
       "@nx-platform-application/message-content": [
         "libs/messenger/message-content/src/index.ts"

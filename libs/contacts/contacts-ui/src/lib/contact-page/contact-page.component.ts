@@ -41,7 +41,7 @@ export class ContactPageComponent {
             return null;
           }
         }
-        return { urn: URN.create('user', crypto.randomUUID()), isNew: true };
+        return { urn: URN.create('user', crypto.randomUUID(), , 'contacts'), isNew: true };
       })
     ),
     { initialValue: null }

@@ -5,7 +5,7 @@ import { CommonModule } from '@angular/common';
 import { URN } from '@nx-platform-application/platform-types';
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
-import { ContactsStorageService } from '@nx-platform-application/contacts-access';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
 // UI Imports
 import { ContactDetailComponent } from '@nx-platform-application/contacts-ui';

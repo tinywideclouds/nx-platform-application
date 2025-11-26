@@ -14,7 +14,7 @@ import { ChatService } from '@nx-platform-application/chat-state';
 import {
   ContactsStorageService,
   Contact,
-} from '@nx-platform-application/contacts-access';
+} from '@nx-platform-application/contacts-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 
 // Child Mocks
@@ -69,7 +69,7 @@ describe('ChatWindowComponent', () => {
   let router: Router;
   let routerEvents$: Subject<any>;
   let routeParamMap$: Subject<any>;
-  let currentUrl = '/chat/123'; 
+  let currentUrl = '/chat/123';
 
   beforeEach(async () => {
     routerEvents$ = new Subject();
@@ -103,7 +103,7 @@ describe('ChatWindowComponent', () => {
 
     fixture = TestBed.createComponent(ChatWindowComponent);
     component = fixture.componentInstance;
-    
+
     fixture.detectChanges();
   });
 
@@ -134,7 +134,7 @@ describe('ChatWindowComponent', () => {
   it('should detect "details" view mode from router', async () => {
     // 1. Change URL state
     currentUrl = '/chat/123/details';
-    
+
     // 2. Trigger event
     routerEvents$.next(
       new NavigationEnd(1, '/chat/123/details', '/chat/123/details')
@@ -170,7 +170,7 @@ describe('ChatWindowComponent', () => {
 
     // Verify: The component uses ['./'] relative nav, effectively going up one level
     expect(router.navigate).toHaveBeenCalledWith(
-      ['./'], 
+      ['./'],
       expect.objectContaining({ relativeTo: expect.anything() })
     );
   });

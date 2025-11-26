@@ -8,7 +8,10 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 // --- ARTIFACTS UNDER TEST ---
 import { ContactsViewerComponent } from './contacts-viewer.component';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-access';
+import {
+  Contact,
+  ContactGroup,
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 
 // --- REAL DEPENDENCIES (Needed for removal) ---
@@ -23,7 +26,7 @@ import { ContactPageComponent } from '../contact-page/contact-page.component';
 @Component({
   selector: 'contacts-sidebar',
   standalone: true,
-  template: ''
+  template: '',
 })
 class StubSidebarComponent {
   @Input() selectedId: string | undefined;
@@ -36,7 +39,7 @@ class StubSidebarComponent {
 @Component({
   selector: 'contacts-detail',
   standalone: true,
-  template: ''
+  template: '',
 })
 class StubContactDetailComponent {
   @Input() contactId!: URN;
@@ -45,7 +48,7 @@ class StubContactDetailComponent {
 @Component({
   selector: 'contacts-group-page',
   standalone: true,
-  template: ''
+  template: '',
 })
 class StubGroupPageComponent {
   @Input() groupId: URN | undefined;
@@ -54,7 +57,7 @@ class StubGroupPageComponent {
 @Component({
   selector: 'contacts-page',
   standalone: true,
-  template: ''
+  template: '',
 })
 class StubContactPageComponent {
   // No inputs needed for creation mode in this context
@@ -63,7 +66,8 @@ class StubContactPageComponent {
 @Component({
   selector: 'lib-master-detail-layout',
   standalone: true,
-  template: '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>'
+  template:
+    '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>',
 })
 class StubLayoutComponent {
   @Input() showDetail = false;
@@ -84,47 +88,44 @@ describe('ContactsViewerComponent', () => {
     queryParamsSubject = new Subject();
 
     await TestBed.configureTestingModule({
-      imports: [
-        ContactsViewerComponent,
-        NoopAnimationsModule,
-      ],
+      imports: [ContactsViewerComponent, NoopAnimationsModule],
       providers: [
         {
           provide: ActivatedRoute,
           useValue: {
             queryParamMap: queryParamsSubject.asObservable(),
-            snapshot: { queryParamMap: convertToParamMap({}) }
-          }
-        }
-      ]
+            snapshot: { queryParamMap: convertToParamMap({}) },
+          },
+        },
+      ],
     })
-    .overrideComponent(ContactsViewerComponent, {
-      remove: { 
-        imports: [
-          MasterDetailLayoutComponent,
-          ContactsSidebarComponent,
-          ContactDetailComponent,
-          ContactGroupPageComponent,
-          ContactPageComponent
-        ] 
-      },
-      add: { 
-        imports: [
-          StubLayoutComponent,
-          StubSidebarComponent,
-          StubContactDetailComponent,
-          StubGroupPageComponent,
-          StubContactPageComponent
-        ] 
-      }
-    })
-    .compileComponents();
+      .overrideComponent(ContactsViewerComponent, {
+        remove: {
+          imports: [
+            MasterDetailLayoutComponent,
+            ContactsSidebarComponent,
+            ContactDetailComponent,
+            ContactGroupPageComponent,
+            ContactPageComponent,
+          ],
+        },
+        add: {
+          imports: [
+            StubLayoutComponent,
+            StubSidebarComponent,
+            StubContactDetailComponent,
+            StubGroupPageComponent,
+            StubContactPageComponent,
+          ],
+        },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(ContactsViewerComponent);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate'); 
-    
+    vi.spyOn(router, 'navigate');
+
     fixture.detectChanges();
   });
 
@@ -143,7 +144,7 @@ describe('ContactsViewerComponent', () => {
 
     // 2. Groups State
     queryParamsSubject.next(convertToParamMap({ tab: 'groups' }));
-    await fixture.whenStable(); 
+    await fixture.whenStable();
     expect(component.activeTab()).toBe('groups');
     expect(component.tabIndex()).toBe(1);
 
@@ -159,58 +160,74 @@ describe('ContactsViewerComponent', () => {
   it('should identify Creation Mode for Contact from QueryParams', async () => {
     queryParamsSubject.next(convertToParamMap({ new: 'contact' }));
     await fixture.whenStable();
-    
+
     expect(component.createMode()).toBe('contact');
     fixture.detectChanges();
-    
+
     // Check if the Contact Page Stub is rendered
-    const page = fixture.debugElement.query(By.directive(StubContactPageComponent));
+    const page = fixture.debugElement.query(
+      By.directive(StubContactPageComponent)
+    );
     expect(page).toBeTruthy();
   });
 
   it('should identify Creation Mode for Group from QueryParams', async () => {
     queryParamsSubject.next(convertToParamMap({ new: 'group' }));
     await fixture.whenStable();
-    
+
     expect(component.createMode()).toBe('group');
     fixture.detectChanges();
-    
+
     // Check if the Group Page Stub is rendered
-    const page = fixture.debugElement.query(By.directive(StubGroupPageComponent));
+    const page = fixture.debugElement.query(
+      By.directive(StubGroupPageComponent)
+    );
     expect(page).toBeTruthy();
   });
 
   // --- ACTION -> ROUTER TESTS ---
 
   it('should update URL when Sidebar emits tabChange', () => {
-    const sidebar = fixture.debugElement.query(By.directive(StubSidebarComponent));
+    const sidebar = fixture.debugElement.query(
+      By.directive(StubSidebarComponent)
+    );
     sidebar.componentInstance.tabChange.emit({ index: 1 });
-    
-    expect(router.navigate).toHaveBeenCalledWith([], expect.objectContaining({
-      queryParams: { tab: 'groups', selectedId: null, new: null },
-      queryParamsHandling: 'merge'
-    }));
+
+    expect(router.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { tab: 'groups', selectedId: null, new: null },
+        queryParamsHandling: 'merge',
+      })
+    );
   });
 
   it('should update URL when Sidebar emits contactSelected (Default Mode)', () => {
-    const sidebar = fixture.debugElement.query(By.directive(StubSidebarComponent));
+    const sidebar = fixture.debugElement.query(
+      By.directive(StubSidebarComponent)
+    );
     sidebar.componentInstance.contactSelected.emit(mockContact);
-    
-    expect(router.navigate).toHaveBeenCalledWith([], expect.objectContaining({
-      queryParams: { selectedId: mockContactUrn, new: null },
-      queryParamsHandling: 'merge'
-    }));
+
+    expect(router.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { selectedId: mockContactUrn, new: null },
+        queryParamsHandling: 'merge',
+      })
+    );
   });
 
   it('should emit Output instead of navigating when in Selection Mode', () => {
     fixture.componentRef.setInput('selectionMode', true);
     fixture.detectChanges();
-    
+
     const spy = vi.spyOn(component.contactSelected, 'emit');
-    const sidebar = fixture.debugElement.query(By.directive(StubSidebarComponent));
-    
+    const sidebar = fixture.debugElement.query(
+      By.directive(StubSidebarComponent)
+    );
+
     sidebar.componentInstance.contactSelected.emit(mockContact);
-    
+
     expect(spy).toHaveBeenCalledWith(mockContact);
     expect(router.navigate).not.toHaveBeenCalled();
   });
