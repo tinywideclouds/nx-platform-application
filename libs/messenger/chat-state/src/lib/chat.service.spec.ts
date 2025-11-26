@@ -34,7 +34,6 @@ const mockIngestionService = { process: vi.fn() };
 const mockOutboundService = { send: vi.fn() };
 const mockMapper = { toView: vi.fn() };
 
-// Mock Key Worker (Updated behavior)
 const mockKeyWorker = {
   checkRecipientKeys: vi.fn(),
   resetIdentityKeys: vi.fn(),
@@ -79,7 +78,6 @@ const mockLogger = {
   error: vi.fn(),
 };
 
-// Fixtures
 const mockUser: User = {
   id: URN.parse('urn:sm:user:me'),
   alias: 'Me',
@@ -151,5 +149,40 @@ describe('ChatService', () => {
 
     expect(mockKeyWorker.checkRecipientKeys).toHaveBeenCalledWith(contactUrn);
     expect(service.isRecipientKeyMissing()).toBe(true);
+  });
+
+  // --- NEW LOGOUT TESTS ---
+
+  it('sessionLogout should disconnect socket and reset memory but NOT wipe DB', async () => {
+    await initializeService();
+
+    // Set some state
+    service.messages.set([{ id: 'msg-1' } as any]);
+
+    await service.sessionLogout();
+
+    expect(mockLiveService.disconnect).toHaveBeenCalled();
+    expect(mockAuthService.logout).toHaveBeenCalled();
+
+    // Verify Memory Reset
+    expect(service.messages()).toEqual([]);
+
+    // Verify DB Persistence (calls should NOT happen)
+    expect(mockStorageService.clearDatabase).not.toHaveBeenCalled();
+    expect(mockContactsService.clearDatabase).not.toHaveBeenCalled();
+  });
+
+  it('fullDeviceWipe should disconnect socket AND wipe DB', async () => {
+    await initializeService();
+
+    await service.fullDeviceWipe();
+
+    expect(mockLiveService.disconnect).toHaveBeenCalled();
+    expect(mockAuthService.logout).toHaveBeenCalled();
+
+    // Verify Wiping
+    expect(mockStorageService.clearDatabase).toHaveBeenCalled();
+    expect(mockContactsService.clearDatabase).toHaveBeenCalled();
+    expect(mockCryptoService.clearKeys).toHaveBeenCalled();
   });
 });

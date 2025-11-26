@@ -8,7 +8,7 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir:
-    '../../../node_modules/.vite/libs/messenger/messenger-crypto-access',
+    '../../../node_modules/.vite/libs/messenger/messenger-crypto-bridge',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -16,7 +16,7 @@ export default defineConfig({
     nxViteTsPaths(),
   ],
   test: {
-    name: 'messenger-crypto-access',
+    name: 'messenger-crypto-bridge',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -26,12 +26,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/messenger/messenger-crypto-access/index.html'
+        '../../../dist/test-reports/libs/messenger/messenger-crypto-bridge/index.html'
       ),
     },
     coverage: {
       reportsDirectory:
-        '../../../coverage/libs/messenger/messenger-crypto-access',
+        '../../../coverage/libs/messenger/messenger-crypto-bridge',
       provider: 'v8' as const,
     },
   },

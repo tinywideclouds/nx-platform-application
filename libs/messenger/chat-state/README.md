@@ -1,59 +1,49 @@
-# 🧠 libs/messenger/chat-state
+# 🧠 @nx-platform-application/chat-state
 
-This library acts as the central **Orchestrator** and state container for the messenger feature.
+This library is the **Central Nervous System** of the Messenger application. It coordinates network IO, local storage, cryptography, and identity management to provide a seamless, secure messaging experience.
 
-## 🏗 Architecture: Facade & Workers
+## 🏛️ Architecture: The Orchestrator
 
-To maintain scalability and testability, `ChatService` avoids being a "God Class" by adopting a **Facade Pattern**. It holds the state and coordinates concurrency, but delegates complex domain logic to specialized **Worker Services**.
+The `ChatService` acts as a **State Orchestrator**. It does not contain business logic itself; instead, it delegates complex tasks to specialized **Worker Services** while maintaining the application's reactive state (Signals).
 
-### 1. `ChatService` (The Orchestrator)
-* **Responsibility:** Holds the application state (Signals), manages the WebSocket connection, and coordinates the workers.
-* **State:** `activeConversations`, `messages`, `selectedConversation`, `isRecipientKeyMissing`.
-* **Concurrency:** Uses a mutex (`runExclusive`) to serialize async operations (like loading history vs. receiving live messages) to prevent race conditions.
+### The Worker Ecosystem
 
-### 2. `ChatIngestionService` (The Intake Worker)
-* **Responsibility:** The "Pump" for incoming data. Fetches, decrypts, cleans, and saves incoming messages.
-* **Pipeline:**
-    1.  **Fetch:** Gets encrypted batch from `chat-data-access`.
-    2.  **Decrypt:** Uses `messenger-crypto-bridge` (Authenticated Encryption).
-    3.  **Gatekeeper:**
-        * **Blocks:** Drops messages from blocked identities.
-        * **Pending:** Adds unknown senders to the "Waiting Room".
-    4.  **Save:** Persists valid messages to `chat-storage`.
-    5.  **Ack:** Confirms receipt to the server.
+| Service                    | Role                 | Responsibility                                                                                                                           |
+| :------------------------- | :------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| **`ChatIngestionService`** | **Input Pipeline**   | Pulls messages, decrypts payload, resolves Identity Handles to Contacts, applies Gatekeeper rules (Block/Pending), and saves to storage. |
+| **`ChatOutboundService`**  | **Output Pipeline**  | Implements **True Optimistic UI**. Saves `pending` messages locally _before_ encryption/sending, then updates status to `sent`.          |
+| **`ChatKeyService`**       | **Key Manager**      | Manages the "Sealed Sender" keys. Handles identity resets and verifies recipient keys before sending.                                    |
+| **`ChatMessageMapper`**    | **View Transformer** | Converts storage models (decrypted bytes) into UI-ready models (text/images).                                                            |
 
-### 3. `ChatOutboundService` (The Sender Worker)
-* **Responsibility:** Manages the complex "Split Brain" of messaging.
-* **Logic:**
-    1.  **Resolve:** Converts a Contact URN to a specific Identity URN via `ChatKeyService`.
-    2.  **Encrypt:** Fetches keys (from cache) and encrypts for the *Identity*.
-    3.  **Send:** Pushes to the network.
-    4.  **Optimistic Save:** Saves the message locally against the *Contact* URN to maintain conversation threading.
+## 🔐 Identity Model: "The Split Brain"
 
-### 4. `ChatKeyService` (The Identity Manager)
-* **Responsibility:** Handles Identity Resolution and Key Management.
-* **Logic:**
-    * **Resolution:** Converts generic `urn:sm:user:...` contacts into actionable `urn:lookup:email:...` or `urn:auth:...` identities using the Handshake DB or Email Discovery.
-    * **Reset:** Handles the "Scorched Earth" key rotation workflow, ensuring the user's Handle is re-bound to their new keys.
+This library enforces a strict separation between **Network Identity** and **Local Identity** to allow transport agility without data loss.
 
-### 5. `ChatMessageMapper` (The Translator)
-* **Responsibility:** Pure transformation from Database Models (`DecryptedMessage`) to View Models (`ChatMessage`).
-* **Logic:** Handles text decoding (UTF-8) and ensures `payloadBytes` are preserved for Rich Content rendering.
+1.  **Network Identity (Handle):** Used for routing and encryption (e.g., `urn:lookup:email:bob@gmail.com`).
+2.  **Local Identity (Contact):** Used for storage and UI (e.g., `urn:sm:user:bob-uuid`).
 
----
+The `ContactMessengerMapper` automatically translates between these two worlds:
 
-## 🚀 Public API
+- **Sending:** `Contact` $\rightarrow$ `Handle` (via Identity Link or Email Discovery).
+- **Receiving:** `Handle` $\rightarrow$ `Contact` (via Reverse Lookup).
 
-### `ChatService` (Provided in Root)
+## 🔄 State Management
 
-#### Signals
-* **`messages`**: List of messages for the *active* conversation.
-* **`activeConversations`**: List of conversation summaries.
-* **`currentUserUrn`**: The authenticated user's URN.
-* **`isRecipientKeyMissing`**: Boolean guard indicating if the selected chat partner has no keys (disabling input).
+The service exposes **Read-Only Signals** for the UI:
 
-#### Actions
-* **`loadConversation(urn)`**: Selects a chat context.
-* **`sendMessage(recipientUrn, text)`**: Encrypts and sends a message.
-* **`fetchAndProcessMessages()`**: Manually triggers the ingestion pipeline.
-* **`resetIdentityKeys()`**: Generates new identity keys for the current user.
+- `activeConversations`: List of conversation summaries.
+- `messages`: The message history for the _selected_ conversation.
+- `isRecipientKeyMissing`: A guard signal that disables the "Send" button if encryption keys are unavailable.
+
+## 🔌 API & Usage
+
+### Cleanup & Logout
+
+The service supports two logout modes:
+
+1.  **`sessionLogout()`**: Disconnects the socket and clears memory state. Leaves local DB intact.
+2.  **`fullDeviceWipe()`**: Disconnects, clears memory, and **destroys** all local IndexedDB data and keys.
+
+### Initialization
+
+The service uses `takeUntilDestroyed` for automatic cleanup of internal subscriptions, but explicitly manages the WebSocket connection lifecycle via `DestroyRef`.

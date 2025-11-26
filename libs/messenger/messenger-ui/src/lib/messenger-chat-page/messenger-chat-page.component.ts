@@ -19,7 +19,11 @@ import {
 
 // SERVICES
 import { ChatService } from '@nx-platform-application/chat-state';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import {
+  ContactsStorageService,
+  Contact,
+  ContactGroup,
+} from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -44,72 +48,80 @@ export class MessengerChatPageComponent {
 
   // --- DATA SOURCES ---
   private allContacts = toSignal(this.contactsService.contacts$, {
-    initialValue: [],
+    initialValue: [] as Contact[],
   });
+
+  // Added: Needed to validate group chats
+  private allGroups = toSignal(this.contactsService.groups$, {
+    initialValue: [] as ContactGroup[],
+  });
+
   private activeConversations = this.chatService.activeConversations;
   private selectedConversationUrn = this.chatService.selectedConversation;
 
   /**
-   * Transforms raw conversation summaries into rich view models
-   * by joining with Contact data.
+   * Transforms raw summaries into view models.
+   * FILTERS OUT: Conversations where the Contact/Group is not known (Pending/Blocked).
    */
   conversationsList = computed<ConversationViewItem[]>(() => {
     const summaries = this.activeConversations();
     const contacts = this.allContacts();
+    const groups = this.allGroups();
     const activeUrn = this.selectedConversationUrn();
 
-    return summaries.map((summary) => {
-      let name = 'Unknown';
-      let initials = '?';
+    const validItems: ConversationViewItem[] = [];
+
+    for (const summary of summaries) {
+      const urn = summary.conversationUrn;
+      let name = '';
+      let initials = '';
       let profilePictureUrl: string | undefined;
 
-      if (summary.conversationUrn.entityType === 'user') {
-        const contact = contacts.find((c) =>
-          c.id.equals(summary.conversationUrn)
-        );
-        if (contact) {
-          name = contact.alias;
-          initials =
-            (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
-          profilePictureUrl =
-            contact.serviceContacts['messenger']?.profilePictureUrl;
-        }
-      } else {
-        name = 'Group';
+      // 1. User Logic
+      if (urn.entityType === 'user') {
+        const contact = contacts.find((c) => c.id.equals(urn));
+
+        // GATEKEEPER: If not in contacts, skip it.
+        if (!contact) continue;
+
+        name = contact.alias;
+        initials =
+          (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
+        profilePictureUrl =
+          contact.serviceContacts['messenger']?.profilePictureUrl;
+      }
+      // 2. Group Logic
+      else {
+        const group = groups.find((g) => g.id.toString() === urn.toString());
+
+        // GATEKEEPER: If group not found, skip it.
+        if (!group) continue;
+
+        name = group.name;
         initials = 'G';
       }
 
-      return {
-        id: summary.conversationUrn,
+      // 3. Construct View Item
+      validItems.push({
+        id: urn,
         name,
         latestMessage: summary.latestSnippet || 'No messages',
         timestamp: summary.timestamp,
-        initials: initials || name.slice(0, 2),
+        initials: initials || name.slice(0, 2).toUpperCase(),
         profilePictureUrl,
         unreadCount: summary.unreadCount,
-        isActive: activeUrn ? activeUrn.equals(summary.conversationUrn) : false,
-      };
-    });
+        isActive: activeUrn ? activeUrn.equals(urn) : false,
+      });
+    }
+
+    return validItems;
   });
 
   // --- ACTIONS ---
 
   onConversationSelected(id: URN) {
-    // Relative navigation: ./ID
-    // This allows the router to handle the structure (e.g. /messenger/conversations/123)
-    this.router.navigate([id.toString()], {
-      relativeTo: this.router.routerState.root.firstChild?.firstChild,
-      // Note: We'll refine the route relativity in the Routes definition phase if needed.
-      // For now, absolute path is safer until we lock down the route tree.
-    });
-
-    // Better Approach for now: Absolute path to ensure stability during refactor
     this.router.navigate(['/messenger', 'conversations', id.toString()]);
   }
 
-  /**
-   * Helper to determine if we are viewing a specific chat
-   * (Used to toggle visibility on mobile)
-   */
   showDetail = computed(() => !!this.selectedConversationUrn());
 }

@@ -8,7 +8,7 @@ import dts from 'vite-plugin-dts'; // 1. Import dts for type definitions
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-access',
+  cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-storage',
   plugins: [
     angular({
       tsconfig: 'tsconfig.lib.json',

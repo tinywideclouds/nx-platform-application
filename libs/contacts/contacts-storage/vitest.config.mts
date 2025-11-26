@@ -7,7 +7,7 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-access',
+  cacheDir: '../../../node_modules/.vite/libs/contacts/contacts-storage',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -25,11 +25,11 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/contacts/contacts-access/index.html'
+        '../../../dist/test-reports/libs/contacts/contacts-storage/index.html'
       ),
     },
     coverage: {
-      reportsDirectory: '../../../coverage/libs/contacts/contacts-access',
+      reportsDirectory: '../../../coverage/libs/contacts/contacts-storage',
       provider: 'v8' as const,
     },
   },

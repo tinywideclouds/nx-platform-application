@@ -1,11 +1,11 @@
-// libs/messenger/chat-storage/src/lib/chat-storage.service.ts
-
 import { Injectable, inject } from '@angular/core';
-import { ISODateTimeString, URN } from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
+import { Logger } from '@nx-platform-application/console-logger';
+import { Dexie } from 'dexie';
 import {
   DecryptedMessage,
   ConversationSummary,
-  MessageRecord
+  MessageRecord,
 } from './chat-storage.models';
 import { MessengerDatabase } from './db/messenger.database';
 
@@ -14,13 +14,8 @@ import { MessengerDatabase } from './db/messenger.database';
 })
 export class ChatStorageService {
   private readonly db = inject(MessengerDatabase);
+  private readonly logger = inject(Logger);
 
-  // Key methods REMOVED
-
-  /**
-   * Wipes all message history.
-   * Used on Logout.
-   */
   async clearDatabase(): Promise<void> {
     await this.db.messages.clear();
   }
@@ -33,21 +28,32 @@ export class ChatStorageService {
       typeId: message.typeId.toString(),
       conversationUrn: message.conversationUrn.toString(),
     };
+
+    this.logger.debug(
+      `[Storage] Saving msg under Convo: ${record.conversationUrn}`
+    );
     await this.db.messages.put(record);
   }
 
   async loadHistory(conversationUrn: URN): Promise<DecryptedMessage[]> {
+    const urnString = conversationUrn.toString();
+    this.logger.debug(`[Storage] Loading history for: ${urnString}`);
+
+    // FIX: Use the compound index [conversationUrn+sentTimestamp] explicitly.
+    // This guarantees we use the index and get sorted results.
     const records = await this.db.messages
-      .where('conversationUrn')
-      .equals(conversationUrn.toString())
-      .sortBy('sentTimestamp');
+      .where('[conversationUrn+sentTimestamp]')
+      .between([urnString, Dexie.minKey], [urnString, Dexie.maxKey])
+      .toArray();
+
+    this.logger.debug(`[Storage] Found ${records.length} messages.`);
 
     return records.map(this.mapRecordToSmart);
   }
 
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     const newestMessages = new Map<string, MessageRecord>();
-    
+
     await this.db.messages
       .orderBy('sentTimestamp')
       .reverse()
@@ -62,10 +68,8 @@ export class ChatStorageService {
       summaries.push({
         conversationUrn: URN.parse(record.conversationUrn),
         timestamp: record.sentTimestamp,
-        // TODO: Use the MessageContentParser service here eventually for "Smart Snippets"
-        // For now, naive text decoding is a safe fallback
         latestSnippet: this.decodeSnippet(record.payloadBytes),
-        unreadCount: 0, 
+        unreadCount: 0,
       });
     }
     return summaries;

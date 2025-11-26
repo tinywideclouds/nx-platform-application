@@ -3,14 +3,16 @@
 import {
   Component,
   ChangeDetectionStrategy,
-  inject,
   ElementRef,
   ViewChild,
   AfterViewChecked,
+  inject,
+  effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormControl } from '@angular/forms';
 import { ChatService } from '@nx-platform-application/chat-state';
+import { Logger } from '@nx-platform-application/console-logger';
 
 @Component({
   selector: 'messenger-chat-conversation',
@@ -22,6 +24,7 @@ import { ChatService } from '@nx-platform-application/chat-state';
 })
 export class ChatConversationComponent implements AfterViewChecked {
   private chatService = inject(ChatService);
+  private logger = inject(Logger);
 
   @ViewChild('messageContainer')
   private messageContainer!: ElementRef;
@@ -47,6 +50,22 @@ export class ChatConversationComponent implements AfterViewChecked {
     } catch (err) {
       // Ignore init errors
     }
+  }
+
+  constructor() {
+    // DEBUG: Log whenever the signals update
+    effect(() => {
+      const msgs = this.messages();
+      const user = this.currentUserUrn();
+      const selected = this.selectedConversation();
+
+      this.logger.debug('[ChatConversation] View State Update:', {
+        conversationUrn: selected?.toString(),
+        currentUser: user?.toString(),
+        messageCount: msgs.length,
+        firstMessage: msgs[0],
+      });
+    });
   }
 
   onSendMessage(): void {

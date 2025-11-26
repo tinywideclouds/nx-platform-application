@@ -37,15 +37,15 @@ export default defineConfig(() => ({
         '@angular/core',
         '@angular/common',
         '@angular/router', // UI lib uses RouterLink
-        '@angular/forms',  // If you use forms later
+        '@angular/forms', // If you use forms later
         'rxjs',
         'rxjs/operators',
 
         // 2. Internal Dependencies
-        // CRITICAL: Do not bundle the data access layer. 
+        // CRITICAL: Do not bundle the data access layer.
         // Let the App provide the singleton instance.
-        '@nx-platform-application/contacts-access',
-        
+        '@nx-platform-application/contacts-storage',
+
         // 3. Shared Types (if used directly in components)
         '@nx-platform-application/platform-types',
       ],

@@ -17,7 +17,7 @@ export class ContactsDatabase extends PlatformDexieService {
 
   // Gatekeeper Tables
   blocked_identities!: Table<StorableBlockedIdentity, number>;
-  pending_identities!: Table<StorablePendingIdentity, number>; // The Waiting Room
+  pending_identities!: Table<StorablePendingIdentity, number>;
 
   constructor() {
     super('contacts');
@@ -41,10 +41,17 @@ export class ContactsDatabase extends PlatformDexieService {
     });
 
     // v4: Gatekeeper
-    // blocked_identities: Deny list
-    // pending_identities: The "Waiting Room" for Unknowns + Vouched
     this.version(4).stores({
       contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
+      contactGroups: 'id, name, *contactIds',
+      identity_links: '++id, contactId, authUrn',
+      blocked_identities: '++id, urn, blockedAt',
+      pending_identities: '++id, urn, vouchedBy, firstSeenAt',
+    });
+
+    // v5: Fix - Add 'email' index for primary email lookups
+    this.version(5).stores({
+      contacts: 'id, alias, email, isFavorite, *phoneNumbers, *emailAddresses',
       contactGroups: 'id, name, *contactIds',
       identity_links: '++id, contactId, authUrn',
       blocked_identities: '++id, urn, blockedAt',

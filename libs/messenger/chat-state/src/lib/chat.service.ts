@@ -3,15 +3,16 @@ import {
   Injectable,
   signal,
   inject,
-  OnDestroy,
   WritableSignal,
   computed,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
-import { Subject, filter, takeUntil, firstValueFrom, interval } from 'rxjs';
+import { filter, firstValueFrom, interval } from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
 
 // --- Services ---
@@ -21,7 +22,6 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
-import { ChatSendService } from '@nx-platform-application/chat-access';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
   ChatStorageService,
@@ -47,24 +47,22 @@ import {
 @Injectable({
   providedIn: 'root',
 })
-export class ChatService implements OnDestroy {
+export class ChatService {
   // --- Dependencies ---
   private readonly logger = inject(Logger);
   private readonly authService = inject(IAuthService);
   private readonly cryptoService = inject(MessengerCryptoService);
-  private readonly sendService = inject(ChatSendService);
   private readonly liveService = inject(ChatLiveDataService);
   private readonly storageService = inject(ChatStorageService);
   private readonly keyService = inject(KeyCacheService);
   private readonly contactsService = inject(ContactsStorageService);
+  private readonly destroyRef = inject(DestroyRef);
 
-  // WORKERS (The Refactored Logic Lives Here)
+  // WORKERS
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly outboundService = inject(ChatOutboundService);
   private readonly keyWorker = inject(ChatKeyService);
   private readonly mapper = inject(ChatMessageMapper);
-
-  private readonly destroy$ = new Subject<void>();
 
   // --- Internal State ---
   private myKeys = signal<PrivateKeys | null>(null);
@@ -73,17 +71,10 @@ export class ChatService implements OnDestroy {
   private operationLock = Promise.resolve();
 
   // --- Public State (Signals) ---
-  
-  // The list of active threads (keyed by Contact URN)
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
-    
-  // The messages for the CURRENTLY selected conversation
   public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
-
   public readonly selectedConversation = signal<URN | null>(null);
-  
-  // Guard: Can we send to this person? (Delegated to ChatKeyService)
   public readonly isRecipientKeyMissing = signal<boolean>(false);
 
   public readonly currentUserUrn = computed(() => {
@@ -94,6 +85,11 @@ export class ChatService implements OnDestroy {
   constructor() {
     this.logger.info('ChatService: Orchestrator initializing...');
     this.init();
+
+    // Ensure socket disconnects even if service is destroyed unexpectedly
+    this.destroyRef.onDestroy(() => {
+      this.liveService.disconnect();
+    });
   }
 
   private async init(): Promise<void> {
@@ -104,6 +100,7 @@ export class ChatService implements OnDestroy {
       if (!currentUser) throw new Error('Authentication failed.');
 
       const authToken = this.authService.getJwtToken();
+      if (!authToken) throw new Error('No valid session token.');
 
       // Load Gatekeeper Rules
       await Promise.all([this.refreshIdentityMap(), this.refreshBlockedSet()]);
@@ -118,9 +115,6 @@ export class ChatService implements OnDestroy {
         let keys = await this.cryptoService.loadMyKeys(senderUrn);
 
         if (!keys) {
-          // Check if keys exist on server (New Device scenario)
-          // Note: Ideally we resolve the Handle first, but for 'self' checks, 
-          // Auth URN is often acceptable/stored.
           const existsOnServer = await this.keyService.hasKeys(senderUrn);
 
           if (existsOnServer) {
@@ -130,7 +124,6 @@ export class ChatService implements OnDestroy {
           } else {
             this.logger.info('New user detected. Generating keys...');
             try {
-              // Delegate generation/binding to the KeyWorker
               keys = await this.keyWorker.resetIdentityKeys(
                 senderUrn,
                 currentUser.email
@@ -145,7 +138,7 @@ export class ChatService implements OnDestroy {
       }
 
       // Live Data Connection
-      this.liveService.connect(authToken!);
+      this.liveService.connect(authToken);
       this.handleConnectionStatus();
       this.initLiveSubscriptions();
     } catch (error) {
@@ -153,9 +146,6 @@ export class ChatService implements OnDestroy {
     }
   }
 
-  /**
-   * Resets keys via the ChatKeyService and updates local state.
-   */
   public async resetIdentityKeys(): Promise<void> {
     const userUrn = this.currentUserUrn();
     const currentUser = this.authService.currentUser();
@@ -163,17 +153,12 @@ export class ChatService implements OnDestroy {
     if (!userUrn || !currentUser) return;
 
     this.myKeys.set(null);
-
-    // Delegate to Worker (It throws on error, allowing UI to handle it)
     const newKeys = await this.keyWorker.resetIdentityKeys(
       userUrn,
       currentUser.email
     );
-
     this.myKeys.set(newKeys);
   }
-
-  // --- Orchestration Logic ---
 
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
@@ -185,8 +170,6 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // Ingestion Worker handles Decryption -> Mapper -> Storage
-      // It returns messages mapped to VIEW models
       const newMessages = await this.ingestionService.process(
         myKeys,
         myUrn,
@@ -227,8 +210,6 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // Outbound Worker handles Mapper (Contact->Handle) -> Encrypt -> Send -> Save (Contact)
-      // It returns the Optimistic Message mapped to the Contact Thread
       const optimisticMsg = await this.outboundService.send(
         myKeys,
         myUrn,
@@ -238,13 +219,10 @@ export class ChatService implements OnDestroy {
       );
 
       if (optimisticMsg) {
-        // Immediate UI Update
         this.upsertMessages([this.mapper.toView(optimisticMsg)]);
       }
     });
   }
-
-  // --- Helpers ---
 
   public async loadConversation(urn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
@@ -258,18 +236,13 @@ export class ChatService implements OnDestroy {
         return;
       }
 
-      // 1. Check Key Availability (Delegated to Worker + Mapper)
-      // This checks if the HANDLE associated with this contact has keys.
       const hasKeys = await this.keyWorker.checkRecipientKeys(urn);
       this.isRecipientKeyMissing.set(!hasKeys);
 
-      // 2. Load History
-      // Storage is indexed by Contact URN, so this matches the View.
       const history = await this.storageService.loadHistory(urn);
       const viewMessages = history.map((msg) => this.mapper.toView(msg));
       this.messages.set(viewMessages);
 
-      // 3. Optimistic Conversation List Update
       const urnString = urn.toString();
       const exists = this.activeConversations().some(
         (c) => c.conversationUrn.toString() === urnString
@@ -291,9 +264,6 @@ export class ChatService implements OnDestroy {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
-    // Filter ensures we only show messages for the Active Contact
-    // Since Outbound/Ingestion now guarantee storage under Contact URN,
-    // this filter works correctly.
     const relevant = messages.filter(
       (msg) => msg.conversationUrn.toString() === activeConvo.toString()
     );
@@ -304,8 +274,6 @@ export class ChatService implements OnDestroy {
 
   private async refreshIdentityMap(): Promise<void> {
     try {
-      // Note: Identity Links are now mostly handled inside the Mapper,
-      // but we keep this state if we need quick synchronous lookups later.
       const links = await this.contactsService.getAllIdentityLinks();
       const newMap = new Map<string, URN>();
       links.forEach((link) => {
@@ -331,18 +299,18 @@ export class ChatService implements OnDestroy {
     this.liveService.status$
       .pipe(
         filter((s) => s === 'connected'),
-        takeUntil(this.destroy$)
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(() => this.fetchAndProcessMessages());
 
     interval(15_000)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.fetchAndProcessMessages());
   }
 
   private initLiveSubscriptions(): void {
     this.liveService.incomingMessage$
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.fetchAndProcessMessages());
   }
 
@@ -360,11 +328,31 @@ export class ChatService implements OnDestroy {
     }
   }
 
-  public async logout(): Promise<void> {
-    this.logger.info('ChatService: Logging out and wiping local data...');
+  /**
+   * Type 1 Logout: Session Logout
+   * - Disconnects Socket.
+   * - Clears memory state.
+   * - Tells Auth Service to logout.
+   * - KEEPS: Local DB, Keys, Contacts.
+   */
+  public async sessionLogout(): Promise<void> {
+    this.logger.info('ChatService: Performing Session Logout...');
 
     this.liveService.disconnect();
-    this.destroy$.next();
+    this.resetMemoryState();
+
+    await this.authService.logout();
+  }
+
+  /**
+   * Type 2 Logout: Full Device Wipe (Scorched Earth)
+   * - Performs Session Logout.
+   * - WIPES: Local DB, Keys, Contacts.
+   */
+  public async fullDeviceWipe(): Promise<void> {
+    this.logger.warn('ChatService: Performing Full Device Wipe...');
+
+    this.liveService.disconnect();
 
     try {
       await Promise.all([
@@ -374,9 +362,22 @@ export class ChatService implements OnDestroy {
         this.cryptoService.clearKeys(),
       ]);
     } catch (e) {
-      this.logger.error('Logout cleanup failed', e);
+      this.logger.error('Device wipe failed', e);
     }
 
+    this.resetMemoryState();
+    await this.authService.logout();
+  }
+
+  /**
+   * Legacy alias for backward compatibility during refactor.
+   * Defaults to full wipe for safety.
+   */
+  public async logout(): Promise<void> {
+    return this.fullDeviceWipe();
+  }
+
+  private resetMemoryState(): void {
     this.myKeys.set(null);
     this.identityLinkMap.set(new Map());
     this.blockedSet.set(new Set());
@@ -385,13 +386,5 @@ export class ChatService implements OnDestroy {
     this.messages.set([]);
     this.selectedConversation.set(null);
     this.isRecipientKeyMissing.set(false);
-
-    this.authService.logout();
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-    this.liveService.disconnect();
   }
 }

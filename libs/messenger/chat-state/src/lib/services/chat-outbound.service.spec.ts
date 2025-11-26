@@ -12,39 +12,42 @@ import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ContactMessengerMapper } from './contact-messenger.mapper';
 
-// Mocks
-const mockSendService = { sendMessage: vi.fn().mockReturnValue(of(undefined)) };
-const mockCryptoService = { encryptAndSign: vi.fn() };
-const mockStorageService = { saveMessage: vi.fn() };
-const mockKeyCache = { getPublicKey: vi.fn() };
-const mockLogger = { error: vi.fn() };
-
-// Mock Mapper
-const mockMapper = {
-  resolveToHandle: vi.fn(),
-  getStorageUrn: vi.fn(),
-};
-
 describe('ChatOutboundService', () => {
   let service: ChatOutboundService;
 
+  // --- Mocks ---
+  const mockSendService = {
+    sendMessage: vi.fn().mockReturnValue(of(undefined)),
+  };
+  const mockCryptoService = {
+    encryptAndSign: vi
+      .fn()
+      .mockResolvedValue({ signature: new Uint8Array([9]) }),
+  };
+  const mockStorageService = {
+    saveMessage: vi.fn().mockResolvedValue(undefined),
+  };
+  const mockKeyCache = {
+    getPublicKey: vi.fn().mockResolvedValue({}),
+  };
+  const mockMapper = {
+    resolveToHandle: vi.fn(),
+    getStorageUrn: vi.fn(),
+  };
+  const mockLogger = { error: vi.fn() };
+
+  // --- Fixtures ---
   const myUrn = URN.parse('urn:auth:user:me');
   const contactUrn = URN.parse('urn:sm:user:bob');
   const handleUrn = URN.parse('urn:lookup:email:bob@test.com');
-
   const typeId = URN.parse('urn:sm:type:text');
   const payloadBytes = new Uint8Array([1, 2, 3]);
-  const mockEnvelope = { signature: new Uint8Array([9]) };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default Behaviors
-    mockMapper.resolveToHandle.mockResolvedValue(handleUrn); // UI -> Network
-    mockMapper.getStorageUrn.mockResolvedValue(contactUrn); // UI <- Storage
-    
-    mockKeyCache.getPublicKey.mockResolvedValue({});
-    mockCryptoService.encryptAndSign.mockResolvedValue(mockEnvelope);
+    mockMapper.resolveToHandle.mockResolvedValue(handleUrn);
+    mockMapper.getStorageUrn.mockResolvedValue(contactUrn);
 
     TestBed.configureTestingModule({
       providers: [
@@ -60,41 +63,41 @@ describe('ChatOutboundService', () => {
     service = TestBed.inject(ChatOutboundService);
   });
 
-  it('should resolve handle for encryption but use contact for storage', async () => {
-    const result = await service.send(
-      {} as any,
-      myUrn,
-      contactUrn,
-      typeId,
-      payloadBytes
-    );
+  it('should save OPTIMISTICALLY (pending) -> Send -> Save (sent)', async () => {
+    await service.send({} as any, myUrn, contactUrn, typeId, payloadBytes);
 
-    // 1. Verify Resolution
-    expect(mockMapper.resolveToHandle).toHaveBeenCalledWith(contactUrn);
+    // 1. Verify Sequence
+    // Expect 2 saves (Pending, then Sent)
+    expect(mockStorageService.saveMessage).toHaveBeenCalledTimes(2);
 
-    // 2. Verify Encryption uses Routing URN (Handle)
-    expect(mockKeyCache.getPublicKey).toHaveBeenCalledWith(handleUrn);
-    expect(mockCryptoService.encryptAndSign).toHaveBeenCalledWith(
-      expect.anything(),
-      handleUrn, 
-      expect.anything(),
-      expect.anything()
-    );
-
-    // 3. Verify Storage uses Storage URN (Contact)
-    // This ensures the message appears in the current UI thread
-    expect(mockMapper.getStorageUrn).toHaveBeenCalledWith(contactUrn);
-    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+    // 2. Verify First Save (Pending)
+    const firstCall = mockStorageService.saveMessage.mock.calls[0][0];
+    expect(firstCall).toEqual(
       expect.objectContaining({
-        conversationUrn: contactUrn,
+        status: 'pending',
+        conversationUrn: contactUrn, // Using resolved storage URN
       })
     );
 
-    expect(result).toBeTruthy();
+    // 3. Verify Network Call happened
+    expect(mockSendService.sendMessage).toHaveBeenCalled();
+
+    // 4. Verify Second Save (Sent)
+    const secondCall = mockStorageService.saveMessage.mock.calls[1][0];
+    expect(secondCall).toEqual(
+      expect.objectContaining({
+        messageId: firstCall.messageId, // Must be same ID
+        status: 'sent',
+      })
+    );
   });
 
-  it('should fail gracefully if mapper throws', async () => {
-    mockMapper.resolveToHandle.mockRejectedValue(new Error('Resolution Failed'));
+  it('should leave message as PENDING if network fails', async () => {
+    mockSendService.sendMessage.mockReturnValue(
+      of(null).pipe(() => {
+        throw new Error('Network Error');
+      })
+    );
 
     const result = await service.send(
       {} as any,
@@ -104,8 +107,14 @@ describe('ChatOutboundService', () => {
       payloadBytes
     );
 
+    // Should have saved ONCE (Pending)
+    expect(mockStorageService.saveMessage).toHaveBeenCalledTimes(1);
+    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'pending' })
+    );
+
+    // Should catch error and return null
     expect(result).toBeNull();
     expect(mockLogger.error).toHaveBeenCalled();
-    expect(mockSendService.sendMessage).not.toHaveBeenCalled();
   });
 });

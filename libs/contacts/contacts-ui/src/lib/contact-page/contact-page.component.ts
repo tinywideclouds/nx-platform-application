@@ -16,11 +16,11 @@ import { MatIconModule } from '@angular/material/icon';
   selector: 'contacts-page',
   standalone: true,
   imports: [
-    CommonModule, 
+    CommonModule,
     ContactDetailComponent,
     ContactsPageToolbarComponent,
     MatButtonModule,
-    MatIconModule
+    MatIconModule,
   ],
   templateUrl: './contact-page.component.html',
   styleUrl: './contact-page.component.scss',
@@ -41,7 +41,10 @@ export class ContactPageComponent {
             return null;
           }
         }
-        return { urn: URN.create('user', crypto.randomUUID(), , 'contacts'), isNew: true };
+        return {
+          urn: URN.create('user', crypto.randomUUID(), 'contacts'),
+          isNew: true,
+        };
       })
     ),
     { initialValue: null }

@@ -10,7 +10,7 @@
       "executor": "@nx/vite:test",
       "outputs": [
         "{options.reportsDirectory}",
-        "{options.htmlReportsDirectory}",
+        "{options.htmlReportsDirectory}"
       ],
       "options": {
         "reportsDirectory": "coverage/apps/contacts/contacts-app",
@@ -56,10 +56,25 @@
         "development": {
           "optimization": false,
           "extractLicenses": false,
-          "sourceMap": true
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/contacts/contacts-app/src/app/environments/environment.ts",
+              "with": "apps/contacts/contacts-app/src/app/environments/environment.dev.ts"
+            }
+          ]
+        },
+        "mock": {
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/contacts/contacts-app/src/app/environments/environment.ts",
+              "with": "apps/contacts/contacts-app/src/app/environments/environment.mock.ts"
+            }
+          ]
         }
       },
-      "defaultConfiguration": "production"
+      "defaultConfiguration": "development"
     },
     "serve": {
       "continuous": true,

@@ -14,7 +14,7 @@ import {
 import { Message } from '../../lib/chat.model';
 
 // --- Smart Interface ---
-// This is the "smart" object our services will use. It overlaps the lib chat.model.ts 
+// This is the "smart" object our services will use. It overlaps the lib chat.model.ts
 export interface EncryptedMessagePayload extends Message {
   payloadBytes: Uint8Array;
 }
@@ -58,7 +58,7 @@ export function encryptedMessagePayloadFromProto(
  * Serializes a "smart" EncryptedMessagePayload object into a
  * compact Uint8Array (binary Protobuf).
  *
- * This is what messenger-crypto-access will encrypt.
+ * This is what messenger-crypto-bridge will encrypt.
  */
 export function serializePayloadToProtoBytes(
   payload: EncryptedMessagePayload
@@ -74,7 +74,7 @@ export function serializePayloadToProtoBytes(
  * Deserializes a Uint8Array (binary Protobuf) back into a
  * "smart" EncryptedMessagePayload object.
  *
- * This is what messenger-crypto-access will call after decrypting.
+ * This is what messenger-crypto-bridge will call after decrypting.
  */
 export function deserializeProtoBytesToPayload(
   bytes: Uint8Array

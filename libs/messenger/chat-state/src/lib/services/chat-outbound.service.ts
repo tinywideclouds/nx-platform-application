@@ -34,30 +34,57 @@ export class ChatOutboundService {
 
   /**
    * Encrypts, signs, sends, and locally saves a message.
-   * Returns the optimistic DecryptedMessage for UI updates.
+   * Uses Mapper for BOTH Recipient and Sender resolution.
    */
   async send(
     myKeys: PrivateKeys,
-    myUrn: URN, // My Auth URN
-    recipientUrn: URN, // Contact OR Auth URN
+    myUrn: URN,
+    recipientUrn: URN,
     typeId: URN,
     payloadBytes: Uint8Array
   ): Promise<DecryptedMessage | null> {
-    try {
-      // 1. Resolve Recipient to Handle (for Routing/Encryption)
-      // If recipientUrn is a Contact, this returns the Handle.
-      // If recipientUrn is a Handle, it returns it as-is.
-      const targetRoutingUrn = await this.mapper.resolveToHandle(recipientUrn);
+    let optimisticMsg: DecryptedMessage | null = null;
 
-      // 2. Construct Payload
+    try {
+      // 1. Resolve Identities via Mapper
+      const targetRoutingUrn = await this.mapper.resolveToHandle(recipientUrn);
+      const storageUrn = await this.mapper.getStorageUrn(recipientUrn);
+
+      // FIX: Ask Mapper how "I" should be represented on the network
+      const payloadSenderUrn = await this.mapper.resolveToHandle(myUrn);
+
+      this.logger.debug(
+        `[Outbound] Routing To: ${targetRoutingUrn.toString()}`
+      );
+      this.logger.debug(
+        `[Outbound] Sending As: ${payloadSenderUrn.toString()}`
+      );
+
+      // 2. Construct Payload (Network Identity)
+      const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
       const payload: EncryptedMessagePayload = {
-        senderId: myUrn,
-        sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+        senderId: payloadSenderUrn,
+        sentTimestamp: timestamp,
         typeId: typeId,
         payloadBytes: payloadBytes,
       };
 
-      // 3. Fetch Keys & Encrypt (using Routing URN)
+      // 3. Create Optimistic Message (Local Identity)
+      optimisticMsg = {
+        messageId: `local-${crypto.randomUUID()}`,
+        senderId: myUrn,
+        recipientId: recipientUrn,
+        sentTimestamp: payload.sentTimestamp,
+        typeId: payload.typeId,
+        payloadBytes: payload.payloadBytes,
+        status: 'pending',
+        conversationUrn: storageUrn,
+      };
+
+      // 4. SAVE IMMEDIATELY
+      await this.storageService.saveMessage(optimisticMsg);
+
+      // 5. Encrypt & Send
       const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
       const envelope = await this.cryptoService.encryptAndSign(
         payload,
@@ -66,31 +93,20 @@ export class ChatOutboundService {
         recipientKeys
       );
 
-      // 4. Network Send
       await firstValueFrom(this.sendService.sendMessage(envelope));
 
-      // 5. Optimistic Save
-      // Determine the Canonical Storage ID.
-      // If we are chatting with a Contact, this ensures the message saves to the Contact thread.
-      const storageUrn = await this.mapper.getStorageUrn(recipientUrn);
-
-      const optimisticMsg: DecryptedMessage = {
-        messageId: `local-${crypto.randomUUID()}`,
-        senderId: myUrn,
-        recipientId: recipientUrn, // Keep original input for reference
-        sentTimestamp: payload.sentTimestamp,
-        typeId: payload.typeId,
-        payloadBytes: payload.payloadBytes,
+      // 6. Update Status
+      const sentMsg: DecryptedMessage = {
+        ...optimisticMsg,
         status: 'sent',
-        conversationUrn: storageUrn, // <-- The Fix: Canonical ID via Mapper
       };
+      await this.storageService.saveMessage(sentMsg);
 
-      await this.storageService.saveMessage(optimisticMsg);
-
-      return optimisticMsg;
+      return sentMsg;
     } catch (error) {
-      this.logger.error('Outbound: Failed to send message', error);
+      this.logger.error('[Outbound] Failed to send message', error);
+      if (optimisticMsg) return optimisticMsg;
       return null;
     }
   }
-} 
+}

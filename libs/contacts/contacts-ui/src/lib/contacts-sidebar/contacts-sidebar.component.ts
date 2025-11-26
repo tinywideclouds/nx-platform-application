@@ -1,10 +1,12 @@
+// libs/contacts/contacts-ui/src/lib/components/contacts-sidebar/contacts-sidebar.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
   inject,
   input,
   output,
-  viewChild,
+  signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
@@ -15,6 +17,9 @@ import { MatTabsModule, MatTabChangeEvent } from '@angular/material/tabs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatListModule } from '@angular/material/list';
+import { MatExpansionModule } from '@angular/material/expansion';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 // DOMAIN
 import {
@@ -22,15 +27,20 @@ import {
   Contact,
   ContactGroup,
   PendingIdentity,
-  BlockedIdentity,
 } from '@nx-platform-application/contacts-storage';
+
+// CLOUD ACCESS
+import {
+  ContactsCloudService,
+  CloudBackupMetadata,
+} from '@nx-platform-application/contacts-cloud-access';
 
 // UI COMPONENTS
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { ContactListComponent } from '../contact-list/contact-list.component';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
 import { PendingListComponent } from '../pending-list/pending-list.component';
-import { BlockedListComponent } from '../blocked-list/blocked-list.component';
+// REMOVED: BlockedListComponent
 
 @Component({
   selector: 'contacts-sidebar',
@@ -42,11 +52,13 @@ import { BlockedListComponent } from '../blocked-list/blocked-list.component';
     MatButtonModule,
     MatIconModule,
     MatTooltipModule,
+    MatListModule,
+    MatExpansionModule,
+    MatProgressSpinnerModule,
     ContactsPageToolbarComponent,
     ContactListComponent,
     ContactGroupListComponent,
     PendingListComponent,
-    BlockedListComponent,
   ],
   templateUrl: './contacts-sidebar.component.html',
   styleUrl: './contacts-sidebar.component.scss',
@@ -54,39 +66,48 @@ import { BlockedListComponent } from '../blocked-list/blocked-list.component';
 })
 export class ContactsSidebarComponent {
   private contactsService = inject(ContactsStorageService);
+  private cloudService = inject(ContactsCloudService);
 
   // --- INPUTS ---
-
-  // Highlight the active row (if any)
   selectedId = input<string | undefined>(undefined);
-
-  // Which tab is active? (0: Contacts, 1: Groups, 2: Manage)
   tabIndex = input(0);
-
-  // Feature Flag: Show "New Contact/Group" buttons?
   showAddActions = input(true);
-
-  // FIX: Added missing Input to satisfy binding
-  // When true, this can be used to alter UI (e.g. hide Manage tab)
   selectionMode = input(false);
 
   // --- OUTPUTS ---
-
   contactSelected = output<Contact>();
   groupSelected = output<ContactGroup>();
   tabChange = output<MatTabChangeEvent>();
 
   // --- DATA ---
-
   contacts = toSignal(this.contactsService.contacts$);
   groups = toSignal(this.contactsService.groups$);
   pending = toSignal(this.contactsService.pending$, { initialValue: [] });
-  blocked = toSignal(this.contactsService.blocked$, { initialValue: [] });
+
+  // REMOVED: blocked$ signal
+
+  // --- CLOUD STATE ---
+  isBackingUp = signal(false);
+  isRestoring = signal(false);
+
+  // Simple signal for the list, refreshed manually for now
+  cloudBackups = signal<CloudBackupMetadata[]>([]);
+
+  constructor() {
+    // Initial load of backups
+    if (this.cloudService.hasPermission('google')) {
+      this.refreshBackups();
+    }
+  }
 
   // --- ACTIONS ---
 
   onTabChange(event: MatTabChangeEvent) {
     this.tabChange.emit(event);
+    // Refresh backups when hitting the 'Security' tab (index 2)
+    if (event.index === 2) {
+      this.refreshBackups();
+    }
   }
 
   async approveIdentity(pending: PendingIdentity) {
@@ -98,7 +119,42 @@ export class ContactsSidebarComponent {
     await this.contactsService.deletePending(pending.urn);
   }
 
-  async unblockIdentity(blocked: BlockedIdentity) {
-    await this.contactsService.unblockIdentity(blocked.urn);
+  // --- CLOUD ACTIONS ---
+
+  async refreshBackups() {
+    try {
+      // Default to 'google' for this temporary UI
+      const backups = await this.cloudService.listBackups('google');
+      this.cloudBackups.set(backups);
+    } catch (err) {
+      console.error('Failed to list backups', err);
+    }
+  }
+
+  async backupToCloud() {
+    if (this.isBackingUp()) return;
+    this.isBackingUp.set(true);
+    try {
+      await this.cloudService.backupToCloud('google');
+      await this.refreshBackups();
+    } catch (e) {
+      console.error('Backup failed', e);
+    } finally {
+      this.isBackingUp.set(false);
+    }
+  }
+
+  async restoreBackup(fileId: string) {
+    if (this.isRestoring()) return;
+    // Confirm? (Skip for prototype)
+    this.isRestoring.set(true);
+    try {
+      await this.cloudService.restoreFromCloud('google', fileId);
+      // Data signals (contacts$) update automatically via liveQuery
+    } catch (e) {
+      console.error('Restore failed', e);
+    } finally {
+      this.isRestoring.set(false);
+    }
   }
 }

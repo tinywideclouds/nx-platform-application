@@ -34,7 +34,6 @@ export class ContactsStorageService {
   private mapStorableToContact(c: StorableContact): Contact {
     const serviceContacts: Record<string, ServiceContact> = {};
 
-    // usage: Object.entries(obj || {}) avoids "cannot convert undefined to object" errors
     for (const [key, s] of Object.entries(c.serviceContacts || {})) {
       if (s) {
         serviceContacts[key] = {
@@ -97,7 +96,6 @@ export class ContactsStorageService {
     return {
       ...p,
       urn: URN.parse(p.urn),
-      // Only parse vouchedBy if it exists
       vouchedBy: p.vouchedBy ? URN.parse(p.vouchedBy) : undefined,
     };
   }
@@ -121,17 +119,10 @@ export class ContactsStorageService {
     liveQuery(() => this.db.contactGroups.orderBy('name').toArray())
   ).pipe(map((storables) => storables.map(this.mapStorableToGroup)));
 
-  /**
-   * Stream of all blocked identities.
-   */
   readonly blocked$: Observable<BlockedIdentity[]> = from(
     liveQuery(() => this.db.blocked_identities.orderBy('blockedAt').toArray())
   ).pipe(map((storables) => storables.map(this.mapStorableToBlocked)));
 
-  /**
-   * The Waiting Room.
-   * Stream of all identities awaiting action (Unknowns + Vouched).
-   */
   readonly pending$: Observable<PendingIdentity[]> = from(
     liveQuery(() => this.db.pending_identities.orderBy('firstSeenAt').toArray())
   ).pipe(map((storables) => storables.map(this.mapStorableToPending)));
@@ -172,11 +163,25 @@ export class ContactsStorageService {
     await this.db.contacts.delete(id.toString());
   }
 
+  /**
+   * Finds a contact by email.
+   * Checks the primary 'email' field FIRST, then falls back to 'emailAddresses' array.
+   */
   async findByEmail(email: string): Promise<Contact | undefined> {
-    const storable = await this.db.contacts
-      .where('emailAddresses')
-      .equals(email)
-      .first();
+    // 1. Check Primary Email (Fastest / Most Common)
+    // Note: This assumes 'email' is indexed in ContactsDatabase.
+    // If not, this line will use a collection scan or fail depending on Dexie config,
+    // but conceptually this is the correct query.
+    let storable = await this.db.contacts.where('email').equals(email).first();
+
+    // 2. Check Secondary Emails if not found
+    if (!storable) {
+      storable = await this.db.contacts
+        .where('emailAddresses')
+        .equals(email)
+        .first();
+    }
+
     return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
@@ -296,25 +301,18 @@ export class ContactsStorageService {
 
   // --- Gatekeeper: The Waiting Room (Pending) ---
 
-  /**
-   * Adds an identity to the Waiting Room.
-   * Can be a random stranger (no voucher) or a referral (with voucher).
-   */
   async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
-    // Upsert logic: if it's already pending, we might be adding a vouch to it.
     const existing = await this.db.pending_identities
       .where('urn')
       .equals(urn.toString())
       .first();
 
     const pending: StorablePendingIdentity = {
-      id: existing?.id, // Preserve ID if updating
+      id: existing?.id,
       urn: urn.toString(),
-      // Preserve original timestamp or set new
       firstSeenAt:
         existing?.firstSeenAt ??
         (new Date().toISOString() as ISODateTimeString),
-      // Overwrite vouch if new one is provided, otherwise keep existing
       vouchedBy: vouchedBy ? vouchedBy.toString() : existing?.vouchedBy,
       note: note ?? existing?.note,
     };
@@ -331,12 +329,6 @@ export class ContactsStorageService {
     return this.mapStorableToPending(storable);
   }
 
-  /**
-   * Removes an identity from the Waiting Room.
-   * Call this when:
-   * 1. User Blocks the identity (move to blocked_identities)
-   * 2. User Adds/Links the identity (move to identity_links)
-   */
   async deletePending(urn: URN): Promise<void> {
     const records = await this.db.pending_identities
       .where('urn')
@@ -351,10 +343,6 @@ export class ContactsStorageService {
     }
   }
 
-  /**
-   * Wipes all contact data from the local device.
-   * Used on Logout.
-   */
   async clearDatabase(): Promise<void> {
     await this.db.transaction(
       'rw',

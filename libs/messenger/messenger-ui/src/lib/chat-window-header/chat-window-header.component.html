@@ -1,5 +1,4 @@
 <header class="flex-shrink-0 flex items-center p-3 border-b bg-white z-10 h-16">
-  
   <button
     mat-icon-button
     (click)="back.emit()"
@@ -14,21 +13,22 @@
     class="relative flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gray-600 text-white"
   >
     @if (participant().profilePictureUrl) {
-      <img
-        [src]="participant().profilePictureUrl"
-        [alt]="participant().name"
-        class="h-full w-full object-cover"
-      />
+    <img
+      [src]="participant().profilePictureUrl"
+      [alt]="participant().name"
+      class="h-full w-full object-cover"
+    />
     } @else {
-      <span data-testid="initials" class="text-base font-medium">
-        {{ participant().initials }}
-      </span>
+    <span data-testid="initials" class="text-base font-medium">
+      {{ participant().initials }}
+    </span>
     }
   </div>
 
   <div class="ml-3 flex-grow min-w-0">
-    <div class="font-medium text-gray-900 truncate">{{ participant().name }}</div>
-    <div class="font-small text-gray-900 truncate">{{ participant().urn }}</div>
+    <div class="font-medium text-gray-900 truncate">
+      {{ participant().name }}
+    </div>
   </div>
 
   <button
@@ -37,7 +37,6 @@
     [color]="mode() === 'details' ? 'primary' : ''"
     aria-label="Contact Details"
     data-testid="info-button"
-    
     [matBadge]="hasKeyIssue() ? '!' : ''"
     matBadgeColor="warn"
     [matBadgeHidden]="!hasKeyIssue()"
