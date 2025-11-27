@@ -1,6 +1,9 @@
 // libs/messenger/chat-storage/src/lib/chat-storage.models.ts
 
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 
 // PublicKeyRecord REMOVED (Moved to key-storage)
 
@@ -27,7 +30,7 @@ export interface DecryptedMessage {
   senderId: URN;
   recipientId: URN;
   sentTimestamp: ISODateTimeString;
-  typeId: URN; 
+  typeId: URN;
   payloadBytes: Uint8Array;
   status: 'pending' | 'sent' | 'received';
   conversationUrn: URN;
@@ -41,4 +44,10 @@ export interface ConversationSummary {
   latestSnippet: string;
   timestamp: ISODateTimeString;
   unreadCount: number;
+}
+
+export interface ConversationMetadata {
+  conversationUrn: string;
+  genesisTimestamp: string | null; // Null = Unknown/Not reached. String = The absolute beginning.
+  lastSyncedAt: string;
 }

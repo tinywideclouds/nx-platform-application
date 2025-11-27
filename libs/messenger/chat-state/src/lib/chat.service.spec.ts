@@ -18,25 +18,29 @@ import { MessengerCryptoService } from '@nx-platform-application/messenger-crypt
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import {
-  ChatDataService,
-  ChatSendService,
-} from '@nx-platform-application/chat-access';
 
-// WORKERS
+// Workers & Services
 import { ChatIngestionService } from './services/chat-ingestion.service';
-import { ChatOutboundService } from './services/chat-outbound.service';
-import { ChatMessageMapper } from './services/chat-message.mapper';
 import { ChatKeyService } from './services/chat-key.service';
+import { ChatConversationService } from './services/chat-conversation.service';
+import { ContactSharePayload } from '@nx-platform-application/message-content';
 
 // --- Mocks ---
 const mockIngestionService = { process: vi.fn() };
-const mockOutboundService = { send: vi.fn() };
-const mockMapper = { toView: vi.fn() };
+const mockKeyWorker = { resetIdentityKeys: vi.fn() };
 
-const mockKeyWorker = {
-  checkRecipientKeys: vi.fn(),
-  resetIdentityKeys: vi.fn(),
+// Mock Child Service
+const mockConversationService = {
+  selectedConversation: signal(null),
+  messages: signal([]),
+  genesisReached: signal(false),
+  isLoadingHistory: signal(false),
+  isRecipientKeyMissing: signal(false),
+  loadConversation: vi.fn(),
+  loadMoreMessages: vi.fn(),
+  sendMessage: vi.fn(),
+  sendContactShare: vi.fn(),
+  upsertMessages: vi.fn(),
 };
 
 const mockContactsService = {
@@ -46,7 +50,6 @@ const mockContactsService = {
 };
 const mockStorageService = {
   loadConversationSummaries: vi.fn().mockResolvedValue([]),
-  loadHistory: vi.fn().mockResolvedValue([]),
   clearDatabase: vi.fn().mockResolvedValue(undefined),
 };
 const mockCryptoService = {
@@ -95,30 +98,27 @@ describe('ChatService', () => {
       user: mockUser,
       token: 'token',
     });
-    await vi.advanceTimersByTimeAsync(1);
+    // Wait for async init promises
+    await vi.waitFor(() => {
+      expect(mockLiveService.connect).toHaveBeenCalled();
+    });
   }
 
   beforeEach(async () => {
-    vi.useFakeTimers();
     vi.clearAllMocks();
 
     mockIngestionService.process.mockResolvedValue([]);
-    mockOutboundService.send.mockResolvedValue({ messageId: 'opt-1' });
-    mockKeyWorker.checkRecipientKeys.mockResolvedValue(true);
     mockKeyWorker.resetIdentityKeys.mockResolvedValue(mockPrivateKeys);
-
-    mockMapper.toView.mockReturnValue({
-      id: 'opt-1',
-      conversationUrn: URN.parse('urn:sm:user:bob'),
-    });
 
     await TestBed.configureTestingModule({
       providers: [
         ChatService,
         { provide: ChatIngestionService, useValue: mockIngestionService },
-        { provide: ChatOutboundService, useValue: mockOutboundService },
         { provide: ChatKeyService, useValue: mockKeyWorker },
-        { provide: ChatMessageMapper, useValue: mockMapper },
+        {
+          provide: ChatConversationService,
+          useValue: mockConversationService,
+        },
         { provide: IAuthService, useValue: mockAuthService },
         { provide: ChatStorageService, useValue: mockStorageService },
         { provide: ContactsStorageService, useValue: mockContactsService },
@@ -126,63 +126,97 @@ describe('ChatService', () => {
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: Logger, useValue: mockLogger },
         { provide: ChatLiveDataService, useValue: mockLiveService },
-        { provide: ChatDataService, useValue: {} },
-        { provide: ChatSendService, useValue: {} },
       ],
     });
 
     service = TestBed.inject(ChatService);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  it('should delegate loadConversation to ConversationService', async () => {
+    await initializeService();
+    const urn = URN.parse('urn:sm:user:bob');
+
+    await service.loadConversation(urn);
+
+    expect(mockConversationService.loadConversation).toHaveBeenCalledWith(urn);
   });
 
-  it('should delegate key checking when loading a conversation', async () => {
+  it('should delegate loadMoreMessages to ConversationService', async () => {
+    await initializeService();
+    await service.loadMoreMessages();
+    expect(mockConversationService.loadMoreMessages).toHaveBeenCalled();
+  });
+
+  it('should delegate sendMessage to ConversationService', async () => {
     mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
     await initializeService();
 
-    const contactUrn = URN.parse('urn:sm:user:bob');
-    mockKeyWorker.checkRecipientKeys.mockResolvedValue(false);
+    const recipient = URN.parse('urn:sm:user:alice');
+    const text = 'Hello';
 
-    await service.loadConversation(contactUrn);
+    await service.sendMessage(recipient, text);
 
-    expect(mockKeyWorker.checkRecipientKeys).toHaveBeenCalledWith(contactUrn);
-    expect(service.isRecipientKeyMissing()).toBe(true);
+    expect(mockConversationService.sendMessage).toHaveBeenCalledWith(
+      recipient,
+      text,
+      expect.anything(), // keys
+      expect.anything() // sender urn
+    );
   });
 
-  // --- NEW LOGOUT TESTS ---
-
-  it('sessionLogout should disconnect socket and reset memory but NOT wipe DB', async () => {
+  it('should delegate sendContactShare to ConversationService', async () => {
+    mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
     await initializeService();
 
-    // Set some state
-    service.messages.set([{ id: 'msg-1' } as any]);
+    const recipient = URN.parse('urn:sm:user:alice');
+    const payload: ContactSharePayload = {
+      urn: 'urn:sm:user:charlie',
+      alias: 'Charlie',
+    };
 
-    await service.sessionLogout();
+    await service.sendContactShare(recipient, payload);
 
-    expect(mockLiveService.disconnect).toHaveBeenCalled();
-    expect(mockAuthService.logout).toHaveBeenCalled();
-
-    // Verify Memory Reset
-    expect(service.messages()).toEqual([]);
-
-    // Verify DB Persistence (calls should NOT happen)
-    expect(mockStorageService.clearDatabase).not.toHaveBeenCalled();
-    expect(mockContactsService.clearDatabase).not.toHaveBeenCalled();
+    expect(mockConversationService.sendContactShare).toHaveBeenCalledWith(
+      recipient,
+      payload,
+      expect.anything(), // keys
+      expect.anything() // sender urn
+    );
   });
 
-  it('fullDeviceWipe should disconnect socket AND wipe DB', async () => {
+  it('fetchAndProcessMessages should ingest then upsert to child service', async () => {
+    mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
+    await initializeService();
+
+    const newMsgs = [{ id: 'msg-1' }];
+    mockIngestionService.process.mockResolvedValue(newMsgs);
+
+    await service.fetchAndProcessMessages();
+
+    // 1. Ingest
+    expect(mockIngestionService.process).toHaveBeenCalled();
+    // 2. Delegate Upsert
+    expect(mockConversationService.upsertMessages).toHaveBeenCalledWith(
+      newMsgs
+    );
+    // 3. Update Summary
+    expect(mockStorageService.loadConversationSummaries).toHaveBeenCalledTimes(
+      2
+    ); // Init + Update
+  });
+
+  it('fullDeviceWipe should wipe all stores and disconnect', async () => {
     await initializeService();
 
     await service.fullDeviceWipe();
 
     expect(mockLiveService.disconnect).toHaveBeenCalled();
     expect(mockAuthService.logout).toHaveBeenCalled();
-
-    // Verify Wiping
     expect(mockStorageService.clearDatabase).toHaveBeenCalled();
     expect(mockContactsService.clearDatabase).toHaveBeenCalled();
     expect(mockCryptoService.clearKeys).toHaveBeenCalled();
+
+    // Should reset child state via loading null
+    expect(mockConversationService.loadConversation).toHaveBeenCalledWith(null);
   });
 });

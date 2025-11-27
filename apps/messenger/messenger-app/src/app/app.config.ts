@@ -47,6 +47,14 @@ import {
 } from '@nx-platform-application/console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
+import {
+  CONTACTS_CLOUD_CONFIG,
+  MockCloudProvider,
+} from '@nx-platform-application/contacts-cloud-access';
+import {
+  CLOUD_PROVIDERS,
+  GoogleDriveService,
+} from '@nx-platform-application/platform-cloud-access';
 
 // ---
 // 2. The app-specific user definitions are GONE from this file.
@@ -97,6 +105,11 @@ const devProviders = environment.useMocks
       },
     ];
 
+// Choose Cloud Provider based on environment
+const cloudProviders = environment.useMocks
+  ? [{ provide: CLOUD_PROVIDERS, useClass: MockCloudProvider, multi: true }]
+  : [{ provide: CLOUD_PROVIDERS, useClass: GoogleDriveService, multi: true }];
+
 // Factory for the APP_INITIALIZER (unchanged)
 export function initializeAuthFactory(
   authService: IAuthService
@@ -121,14 +134,19 @@ export const appConfig: ApplicationConfig = {
     contactsProvider,
     ...devProviders,
     mockUserProvider, // <-- Provider remains
-
+    ...cloudProviders,
     {
       provide: LOGGER_CONFIG,
       useValue: {
         level: isDevMode() ? LogLevel.DEBUG : LogLevel.WARN,
       },
     },
-
+    {
+      provide: CONTACTS_CLOUD_CONFIG,
+      useValue: {
+        googleClientId: environment.googleClientId,
+      },
+    },
     {
       provide: APP_INITIALIZER,
       useFactory: initializeAuthFactory,

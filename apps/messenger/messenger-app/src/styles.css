@@ -4,5 +4,21 @@
 @tailwind utilities;
 
 /* ... rest of your global styles ... */
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+}
+
+@layer components {
+  /* * NAMING CONVENTION: 
+   * Use a semantic name (e.g., .layout-header) rather than 
+   * describing the style (e.g., .white-border-header).
+   */
+  .layout-header {
+    @apply flex-shrink-0 flex items-center p-3 border-b bg-white z-10 h-14;
+  }
+}

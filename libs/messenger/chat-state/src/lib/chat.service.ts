@@ -30,19 +30,16 @@ import {
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
+// --- Child Service (Active Chat State) ---
+import { ChatConversationService } from './services/chat-conversation.service';
+
 // WORKERS & HELPERS
 import { ChatIngestionService } from './services/chat-ingestion.service';
-import { ChatMessageMapper } from './services/chat-message.mapper';
-import { ChatOutboundService } from './services/chat-outbound.service';
 import { ChatKeyService } from './services/chat-key.service';
 
 // Types
 import { ChatMessage } from '@nx-platform-application/messenger-types';
-import {
-  ContactSharePayload,
-  MESSAGE_TYPE_CONTACT_SHARE,
-  MESSAGE_TYPE_TEXT,
-} from '@nx-platform-application/message-content';
+import { ContactSharePayload } from '@nx-platform-application/message-content';
 
 @Injectable({
   providedIn: 'root',
@@ -58,24 +55,31 @@ export class ChatService {
   private readonly contactsService = inject(ContactsStorageService);
   private readonly destroyRef = inject(DestroyRef);
 
+  // --- Child Service (Active Chat State) ---
+  private readonly conversationService = inject(ChatConversationService);
+
   // WORKERS
   private readonly ingestionService = inject(ChatIngestionService);
-  private readonly outboundService = inject(ChatOutboundService);
   private readonly keyWorker = inject(ChatKeyService);
-  private readonly mapper = inject(ChatMessageMapper);
 
-  // --- Internal State ---
+  // --- Internal State (Global) ---
   private myKeys = signal<PrivateKeys | null>(null);
   private identityLinkMap = signal(new Map<string, URN>());
   private blockedSet = signal(new Set<string>());
   private operationLock = Promise.resolve();
 
-  // --- Public State (Signals) ---
+  // --- Public State (App Level) ---
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
-  public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
-  public readonly selectedConversation = signal<URN | null>(null);
-  public readonly isRecipientKeyMissing = signal<boolean>(false);
+
+  // --- Delegated State (Active Chat Level) ---
+  public readonly messages = this.conversationService.messages;
+  public readonly selectedConversation =
+    this.conversationService.selectedConversation;
+  public readonly genesisReached = this.conversationService.genesisReached;
+  public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
+  public readonly isRecipientKeyMissing =
+    this.conversationService.isRecipientKeyMissing;
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -86,7 +90,6 @@ export class ChatService {
     this.logger.info('ChatService: Orchestrator initializing...');
     this.init();
 
-    // Ensure socket disconnects even if service is destroyed unexpectedly
     this.destroyRef.onDestroy(() => {
       this.liveService.disconnect();
     });
@@ -102,14 +105,11 @@ export class ChatService {
       const authToken = this.authService.getJwtToken();
       if (!authToken) throw new Error('No valid session token.');
 
-      // Load Gatekeeper Rules
       await Promise.all([this.refreshIdentityMap(), this.refreshBlockedSet()]);
 
-      // Load Conversations
       const summaries = await this.storageService.loadConversationSummaries();
       this.activeConversations.set(summaries);
 
-      // Identity & Keys
       const senderUrn = this.currentUserUrn();
       if (senderUrn) {
         let keys = await this.cryptoService.loadMyKeys(senderUrn);
@@ -137,7 +137,6 @@ export class ChatService {
         if (keys) this.myKeys.set(keys);
       }
 
-      // Live Data Connection
       this.liveService.connect(authToken);
       this.handleConnectionStatus();
       this.initLiveSubscriptions();
@@ -160,6 +159,8 @@ export class ChatService {
     this.myKeys.set(newKeys);
   }
 
+  // --- Ingestion Pipeline ---
+
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
       const myKeys = this.myKeys();
@@ -176,100 +177,73 @@ export class ChatService {
         this.blockedSet()
       );
 
-      this.upsertMessages(newMessages);
+      // 1. Delegate Updates to Active View
+      this.conversationService.upsertMessages(newMessages);
+
+      // 2. Update Inbox List if needed
+      if (newMessages.length > 0) {
+        this.refreshActiveConversations();
+      }
     });
   }
 
-  public async sendMessage(recipientUrn: URN, text: string): Promise<void> {
-    const bytes = new TextEncoder().encode(text);
-    const typeId = URN.parse(MESSAGE_TYPE_TEXT);
-    await this.sendGeneric(recipientUrn, typeId, bytes);
+  // --- Delegated Actions ---
+
+  public loadConversation(urn: URN | null): Promise<void> {
+    return this.conversationService.loadConversation(urn);
   }
 
+  public loadMoreMessages(): Promise<void> {
+    return this.conversationService.loadMoreMessages();
+  }
+
+  public async sendMessage(recipientUrn: URN, text: string): Promise<void> {
+    const keys = this.myKeys();
+    const sender = this.currentUserUrn();
+
+    if (!keys || !sender) {
+      this.logger.error('Cannot send: keys or identity not ready');
+      return;
+    }
+
+    await this.conversationService.sendMessage(
+      recipientUrn,
+      text,
+      keys,
+      sender
+    );
+    this.refreshActiveConversations();
+  }
+
+  /**
+   * Sends a contact card/share to the recipient.
+   */
   public async sendContactShare(
     recipientUrn: URN,
     data: ContactSharePayload
   ): Promise<void> {
-    const json = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(json);
-    const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
-    await this.sendGeneric(recipientUrn, typeId, bytes);
-  }
+    const keys = this.myKeys();
+    const sender = this.currentUserUrn();
 
-  private async sendGeneric(
-    recipientUrn: URN,
-    typeId: URN,
-    bytes: Uint8Array
-  ): Promise<void> {
-    return this.runExclusive(async () => {
-      const myKeys = this.myKeys();
-      const myUrn = this.currentUserUrn();
-
-      if (!myKeys || !myUrn) {
-        this.logger.error('Cannot send: keys or user URN not loaded.');
-        return;
-      }
-
-      const optimisticMsg = await this.outboundService.send(
-        myKeys,
-        myUrn,
-        recipientUrn,
-        typeId,
-        bytes
-      );
-
-      if (optimisticMsg) {
-        this.upsertMessages([this.mapper.toView(optimisticMsg)]);
-      }
-    });
-  }
-
-  public async loadConversation(urn: URN | null): Promise<void> {
-    return this.runExclusive(async () => {
-      if (this.selectedConversation()?.toString() === urn?.toString()) return;
-
-      this.selectedConversation.set(urn);
-
-      if (!urn) {
-        this.messages.set([]);
-        this.isRecipientKeyMissing.set(false);
-        return;
-      }
-
-      const hasKeys = await this.keyWorker.checkRecipientKeys(urn);
-      this.isRecipientKeyMissing.set(!hasKeys);
-
-      const history = await this.storageService.loadHistory(urn);
-      const viewMessages = history.map((msg) => this.mapper.toView(msg));
-      this.messages.set(viewMessages);
-
-      const urnString = urn.toString();
-      const exists = this.activeConversations().some(
-        (c) => c.conversationUrn.toString() === urnString
-      );
-
-      if (!exists) {
-        const newSummary: ConversationSummary = {
-          conversationUrn: urn,
-          latestSnippet: '',
-          timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
-          unreadCount: 0,
-        };
-        this.activeConversations.update((list) => [newSummary, ...list]);
-      }
-    });
-  }
-
-  private upsertMessages(messages: ChatMessage[]): void {
-    const activeConvo = this.selectedConversation();
-    if (!activeConvo) return;
-
-    const relevant = messages.filter(
-      (msg) => msg.conversationUrn.toString() === activeConvo.toString()
-    );
-    if (relevant.length > 0) {
-      this.messages.update((current) => [...current, ...relevant]);
+    if (!keys || !sender) {
+      this.logger.error('Cannot send: keys or identity not ready');
+      return;
     }
+
+    await this.conversationService.sendContactShare(
+      recipientUrn,
+      data,
+      keys,
+      sender
+    );
+    this.refreshActiveConversations();
+  }
+
+  // --- Private Helpers ---
+
+  private async refreshActiveConversations(): Promise<void> {
+    const summaries = await this.storageService.loadConversationSummaries();
+    this.activeConversations.set(summaries);
   }
 
   private async refreshIdentityMap(): Promise<void> {
@@ -328,13 +302,8 @@ export class ChatService {
     }
   }
 
-  /**
-   * Type 1 Logout: Session Logout
-   * - Disconnects Socket.
-   * - Clears memory state.
-   * - Tells Auth Service to logout.
-   * - KEEPS: Local DB, Keys, Contacts.
-   */
+  // --- Session Management ---
+
   public async sessionLogout(): Promise<void> {
     this.logger.info('ChatService: Performing Session Logout...');
 
@@ -344,11 +313,6 @@ export class ChatService {
     await this.authService.logout();
   }
 
-  /**
-   * Type 2 Logout: Full Device Wipe (Scorched Earth)
-   * - Performs Session Logout.
-   * - WIPES: Local DB, Keys, Contacts.
-   */
   public async fullDeviceWipe(): Promise<void> {
     this.logger.warn('ChatService: Performing Full Device Wipe...');
 
@@ -369,10 +333,6 @@ export class ChatService {
     await this.authService.logout();
   }
 
-  /**
-   * Legacy alias for backward compatibility during refactor.
-   * Defaults to full wipe for safety.
-   */
   public async logout(): Promise<void> {
     return this.fullDeviceWipe();
   }
@@ -381,10 +341,9 @@ export class ChatService {
     this.myKeys.set(null);
     this.identityLinkMap.set(new Map());
     this.blockedSet.set(new Set());
-
     this.activeConversations.set([]);
-    this.messages.set([]);
-    this.selectedConversation.set(null);
-    this.isRecipientKeyMissing.set(false);
+
+    // Reset Child Service State indirectly via loading null
+    this.conversationService.loadConversation(null);
   }
 }

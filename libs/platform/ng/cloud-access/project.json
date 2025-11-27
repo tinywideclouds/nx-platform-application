@@ -1,0 +1,39 @@
+{
+  "name": "platform-cloud-access",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ng/cloud-access/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [
+        "^build",
+        { "projects": "platform-protos", "target": "generate" }
+      ],
+      "options": {
+        "outputPath": "dist/libs/platform/ng/cloud-access",
+        "configFile": "libs/platform/ng/cloud-access/vite.config.mts",
+        "main": "libs/platform/ng/cloud-access/src/index.ts",
+        "assets": ["libs/platform/ng/cloud-access/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ng/cloud-access",
+        "htmlReportDirectory": "dist/test-reports/platform/ng/cloud-access",
+        "configFile": "libs/platform/ng/cloud-access/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

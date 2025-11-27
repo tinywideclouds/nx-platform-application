@@ -1,6 +1,6 @@
 <div class="h-full flex flex-col bg-white">
-  
   <messenger-toolbar
+    class="bg-secondary-400"
     [currentUser]="currentUser()"
     [activeView]="activeView()"
     (viewConversations)="onViewConversations()"
@@ -13,5 +13,4 @@
   <div class="flex-1 overflow-hidden relative">
     <router-outlet />
   </div>
-
 </div>

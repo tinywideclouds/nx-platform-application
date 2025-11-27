@@ -22,8 +22,14 @@
       "@nx-platform-application/chat-access": [
         "libs/messenger/chat-access/src/index.ts"
       ],
+      "@nx-platform-application/chat-cloud-access": [
+        "libs/messenger/chat-cloud-access/src/index.ts"
+      ],
       "@nx-platform-application/chat-live-data": [
         "libs/messenger/chat-live-data/src/index.ts"
+      ],
+      "@nx-platform-application/chat-message-repository": [
+        "libs/messenger/chat-message-repository/src/index.ts"
       ],
       "@nx-platform-application/chat-state": [
         "libs/messenger/chat-state/src/index.ts"
@@ -37,11 +43,11 @@
       "@nx-platform-application/console-logger": [
         "libs/platform/ng/console-logger/src/index.ts"
       ],
-      "@nx-platform-application/contacts-storage": [
-        "libs/contacts/contacts-storage/src/index.ts"
-      ],
       "@nx-platform-application/contacts-cloud-access": [
         "libs/contacts/cloud-access/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-storage": [
+        "libs/contacts/contacts-storage/src/index.ts"
       ],
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
@@ -99,6 +105,9 @@
       ],
       "@nx-platform-application/platform-auth-ui/mocks": [
         "libs/platform/ng/auth-ui/src/mocking.ts"
+      ],
+      "@nx-platform-application/platform-cloud-access": [
+        "libs/platform/ng/cloud-access/src/index.ts"
       ],
       "@nx-platform-application/platform-dexie-storage": [
         "libs/platform/ng/dexie-storage/src/index.ts"

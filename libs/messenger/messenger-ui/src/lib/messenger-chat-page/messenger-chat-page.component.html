@@ -1,29 +1,26 @@
 <lib-master-detail-layout [showDetail]="showDetail()">
-          
   <div sidebar class="h-full flex flex-col border-r border-gray-200 bg-white">
-      
-      <div class="p-4 border-b bg-gray-50">
-        <h3 class="font-bold text-gray-700">Chats</h3>
-      </div>
+    <div class="layout-header">
+      <h3 class="font-bold text-gray-700">Chats</h3>
+      <messenger-network-status />
+    </div>
 
-      <div class="flex-1 overflow-y-auto">
-        <chat-conversation-list
-          [items]="conversationsList()"
-          (conversationSelected)="onConversationSelected($event)"
-        />
-      </div>
-
+    <div class="flex-1 overflow-y-auto">
+      <chat-conversation-list
+        [items]="conversationsList()"
+        (conversationSelected)="onConversationSelected($event)"
+      />
+    </div>
   </div>
 
   <div main class="h-full bg-gray-50">
     <router-outlet />
-    
+
     @if (!showDetail()) {
-      <div class="flex flex-col items-center justify-center h-full text-gray-400">
-        <mat-icon class="text-6xl h-16 w-16 mb-4 opacity-20">forum</mat-icon>
-        <p>Select a conversation to start chatting</p>
-      </div>
+    <div class="flex flex-col items-center justify-center h-full text-gray-400">
+      <mat-icon class="text-6xl h-16 w-16 mb-4 opacity-20">forum</mat-icon>
+      <p>Select a conversation to start chatting</p>
+    </div>
     }
   </div>
-
 </lib-master-detail-layout>

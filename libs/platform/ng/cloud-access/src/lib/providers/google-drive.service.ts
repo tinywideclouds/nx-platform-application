@@ -3,9 +3,8 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   CloudStorageProvider,
   CloudBackupMetadata,
-  BackupPayload,
 } from '../models/cloud-provider.interface';
-import { CONTACTS_CLOUD_CONFIG } from '../tokens/cloud-config.token';
+import { PLATFORM_CLOUD_CONFIG } from '../tokens/cloud-config.token';
 
 // Declare Google Identity Services global types to avoid TS errors
 declare const google: any;
@@ -14,7 +13,7 @@ declare const google: any;
 export class GoogleDriveService implements CloudStorageProvider {
   readonly providerId = 'google';
   private logger = inject(Logger);
-  private config = inject(CONTACTS_CLOUD_CONFIG, { optional: true });
+  private config = inject(PLATFORM_CLOUD_CONFIG, { optional: true });
 
   // Scope: 'drive.file' grants access ONLY to files created by this app.
   private readonly SCOPE = 'https://www.googleapis.com/auth/drive.file';
@@ -50,19 +49,23 @@ export class GoogleDriveService implements CloudStorageProvider {
       return;
     }
 
-    this.tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: this.config.googleClientId,
-      scope: this.SCOPE,
-      // Default callback (can be overridden per request)
-      callback: (tokenResponse: any) => {
-        if (tokenResponse.access_token) {
-          this.accessToken = tokenResponse.access_token;
-          this.logger.debug(
-            '[GoogleDrive] Access token received via init callback'
-          );
-        }
-      },
-    });
+    try {
+      this.tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: this.config.googleClientId,
+        scope: this.SCOPE,
+        // Default callback (can be overridden per request)
+        callback: (tokenResponse: any) => {
+          if (tokenResponse.access_token) {
+            this.accessToken = tokenResponse.access_token;
+            this.logger.debug(
+              '[GoogleDrive] Access token received via init callback'
+            );
+          }
+        },
+      });
+    } catch (e) {
+      this.logger.error('[GoogleDrive] Failed to init token client', e);
+    }
   }
 
   hasPermission(): boolean {
@@ -107,33 +110,62 @@ export class GoogleDriveService implements CloudStorageProvider {
     });
   }
 
+  /**
+   * Uploads content to Google Drive.
+   * Handles String (JSON), Blob (Binary), or Objects (auto-stringified).
+   */
   async uploadBackup(
-    payload: BackupPayload,
+    content: unknown,
     filename: string
   ): Promise<CloudBackupMetadata> {
     if (!this.accessToken) {
       throw new Error('No access token available. Request access first.');
     }
 
-    const fileContent = JSON.stringify(payload);
+    // 1. Determine Content Type & Body
+    let fileBody: Blob | string;
+    let mimeType = 'application/json';
 
-    // 1. Prepare Metadata
+    if (content instanceof Blob) {
+      fileBody = content;
+      mimeType = content.type || 'application/octet-stream';
+    } else if (typeof content === 'string') {
+      fileBody = content;
+      // Heuristic: If it looks like JSON, treat as JSON, else text
+      if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
+        mimeType = 'application/json';
+      } else {
+        mimeType = 'text/plain';
+      }
+    } else {
+      // Default: Assume generic object -> JSON
+      fileBody = JSON.stringify(content);
+      mimeType = 'application/json';
+    }
+
+    // 2. Prepare Metadata
     const metadata = {
       name: filename,
-      mimeType: 'application/json',
-      // Optional: Add 'parents' here if we want to organize into a specific folder
+      mimeType,
     };
 
-    // 2. Prepare Multipart Body
+    // 3. Prepare Multipart Request Body
     const form = new FormData();
     form.append(
       'metadata',
       new Blob([JSON.stringify(metadata)], { type: 'application/json' })
     );
-    form.append('file', new Blob([fileContent], { type: 'application/json' }));
 
-    // 3. Upload via REST API
-    this.logger.debug(`[GoogleDrive] Uploading ${filename}...`);
+    const contentBlob =
+      fileBody instanceof Blob
+        ? fileBody
+        : new Blob([fileBody], { type: mimeType });
+
+    form.append('file', contentBlob);
+
+    this.logger.debug(`[GoogleDrive] Uploading ${filename} (${mimeType})...`);
+
+    // 4. Upload via REST API
     const response = await fetch(
       'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,createdTime',
       {
@@ -158,13 +190,22 @@ export class GoogleDriveService implements CloudStorageProvider {
     };
   }
 
-  async listBackups(): Promise<CloudBackupMetadata[]> {
+  /**
+   * Lists files created by this app.
+   * Supports optional substring filtering.
+   */
+  async listBackups(querySubstring?: string): Promise<CloudBackupMetadata[]> {
     if (!this.accessToken) {
       throw new Error('No access token available. Request access first.');
     }
 
     // Filter by name prefix and ensure not trashed
-    const query = "name contains 'contacts_backup_' and trashed = false";
+    let query = 'trashed = false';
+    if (querySubstring) {
+      // Escape single quotes to prevent injection-like issues
+      const safeSubstring = querySubstring.replace(/'/g, "\\'");
+      query += ` and name contains '${safeSubstring}'`;
+    }
 
     const url = new URL('https://www.googleapis.com/drive/v3/files');
     url.searchParams.append('q', query);
@@ -188,7 +229,7 @@ export class GoogleDriveService implements CloudStorageProvider {
     }));
   }
 
-  async downloadBackup(fileId: string): Promise<BackupPayload> {
+  async downloadBackup<T = unknown>(fileId: string): Promise<T> {
     if (!this.accessToken) {
       throw new Error('No access token available. Request access first.');
     }

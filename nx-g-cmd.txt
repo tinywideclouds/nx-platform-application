@@ -74,6 +74,9 @@ nx g @nx/workspace:move --project=messenger-crypto-access --newProjectName=messe
 
 nx g @nx/workspace:move --project=contacts-access --newProjectName=contacts-storage --destination=libs/contacts/contacts-storage --importPath=@nx-platform-application/contacts-storage
 
+nx g @nx/angular:library --name=contacts-cloud-access --directory=libs/contacts/cloud-access --tags="scope:contacts"
 
-nx g @nx/angular:library --name=key-contacts-cloud-access --directory=libs/contacts/cloud-access --tags="scope:contacts"
+nx g @nx/angular:library --name=platform-cloud-access --directory=libs/platform/ng/cloud-access --tags="scope:platform"
+
+nx g @nx/angular:library --name=chat-message-repository --directory=libs/messenger/chat-message-repository --tags="scope:messenger"
 

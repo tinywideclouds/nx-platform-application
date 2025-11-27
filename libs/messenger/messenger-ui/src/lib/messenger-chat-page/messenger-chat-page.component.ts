@@ -26,6 +26,7 @@ import {
 } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { MatIconModule } from '@angular/material/icon';
+import { MessengerNetworkStatusComponent } from '../messenger-network-status/messenger-network-status.component';
 
 @Component({
   selector: 'messenger-chat-page',
@@ -36,6 +37,7 @@ import { MatIconModule } from '@angular/material/icon';
     MatIconModule,
     MasterDetailLayoutComponent,
     ChatConversationListComponent,
+    MessengerNetworkStatusComponent,
   ],
   templateUrl: './messenger-chat-page.component.html',
   styleUrl: './messenger-chat-page.component.scss',

@@ -4,8 +4,8 @@
     "esbenp.prettier-vscode",
     "dbaeumer.vscode-eslint",
     "ms-playwright.playwright",
-    "angular.ng-template", // Angular Language Service
-    "vitest.explorer", // Vitest (Official)
-    "esbenp.prettier-vscode" // Prettier
+    "angular.ng-template",
+    "vitest.explorer",
+    "esbenp.prettier-vscode"
   ]
 }
