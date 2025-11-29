@@ -1,0 +1,100 @@
+<div class="space-y-6">
+  <header class="pb-4 border-b border-gray-200">
+    <h1 class="text-2xl font-bold text-gray-800 m-0">Contacts & Security</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      Manage sync, backups, and incoming requests.
+    </p>
+  </header>
+
+  <div
+    class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+  >
+    <div
+      class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"
+    >
+      <div class="flex items-center gap-2">
+        <mat-icon class="text-blue-600">cloud_sync</mat-icon>
+        <h3 class="font-bold text-gray-900 text-sm">Google Drive Sync</h3>
+      </div>
+    </div>
+
+    @if (isBackingUp() || isRestoring()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+
+    <div class="p-6">
+      <p class="text-sm text-gray-600 mb-4">
+        Sync your contacts and groups to the cloud. This allows you to restore
+        them on other devices.
+      </p>
+
+      <div class="flex gap-3 mb-6">
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="backupToCloud()"
+          [disabled]="isBackingUp()"
+        >
+          <mat-icon>backup</mat-icon>
+          Backup Now
+        </button>
+      </div>
+
+      @if (cloudBackups().length > 0) {
+      <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
+        Restore Points
+      </h4>
+      <div class="border rounded-lg divide-y">
+        @for (backup of cloudBackups(); track backup.fileId) {
+        <div class="p-3 flex items-center justify-between hover:bg-gray-50">
+          <div class="flex items-center gap-3">
+            <mat-icon class="text-gray-400">history</mat-icon>
+            <div>
+              <div class="text-sm font-medium text-gray-900">
+                {{ backup.name }}
+              </div>
+              <div class="text-xs text-gray-500">
+                {{ backup.createdAt | date : 'medium' }}
+              </div>
+            </div>
+          </div>
+          <button
+            mat-icon-button
+            (click)="restoreBackup(backup.fileId)"
+            [disabled]="isRestoring()"
+          >
+            <mat-icon>restore</mat-icon>
+          </button>
+        </div>
+        }
+      </div>
+      }
+    </div>
+  </div>
+
+  <div
+    class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+  >
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+      <mat-icon class="text-orange-500">gpp_maybe</mat-icon>
+      <h3 class="font-bold text-gray-900 text-sm">Pending Requests</h3>
+    </div>
+
+    <div class="p-6">
+      @if (pending().length > 0) {
+      <p class="text-sm text-gray-600 mb-4">
+        The following users are trying to contact you.
+      </p>
+      <contacts-pending-list
+        [pending]="pending()"
+        (approve)="approveIdentity($event)"
+        (block)="blockPending($event)"
+      />
+      } @else {
+      <div class="text-center py-4 text-gray-400 text-sm italic">
+        No pending requests.
+      </div>
+      }
+    </div>
+  </div>
+</div>

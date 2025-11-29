@@ -1,10 +1,11 @@
-// libs/messenger/settings-ui/src/lib/settings-sidebar/settings-sidebar.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SettingsSidebarComponent } from './settings-sidebar.component';
-import { RouterTestingModule } from '@angular/router/testing';
+import { provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockModule } from 'ng-mocks';
+import { MatListModule } from '@angular/material/list';
+import { MatIconModule } from '@angular/material/icon';
 
 describe('SettingsSidebarComponent', () => {
   let component: SettingsSidebarComponent;
@@ -12,7 +13,13 @@ describe('SettingsSidebarComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SettingsSidebarComponent, RouterTestingModule]
+      imports: [
+        SettingsSidebarComponent,
+        // Mock UI modules to avoid rendering overhead
+        MockModule(MatListModule),
+        MockModule(MatIconModule),
+      ],
+      providers: [provideRouter([])],
     }).compileComponents();
 
     fixture = TestBed.createComponent(SettingsSidebarComponent);
@@ -25,10 +32,12 @@ describe('SettingsSidebarComponent', () => {
   });
 
   it('should emit closeSettings when back button is clicked', () => {
-    const spy = vi.spyOn(component.closeSettings, 'emit');
-    const btn = fixture.debugElement.query(By.css('button'));
-    
-    btn.nativeElement.click();
-    expect(spy).toHaveBeenCalled();
+    const emitSpy = vi.spyOn(component.closeSettings, 'emit');
+    // Assuming the first button is the back button based on template
+    const backButton = fixture.debugElement.query(By.css('button'));
+
+    backButton.nativeElement.click();
+
+    expect(emitSpy).toHaveBeenCalled();
   });
 });

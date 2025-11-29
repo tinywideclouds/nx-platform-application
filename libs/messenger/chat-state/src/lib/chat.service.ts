@@ -107,7 +107,8 @@ export class ChatService {
 
       await Promise.all([this.refreshIdentityMap(), this.refreshBlockedSet()]);
 
-      const summaries = await this.storageService.loadConversationSummaries();
+      const summaries =
+        await this.conversationService.loadConversationSummaries();
       this.activeConversations.set(summaries);
 
       const senderUrn = this.currentUserUrn();
@@ -242,7 +243,8 @@ export class ChatService {
   // --- Private Helpers ---
 
   private async refreshActiveConversations(): Promise<void> {
-    const summaries = await this.storageService.loadConversationSummaries();
+    const summaries =
+      await this.conversationService.loadConversationSummaries();
     this.activeConversations.set(summaries);
   }
 

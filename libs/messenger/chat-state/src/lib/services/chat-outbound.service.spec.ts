@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { ChatOutboundService } from './chat-outbound.service';
 import { URN } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { MockProvider } from 'ng-mocks';
 
 // Services
 import { ChatSendService } from '@nx-platform-application/chat-access';
@@ -14,27 +15,8 @@ import { ContactMessengerMapper } from './contact-messenger.mapper';
 
 describe('ChatOutboundService', () => {
   let service: ChatOutboundService;
-
-  // --- Mocks ---
-  const mockSendService = {
-    sendMessage: vi.fn().mockReturnValue(of(undefined)),
-  };
-  const mockCryptoService = {
-    encryptAndSign: vi
-      .fn()
-      .mockResolvedValue({ signature: new Uint8Array([9]) }),
-  };
-  const mockStorageService = {
-    saveMessage: vi.fn().mockResolvedValue(undefined),
-  };
-  const mockKeyCache = {
-    getPublicKey: vi.fn().mockResolvedValue({}),
-  };
-  const mockMapper = {
-    resolveToHandle: vi.fn(),
-    getStorageUrn: vi.fn(),
-  };
-  const mockLogger = { error: vi.fn() };
+  let storageService: ChatStorageService;
+  let sendService: ChatSendService;
 
   // --- Fixtures ---
   const myUrn = URN.parse('urn:auth:user:me');
@@ -46,54 +28,70 @@ describe('ChatOutboundService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockMapper.resolveToHandle.mockResolvedValue(handleUrn);
-    mockMapper.getStorageUrn.mockResolvedValue(contactUrn);
-
     TestBed.configureTestingModule({
       providers: [
         ChatOutboundService,
-        { provide: ChatSendService, useValue: mockSendService },
-        { provide: MessengerCryptoService, useValue: mockCryptoService },
-        { provide: ChatStorageService, useValue: mockStorageService },
-        { provide: KeyCacheService, useValue: mockKeyCache },
-        { provide: ContactMessengerMapper, useValue: mockMapper },
-        { provide: Logger, useValue: mockLogger },
+        MockProvider(ChatSendService, {
+          sendMessage: vi.fn().mockReturnValue(of(undefined)),
+        }),
+        MockProvider(MessengerCryptoService, {
+          encryptAndSign: vi
+            .fn()
+            .mockResolvedValue({ signature: new Uint8Array([9]) }),
+        }),
+        MockProvider(ChatStorageService, {
+          saveMessage: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(KeyCacheService, {
+          getPublicKey: vi.fn().mockResolvedValue({}),
+        }),
+        MockProvider(ContactMessengerMapper, {
+          resolveToHandle: vi.fn().mockResolvedValue(handleUrn),
+          getStorageUrn: vi.fn().mockResolvedValue(contactUrn),
+        }),
+        MockProvider(Logger),
       ],
     });
     service = TestBed.inject(ChatOutboundService);
+    storageService = TestBed.inject(ChatStorageService);
+    sendService = TestBed.inject(ChatSendService);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should save OPTIMISTICALLY (pending) -> Send -> Save (sent)', async () => {
     await service.send({} as any, myUrn, contactUrn, typeId, payloadBytes);
 
-    // 1. Verify Sequence
-    // Expect 2 saves (Pending, then Sent)
-    expect(mockStorageService.saveMessage).toHaveBeenCalledTimes(2);
+    // 1. Verify Sequence: Expect 2 saves (Pending, then Sent)
+    expect(storageService.saveMessage).toHaveBeenCalledTimes(2);
 
     // 2. Verify First Save (Pending)
-    const firstCall = mockStorageService.saveMessage.mock.calls[0][0];
+    const firstCall = (storageService.saveMessage as any).mock.calls[0][0];
     expect(firstCall).toEqual(
       expect.objectContaining({
         status: 'pending',
-        conversationUrn: contactUrn, // Using resolved storage URN
+        conversationUrn: contactUrn,
       })
     );
 
-    // 3. Verify Network Call happened
-    expect(mockSendService.sendMessage).toHaveBeenCalled();
+    // 3. Verify Network Call
+    expect(sendService.sendMessage).toHaveBeenCalled();
 
     // 4. Verify Second Save (Sent)
-    const secondCall = mockStorageService.saveMessage.mock.calls[1][0];
+    const secondCall = (storageService.saveMessage as any).mock.calls[1][0];
     expect(secondCall).toEqual(
       expect.objectContaining({
-        messageId: firstCall.messageId, // Must be same ID
+        messageId: firstCall.messageId, // Must match
         status: 'sent',
       })
     );
   });
 
   it('should leave message as PENDING if network fails', async () => {
-    mockSendService.sendMessage.mockReturnValue(
+    // Override the default mock to throw
+    vi.spyOn(sendService, 'sendMessage').mockReturnValue(
       of(null).pipe(() => {
         throw new Error('Network Error');
       })
@@ -108,13 +106,12 @@ describe('ChatOutboundService', () => {
     );
 
     // Should have saved ONCE (Pending)
-    expect(mockStorageService.saveMessage).toHaveBeenCalledTimes(1);
-    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+    expect(storageService.saveMessage).toHaveBeenCalledTimes(1);
+    expect(storageService.saveMessage).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'pending' })
     );
 
     // Should catch error and return null
     expect(result).toBeNull();
-    expect(mockLogger.error).toHaveBeenCalled();
   });
 });

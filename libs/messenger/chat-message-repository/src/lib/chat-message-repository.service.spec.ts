@@ -1,5 +1,3 @@
-// libs/messenger/chat-message-repository/src/lib/chat-message-repository.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import {
   ChatMessageRepository,
@@ -9,22 +7,12 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatStorageService,
   DecryptedMessage,
-  ConversationMetadata,
 } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
-import { vi } from 'vitest';
+import { MockProvider } from 'ng-mocks';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-// Mocks
-const mockStorage = {
-  loadHistorySegment: vi.fn(),
-  getConversationMetadata: vi.fn(),
-  setGenesisTimestamp: vi.fn(),
-};
-
-const mockCloud = {
-  restoreVaultForDate: vi.fn(),
-};
-
+// Test Helpers
 const mockUrn = URN.parse('urn:sm:user:bob');
 const mockMsg = (id: string, ts: string): DecryptedMessage =>
   ({
@@ -34,17 +22,35 @@ const mockMsg = (id: string, ts: string): DecryptedMessage =>
 
 describe('ChatMessageRepository', () => {
   let service: ChatMessageRepository;
+  let storage: ChatStorageService;
+  let cloud: ChatCloudService;
 
   beforeEach(() => {
     vi.clearAllMocks();
+
     TestBed.configureTestingModule({
       providers: [
         ChatMessageRepository,
-        { provide: ChatStorageService, useValue: mockStorage },
-        { provide: ChatCloudService, useValue: mockCloud },
+        // ✅ 1. Explicitly mock Storage methods
+        MockProvider(ChatStorageService, {
+          loadHistorySegment: vi.fn(),
+          getConversationMetadata: vi.fn().mockResolvedValue(null), // Default: No known genesis
+          setGenesisTimestamp: vi.fn().mockResolvedValue(undefined),
+        }),
+        // ✅ 2. Explicitly mock Cloud methods
+        MockProvider(ChatCloudService, {
+          restoreVaultForDate: vi.fn(),
+        }),
       ],
     });
+
     service = TestBed.inject(ChatMessageRepository);
+    storage = TestBed.inject(ChatStorageService);
+    cloud = TestBed.inject(ChatCloudService);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('getMessages', () => {
@@ -54,88 +60,87 @@ describe('ChatMessageRepository', () => {
       beforeTimestamp: '2023-06-01T00:00:00Z',
     };
 
-    it('HIT: should return local messages if limit satisfied', async () => {
-      // Local returns 10 messages (Full Page)
+    it('HIT: should return local messages if limit satisfied (Fast Path)', async () => {
+      // Setup: Local DB has enough messages
       const messages = Array(10).fill(mockMsg('1', '2023-05-31'));
-      mockStorage.loadHistorySegment.mockResolvedValue(messages);
-      mockStorage.getConversationMetadata.mockResolvedValue(null);
+      vi.spyOn(storage, 'loadHistorySegment').mockResolvedValue(messages);
 
       const result = await service.getMessages(query);
 
+      // Assert: No Cloud Call
       expect(result.messages.length).toBe(10);
-      expect(mockCloud.restoreVaultForDate).not.toHaveBeenCalled();
+      expect(cloud.restoreVaultForDate).not.toHaveBeenCalled();
       expect(result.genesisReached).toBe(false);
     });
 
     it('MISS (Hydration): should call Cloud if local GAP detected', async () => {
-      // Local returns only 2 messages (Gap)
+      // Setup: Local DB has gap (only 2 messages)
       const partialMessages = [
         mockMsg('1', '2023-05-31'),
         mockMsg('2', '2023-05-30'),
       ];
 
-      // 1. First Call: Returns Partial
-      mockStorage.loadHistorySegment.mockResolvedValueOnce(partialMessages);
-
-      // 2. Cloud Restore: Success (returns count > 0)
-      mockCloud.restoreVaultForDate.mockResolvedValue(50);
-
-      // 3. Second Call: Returns Full Page (simulated hydration)
+      // Sequence of Storage calls:
+      // 1. Initial check -> Returns partial
+      // 2. Post-restore check -> Returns full set (simulated)
       const hydratedMessages = Array(10).fill(mockMsg('x', '2023-05-30'));
-      mockStorage.loadHistorySegment.mockResolvedValueOnce(hydratedMessages);
+
+      vi.spyOn(storage, 'loadHistorySegment')
+        .mockResolvedValueOnce(partialMessages) // 1st call
+        .mockResolvedValueOnce(hydratedMessages); // 2nd call
+
+      // Cloud Logic: Found data
+      vi.spyOn(cloud, 'restoreVaultForDate').mockResolvedValue(50);
 
       const result = await service.getMessages(query);
 
-      expect(mockStorage.loadHistorySegment).toHaveBeenCalledTimes(2);
-      expect(mockCloud.restoreVaultForDate).toHaveBeenCalledWith(
+      // Assertions
+      expect(storage.loadHistorySegment).toHaveBeenCalledTimes(2);
+      expect(cloud.restoreVaultForDate).toHaveBeenCalledWith(
         query.beforeTimestamp
       );
       expect(result.messages.length).toBe(10);
     });
 
     it('MISS (Genesis): should mark genesis if Cloud also returns empty', async () => {
-      // Local returns 0
-      mockStorage.loadHistorySegment.mockResolvedValue([]);
-
-      // Cloud returns 0 (Nothing in backup either)
-      mockCloud.restoreVaultForDate.mockResolvedValue(0);
+      // Setup: Local empty, Cloud empty
+      vi.spyOn(storage, 'loadHistorySegment').mockResolvedValue([]);
+      vi.spyOn(cloud, 'restoreVaultForDate').mockResolvedValue(0);
 
       const result = await service.getMessages(query);
 
-      // Verify we marked genesis
-      expect(mockStorage.setGenesisTimestamp).toHaveBeenCalledWith(
+      // Assert: Mark Genesis
+      expect(storage.setGenesisTimestamp).toHaveBeenCalledWith(
         mockUrn,
         query.beforeTimestamp
       );
 
-      // Verify result flags
+      // Assert: Result reflects end of history
       expect(result.messages.length).toBe(0);
-      // We expect genesisReached to be true because we just set it
-      // Note: Implementation re-checks getGenesisTimestamp, so we mock the return
-      mockStorage.getConversationMetadata.mockResolvedValue({
-        genesisTimestamp: query.beforeTimestamp,
-      });
+      expect(result.genesisReached).toBe(true);
     });
 
     it('GENESIS: should skip Cloud if genesis marker exists and we passed it', async () => {
-      // Genesis is set to Jan 2023
+      // Setup: Genesis is known at Jan 2023
       const genesisTs = '2023-01-01T00:00:00Z';
-      mockStorage.getConversationMetadata.mockResolvedValue({
+      vi.spyOn(storage, 'getConversationMetadata').mockResolvedValue({
+        conversationUrn: mockUrn.toString(),
+        lastSyncedAt: '',
         genesisTimestamp: genesisTs,
       });
 
-      // Query is asking for data BEFORE Jan 2023 (older than genesis)
+      // Query: Asking for data OLDER than Jan 2023 (e.g. Dec 2022)
       const olderQuery: HistoryQuery = {
         ...query,
         beforeTimestamp: '2022-12-31T00:00:00Z',
       };
 
-      mockStorage.loadHistorySegment.mockResolvedValue([]);
+      vi.spyOn(storage, 'loadHistorySegment').mockResolvedValue([]);
 
       const result = await service.getMessages(olderQuery);
 
-      // Should NOT call cloud because we know history doesn't exist back then
-      expect(mockCloud.restoreVaultForDate).not.toHaveBeenCalled();
+      // Assert: Short-circuit (No Cloud Call)
+      expect(cloud.restoreVaultForDate).not.toHaveBeenCalled();
       expect(result.genesisReached).toBe(true);
     });
   });

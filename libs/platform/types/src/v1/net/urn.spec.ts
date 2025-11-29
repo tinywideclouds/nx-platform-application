@@ -3,19 +3,17 @@ import { create } from '@bufbuild/protobuf';
 import { URN, urnToPb, urnFromPb } from './urn';
 
 // Import the raw proto types for creating test instances
-import {
-  UrnPbSchema,
-} from '@nx-platform-application/platform-protos/net/v1/urn_pb.js';
+import { UrnPbSchema } from '@nx-platform-application/platform-protos/net/v1/urn_pb.js';
 
 describe('URN Logic and Mappers', () => {
-  const mockUrnString = 'urn:sm:user:user-123-abc';
+  const mockUrnString = 'urn:app:user:user-123-abc';
   const mockUrn = URN.parse(mockUrnString);
 
   // --- 1. Typical Usage (Testing the URN class itself) ---
   describe('URN Class Logic', () => {
     it('should correctly parse a valid URN string', () => {
       expect(mockUrn).toBeInstanceOf(URN);
-      expect(mockUrn.namespace).toBe('sm');
+      expect(mockUrn.namespace).toBe('app');
       expect(mockUrn.entityType).toBe('user');
       expect(mockUrn.entityId).toBe('user-123-abc');
     });
@@ -23,7 +21,7 @@ describe('URN Logic and Mappers', () => {
     it('should correctly create a URN instance', () => {
       const createdUrn = URN.create('device', 'device-xyz');
       expect(createdUrn).toBeInstanceOf(URN);
-      expect(createdUrn.namespace).toBe('sm');
+      expect(createdUrn.namespace).toBe('app');
       expect(createdUrn.entityType).toBe('device');
       expect(createdUrn.entityId).toBe('device-xyz');
     });
@@ -38,13 +36,21 @@ describe('URN Logic and Mappers', () => {
     });
 
     it('should throw an error on invalid URN string (parse)', () => {
-      expect(() => URN.parse('not-a-urn')).toThrow('Invalid URN format: expected 4 parts');
-      expect(() => URN.parse('http:sm:user:id')).toThrow("Invalid URN format: invalid scheme 'http'");
+      expect(() => URN.parse('not-a-urn')).toThrow(
+        'Invalid URN format: expected 4 parts'
+      );
+      expect(() => URN.parse('http:app:user:id')).toThrow(
+        "Invalid URN format: invalid scheme 'http'"
+      );
     });
 
     it('should throw an error on empty fields (create)', () => {
-      expect(() => URN.create('', 'id')).toThrow('Invalid URN format: entityType cannot be empty');
-      expect(() => URN.create('user', '')).toThrow('Invalid URN format: entityId cannot be empty');
+      expect(() => URN.create('', 'id')).toThrow(
+        'Invalid URN format: entityType cannot be empty'
+      );
+      expect(() => URN.create('user', '')).toThrow(
+        'Invalid URN format: entityId cannot be empty'
+      );
     });
   });
 
@@ -86,7 +92,7 @@ describe('URN Logic and Mappers', () => {
     it('should correctly map UrnPb (Proto) to URN (TS)', () => {
       // Use 'create' to simulate a real Proto object
       const mockProtoPb = create(UrnPbSchema, {
-        namespace: 'sm',
+        namespace: 'app',
         entityType: 'message',
         entityId: 'msg-456',
       });
@@ -94,7 +100,7 @@ describe('URN Logic and Mappers', () => {
       const tsUrn = urnFromPb(mockProtoPb);
 
       expect(tsUrn).toBeInstanceOf(URN);
-      expect(tsUrn.namespace).toBe('sm'); // URN.create ensures this
+      expect(tsUrn.namespace).toBe('app'); // URN.create ensures this
       expect(tsUrn.entityType).toBe(mockProtoPb.entityType);
       expect(tsUrn.entityId).toBe(mockProtoPb.entityId);
     });

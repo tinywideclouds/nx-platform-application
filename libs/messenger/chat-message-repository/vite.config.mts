@@ -9,8 +9,4 @@ export default defineConfig(() => ({
   cacheDir:
     '../../../node_modules/.vite/libs/messenger/chat-message-repository',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
 }));

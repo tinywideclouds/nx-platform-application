@@ -1,46 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MessengerComposePageComponent } from './messenger-compose-page.component';
 import { Router } from '@angular/router';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { URN } from '@nx-platform-application/platform-types';
-import {
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-storage';
 import { vi } from 'vitest';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { By } from '@angular/platform-browser';
 
-// --- ARTIFACTS UNDER TEST ---
-// Import original to override
+// ng-mocks
+import { MockComponent, MockProvider } from 'ng-mocks';
 import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-toolkit';
 
-// --- STUBS ---
-
-@Component({
-  selector: 'contacts-sidebar',
-  standalone: true,
-  template: '',
-})
-class StubContactsSidebarComponent {
-  @Input() selectionMode = false;
-  @Input() showAddActions = true;
-  @Output() contactSelected = new EventEmitter<Contact>();
-  @Output() groupSelected = new EventEmitter<ContactGroup>();
-}
-
-@Component({
-  selector: 'lib-master-detail-layout',
-  standalone: true,
-  template:
-    '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>',
-})
-class StubLayoutComponent {
-  @Input() showDetail = false;
-}
-
-// --- MOCK DATA ---
+// Mock Data
 const mockContact = {
   id: URN.parse('urn:sm:user:test'),
   alias: 'Test User',
@@ -52,24 +23,15 @@ describe('MessengerComposePageComponent', () => {
   let router: Router;
 
   beforeEach(async () => {
-    // Mock Router
-    const routerMock = {
-      navigate: vi.fn(),
-    };
-
     await TestBed.configureTestingModule({
-      imports: [MessengerComposePageComponent, NoopAnimationsModule],
-      providers: [{ provide: Router, useValue: routerMock }],
-    })
-      .overrideComponent(MessengerComposePageComponent, {
-        remove: {
-          imports: [ContactsSidebarComponent, MasterDetailLayoutComponent],
-        },
-        add: {
-          imports: [StubContactsSidebarComponent, StubLayoutComponent],
-        },
-      })
-      .compileComponents();
+      imports: [
+        MessengerComposePageComponent,
+        // ✅ Mock children directly
+        MockComponent(ContactsSidebarComponent),
+        MockComponent(MasterDetailLayoutComponent),
+      ],
+      providers: [MockProvider(Router)],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(MessengerComposePageComponent);
     component = fixture.componentInstance;
@@ -81,18 +43,21 @@ describe('MessengerComposePageComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should navigate to conversation when a contact is selected via the sidebar stub', () => {
-    // 1. Find the Stub
-    const sidebarStub = fixture.debugElement.query(
-      By.directive(StubContactsSidebarComponent)
-    );
-    expect(sidebarStub).toBeTruthy();
+  it('should navigate to conversation when a contact is selected via the sidebar', () => {
+    const spy = vi.spyOn(router, 'navigate');
 
-    // 2. Emit the event from the Stub
-    sidebarStub.componentInstance.contactSelected.emit(mockContact);
+    // 1. Find the Mock Component
+    const sidebar = fixture.debugElement.query(
+      By.directive(ContactsSidebarComponent)
+    );
+    expect(sidebar).toBeTruthy();
+
+    // 2. Simulate Output Emission
+    // Using componentInstance logic which ng-mocks supports for outputs
+    sidebar.componentInstance.contactSelected.emit(mockContact);
 
     // 3. Verify Router Navigation
-    expect(router.navigate).toHaveBeenCalledWith([
+    expect(spy).toHaveBeenCalledWith([
       '/messenger',
       'conversations',
       'urn:sm:user:test',

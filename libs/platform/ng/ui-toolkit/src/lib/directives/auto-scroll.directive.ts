@@ -1,11 +1,11 @@
-// libs/shared/ui/src/lib/auto-scroll.directive.ts
 import {
   Directive,
   ElementRef,
   inject,
   effect,
-  input, // Modern Signal Input
-  output, // Modern Output
+  input,
+  output,
+  DestroyRef,
 } from '@angular/core';
 
 @Directive({
@@ -15,15 +15,12 @@ import {
 })
 export class AutoScrollDirective {
   private el = inject(ElementRef<HTMLElement>);
+  // ✅ Modern DestroyRef (replaces ngOnDestroy)
+  private destroyRef = inject(DestroyRef);
 
-  // 1. Modern Signal Inputs
-  // Alias allows us to keep the syntax: [appAutoScroll]="messages()"
   data = input.required<any[]>({ alias: 'appAutoScroll' });
-
-  // Optional predicate function
   shouldForceScroll = input<(item: any) => boolean>();
 
-  // 2. Modern Output
   readonly alertVisibility = output<boolean>();
 
   private isInitialLoad = true;
@@ -31,33 +28,33 @@ export class AutoScrollDirective {
   private scrollTimeoutId: any;
 
   constructor() {
-    // 3. Effect automatically tracks the 'data' input signal
-    effect(() => {
-      const items = this.data(); // Accessing the input signal
+    // ✅ Pass 'onCleanup' to handle effect-specific teardown
+    effect((onCleanup) => {
+      const items = this.data();
       if (!items || items.length === 0) return;
 
-      // A. Initial Load
+      // 1. Initial Load Logic
       if (this.isInitialLoad) {
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
           this.scrollToBottom('auto');
           this.isInitialLoad = false;
         });
+
+        // Cleanup: Cancel if component dies OR effect re-runs
+        onCleanup(() => cancelAnimationFrame(rafId));
         return;
       }
 
-      // B. Determine Scroll Logic
+      // 2. Standard Scroll Logic
       const lastItem = items[items.length - 1];
-
-      // Get the predicate function from the input signal
       const predicate = this.shouldForceScroll();
       const forceScroll = predicate ? predicate(lastItem) : false;
-
       const wasAtBottom = this.isUserNearBottom();
       const shouldScroll = forceScroll || wasAtBottom || this.isAutoScrolling;
 
-      // C. Action
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
+      // 3. Nested RAF for Layout Thrashing protection
+      const outerRafId = requestAnimationFrame(() => {
+        const innerRafId = requestAnimationFrame(() => {
           if (shouldScroll) {
             this.scrollToBottom('smooth');
             this.alertVisibility.emit(false);
@@ -65,28 +62,36 @@ export class AutoScrollDirective {
             this.alertVisibility.emit(true);
           }
         });
-      });
-    });
-  }
 
-  // (Cleanup is handled automatically by Angular for timers usually,
-  // but good practice to keep manual cleanup for timeouts)
-  ngOnDestroy() {
-    clearTimeout(this.scrollTimeoutId);
+        // Register inner cleanup
+        onCleanup(() => cancelAnimationFrame(innerRafId));
+      });
+
+      // Register outer cleanup
+      onCleanup(() => cancelAnimationFrame(outerRafId));
+    });
+
+    // ✅ Clean up the scroll lock timeout using DestroyRef
+    this.destroyRef.onDestroy(() => {
+      clearTimeout(this.scrollTimeoutId);
+    });
   }
 
   public scrollToBottom(behavior: ScrollBehavior = 'smooth'): void {
     const nativeEl = this.el.nativeElement;
     this.isAutoScrolling = true;
 
-    nativeEl.scrollTo({ top: nativeEl.scrollHeight, behavior });
+    // Safety check for JSDOM or detached elements
+    if (nativeEl.scrollTo) {
+      nativeEl.scrollTo({ top: nativeEl.scrollHeight, behavior });
+    }
 
     clearTimeout(this.scrollTimeoutId);
+
+    // Set lock
     this.scrollTimeoutId = setTimeout(() => {
       this.isAutoScrolling = false;
     }, 1000);
-
-    this.alertVisibility.emit(false);
   }
 
   private isUserNearBottom(): boolean {

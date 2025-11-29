@@ -3,7 +3,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   CloudStorageProvider,
   CloudBackupMetadata,
-} from '../models/cloud-provider.interface';
+} from '../cloud-provider.interface';
 import { PLATFORM_CLOUD_CONFIG } from '../tokens/cloud-config.token';
 
 // Declare Google Identity Services global types to avoid TS errors

@@ -55,6 +55,14 @@ export class ChatConversationService {
   private operationLock = Promise.resolve();
 
   /**
+   * Ensure mconversations and summaries are central to here even if this is only a wrapper
+   * @returns Promise<ConversationSummary[]>
+   */
+  async loadConversationSummaries(): Promise<ConversationSummary[]> {
+    return this.repository.getConversationSummaries();
+  }
+
+  /**
    * Loads the INITIAL page of the conversation.
    */
   async loadConversation(urn: URN | null): Promise<void> {
@@ -83,9 +91,7 @@ export class ChatConversationService {
         });
 
         // Map & Reverse (Repo gives Newest->Oldest, UI wants Oldest->Newest)
-        const viewMessages = result.messages
-          .map((m) => this.mapper.toView(m))
-          .reverse();
+        const viewMessages = result.messages.map((m) => this.mapper.toView(m));
 
         this.messages.set(viewMessages);
         this.genesisReached.set(result.genesisReached);
@@ -119,9 +125,7 @@ export class ChatConversationService {
         });
 
         if (result.messages.length > 0) {
-          const newHistory = result.messages
-            .map((m) => this.mapper.toView(m))
-            .reverse();
+          const newHistory = result.messages.map((m) => this.mapper.toView(m));
           this.messages.update((current) => [...newHistory, ...current]);
         }
 

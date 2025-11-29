@@ -1,13 +1,21 @@
-// apps/contacts-app/src/app/app.component.ts
-
 import { Component } from '@angular/core';
-import { RouterOutlet, RouterLink } from '@angular/router';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 
 @Component({
-  selector: 'app-root', // Use 'app-root' as defined in eslint.config.mjs
+  selector: 'app-root',
   standalone: true,
-  // Import the router directives
-  imports: [RouterOutlet, RouterLink],
-  templateUrl: './app.html'
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    MatToolbarModule,
+    MatButtonModule,
+    MatIconModule,
+  ],
+  templateUrl: './app.html',
+  styleUrls: ['./app.css'],
 })
 export class AppComponent {}

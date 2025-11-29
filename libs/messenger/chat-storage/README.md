@@ -1,36 +1,55 @@
-# 📖 @nx-platform-application/chat-storage
+# 🗄️ libs/messenger/chat-storage
 
-This library is the local persistence layer for the Messenger. It is responsible for storing and retrieving **decrypted messages** from the browser's IndexedDB.
+**Type:** Data Access Library
+**Scope:** Messenger Domain
 
-This is a critical component of the "Poke-then-Pull" architecture, as the client is now responsible for maintaining its own message history.
+This library provides the **Local Persistence Layer** for the Messenger application using **Dexie.js** (IndexedDB). It serves as the primary "Source of Truth" for the UI, ensuring the application works 100% offline.
 
-## Architecture
+## 🏗 Database Schema (`messenger`)
 
-This service is a thin, specialized wrapper around the generic `@nx-platform-application/platform-storage` (`IndexedDb`) service. It extends the `ActionIntentionDB` database with a new `messages` table and provides a type-safe API for chat-specific operations.
+The database is versioned and handles migrations automatically.
 
-## Data Models
+### 1. `messages` Table
 
-* **`DecryptedMessage`**: The "smart" object for a message that has been decrypted and verified. This is the primary data model for this service.
-* **`ConversationSummary`**: A lightweight model used to populate the conversation list, containing only the latest message snippet and timestamp.
+Stores the actual chat history.
 
-## Primary API
+- **PK:** `messageId` (String)
+- **Indexes:**
+  - `conversationUrn`: For filtering by chat.
+  - `sentTimestamp`: For time-based sorting.
+  - `[conversationUrn+sentTimestamp]`: **Compound Index**. Critical for efficient "History Segment" queries (e.g., "Give me Bob's messages from last week").
+
+### 2. `conversation_metadata` Table (New)
+
+Tracks the synchronization state of each conversation.
+
+- **PK:** `conversationUrn` (String)
+- **Fields:**
+  - `genesisTimestamp`: The timestamp of the _absolute oldest_ message known to exist. If the UI scrolls past this date, we stop asking the cloud for more data.
+  - `lastSyncedAt`: Timestamp of the last successful ingestion.
+
+### 3. `settings` Table (New)
+
+A simple Key-Value store for persisting application preferences within the encrypted boundary (unlike `localStorage`).
+
+- **PK:** `key` (String)
+- **Usage:** Stores flags like `chat_cloud_enabled` to persist the user's "Online/Offline" choice safely.
+
+## 🧩 Key Services
 
 ### `ChatStorageService`
 
-An `@Injectable` Angular service that provides the following public methods:
+The public API for database interaction.
 
-**`saveMessage(message: DecryptedMessage): Promise<void>`**
-* Saves a single `DecryptedMessage` to the `messages` table in IndexedDB.
-* It automatically converts `URN` objects to strings for storage.
+#### Smart Querying
 
-**`loadHistory(conversationUrn: URN): Promise<DecryptedMessage[]>`**
-* Retrieves all messages for a specific conversation, sorted by timestamp.
-* It automatically maps the stored records back into "smart" `DecryptedMessage` objects with `URN` instances.
+- `loadHistorySegment(urn, limit, before?)`: Fetches a paged list of messages using the compound index. Used by the Repository for infinite scrolling.
+- `getMessagesInRange(start, end)`: Fetches messages strictly within a time window. Used by the Cloud Service to create "Monthly Vaults."
 
-**`loadConversationSummaries(): Promise<ConversationSummary[]>`**
-* Efficiently queries the database to find the *single newest* message for *every* conversation.
-* Returns an array of `ConversationSummary` objects, perfect for populating the main chat list on app load.
+#### Bulk Operations
 
-## Running unit tests
+- `bulkSaveMessages(messages)`: Optimized method for inserting thousands of messages during a Cloud Restore operation.
 
-Run `nx test chat-storage` to execute the unit tests for this library.
+## 🛡 Security & Wipe
+
+- `clearDatabase()`: Performs a transactional wipe of **all tables**. This is used by the "Scorched Earth" logout to ensure no metadata or settings remain on the device.

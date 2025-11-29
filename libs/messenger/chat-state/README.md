@@ -1,49 +1,79 @@
-# 🧠 @nx-platform-application/chat-state
+# 🧠 libs/messenger/chat-state
 
-This library is the **Central Nervous System** of the Messenger application. It coordinates network IO, local storage, cryptography, and identity management to provide a seamless, secure messaging experience.
+**Type:** Domain State Library
+**Scope:** Messenger Domain
 
-## 🏛️ Architecture: The Orchestrator
+This library contains the core business logic and state management for the Messenger application. It acts as the "Nervous System," connecting the UI to the Data Layer, Crypto Engine, and Network.
 
-The `ChatService` acts as a **State Orchestrator**. It does not contain business logic itself; instead, it delegates complex tasks to specialized **Worker Services** while maintaining the application's reactive state (Signals).
+## 🏗 Architecture: The Orchestrator Pattern
 
-### The Worker Ecosystem
+State is divided into two primary scopes:
 
-| Service                    | Role                 | Responsibility                                                                                                                           |
-| :------------------------- | :------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| **`ChatIngestionService`** | **Input Pipeline**   | Pulls messages, decrypts payload, resolves Identity Handles to Contacts, applies Gatekeeper rules (Block/Pending), and saves to storage. |
-| **`ChatOutboundService`**  | **Output Pipeline**  | Implements **True Optimistic UI**. Saves `pending` messages locally _before_ encryption/sending, then updates status to `sent`.          |
-| **`ChatKeyService`**       | **Key Manager**      | Manages the "Sealed Sender" keys. Handles identity resets and verifies recipient keys before sending.                                    |
-| **`ChatMessageMapper`**    | **View Transformer** | Converts storage models (decrypted bytes) into UI-ready models (text/images).                                                            |
+### 1. Global Scope (`ChatService`)
 
-## 🔐 Identity Model: "The Split Brain"
+The **Orchestrator**. It manages application-level concerns that exist regardless of which screen the user is looking at.
 
-This library enforces a strict separation between **Network Identity** and **Local Identity** to allow transport agility without data loss.
+- **Responsibilities:**
+  - User Identity & Auth Lifecycle (Login/Logout/Wipe).
+  - Global Connection Status (Online/Offline).
+  - Ingestion Pipeline (Processing incoming socket data).
+  - Active Conversation List (The "Inbox").
+- **Signals:** `activeConversations`, `currentUserUrn`.
 
-1.  **Network Identity (Handle):** Used for routing and encryption (e.g., `urn:lookup:email:bob@gmail.com`).
-2.  **Local Identity (Contact):** Used for storage and UI (e.g., `urn:sm:user:bob-uuid`).
+### 2. Active Context Scope (`ChatConversationService`)
 
-The `ContactMessengerMapper` automatically translates between these two worlds:
+The **Focus Manager**. It manages the state of the specific conversation currently open in the UI.
 
-- **Sending:** `Contact` $\rightarrow$ `Handle` (via Identity Link or Email Discovery).
-- **Receiving:** `Handle` $\rightarrow$ `Contact` (via Reverse Lookup).
+- **Responsibilities:**
+  - Current Message List (UI-ready View Models).
+  - Infinite Scroll & Pagination State.
+  - Sending Actions (Typing, Attachments).
+  - Genesis Markers (End of History detection).
+- **Signals:** `messages`, `selectedConversation`, `genesisReached`, `isLoadingHistory`.
 
-## 🔄 State Management
+## ⚙️ The "Worker" Services
 
-The service exposes **Read-Only Signals** for the UI:
+Complex logic is offloaded to specialized stateless workers to keep the main services clean.
 
-- `activeConversations`: List of conversation summaries.
-- `messages`: The message history for the _selected_ conversation.
-- `isRecipientKeyMissing`: A guard signal that disables the "Send" button if encryption keys are unavailable.
+- **`ChatIngestionService`:** The "Inbound" pipeline. Handles decryption, identity resolution (Handle -> Contact), Gatekeeper checks (Blocking), and storage persistence.
+- **`ChatOutboundService`:** The "Outbound" pipeline. Handles Optimistic UI updates, encryption, and network transmission.
+- **`ChatKeyService`:** Manages the "Scorched Earth" identity reset and key verification logic.
 
-## 🔌 API & Usage
+## 🧩 Data Access Integration
 
-### Cleanup & Logout
+This library does **not** query Dexie or Google Drive directly for messages. It delegates all data retrieval to the **Repository Layer**.
 
-The service supports two logout modes:
+```typescript
+// Pattern:
+ChatService (UI State) -> ChatMessageRepository (Data Decisions) -> Storage/Cloud
 
-1.  **`sessionLogout()`**: Disconnects the socket and clears memory state. Leaves local DB intact.
-2.  **`fullDeviceWipe()`**: Disconnects, clears memory, and **destroys** all local IndexedDB data and keys.
+```
 
-### Initialization
+## 🚀 Usage
 
-The service uses `takeUntilDestroyed` for automatic cleanup of internal subscriptions, but explicitly manages the WebSocket connection lifecycle via `DestroyRef`.
+Integrating into UI Components
+Most UI components should inject ChatService. It exposes proxies to the ChatConversationService signals for convenience.
+
+```TypeScript
+
+@Component({...})
+export class ChatWindowComponent {
+  private chatService = inject(ChatService);
+
+  // Read State
+  messages = this.chatService.messages;
+
+  // Perform Actions
+  sendMessage(txt: string) {
+     this.chatService.sendMessage(this.recipient, txt);
+  }
+}
+```
+
+## 🛠 Dependencies
+
+@nx-platform-application/chat-message-repository: The smart data layer.
+
+@nx-platform-application/chat-storage: Local persistence types.
+
+@nx-platform-application/chat-live-data: WebSocket connection.

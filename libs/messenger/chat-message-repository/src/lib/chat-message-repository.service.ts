@@ -1,5 +1,3 @@
-// libs/messenger/chat-message-repository/src/lib/chat-message-repository.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import {
   ISODateTimeString,
@@ -8,6 +6,7 @@ import {
 import {
   ChatStorageService,
   DecryptedMessage,
+  ConversationSummary,
   ConversationMetadata,
 } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
@@ -33,13 +32,40 @@ export class ChatMessageRepository {
   private genesisCache = new Map<string, string | null>();
 
   /**
-   * The "Smart" Query.
+   * Loads the list of active conversations.
+   * Implements the "Unify" pattern:
+   * 1. Check Local Storage.
+   * 2. If empty, attempt to hydrate the "Latest" state from Cloud (Current Month).
+   * 3. Return result.
+   */
+  async getConversationSummaries(): Promise<ConversationSummary[]> {
+    // 1. Local Lookup
+    let summaries = await this.storage.loadConversationSummaries();
+
+    // 2. Hydration Check
+    // If we have no conversations locally, we might be on a fresh install.
+    // We try to fetch the *Current Month's* history from the cloud to populate the inbox.
+    if (summaries.length === 0 && this.cloud.isCloudEnabled()) {
+      const now = Temporal.Now.plainDateISO().toString();
+
+      // Attempt to download/import the latest vault
+      const restoredCount = await this.cloud.restoreVaultForDate(now);
+
+      if (restoredCount > 0) {
+        // Data changed, re-query storage
+        summaries = await this.storage.loadConversationSummaries();
+      }
+    }
+
+    return summaries;
+  }
+
+  /**
+   * The "Smart" Query for Message History.
    * Fetches messages from local storage first.
    * If gaps are detected (miss), it "looks through" to the cloud to restore history.
    */
   async getMessages(query: HistoryQuery): Promise<HistoryResult> {
-    const urnStr = query.conversationUrn.toString();
-
     const beforeTimestamp =
       (query.beforeTimestamp as ISODateTimeString) || undefined;
 
@@ -51,15 +77,12 @@ export class ChatMessageRepository {
     );
 
     // 2. Assessment: Do we have enough data?
-    // If we got fewer messages than requested, we might have hit a local gap.
     if (localMessages.length < query.limit) {
       const genesisTimestamp = await this.getGenesisTimestamp(
         query.conversationUrn
       );
 
       // Determine the "Edge" of our current knowledge
-      // If we are scrolling back from a specific date, use that.
-      // Otherwise, use the oldest message we just found.
       const oldestLocal =
         localMessages.length > 0
           ? localMessages[localMessages.length - 1].sentTimestamp
@@ -69,23 +92,19 @@ export class ChatMessageRepository {
         beforeTimestamp || oldestLocal || Temporal.Instant.toString();
 
       // 3. Cloud Fallback (Slow Path)
-      // Only check cloud if we haven't already marked this point as the "Beginning of Time"
       if (!this.isGenesisReached(genesisTimestamp, cursorDate)) {
         // Ask Cloud to restore the vault containing this date
         const restoredCount = await this.cloud.restoreVaultForDate(cursorDate);
 
         if (restoredCount > 0) {
           // 4. Re-Query Local (Hydrated)
-          // The cloud just inserted data into Dexie, so we query Dexie again.
           localMessages = await this.storage.loadHistorySegment(
             query.conversationUrn,
             query.limit,
             beforeTimestamp
           );
         } else {
-          // Cloud had nothing for this month.
-          // We assume we have reached the end of history.
-          // Mark Genesis at this timestamp to prevent future network calls.
+          // Mark Genesis (End of History)
           await this.setGenesisTimestamp(
             query.conversationUrn,
             cursorDate as ISODateTimeString
@@ -95,7 +114,6 @@ export class ChatMessageRepository {
     }
 
     // 5. Final Genesis Check
-    // We are at genesis if we have a known genesis timestamp AND our oldest message is older/equal to it.
     const finalGenesis = await this.getGenesisTimestamp(query.conversationUrn);
     const finalOldest =
       localMessages.length > 0
@@ -113,9 +131,6 @@ export class ChatMessageRepository {
 
   // --- Metadata Helpers ---
 
-  /**
-   * Checks the cache or DB for the "Genesis Marker" (Start of History).
-   */
   private async getGenesisTimestamp(urn: URN): Promise<string | null> {
     const urnStr = urn.toString();
     if (this.genesisCache.has(urnStr)) {
@@ -128,14 +143,10 @@ export class ChatMessageRepository {
       return meta.genesisTimestamp;
     }
 
-    // Cache miss = null (Unknown)
     this.genesisCache.set(urnStr, null);
     return null;
   }
 
-  /**
-   * Sets the "Genesis Marker", indicating no messages exist prior to this date.
-   */
   private async setGenesisTimestamp(
     urn: URN,
     timestamp: ISODateTimeString
@@ -144,16 +155,12 @@ export class ChatMessageRepository {
     await this.storage.setGenesisTimestamp(urn, timestamp);
   }
 
-  /**
-   * Logic: If a genesis timestamp exists, and our current cursor is older
-   * (or equal) to it, we have reached the start.
-   */
   private isGenesisReached(
     genesis: string | null | undefined,
     cursor: string | undefined
   ): boolean {
-    if (!genesis) return false; // Unknown start
-    if (!cursor) return false; // No cursor context
+    if (!genesis) return false;
+    if (!cursor) return false;
     return cursor <= genesis;
   }
 }

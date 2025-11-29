@@ -22,10 +22,13 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-storag
 // --- Cloud Access ---
 import {
   CONTACTS_CLOUD_CONFIG,
-  CLOUD_PROVIDERS,
-  GoogleDriveService,
   MockCloudProvider,
 } from '@nx-platform-application/contacts-cloud-access';
+
+import {
+  CLOUD_PROVIDERS,
+  GoogleDriveService,
+} from '@nx-platform-application/platform-cloud-access';
 
 // --- Mock Providers (if needed for storage/auth in harness) ---
 // Assuming you have a mock for ContactsStorageService similar to messenger-app,

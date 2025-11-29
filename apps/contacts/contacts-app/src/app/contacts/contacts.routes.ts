@@ -4,45 +4,46 @@ import { Routes } from '@angular/router';
 
 export const CONTACTS_ROUTES: Routes = [
   {
-    path: '', // This is now the '/contacts' route
-    // The main list view
+    path: '', // '/contacts'
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactsViewerComponent
       ),
   },
   {
-    path: 'new', // This is now '/contacts/new'
-    // The "Add" page
+    path: 'new', // '/contacts/new'
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactPageComponent
       ),
   },
   {
-    path: 'edit/:id', // This is now '/contacts/edit/:id'
-    // The "Edit" page
+    path: 'edit/:id', // '/contacts/edit/:id'
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactPageComponent
       ),
   },
   {
-    path: 'group-new', // This is '/contacts/group-new'
-    // The "Add Group" page
+    path: 'group-new', // '/contacts/group-new'
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactGroupPageComponent
       ),
   },
   {
-    path: 'group-edit/:id', // This is '/contacts/group-edit/:id'
-    // The "Edit Group" page
+    path: 'group-edit/:id', // '/contacts/group-edit/:id'
     loadComponent: () =>
       import('@nx-platform-application/contacts-ui').then(
         (m) => m.ContactGroupPageComponent
       ),
   },
-  // You can add more contact-specific routes here,
-  // like 'groups', 'favorites', etc.
+  // NEW: Settings Route
+  {
+    path: 'settings', // '/contacts/settings'
+    loadComponent: () =>
+      import('@nx-platform-application/contacts-ui').then(
+        (m) => m.ContactsSettingsPageComponent
+      ),
+  },
 ];

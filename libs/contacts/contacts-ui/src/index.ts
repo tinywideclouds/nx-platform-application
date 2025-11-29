@@ -9,5 +9,6 @@ export * from './lib/contact-group-page-form/contact-group-form.component';
 export * from './lib/contact-group-page/contact-group-page.component';
 export * from './lib/contacts-sidebar/contacts-sidebar.component';
 export * from './lib/contact-detail/contact-detail.component';
+export * from './lib/contacts-settings-page/contacts-settings-page.component';
 
 export * from '@nx-platform-application/contacts-storage';

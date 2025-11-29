@@ -1,57 +1,39 @@
-# ☁️ @nx-platform-application/contacts-cloud-access
+# ☁️ libs/contacts/cloud-access
 
-This library provides a **Cloud Persistence Layer** for the Contacts application. It implements a "Backup & Restore" strategy using a **Provider Facade** pattern, allowing the application to support multiple cloud backends (Google Drive, iCloud, etc.) while keeping the UI agnostic.
+**Type:** Feature Data Library
+**Scope:** Contacts Domain
 
-## 🏛️ Architectural Concept
+This library manages the backup and restoration of the user's Address Book.
 
-### The Provider Facade
+## ♻️ Refactor Note (Platform Extraction)
 
-The library exposes a single orchestrator, `ContactsCloudService`, which manages:
+Previously, this library contained specific Google Drive implementation logic. That logic has been extracted to `@nx-platform-application/platform-cloud-access`.
 
-1.  **Authentication:** Checks permissions and triggers incremental auth popups (e.g., Google's "Consent Screen").
-2.  **Snapshotting:** Captures a point-in-time snapshot of the local Dexie database (`contacts` + `groups`).
-3.  **Transport:** Delegates the actual upload/download to a concrete `CloudStorageProvider`.
+This library now acts as a **Domain Consumer** of the shared platform infrastructure.
 
-### Security Model: "Incremental Capability"
+## 🏗 Architecture
 
-This library **does not** handle user login. It assumes the user is already authenticated with the App.
-When a backup is requested, it asks for **Incremental Permission** (e.g., `drive.file` scope), which grants access _only_ to files created by this application, adhering to the **Principle of Least Privilege**.
+### `ContactsCloudService`
 
-## 📦 Public API
+This service acts as an orchestrator between the Local Storage and the Cloud Platform.
 
-### `ContactsCloudService` (Facade)
+1.  **Injects:** `CLOUD_PROVIDERS` (Generic Interface).
+2.  **Snapshots:** Reads all Contacts and Groups from `ContactsStorageService`.
+3.  **Packages:** Wraps them in a `BackupPayload` with version metadata.
+4.  **Delegates:** Hands the payload to the platform provider for upload.
 
-The main entry point for the UI.
+## 📦 Data Model
 
-- `backupToCloud(providerId: string)`: Snapshots local data and uploads it.
-- `restoreFromCloud(providerId: string, fileId: string)`: Downloads a backup and merges it into the local DB.
-- `listBackups(providerId: string)`: Returns available backups for this app.
-- `hasPermission(providerId: string)`: Synchronously checks if the user has already granted storage access.
+### `BackupPayload`
 
-### Configuration
-
-You must provide the configuration token in your `app.config.ts`:
+Contacts are small enough to be backed up as a single snapshot file (unlike Chat History).
 
 ```typescript
-import { CONTACTS_CLOUD_CONFIG } from '@nx-platform-application/contacts-cloud-access';
-
-{
-  provide: CONTACTS_CLOUD_CONFIG,
-  useValue: {
-    googleClientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com'
-  }
+export interface BackupPayload {
+  version: number; // Schema version
+  timestamp: string; // ISO Date
+  sourceDevice: string; // User Agent
+  contacts: Contact[]; // Complete list
+  groups: ContactGroup[]; // Complete list
 }
 ```
-
-### Providers
-
-- **`GoogleDriveService`**: Uses the Google Identity Services (GIS) SDK and Drive API v3 (REST).
-- **`MockCloudProvider`**: A simulation provider for testing and offline development (`nx serve -c mock`).
-
-## 🚀 Setup Requirements
-
-1.  **Google Cloud Console:** Enable the **Google Drive API** for your project.
-2.  **Index.html:** You must include the GIS script in your application's `index.html`:
-    ```html
-    <script src="[https://accounts.google.com/gsi/client](https://accounts.google.com/gsi/client)" async defer></script>
-    ```

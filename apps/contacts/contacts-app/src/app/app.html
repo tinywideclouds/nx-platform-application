@@ -1,34 +1,29 @@
-<!-- apps/contacts-app/src/app/app.component.html -->
+<div class="h-full flex flex-col">
+  <mat-toolbar color="primary" class="flex justify-between z-10 shadow-md">
+    <div class="flex items-center gap-4">
+      <span class="font-bold text-lg">Contacts App</span>
 
-<div class="flex flex-col h-screen">
-  <!-- Header/Navigation -->
-  <nav class="bg-gray-800 text-white shadow-md">
-    <div class="container mx-auto px-4 py-3 flex items-center justify-between">
-      <h1 class="text-xl font-bold">Contacts Test Harness</h1>
-      
-      <!-- Navigation Links -->
-      <div class="flex space-x-4">
-        <a 
-          routerLink="/messenger" 
-          routerLinkActive="font-bold underline"
-          class="hover:text-gray-300"
+      <nav class="flex gap-1 ml-4">
+        <a
+          mat-button
+          routerLink="/contacts"
+          routerLinkActive="bg-white/20"
+          [routerLinkActiveOptions]="{exact: true}"
         >
-          Messenger
+          List
         </a>
-        <a 
-          routerLink="/all-contacts" 
-          routerLinkActive="font-bold underline"
-          class="hover:text-gray-300"
-        >
-          All Contacts
+        <a mat-button routerLink="/all-contacts" routerLinkActive="bg-white/20">
+          All (Placeholder)
         </a>
-      </div>
+      </nav>
     </div>
-  </nav>
 
-  <!-- Main Content Area -->
-  <main class="flex-1 overflow-y-auto bg-gray-100">
-    <!-- The router will render the correct page here -->
-    <router-outlet></router-outlet>
-  </main>
+    <a mat-icon-button routerLink="/contacts/settings" aria-label="Settings">
+      <mat-icon>settings</mat-icon>
+    </a>
+  </mat-toolbar>
+
+  <div class="flex-1 overflow-hidden bg-gray-50">
+    <router-outlet />
+  </div>
 </div>

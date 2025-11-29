@@ -1,31 +1,12 @@
-// libs/messenger/settings-ui/src/lib/settings-shell/settings-shell.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SettingsShellComponent } from './settings-shell.component';
 import { Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { SettingsSidebarComponent } from '../settings-sidebar/settings-sidebar.component';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { vi } from 'vitest';
-
-// --- Mocks ---
-@Component({
-  selector: 'lib-master-detail-layout',
-  standalone: true,
-  template: '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>'
-})
-class MockLayout {
-  @Input() showDetail = false;
-}
-
-@Component({
-  selector: 'lib-settings-sidebar',
-  standalone: true,
-  template: ''
-})
-class MockSidebar {
-  @Output() closeSettings = new EventEmitter<void>();
-}
+import { MockComponent } from 'ng-mocks';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { By } from '@angular/platform-browser';
 
 describe('SettingsShellComponent', () => {
   let component: SettingsShellComponent;
@@ -33,17 +14,17 @@ describe('SettingsShellComponent', () => {
   let router: Router;
 
   beforeEach(async () => {
-    const routerMock = { navigate: vi.fn() };
-
     await TestBed.configureTestingModule({
-      imports: [SettingsShellComponent],
-      providers: [{ provide: Router, useValue: routerMock }]
-    })
-    .overrideComponent(SettingsShellComponent, {
-      remove: { imports: [MasterDetailLayoutComponent, SettingsSidebarComponent] },
-      add: { imports: [MockLayout, MockSidebar] }
-    })
-    .compileComponents();
+      imports: [
+        SettingsShellComponent,
+        MockComponent(MasterDetailLayoutComponent),
+        MockComponent(SettingsSidebarComponent),
+      ],
+      providers: [
+        // ✅ Correctly provide Router infrastructure
+        provideRouter([]),
+      ],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(SettingsShellComponent);
     component = fixture.componentInstance;
@@ -55,8 +36,14 @@ describe('SettingsShellComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should navigate back to messenger root on close', () => {
-    component.onClose();
-    expect(router.navigate).toHaveBeenCalledWith(['/messenger']);
+  it('should navigate home when sidebar emits closeSettings', () => {
+    const spy = vi.spyOn(router, 'navigate');
+
+    const sidebar = fixture.debugElement.query(
+      By.directive(SettingsSidebarComponent)
+    );
+    sidebar.componentInstance.closeSettings.emit();
+
+    expect(spy).toHaveBeenCalledWith(['/messenger']);
   });
 });

@@ -1,8 +1,6 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-detail/contact-detail.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ContactDetailComponent } from './contact-detail.component';
 import {
   ContactsStorageService,
@@ -10,8 +8,9 @@ import {
   ContactGroup,
 } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { MockComponent, MockProvider } from 'ng-mocks';
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
+import { MatChipsModule } from '@angular/material/chips';
 
 const mockUrn = URN.parse('urn:sm:user:123');
 const mockContact: Contact = {
@@ -30,33 +29,32 @@ const mockGroup: ContactGroup = {
   contactIds: [mockUrn],
 };
 
-const mockContactsService = {
-  getContact: vi.fn(),
-  saveContact: vi.fn(),
-  getLinkedIdentities: vi.fn(),
-  getGroupsForContact: vi.fn(),
-};
-
 describe('ContactDetailComponent', () => {
   let fixture: ComponentFixture<ContactDetailComponent>;
   let component: ContactDetailComponent;
+  let service: ContactsStorageService;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    mockContactsService.getContact.mockResolvedValue(mockContact);
-    mockContactsService.saveContact.mockResolvedValue(undefined);
-    mockContactsService.getLinkedIdentities.mockResolvedValue([]);
-    mockContactsService.getGroupsForContact.mockResolvedValue([mockGroup]);
-
     await TestBed.configureTestingModule({
-      imports: [ContactDetailComponent, NoopAnimationsModule],
+      imports: [
+        ContactDetailComponent,
+        MockComponent(ContactFormComponent),
+        // We can mock MatChipsModule too if we want to be pure unit, but it's often lightweight enough
+        // Mocking it is safer for "dumb" DOM tests
+      ],
       providers: [
-        { provide: ContactsStorageService, useValue: mockContactsService },
+        MockProvider(ContactsStorageService, {
+          getContact: vi.fn().mockResolvedValue(mockContact),
+          saveContact: vi.fn().mockResolvedValue(undefined),
+          getLinkedIdentities: vi.fn().mockResolvedValue([]),
+          getGroupsForContact: vi.fn().mockResolvedValue([mockGroup]),
+        }),
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactDetailComponent);
     component = fixture.componentInstance;
+    service = TestBed.inject(ContactsStorageService);
 
     fixture.componentRef.setInput('contactId', mockUrn);
     fixture.detectChanges();
@@ -70,7 +68,7 @@ describe('ContactDetailComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(mockContactsService.getContact).toHaveBeenCalledWith(mockUrn);
+    expect(service.getContact).toHaveBeenCalledWith(mockUrn);
     const form = fixture.debugElement.query(By.directive(ContactFormComponent));
     expect(form).toBeTruthy();
   });
@@ -81,12 +79,13 @@ describe('ContactDetailComponent', () => {
 
     const spy = vi.spyOn(component.saved, 'emit');
 
+    // Simulate Output from Mock Child
     const form = fixture.debugElement.query(By.directive(ContactFormComponent));
-    form.triggerEventHandler('save', mockContact);
+    form.componentInstance.save.emit(mockContact);
 
     await fixture.whenStable();
 
-    expect(mockContactsService.saveContact).toHaveBeenCalledWith(mockContact);
+    expect(service.saveContact).toHaveBeenCalledWith(mockContact);
     expect(spy).toHaveBeenCalledWith(mockContact);
   });
 });

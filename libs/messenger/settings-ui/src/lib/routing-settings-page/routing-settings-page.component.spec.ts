@@ -1,46 +1,46 @@
-// libs/messenger/settings-ui/src/lib/routing-settings-page/routing-settings-page.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RoutingSettingsPageComponent } from './routing-settings-page.component';
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache'; // <--- Import
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { signal } from '@angular/core';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockProvider } from 'ng-mocks';
 
 describe('RoutingSettingsPageComponent', () => {
   let component: RoutingSettingsPageComponent;
   let fixture: ComponentFixture<RoutingSettingsPageComponent>;
+  let keyCache: KeyCacheService;
 
-  const mockChatService = {
-    messages: signal([])
-  };
-  const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn() };
-  const mockSnackBar = { open: vi.fn() };
-  
-  // Mock KeyCacheService
-  const mockKeyCache = {
-    clear: vi.fn().mockResolvedValue(undefined)
+  // 1. Manual Spies
+  const snackBarSpy = {
+    open: vi.fn(),
   };
 
   beforeEach(async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     await TestBed.configureTestingModule({
       imports: [RoutingSettingsPageComponent],
       providers: [
-        { provide: ChatService, useValue: mockChatService },
-        { provide: Logger, useValue: mockLogger },
-        { provide: MatSnackBar, useValue: mockSnackBar },
-        { provide: KeyCacheService, useValue: mockKeyCache } // <--- Provide
-      ]
+        MockProvider(ChatService, { messages: signal([]) }),
+        MockProvider(Logger),
+        MockProvider(KeyCacheService, {
+          clear: vi.fn().mockResolvedValue(undefined),
+        }),
+        // 2. Force override with useValue
+        { provide: MatSnackBar, useValue: snackBarSpy },
+      ],
     })
-    .overrideProvider(MatSnackBar, { useValue: mockSnackBar })
-    .compileComponents();
+      // 3. Remove real module
+      .overrideComponent(RoutingSettingsPageComponent, {
+        remove: { imports: [MatSnackBarModule] },
+        add: { imports: [] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(RoutingSettingsPageComponent);
     component = fixture.componentInstance;
+    keyCache = TestBed.inject(KeyCacheService);
     fixture.detectChanges();
   });
 
@@ -50,11 +50,12 @@ describe('RoutingSettingsPageComponent', () => {
 
   it('should call KeyCacheService.clear() on clear cache action', async () => {
     await component.onClearKeyCache();
-    
-    expect(mockKeyCache.clear).toHaveBeenCalled();
-    expect(mockSnackBar.open).toHaveBeenCalledWith(
-      expect.stringContaining('cleared'), 
-      expect.any(String), 
+
+    expect(keyCache.clear).toHaveBeenCalled();
+    // Now this assertion will pass because snackBarSpy.open is a real Vitest spy
+    expect(snackBarSpy.open).toHaveBeenCalledWith(
+      expect.stringContaining('cleared'),
+      'OK',
       expect.any(Object)
     );
   });
