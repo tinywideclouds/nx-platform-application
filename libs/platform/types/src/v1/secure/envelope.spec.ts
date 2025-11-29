@@ -6,7 +6,7 @@ import {
   secureEnvelopeFromProto,
   serializeEnvelopeToJson,
   deserializeJsonToEnvelope,
-  deserializeJsonToEnvelopes
+  deserializeJsonToEnvelopes,
 } from './envelope';
 
 // --- Mocks ---
@@ -19,17 +19,20 @@ vi.mock('@bufbuild/protobuf', () => ({
 }));
 
 // 2. Mock the generated proto schema objects
-vi.mock('@nx-platform-application/platform-protos/secure/v1/envelope_pb', () => ({
-  SecureEnvelopePbSchema: {},
-  SecureEnvelopePb: {},
-  SecureEnvelopeListPbSchema: {},
-}));
+vi.mock(
+  '@nx-platform-application/platform-protos/secure/v1/envelope_pb',
+  () => ({
+    SecureEnvelopePbSchema: {},
+    SecureEnvelopePb: {},
+    SecureEnvelopeListPbSchema: {},
+  })
+);
 
 describe('SecureEnvelope Mappers', () => {
   // --- Fixtures ---
-  const mockUrnString = 'urn:sm:user:recipient-123';
+  const mockUrnString = 'urn:contacts:user:recipient-123';
   const mockUrn = URN.parse(mockUrnString);
-  
+
   const mockEncKey = new Uint8Array([1, 2, 3]);
   const mockEncData = new Uint8Array([4, 5, 6]);
   const mockSig = new Uint8Array([7, 8, 9]);

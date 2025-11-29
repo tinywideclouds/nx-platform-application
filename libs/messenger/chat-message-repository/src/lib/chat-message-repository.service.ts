@@ -1,3 +1,5 @@
+// libs/messenger/chat-message-repository/src/lib/chat-message-repository.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import {
   ISODateTimeString,
@@ -7,7 +9,6 @@ import {
   ChatStorageService,
   DecryptedMessage,
   ConversationSummary,
-  ConversationMetadata,
 } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
 import { Temporal } from '@js-temporal/polyfill';
@@ -15,12 +16,12 @@ import { Temporal } from '@js-temporal/polyfill';
 export interface HistoryQuery {
   conversationUrn: URN;
   limit: number;
-  beforeTimestamp?: string; // ISO Date String for pagination
+  beforeTimestamp?: string; // Cursor for infinite scroll
 }
 
 export interface HistoryResult {
   messages: DecryptedMessage[];
-  genesisReached: boolean; // True if we are definitely at the start of history
+  genesisReached: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -28,33 +29,20 @@ export class ChatMessageRepository {
   private storage = inject(ChatStorageService);
   private cloud = inject(ChatCloudService);
 
-  // In-memory cache to prevent repeated DB lookups for metadata during scroll
-  private genesisCache = new Map<string, string | null>();
-
   /**
-   * Loads the list of active conversations.
-   * Implements the "Unify" pattern:
-   * 1. Check Local Storage.
-   * 2. If empty, attempt to hydrate the "Latest" state from Cloud (Current Month).
-   * 3. Return result.
+   * Loads the Inbox.
+   * 1. Instant Load from Local Meta-Index.
+   * 2. (Optional) Background Hydration if empty.
    */
   async getConversationSummaries(): Promise<ConversationSummary[]> {
-    // 1. Local Lookup
+    // 1. FAST: Load from the 'conversations' table index
     let summaries = await this.storage.loadConversationSummaries();
 
-    // 2. Hydration Check
-    // If we have no conversations locally, we might be on a fresh install.
-    // We try to fetch the *Current Month's* history from the cloud to populate the inbox.
+    // 2. HYDRATION: If we have absolutely nothing, try to restore history.
     if (summaries.length === 0 && this.cloud.isCloudEnabled()) {
-      const now = Temporal.Now.plainDateISO().toString();
-
-      // Attempt to download/import the latest vault
-      const restoredCount = await this.cloud.restoreVaultForDate(now);
-
-      if (restoredCount > 0) {
-        // Data changed, re-query storage
-        summaries = await this.storage.loadConversationSummaries();
-      }
+      await this.performInboxHydration();
+      // Reload after hydration
+      summaries = await this.storage.loadConversationSummaries();
     }
 
     return summaries;
@@ -62,105 +50,126 @@ export class ChatMessageRepository {
 
   /**
    * The "Smart" Query for Message History.
-   * Fetches messages from local storage first.
-   * If gaps are detected (miss), it "looks through" to the cloud to restore history.
+   * Uses the Meta-Index to short-circuit network requests.
    */
   async getMessages(query: HistoryQuery): Promise<HistoryResult> {
     const beforeTimestamp =
       (query.beforeTimestamp as ISODateTimeString) || undefined;
 
-    // 1. Try Local First (Fast Path)
+    // 1. GENESIS CHECK (The "Stop" Sign)
+    // Check our Meta-Index to see if we've already reached the beginning of time.
+    const index = await this.storage.getConversationIndex(
+      query.conversationUrn
+    );
+
+    if (
+      index?.genesisTimestamp &&
+      beforeTimestamp &&
+      beforeTimestamp <= index.genesisTimestamp
+    ) {
+      // We are asking for data OLDER than the known start. Stop.
+      return { messages: [], genesisReached: true };
+    }
+
+    // 2. LOAD LOCAL (Fast Path)
     let localMessages = await this.storage.loadHistorySegment(
       query.conversationUrn,
       query.limit,
       beforeTimestamp
     );
 
-    // 2. Assessment: Do we have enough data?
+    // 3. CLOUD FALLBACK (Lazy Load)
+    // If we didn't get enough messages, and we haven't hit genesis, look to the cloud.
     if (localMessages.length < query.limit) {
-      const genesisTimestamp = await this.getGenesisTimestamp(
-        query.conversationUrn
-      );
-
-      // Determine the "Edge" of our current knowledge
+      // Determine where to look (The Cursor)
       const oldestLocal =
         localMessages.length > 0
           ? localMessages[localMessages.length - 1].sentTimestamp
           : null;
 
       const cursorDate =
-        beforeTimestamp || oldestLocal || Temporal.Instant.toString();
+        beforeTimestamp || oldestLocal || Temporal.Now.instant().toString();
 
-      // 3. Cloud Fallback (Slow Path)
-      if (!this.isGenesisReached(genesisTimestamp, cursorDate)) {
-        // Ask Cloud to restore the vault containing this date
-        const restoredCount = await this.cloud.restoreVaultForDate(cursorDate);
+      // OPTIMIZATION: Pass the URN to the cloud!
+      // The Cloud Service will check the Manifest. If "Bob" isn't in that month, it returns 0 instantly.
+      const restoredCount = await this.cloud.restoreVaultForDate(
+        cursorDate,
+        query.conversationUrn
+      );
 
-        if (restoredCount > 0) {
-          // 4. Re-Query Local (Hydrated)
-          localMessages = await this.storage.loadHistorySegment(
-            query.conversationUrn,
-            query.limit,
-            beforeTimestamp
-          );
-        } else {
-          // Mark Genesis (End of History)
-          await this.setGenesisTimestamp(
-            query.conversationUrn,
-            cursorDate as ISODateTimeString
-          );
-        }
+      if (restoredCount > 0) {
+        // Data found! Reload local.
+        localMessages = await this.storage.loadHistorySegment(
+          query.conversationUrn,
+          query.limit,
+          beforeTimestamp
+        );
+      } else {
+        // No data found in cloud for this date.
+        // This implies we reached the Genesis for THIS conversation.
+        await this.storage.setGenesisTimestamp(
+          query.conversationUrn,
+          cursorDate as ISODateTimeString
+        );
       }
     }
 
-    // 5. Final Genesis Check
-    const finalGenesis = await this.getGenesisTimestamp(query.conversationUrn);
+    // 4. Final Assessment
+    // Re-check genesis in case we just updated it above.
+    const updatedIndex = await this.storage.getConversationIndex(
+      query.conversationUrn
+    );
+    const finalGenesis = updatedIndex?.genesisTimestamp;
+
+    // Determine the oldest message we currently have
     const finalOldest =
       localMessages.length > 0
         ? localMessages[localMessages.length - 1].sentTimestamp
         : null;
 
+    // Are we done?
+    // Yes if: We have a genesis, and our oldest message matches (or is newer than) it.
+    // Or if we have no messages and no genesis (rare edge case, usually implies empty chat).
+    const isAtGenesis =
+      !!finalGenesis && !!finalOldest && finalOldest <= finalGenesis;
+
     return {
       messages: localMessages,
-      genesisReached: this.isGenesisReached(
-        finalGenesis,
-        finalOldest || query.beforeTimestamp
-      ),
+      genesisReached:
+        isAtGenesis || (localMessages.length === 0 && !!finalGenesis),
     };
   }
 
-  // --- Metadata Helpers ---
+  // --- Internal Helpers ---
 
-  private async getGenesisTimestamp(urn: URN): Promise<string | null> {
-    const urnStr = urn.toString();
-    if (this.genesisCache.has(urnStr)) {
-      return this.genesisCache.get(urnStr) || null;
+  /**
+   * "Iterative Probe"
+   * Tries to find recent history by:
+   * 1. Downloading the Global Master Index (Fastest)
+   * 2. Scanning backwards 3 months (Fallback)
+   */
+  private async performInboxHydration(): Promise<void> {
+    // STRATEGY 1: Global Index (The "Bill from 2022" Fix)
+    const indexRestored = await this.cloud.restoreIndex();
+
+    if (indexRestored) {
+      return; // Success! Sidebar is populated with all chats.
     }
 
-    const meta = await this.storage.getConversationMetadata(urn);
-    if (meta?.genesisTimestamp) {
-      this.genesisCache.set(urnStr, meta.genesisTimestamp);
-      return meta.genesisTimestamp;
+    // STRATEGY 2: Recent Scan (Fallback for Legacy Backups)
+    const MAX_MONTHS_BACK = 3;
+    let monthsChecked = 0;
+
+    let cursor = Temporal.Now.plainDateISO();
+
+    while (monthsChecked < MAX_MONTHS_BACK) {
+      // For Inbox hydration, we do NOT pass a filter URN.
+      const count = await this.cloud.restoreVaultForDate(cursor.toString());
+
+      if (count > 0) return; // Found recent data, stop.
+
+      cursor = cursor.subtract({ months: 1 });
+      monthsChecked++;
     }
-
-    this.genesisCache.set(urnStr, null);
-    return null;
-  }
-
-  private async setGenesisTimestamp(
-    urn: URN,
-    timestamp: ISODateTimeString
-  ): Promise<void> {
-    this.genesisCache.set(urn.toString(), timestamp);
-    await this.storage.setGenesisTimestamp(urn, timestamp);
-  }
-
-  private isGenesisReached(
-    genesis: string | null | undefined,
-    cursor: string | undefined
-  ): boolean {
-    if (!genesis) return false;
-    if (!cursor) return false;
-    return cursor <= genesis;
   }
 }

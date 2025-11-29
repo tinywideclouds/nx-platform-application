@@ -15,10 +15,10 @@ import { vi } from 'vitest';
 import { signal } from '@angular/core';
 
 // Fixtures
-const contactUrn = URN.parse('urn:sm:user:bob');
+const contactUrn = URN.parse('urn:contacts:user:bob');
 const authUrn = URN.parse('urn:auth:google:bob-123');
 const lookupUrn = URN.parse('urn:lookup:email:bob@test.com');
-const myUrn = URN.parse('urn:sm:user:me');
+const myUrn = URN.parse('urn:message:user:me');
 
 const sc: Record<string, ServiceContact> = {
   hi: {

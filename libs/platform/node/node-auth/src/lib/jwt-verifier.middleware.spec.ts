@@ -38,7 +38,7 @@ vi.mock('jose', async (importActual) => {
 const MOCK_IDENTITY_URL = 'http://fake-identity-service.com';
 const MOCK_USER_PAYLOAD = {
   // This comes from the JWT (a string)
-  sub: 'urn:sm:user:user-123',
+  sub: 'urn:contacts:user:user-123',
   email: 'test@example.com',
   alias: 'Testy',
 };
@@ -46,7 +46,7 @@ const MOCK_USER_PAYLOAD = {
 // --- 2. Update MOCK_USER_OBJECT to use a URN ---
 // This is what req.user should look like after the middleware runs
 const MOCK_USER_OBJECT = {
-  id: URN.parse('urn:sm:user:user-123'),
+  id: URN.parse('urn:contacts:user:user-123'),
   email: 'test@example.com',
   alias: 'Testy',
 };

@@ -16,7 +16,7 @@ const MOCK_STRANGER: PendingIdentity = {
 const MOCK_VOUCHED: PendingIdentity = {
   urn: URN.parse('urn:auth:apple:friend'),
   firstSeenAt: '2023-01-01T00:00:00Z' as any,
-  vouchedBy: URN.parse('urn:sm:user:bob'),
+  vouchedBy: URN.parse('urn:contacts:user:bob'),
   note: 'Trust me',
 };
 

@@ -38,7 +38,6 @@ import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
 
 // Types
-import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { ContactSharePayload } from '@nx-platform-application/message-content';
 
 @Injectable({

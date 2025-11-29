@@ -17,7 +17,7 @@ import { ContactAvatarComponent } from '@nx-platform-application/contacts-ui';
 // --- 2. Update Mock Fixture to use URN objects ---
 const MOCK_ITEMS: ConversationViewItem[] = [
   {
-    id: URN.parse('urn:sm:user:contact-123'),
+    id: URN.parse('urn:contacts:user:contact-123'),
     name: 'johndoe',
     latestMessage: 'Hey',
     timestamp: '2025-11-15T12:30:00Z',
@@ -26,7 +26,7 @@ const MOCK_ITEMS: ConversationViewItem[] = [
     isActive: false,
   },
   {
-    id: URN.parse('urn:sm:user:contact-456'),
+    id: URN.parse('urn:contacts:user:contact-456'),
     name: 'janedoe',
     latestMessage: 'Hi',
     timestamp: '2025-11-15T12:31:00Z',
@@ -110,6 +110,8 @@ describe('ChatConversationListComponent', () => {
       By.css('[data-testid="empty-conversation-list"]')
     );
     expect(emptyMessage).toBeTruthy();
-    expect(emptyMessage.nativeElement.textContent).toContain('No conversations');
+    expect(emptyMessage.nativeElement.textContent).toContain(
+      'No conversations'
+    );
   });
 });

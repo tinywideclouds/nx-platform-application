@@ -8,11 +8,11 @@ import { URN } from '@nx-platform-application/platform-types';
 import { ContactGroupListItemComponent } from './contact-group-list-item.component';
 
 const MOCK_GROUP: ContactGroup = {
-  id: URN.parse('urn:sm:group:grp-123'),
+  id: URN.parse('urn:contacts:group:grp-123'),
   name: 'Family',
   contactIds: [
-    URN.parse('urn:sm:user:user-1'),
-    URN.parse('urn:sm:user:user-2'),
+    URN.parse('urn:contacts:user:user-1'),
+    URN.parse('urn:contacts:user:user-2'),
   ],
 };
 
@@ -52,7 +52,7 @@ describe('ContactGroupListItemComponent (Rendering)', () => {
   it('should render the correct member count (singular)', () => {
     const singularGroup = {
       ...MOCK_GROUP,
-      contactIds: [URN.parse('urn:sm:user:user-1')],
+      contactIds: [URN.parse('urn:contacts:user:user-1')],
     };
     fixture.componentRef.setInput('group', singularGroup);
     fixture.detectChanges();

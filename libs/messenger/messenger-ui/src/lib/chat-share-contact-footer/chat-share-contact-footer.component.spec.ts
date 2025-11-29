@@ -10,8 +10,8 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-const mockUrn1 = URN.parse('urn:sm:user:1');
-const mockUrn2 = URN.parse('urn:sm:user:2');
+const mockUrn1 = URN.parse('urn:contacts:user:1');
+const mockUrn2 = URN.parse('urn:contacts:user:2');
 
 const mockContact1: Contact = {
   id: mockUrn1,

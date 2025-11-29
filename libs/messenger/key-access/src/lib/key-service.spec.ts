@@ -36,8 +36,8 @@ describe('SecureKeyService', () => {
   let mockSerialize: Mock;
 
   // --- Fixtures ---
-  const mockUserUrn = URN.parse('urn:sm:user:test-user');
-  const mockApiUrl = 'api/keys/urn:sm:user:test-user';
+  const mockUserUrn = URN.parse('urn:contacts:user:test-user');
+  const mockApiUrl = 'api/keys/urn:contacts:user:test-user';
 
   // "Read" fixtures
   const mockJsonResponse = { encKey: 'b64...', sigKey: 'b64...' };
@@ -84,7 +84,7 @@ describe('SecureKeyService', () => {
 
       const req = httpMock.expectOne(mockApiUrl);
       expect(req.request.method).toBe('GET');
-      req.flush(mockJsonResponse); 
+      req.flush(mockJsonResponse);
 
       const keys = await promise;
 
@@ -152,7 +152,7 @@ describe('SecureKeyService', () => {
       const req = httpMock.expectOne(mockApiUrl);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toBe(mockSerializedJson);
-      req.flush(null, { status: 200, statusText: 'OK' }); 
+      req.flush(null, { status: 200, statusText: 'OK' });
 
       await storePromise;
 

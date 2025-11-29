@@ -21,7 +21,7 @@ message EncryptedMessagePayloadPb {
   string sent_timestamp = 2;
 
   // The URN that identifies the *type* of the payloadBytes.
-  // e.g., "urn:sm:type:text-message", "urn:sm:type:reaction"
+  // e.g., "urn:message:type:text-message", "urn:sm:type:reaction"
   string type_id = 3;
 
   // The raw, type-specific payload.

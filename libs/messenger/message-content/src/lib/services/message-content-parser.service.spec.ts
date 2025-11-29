@@ -3,10 +3,10 @@
 import { TestBed } from '@angular/core/testing';
 import { MessageContentParser } from './message-content-parser.service';
 import { URN } from '@nx-platform-application/platform-types';
-import { 
-  MESSAGE_TYPE_TEXT, 
+import {
+  MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
-  ContactSharePayload
+  ContactSharePayload,
 } from '../models/content-types';
 
 describe('MessageContentParser', () => {
@@ -15,7 +15,7 @@ describe('MessageContentParser', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [MessageContentParser]
+      providers: [MessageContentParser],
     });
     service = TestBed.inject(MessageContentParser);
   });
@@ -32,7 +32,8 @@ describe('MessageContentParser', () => {
       const result = service.parse(typeId, bytes);
 
       expect(result.type).toBe('text');
-      if (result.type === 'text') { // Guard for TS
+      if (result.type === 'text') {
+        // Guard for TS
         expect(result.text).toBe('Hello World');
       }
     });
@@ -54,9 +55,9 @@ describe('MessageContentParser', () => {
     it('should decode valid Contact Share JSON', () => {
       const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
       const payload: ContactSharePayload = {
-        urn: 'urn:sm:user:bob',
+        urn: 'urn:contacts:user:bob',
         alias: 'Bob',
-        text: 'Check this out'
+        text: 'Check this out',
       };
       const bytes = encoder.encode(JSON.stringify(payload));
 
@@ -95,14 +96,14 @@ describe('MessageContentParser', () => {
 
   describe('Unknown Types', () => {
     it('should return unknown type object', () => {
-      const typeId = URN.parse('urn:sm:type:unknown-future-thing');
+      const typeId = URN.parse('urn:message:type:unknown-future-thing');
       const bytes = encoder.encode('data');
 
       const result = service.parse(typeId, bytes);
 
       expect(result.type).toBe('unknown');
       if (result.type === 'unknown') {
-        expect(result.rawType).toBe('urn:sm:type:unknown-future-thing');
+        expect(result.rawType).toBe('urn:message:type:unknown-future-thing');
         expect(result.error).toBe('Unsupported message type');
       }
     });

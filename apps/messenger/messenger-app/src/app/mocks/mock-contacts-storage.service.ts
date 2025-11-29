@@ -18,7 +18,7 @@ import { Observable, of } from 'rxjs';
 
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: URN.parse('urn:sm:user:mock-contact-1'),
+    id: URN.parse('urn:contacts:user:mock-contact-1'),
     alias: 'Alice (Mock)',
     firstName: 'Alice',
     surname: 'Anderson',
@@ -27,7 +27,7 @@ const MOCK_CONTACTS: Contact[] = [
     emailAddresses: ['alice@mock.com'],
     serviceContacts: {
       messenger: {
-        id: URN.parse('urn:sm:service:msg-alice'),
+        id: URN.parse('urn:message:service:msg-alice'),
         alias: 'alice_msg',
         lastSeen: '2025-01-01T12:00:00Z' as ISODateTimeString,
         profilePictureUrl: 'https://i.pravatar.cc/150?img=5',
@@ -35,7 +35,7 @@ const MOCK_CONTACTS: Contact[] = [
     },
   },
   {
-    id: URN.parse('urn:sm:user:mock-contact-2'),
+    id: URN.parse('urn:contacts:user:mock-contact-2'),
     alias: 'Bob (Mock)',
     firstName: 'Bob',
     surname: 'Brown',
@@ -44,7 +44,7 @@ const MOCK_CONTACTS: Contact[] = [
     emailAddresses: ['bob@mock.com'],
     serviceContacts: {
       messenger: {
-        id: URN.parse('urn:sm:service:msg-bob'),
+        id: URN.parse('urn:message:service:msg-bob'),
         alias: 'bobby_b',
         lastSeen: '2025-01-01T12:00:00Z' as ISODateTimeString,
         profilePictureUrl: 'https://i.pravatar.cc/150?img=12',
@@ -55,12 +55,12 @@ const MOCK_CONTACTS: Contact[] = [
 
 const MOCK_GROUPS: ContactGroup[] = [
   {
-    id: URN.parse('urn:sm:group:mock-group-1'),
+    id: URN.parse('urn:contacts:group:mock-group-1'),
     name: 'Mock Dev Team',
     description: 'A mock group for testing the UI',
     contactIds: [
-      URN.parse('urn:sm:user:mock-contact-1'),
-      URN.parse('urn:sm:user:mock-contact-2'),
+      URN.parse('urn:contacts:user:mock-contact-1'),
+      URN.parse('urn:contacts:user:mock-contact-2'),
     ],
   },
 ];
@@ -76,7 +76,7 @@ const MOCK_PENDING: PendingIdentity[] = [
     id: 102,
     urn: URN.parse('urn:auth:apple:vouched-friend'),
     firstSeenAt: '2025-11-17T10:00:00Z' as ISODateTimeString,
-    vouchedBy: URN.parse('urn:sm:user:mock-contact-2'), // Vouched by Bob
+    vouchedBy: URN.parse('urn:contacts:user:mock-contact-2'), // Vouched by Bob
     note: 'This is my friend form the gym',
   },
 ];

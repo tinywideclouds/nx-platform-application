@@ -14,7 +14,7 @@ export default defineConfig({
     nxViteTsPaths(),
   ],
   test: {
-    name: 'key-contacts-cloud-access',
+    name: 'contacts-cloud-access',
     globals: true,
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],

@@ -6,7 +6,7 @@ import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatOutboundService } from './chat-outbound.service';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi } from 'vitest';
 import {
   URN,
   ISODateTimeString,
@@ -14,8 +14,8 @@ import {
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
 // --- Fixtures ---
-const mockConvoUrn = URN.parse('urn:sm:user:bob');
-const mockMyUrn = URN.parse('urn:sm:user:me');
+const mockConvoUrn = URN.parse('urn:contacts:user:bob');
+const mockMyUrn = URN.parse('urn:contacts:user:me');
 
 // Helper to create simple messages
 const createMsg = (id: string, time: string): ChatMessage => ({
@@ -24,7 +24,7 @@ const createMsg = (id: string, time: string): ChatMessage => ({
   conversationUrn: mockConvoUrn,
   senderId: mockMyUrn,
   textContent: `Message ${id}`,
-  typeId: URN.parse('urn:sm:type:text'),
+  typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new Uint8Array(),
 });
 

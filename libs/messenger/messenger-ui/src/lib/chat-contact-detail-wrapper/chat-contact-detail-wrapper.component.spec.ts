@@ -16,8 +16,8 @@ import { MockComponent, MockProvider } from 'ng-mocks';
 import { ContactDetailComponent } from '@nx-platform-application/contacts-ui';
 import { ChatShareContactFooterComponent } from '../chat-share-contact-footer/chat-share-contact-footer.component';
 
-const contactId = URN.parse('urn:sm:user:shared-contact');
-const recipientId = URN.parse('urn:sm:user:recipient');
+const contactId = URN.parse('urn:contacts:user:shared-contact');
+const recipientId = URN.parse('urn:contacts:user:recipient');
 
 const mockContact: Contact = {
   id: contactId,

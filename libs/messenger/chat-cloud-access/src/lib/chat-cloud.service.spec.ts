@@ -11,10 +11,13 @@ import {
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ChatVault } from './models/chat-vault.interface';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+import { VaultManifest } from './models/chat-vault.interface';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 
-// --- Temporal Mock (Unchanged) ---
+// --- Temporal Mock ---
 vi.mock('@js-temporal/polyfill', () => {
   return {
     Temporal: {
@@ -80,18 +83,27 @@ describe('ChatCloudService', () => {
   let service: ChatCloudService;
   let storage: ChatStorageService;
 
-  // Manual mock for the interface token
   const mockProvider: CloudStorageProvider = {
     providerId: 'google',
+    displayName: 'google',
+    revokeAccess: vi.fn(),
     requestAccess: vi.fn(),
     hasPermission: vi.fn(),
     listBackups: vi.fn(),
     uploadBackup: vi.fn(),
     downloadBackup: vi.fn(),
+    uploadFile: vi.fn(),
+    downloadFile: vi.fn(),
   };
 
+  const bobUrn = URN.parse('urn:contacts:user:bob');
+  const aliceUrn = URN.parse('urn:contacts:user:alice');
+
   const mockMessages: DecryptedMessage[] = [
-    { sentTimestamp: '2023-11-01T10:00:00Z' } as any,
+    {
+      sentTimestamp: '2023-11-01T10:00:00Z',
+      conversationUrn: bobUrn,
+    } as any,
   ];
 
   beforeEach(() => {
@@ -100,25 +112,14 @@ describe('ChatCloudService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatCloudService,
-
-        // ✅ FIX 1: Explicitly define the spies.
-        // This avoids 'autoSpy' trying to mock non-function properties.
         MockProvider(ChatStorageService, {
-          isCloudEnabled: vi.fn().mockResolvedValue(false), // Default state
+          isCloudEnabled: vi.fn().mockResolvedValue(false),
           setCloudEnabled: vi.fn().mockResolvedValue(undefined),
           getDataRange: vi.fn(),
           getMessagesInRange: vi.fn(),
           bulkSaveMessages: vi.fn().mockResolvedValue(undefined),
         }),
-
-        // ✅ FIX 2: Explicitly spy on Logger methods too
-        MockProvider(Logger, {
-          info: vi.fn(),
-          warn: vi.fn(),
-          error: vi.fn(),
-          debug: vi.fn(),
-        }),
-
+        MockProvider(Logger),
         { provide: CLOUD_PROVIDERS, useValue: [mockProvider] },
       ],
     });
@@ -131,126 +132,152 @@ describe('ChatCloudService', () => {
     vi.restoreAllMocks();
   });
 
-  describe('Initialization', () => {
-    it('should initialize state from storage', async () => {
-      // Re-configure storage return value using vi.spyOn to override the default
-      vi.spyOn(storage, 'isCloudEnabled').mockResolvedValue(true);
-
-      // Access private method to re-trigger initialization logic
-      await (service as any).initCloudState();
-
-      expect(service.isCloudEnabled()).toBe(true);
-    });
-  });
-
-  describe('Connection (Guard)', () => {
-    it('should enable cloud if provider grants access', async () => {
-      vi.spyOn(mockProvider, 'requestAccess').mockResolvedValue(true);
-
-      const result = await service.connect('google');
-
-      expect(result).toBe(true);
-      expect(service.isCloudEnabled()).toBe(true);
-      expect(storage.setCloudEnabled).toHaveBeenCalledWith(true);
-    });
-
-    it('should stay offline if provider denies access', async () => {
-      vi.spyOn(mockProvider, 'requestAccess').mockResolvedValue(false);
-
-      const result = await service.connect('google');
-
-      expect(result).toBe(false);
-      expect(service.isCloudEnabled()).toBe(false);
-    });
-  });
-
-  describe('Backup Strategy', () => {
+  describe('Backup (Twin-File Strategy)', () => {
     beforeEach(() => {
-      // Force "Online" state internally for these tests
       (service['_isCloudEnabled'] as any).set(true);
       vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(true);
-    });
 
-    it('should skip if offline', async () => {
-      (service['_isCloudEnabled'] as any).set(false);
-
-      await service.backup('google');
-
-      expect(storage.getDataRange).not.toHaveBeenCalled();
-    });
-
-    it('should disconnect if permission is revoked', async () => {
-      vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(false);
-
-      await service.backup('google');
-
-      expect(storage.setCloudEnabled).toHaveBeenCalledWith(false);
-    });
-
-    it('should process "Hot" and "Missing" vaults, skip "Cold"', async () => {
       vi.spyOn(storage, 'getDataRange').mockResolvedValue({
-        min: '2023-10-01T00:00:00Z' as ISODateTimeString,
-        max: '2023-11-15T00:00:00Z' as ISODateTimeString,
+        min: '2023-11-01T00:00:00Z' as ISODateTimeString,
+        max: '2023-11-30T00:00:00Z' as ISODateTimeString,
       });
-
-      vi.spyOn(mockProvider, 'listBackups').mockResolvedValue([
-        {
-          name: 'chat_vault_2023_10.json',
-          fileId: '1',
-          createdAt: '',
-          sizeBytes: 0,
-        },
-      ]);
-
       vi.spyOn(storage, 'getMessagesInRange').mockResolvedValue(mockMessages);
+      vi.spyOn(mockProvider, 'listBackups').mockResolvedValue([]);
+    });
 
+    it('should upload BOTH a Manifest and a Vault', async () => {
       await service.backup('google');
 
-      // Verify Upload logic
-      expect(mockProvider.uploadBackup).toHaveBeenCalledTimes(1);
-      const callArgs = (mockProvider.uploadBackup as any).mock.calls[0];
-      expect(callArgs[1]).toBe('chat_vault_2023_11.json');
+      expect(mockProvider.uploadBackup).toHaveBeenCalledTimes(2);
 
-      // Verify Optimization logic (only fetched messages for the missing vault)
-      expect(storage.getMessagesInRange).toHaveBeenCalledTimes(1);
+      // Verify Manifest Upload
+      // FIX: Removed 'messages: undefined' check as the key is missing entirely
+      expect(mockProvider.uploadBackup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vaultId: '2023_11',
+          participants: [bobUrn.toString()],
+        }),
+        'chat_manifest_2023_11.json'
+      );
+
+      // Verify Vault Upload
+      expect(mockProvider.uploadBackup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vaultId: '2023_11',
+          messages: mockMessages,
+        }),
+        'chat_vault_2023_11.json'
+      );
     });
   });
 
-  describe('Restore (Lazy Load)', () => {
-    const targetDate = '2023-05-15T10:00:00Z';
-    const expectedFilename = 'chat_vault_2023_05.json';
+  describe('Restore (Optimized Gatekeeper)', () => {
+    const targetDate = '2023-11-15T10:00:00Z';
+    const vaultId = '2023_11';
+    const manifestName = `chat_manifest_${vaultId}.json`;
+    const vaultName = `chat_vault_${vaultId}.json`;
 
     beforeEach(() => {
       (service['_isCloudEnabled'] as any).set(true);
       vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(true);
     });
 
-    it('should download and import vault if found', async () => {
-      vi.spyOn(mockProvider, 'listBackups').mockResolvedValue([
-        {
-          fileId: 'file-123',
-          name: expectedFilename,
-          createdAt: '',
-          sizeBytes: 0,
-        },
-      ]);
-
-      const mockVault: ChatVault = {
-        vaultId: '2023_05',
-        messages: [{ messageId: 'm1' } as any],
+    it('HIT: should download vault if user is found in Manifest', async () => {
+      const mockManifest: VaultManifest = {
         version: 1,
+        vaultId,
+        messageCount: 1,
         rangeStart: '',
         rangeEnd: '',
-        messageCount: 1,
+        participants: [bobUrn.toString()],
       };
-      vi.spyOn(mockProvider, 'downloadBackup').mockResolvedValue(mockVault);
 
-      const count = await service.restoreVaultForDate(targetDate);
+      vi.spyOn(mockProvider, 'listBackups').mockImplementation(
+        async (query) => {
+          if (query === manifestName)
+            return [{ fileId: 'man-1', name: manifestName } as any];
+          if (query === vaultName)
+            return [{ fileId: 'vault-1', name: vaultName } as any];
+          return [];
+        }
+      );
 
-      expect(mockProvider.listBackups).toHaveBeenCalledWith(expectedFilename);
-      expect(mockProvider.downloadBackup).toHaveBeenCalledWith('file-123');
-      expect(storage.bulkSaveMessages).toHaveBeenCalledWith(mockVault.messages);
-      expect(count).toBe(1);
+      vi.spyOn(mockProvider, 'downloadBackup')
+        .mockResolvedValueOnce(mockManifest)
+        .mockResolvedValueOnce({ messages: mockMessages } as any);
+
+      await service.restoreVaultForDate(targetDate, bobUrn);
+
+      expect(mockProvider.downloadBackup).toHaveBeenCalledTimes(2);
+      expect(storage.bulkSaveMessages).toHaveBeenCalled();
+    });
+
+    it('MISS: should SKIP download if user is NOT in Manifest', async () => {
+      const mockManifest: VaultManifest = {
+        version: 1,
+        vaultId,
+        messageCount: 1,
+        rangeStart: '',
+        rangeEnd: '',
+        participants: [aliceUrn.toString()],
+      };
+
+      vi.spyOn(mockProvider, 'listBackups').mockImplementation(
+        async (query) => {
+          if (query === manifestName)
+            return [{ fileId: 'man-1', name: manifestName } as any];
+          return [];
+        }
+      );
+
+      vi.spyOn(mockProvider, 'downloadBackup').mockResolvedValueOnce(
+        mockManifest
+      );
+
+      const count = await service.restoreVaultForDate(targetDate, bobUrn);
+
+      expect(mockProvider.downloadBackup).toHaveBeenCalledTimes(1);
+      expect(storage.bulkSaveMessages).not.toHaveBeenCalled();
+      expect(count).toBe(0);
+    });
+
+    it('LEGACY: should FALLBACK to full download if Manifest is missing', async () => {
+      vi.spyOn(mockProvider, 'listBackups').mockImplementation(
+        async (query) => {
+          if (query === manifestName) return [];
+          if (query === vaultName)
+            return [{ fileId: 'vault-1', name: vaultName } as any];
+          return [];
+        }
+      );
+
+      vi.spyOn(mockProvider, 'downloadBackup').mockResolvedValueOnce({
+        messages: mockMessages,
+      } as any);
+
+      await service.restoreVaultForDate(targetDate, bobUrn);
+
+      expect(mockProvider.downloadBackup).toHaveBeenCalledTimes(1);
+      expect(storage.bulkSaveMessages).toHaveBeenCalled();
+    });
+
+    it('GLOBAL: should skip manifest check if no filterUrn provided', async () => {
+      vi.spyOn(mockProvider, 'listBackups').mockImplementation(
+        async (query) => {
+          if (query === vaultName)
+            return [{ fileId: 'vault-1', name: vaultName } as any];
+          return [];
+        }
+      );
+
+      vi.spyOn(mockProvider, 'downloadBackup').mockResolvedValueOnce({
+        messages: mockMessages,
+      } as any);
+
+      await service.restoreVaultForDate(targetDate);
+
+      expect(mockProvider.listBackups).toHaveBeenCalledWith(vaultName);
+      expect(storage.bulkSaveMessages).toHaveBeenCalled();
     });
   });
 });

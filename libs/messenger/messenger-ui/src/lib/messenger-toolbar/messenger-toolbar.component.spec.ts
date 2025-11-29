@@ -6,9 +6,9 @@ import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 
 const mockUser: User = {
-  id: URN.parse('urn:sm:user:me'),
+  id: URN.parse('urn:contacts:user:me'),
   alias: 'Me',
-  email: 'me@test.com'
+  email: 'me@test.com',
 };
 
 describe('MessengerToolbarComponent', () => {
@@ -22,7 +22,7 @@ describe('MessengerToolbarComponent', () => {
 
     fixture = TestBed.createComponent(MessengerToolbarComponent);
     component = fixture.componentInstance;
-    
+
     fixture.componentRef.setInput('currentUser', mockUser);
     fixture.detectChanges();
   });
@@ -33,18 +33,25 @@ describe('MessengerToolbarComponent', () => {
 
   it('should render user initials', () => {
     // When no profile URL, it renders initials div
-    fixture.componentRef.setInput('currentUser', { ...mockUser, profileUrl: undefined });
+    fixture.componentRef.setInput('currentUser', {
+      ...mockUser,
+      profileUrl: undefined,
+    });
     fixture.detectChanges();
 
-    const avatar = fixture.debugElement.query(By.css('.rounded-full.bg-gray-600'));
+    const avatar = fixture.debugElement.query(
+      By.css('.rounded-full.bg-gray-600')
+    );
     expect(avatar.nativeElement.textContent).toContain('ME');
   });
 
   it('should emit viewCompose event', () => {
     // FIX: Access the correct output property 'viewCompose'
     const spy = vi.spyOn(component.viewCompose, 'emit');
-    const btn = fixture.debugElement.query(By.css('button[matTooltip="New Message"]'));
-    
+    const btn = fixture.debugElement.query(
+      By.css('button[matTooltip="New Message"]')
+    );
+
     btn.nativeElement.click();
     expect(spy).toHaveBeenCalled();
   });
@@ -52,8 +59,10 @@ describe('MessengerToolbarComponent', () => {
   it('should emit viewContacts event', () => {
     // FIX: Access the correct output property 'viewContacts'
     const spy = vi.spyOn(component.viewContacts, 'emit');
-    const btn = fixture.debugElement.query(By.css('button[matTooltip="Contacts"]'));
-    
+    const btn = fixture.debugElement.query(
+      By.css('button[matTooltip="Contacts"]')
+    );
+
     btn.nativeElement.click();
     expect(spy).toHaveBeenCalled();
   });

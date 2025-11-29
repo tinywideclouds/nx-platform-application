@@ -13,7 +13,7 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 
 // Mock Data
 const mockContact = {
-  id: URN.parse('urn:sm:user:test'),
+  id: URN.parse('urn:contacts:user:test'),
   alias: 'Test User',
 } as Contact;
 
@@ -60,7 +60,7 @@ describe('MessengerComposePageComponent', () => {
     expect(spy).toHaveBeenCalledWith([
       '/messenger',
       'conversations',
-      'urn:sm:user:test',
+      'urn:contacts:user:test',
     ]);
   });
 });

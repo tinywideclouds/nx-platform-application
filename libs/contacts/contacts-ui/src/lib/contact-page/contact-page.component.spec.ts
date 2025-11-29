@@ -11,7 +11,7 @@ import { MockComponent, MockProvider } from 'ng-mocks';
 import { ContactDetailComponent } from '../contact-detail/contact-detail.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
-const mockContactUrnString = 'urn:sm:user:user-123';
+const mockContactUrnString = 'urn:contacts:user:user-123';
 
 describe('ContactPageComponent', () => {
   let fixture: ComponentFixture<ContactPageComponent>;

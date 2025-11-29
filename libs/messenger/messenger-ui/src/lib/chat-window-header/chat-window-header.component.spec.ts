@@ -9,7 +9,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockModule, ngMocks } from 'ng-mocks';
 
 const MOCK_PARTICIPANT: ChatParticipant = {
-  urn: URN.parse('urn:sm:user:alice'),
+  urn: URN.parse('urn:contacts:user:alice'),
   name: 'Alice',
   initials: 'A',
   profilePictureUrl: 'http://img.com/alice.png',

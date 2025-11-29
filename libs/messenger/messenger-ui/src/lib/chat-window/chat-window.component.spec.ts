@@ -20,7 +20,7 @@ import { MockComponent, MockProvider } from 'ng-mocks';
 import { ChatWindowHeaderComponent } from '../chat-window-header/chat-window-header.component';
 
 // Mock Data
-const mockContactUrn = URN.parse('urn:sm:user:alice');
+const mockContactUrn = URN.parse('urn:contacts:user:alice');
 const mockContact: Contact = {
   id: mockContactUrn,
   alias: 'Alice',

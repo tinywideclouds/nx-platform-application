@@ -1,39 +1,38 @@
+// libs/messenger/chat-storage/src/lib/db/messenger.database.ts
+
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
 import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
-import { MessageRecord, ConversationMetadata } from '../chat-storage.models';
+import { MessageRecord, ConversationIndexRecord } from '../chat-storage.models';
 
 @Injectable({ providedIn: 'root' })
 export class MessengerDatabase extends PlatformDexieService {
   messages!: Table<MessageRecord, string>;
   settings!: Table<{ key: string; value: any }, string>;
-  conversation_metadata!: Table<ConversationMetadata, string>;
+  // NEW: The Meta-Index Table
+  conversations!: Table<ConversationIndexRecord, string>;
 
   constructor() {
     super('messenger');
 
-    // v1: Legacy Schema (Historical reference)
+    // v1 - v4: (Previous versions retained for history/migrations)
     this.version(1).stores({
       messages: 'messageId, conversationUrn, sentTimestamp',
-      publicKeys: 'urn', // Old table
+      publicKeys: 'urn',
     });
 
-    // v2: Optimization & Cleanup
-    // - Removes publicKeys table
-    // - Adds compound index [conversationUrn+sentTimestamp] for fast history queries
     this.version(2).stores({
       messages:
         'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
-      publicKeys: null, // Deletes the table
+      publicKeys: null,
     });
 
     this.version(3).stores({
       messages:
         'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
-      settings: 'key', // Simple Key-Value Store
+      settings: 'key',
     });
 
-    // v4: Conversation Metadata (Genesis Markers)
     this.version(4).stores({
       messages:
         'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
@@ -41,8 +40,19 @@ export class MessengerDatabase extends PlatformDexieService {
       conversation_metadata: 'conversationUrn',
     });
 
+    // v5: The Meta-Index Architecture
+    // - Adds 'conversations' table optimized for Inbox sorting
+    // - Removes 'conversation_metadata' (merged into conversations)
+    this.version(5).stores({
+      messages:
+        'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
+      settings: 'key',
+      conversation_metadata: null, // Drop old table
+      conversations: 'conversationUrn, lastActivityTimestamp', // Index on timestamp for fast inbox load
+    });
+
     this.messages = this.table('messages');
     this.settings = this.table('settings');
-    this.conversation_metadata = this.table('conversation_metadata');
+    this.conversations = this.table('conversations');
   }
 }

@@ -25,8 +25,8 @@ describe('ContactsDatabase', () => {
     expect(db).toBeTruthy();
   });
 
-  it('should have migrated to version 4', () => {
-    expect(db.verno).toBe(4);
+  it('should have migrated to version 5', () => {
+    expect(db.verno).toBe(5);
   });
 
   // ... (Existing Contact/Group checks remain unchanged) ...

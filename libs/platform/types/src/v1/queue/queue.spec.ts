@@ -15,14 +15,11 @@ vi.mock('@bufbuild/protobuf', () => ({
 }));
 
 // Mock the generated proto schema
-vi.mock(
-  '@nx-platform-application/platform-protos/routing/v1/queue_pb',
-  () => ({
-    QueuedMessageListPbSchema: {}, // Mock schema
-    QueuedMessageListPb: {}, // Mock type
-    QueuedMessagePb: {}, // Mock type
-  })
-);
+vi.mock('@nx-platform-application/platform-protos/routing/v1/queue_pb', () => ({
+  QueuedMessageListPbSchema: {}, // Mock schema
+  QueuedMessageListPb: {}, // Mock type
+  QueuedMessagePb: {}, // Mock type
+}));
 
 // Mock our *other* facade (which this one depends on)
 //
@@ -41,14 +38,14 @@ describe('Queue Facade Mappers', () => {
   // --- Fixtures ---
   const mockEnvelopePb: SecureEnvelopePb = {
     $typeName: 'src.types.secure.v1.SecureEnvelopePb',
-    recipientId: 'urn:sm:user:test',
+    recipientId: 'urn:contacts:user:test',
     encryptedData: new Uint8Array([1]),
     encryptedSymmetricKey: new Uint8Array([2]),
     signature: new Uint8Array([3]),
   };
 
   const mockSmartEnvelope: SecureEnvelope = {
-    recipientId: URN.parse('urn:sm:user:test'),
+    recipientId: URN.parse('urn:contacts:user:test'),
     encryptedData: new Uint8Array([1]),
     encryptedSymmetricKey: new Uint8Array([2]),
     signature: new Uint8Array([3]),
@@ -90,7 +87,8 @@ describe('Queue Facade Mappers', () => {
 
     // This import will now grab the mock from vi.mock
     const envelopeFacade = await import('../secure/envelope');
-    mockSecureEnvelopeFromProto = envelopeFacade.secureEnvelopeFromProto as Mock;
+    mockSecureEnvelopeFromProto =
+      envelopeFacade.secureEnvelopeFromProto as Mock;
 
     vi.clearAllMocks();
 
@@ -133,10 +131,7 @@ describe('Queue Facade Mappers', () => {
       expect(mockSecureEnvelopeFromProto).toHaveBeenCalledWith(mockEnvelopePb);
 
       // 3. Check final result
-      expect(result).toEqual([
-        mockSmartQueuedMessage,
-        mockSmartQueuedMessage,
-      ]);
+      expect(result).toEqual([mockSmartQueuedMessage, mockSmartQueuedMessage]);
     });
   });
 });

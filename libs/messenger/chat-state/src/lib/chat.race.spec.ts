@@ -55,12 +55,12 @@ vi.mock('@js-temporal/polyfill', () => ({
 }));
 
 const mockUser: User = {
-  id: URN.parse('urn:sm:user:me'),
+  id: URN.parse('urn:contacts:user:me'),
   alias: 'Me',
   email: 'me@test.com',
 };
 const mockUserUrn = mockUser.id;
-const mockSenderUrn = URN.parse('urn:sm:user:sender');
+const mockSenderUrn = URN.parse('urn:contacts:user:sender');
 
 const mockMyKeys: PrivateKeys = {
   encKey: 'my-enc-key',
@@ -91,7 +91,7 @@ const mockTextContent = 'Test Payload';
 const mockDecryptedPayload: EncryptedMessagePayload = {
   senderId: mockSenderUrn,
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
-  typeId: URN.parse('urn:sm:type:text'),
+  typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new TextEncoder().encode(mockTextContent),
 };
 

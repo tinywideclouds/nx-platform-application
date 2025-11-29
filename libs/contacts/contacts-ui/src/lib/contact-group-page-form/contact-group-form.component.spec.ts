@@ -17,9 +17,9 @@ import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 // --- 3. Update Mock Fixtures to use URNs ---
-const mockContact1Urn = URN.parse('urn:sm:user:user-123');
-const mockContact2Urn = URN.parse('urn:sm:user:user-456');
-const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
+const mockContact1Urn = URN.parse('urn:contacts:user:user-123');
+const mockContact2Urn = URN.parse('urn:contacts:user:user-456');
+const mockGroupUrn = URN.parse('urn:contacts:group:grp-123');
 
 const MOCK_CONTACTS: Contact[] = [
   {

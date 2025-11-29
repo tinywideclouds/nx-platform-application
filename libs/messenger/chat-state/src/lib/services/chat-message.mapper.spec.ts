@@ -2,19 +2,22 @@ import { TestBed } from '@angular/core/testing';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { Logger } from '@nx-platform-application/console-logger';
 import { DecryptedMessage } from '@nx-platform-application/chat-storage';
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 const mockLogger = { error: vi.fn() };
 
 const mockDecryptedMsg: DecryptedMessage = {
   messageId: 'msg-1',
-  senderId: URN.parse('urn:sm:user:sender'),
-  recipientId: URN.parse('urn:sm:user:me'),
+  senderId: URN.parse('urn:contacts:user:sender'),
+  recipientId: URN.parse('urn:contacts:user:me'),
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
-  conversationUrn: URN.parse('urn:sm:user:sender'),
+  conversationUrn: URN.parse('urn:contacts:user:sender'),
   status: 'received',
-  typeId: URN.parse('urn:sm:type:text'),
+  typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new TextEncoder().encode('Hello World'),
 };
 
@@ -24,10 +27,7 @@ describe('ChatMessageMapper', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     TestBed.configureTestingModule({
-      providers: [
-        ChatMessageMapper,
-        { provide: Logger, useValue: mockLogger }
-      ],
+      providers: [ChatMessageMapper, { provide: Logger, useValue: mockLogger }],
     });
     service = TestBed.inject(ChatMessageMapper);
   });
@@ -36,16 +36,16 @@ describe('ChatMessageMapper', () => {
     const result = service.toView(mockDecryptedMsg);
 
     expect(result.id).toBe('msg-1');
-    expect(result.senderId.toString()).toBe('urn:sm:user:sender');
+    expect(result.senderId.toString()).toBe('urn:message:user:sender');
     expect(result.textContent).toBe('Hello World');
     expect(result.sentTimestamp).toBe('2025-01-01T12:00:00Z');
-    expect(result.typeId.toString()).toBe('urn:sm:type:text');
+    expect(result.typeId.toString()).toBe('urn:message:type:text');
   });
 
   it('should handle non-text messages gracefully', () => {
     const nonTextMsg = {
       ...mockDecryptedMsg,
-      typeId: URN.parse('urn:sm:type:image'),
+      typeId: URN.parse('urn:message:type:image'),
       payloadBytes: new Uint8Array([0, 1, 2]),
     };
 
@@ -53,18 +53,18 @@ describe('ChatMessageMapper', () => {
 
     expect(result.textContent).toBe('Unsupported Message Type');
     // Should preserve bytes for smart renderer
-    expect(result.payloadBytes).toEqual(new Uint8Array([0, 1, 2])); 
+    expect(result.payloadBytes).toEqual(new Uint8Array([0, 1, 2]));
   });
 
   it('should handle malformed text gracefully', () => {
     const malformedMsg = {
       ...mockDecryptedMsg,
       // Invalid UTF-8 sequence that causes TextDecoder(fatal=true) to throw
-      payloadBytes: new Uint8Array([0xFF, 0xFF]),
+      payloadBytes: new Uint8Array([0xff, 0xff]),
     };
 
     const result = service.toView(malformedMsg);
-    
+
     expect(mockLogger.error).toHaveBeenCalled();
     expect(result.textContent).toContain('[Error: Unreadable message]');
   });

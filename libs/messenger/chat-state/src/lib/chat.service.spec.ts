@@ -82,7 +82,7 @@ const mockLogger = {
 };
 
 const mockUser: User = {
-  id: URN.parse('urn:sm:user:me'),
+  id: URN.parse('urn:contacts:user:me'),
   alias: 'Me',
   email: 'me@test.com',
 };
@@ -134,7 +134,7 @@ describe('ChatService', () => {
 
   it('should delegate loadConversation to ConversationService', async () => {
     await initializeService();
-    const urn = URN.parse('urn:sm:user:bob');
+    const urn = URN.parse('urn:contacts:user:bob');
 
     await service.loadConversation(urn);
 
@@ -151,7 +151,7 @@ describe('ChatService', () => {
     mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
     await initializeService();
 
-    const recipient = URN.parse('urn:sm:user:alice');
+    const recipient = URN.parse('urn:contacts:user:alice');
     const text = 'Hello';
 
     await service.sendMessage(recipient, text);
@@ -168,9 +168,9 @@ describe('ChatService', () => {
     mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
     await initializeService();
 
-    const recipient = URN.parse('urn:sm:user:alice');
+    const recipient = URN.parse('urn:contacts:user:alice');
     const payload: ContactSharePayload = {
-      urn: 'urn:sm:user:charlie',
+      urn: 'urn:contacts:user:charlie',
       alias: 'Charlie',
     };
 

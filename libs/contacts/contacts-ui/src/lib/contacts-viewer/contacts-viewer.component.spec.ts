@@ -74,7 +74,7 @@ class StubLayoutComponent {
 }
 
 // --- MOCK DATA ---
-const mockContactUrn = 'urn:sm:user:123';
+const mockContactUrn = 'urn:contacts:user:123';
 const mockContact = { id: URN.parse(mockContactUrn) } as Contact;
 
 describe('ContactsViewerComponent', () => {

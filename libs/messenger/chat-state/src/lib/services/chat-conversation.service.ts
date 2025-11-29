@@ -1,19 +1,12 @@
 // libs/messenger/chat-state/src/lib/services/chat-conversation.service.ts
 
 import { Injectable, inject, signal, WritableSignal } from '@angular/core';
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
-import { Temporal } from '@js-temporal/polyfill';
+import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 
 // Data Layer
 import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import {
-  ChatStorageService,
-  ConversationSummary,
-} from '@nx-platform-application/chat-storage';
+import { ConversationSummary } from '@nx-platform-application/chat-storage';
 
 // Helpers
 import { ChatKeyService } from './chat-key.service';

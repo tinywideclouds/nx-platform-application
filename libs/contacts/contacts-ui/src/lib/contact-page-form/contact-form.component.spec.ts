@@ -18,7 +18,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips'; // <-- Import
 
 const mockContact: Contact = {
-  id: URN.parse('urn:sm:user:user-123'),
+  id: URN.parse('urn:contacts:user:user-123'),
   alias: 'johndoe',
   email: 'john@example.com',
   firstName: 'John',
@@ -27,7 +27,7 @@ const mockContact: Contact = {
   emailAddresses: ['john@work.com'],
   serviceContacts: {
     messenger: {
-      id: URN.parse('urn:sm:service:msg-uuid-1'),
+      id: URN.parse('urn:message:service:msg-uuid-1'),
       alias: 'jd_messenger',
       lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
     },

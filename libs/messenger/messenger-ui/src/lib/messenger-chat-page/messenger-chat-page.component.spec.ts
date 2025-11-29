@@ -20,8 +20,8 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 import { ChatConversationListComponent } from '@nx-platform-application/chat-ui';
 import { MessengerNetworkStatusComponent } from '../messenger-network-status/messenger-network-status.component';
 
-const friendUrn = URN.parse('urn:sm:user:friend');
-const strangerUrn = URN.parse('urn:sm:user:stranger');
+const friendUrn = URN.parse('urn:contacts:user:friend');
+const strangerUrn = URN.parse('urn:contacts:user:stranger');
 
 const mockSummaries = [
   {

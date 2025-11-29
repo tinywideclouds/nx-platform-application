@@ -47,11 +47,9 @@ import {
 } from '@nx-platform-application/console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
+import { MockCloudProvider } from '@nx-platform-application/contacts-cloud-access';
 import {
-  CONTACTS_CLOUD_CONFIG,
-  MockCloudProvider,
-} from '@nx-platform-application/contacts-cloud-access';
-import {
+  PLATFORM_CLOUD_CONFIG,
   CLOUD_PROVIDERS,
   GoogleDriveService,
 } from '@nx-platform-application/platform-cloud-access';
@@ -142,7 +140,7 @@ export const appConfig: ApplicationConfig = {
       },
     },
     {
-      provide: CONTACTS_CLOUD_CONFIG,
+      provide: PLATFORM_CLOUD_CONFIG,
       useValue: {
         googleClientId: environment.googleClientId,
       },

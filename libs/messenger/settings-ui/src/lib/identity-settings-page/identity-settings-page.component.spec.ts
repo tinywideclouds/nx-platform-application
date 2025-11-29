@@ -23,7 +23,7 @@ describe('IdentitySettingsPageComponent', () => {
   let cloudServiceSpy: any;
 
   const mockUser = {
-    id: URN.parse('urn:sm:user:test'),
+    id: URN.parse('urn:contacts:user:test'),
     alias: 'TestUser',
     email: 'test@test.com',
   };

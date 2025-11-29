@@ -13,7 +13,7 @@ import { AUTH_API_URL } from './auth-data.config';
 
 // --- 2. Define mock domain object and DTO ---
 const mockUserDomain: User = {
-  id: URN.parse('urn:sm:user:123'),
+  id: URN.parse('urn:contacts:user:123'),
   alias: 'Test User',
   email: 'test@example.com',
 };
@@ -22,7 +22,7 @@ const mockUserDomain: User = {
 const mockAuthResponseDTO = {
   authenticated: true,
   user: {
-    id: 'urn:sm:user:123', // <-- The ID is a string here
+    id: 'urn:contacts:user:123', // <-- The ID is a string here
     alias: 'Test User',
     email: 'test@example.com',
   },

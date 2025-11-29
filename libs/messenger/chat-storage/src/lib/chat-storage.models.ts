@@ -5,12 +5,8 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
-// PublicKeyRecord REMOVED (Moved to key-storage)
+// --- STORAGE MODELS (Dexie) ---
 
-/**
- * This is the shape of the data as it will be in Dexie
- * We convert URNs to strings for storage.
- */
 export interface MessageRecord {
   messageId: string;
   senderId: string;
@@ -23,8 +19,29 @@ export interface MessageRecord {
 }
 
 /**
- * The "smart" model for a fully decrypted and verified message.
+ * NEW: The Meta-Index Record
+ * Acts as the source of truth for the Inbox AND the scroll boundaries.
  */
+export interface ConversationIndexRecord {
+  /** Primary Key */
+  conversationUrn: string;
+
+  /** Sorting & UI (The "Inbox" View) */
+  lastActivityTimestamp: string; // ISO String, indexed for fast sorting
+  snippet: string; // Decrypted text preview
+  previewType: 'text' | 'image' | 'file' | 'other';
+  unreadCount: number;
+
+  /** GENESIS LOGIC (The "Scroll" Boundaries) */
+  // If set, we know history definitely starts here. Stop scrolling.
+  genesisTimestamp: string | null;
+
+  /** SYNC LOGIC (Optimistic Concurrency) */
+  lastModified: string;
+}
+
+// --- DOMAIN MODELS (Application) ---
+
 export interface DecryptedMessage {
   messageId: string;
   senderId: URN;
@@ -36,18 +53,11 @@ export interface DecryptedMessage {
   conversationUrn: URN;
 }
 
-/**
- * A lightweight summary of a conversation.
- */
 export interface ConversationSummary {
   conversationUrn: URN;
   latestSnippet: string;
   timestamp: ISODateTimeString;
   unreadCount: number;
-}
-
-export interface ConversationMetadata {
-  conversationUrn: string;
-  genesisTimestamp: string | null; // Null = Unknown/Not reached. String = The absolute beginning.
-  lastSyncedAt: string;
+  // Helpful for UI icons
+  previewType: 'text' | 'image' | 'file' | 'other';
 }

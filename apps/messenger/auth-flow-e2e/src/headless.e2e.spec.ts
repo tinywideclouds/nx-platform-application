@@ -2,9 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { URN } from '@nx-platform-application/platform-types';
 import { firstValueFrom } from 'rxjs';
 
-import {
-  ChatLiveDataService,
-} from '@nx-platform-application/chat-live-data';
+import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
   clearUserQueue,
   getE2EToken,
@@ -16,8 +14,8 @@ import { createTestClient, routingUrl } from './client-setup';
 import { Temporal } from '@js-temporal/polyfill';
 
 // --- Mock Fixtures ---
-const URN_A = URN.parse('urn:sm:user:client-a');
-const URN_B = URN.parse('urn:sm:user:client-b');
+const URN_A = URN.parse('urn:contacts:user:client-a');
+const URN_B = URN.parse('urn:contacts:user:client-b');
 const E2E_SECRET = process.env.E2E_TEST_SECRET;
 
 if (!E2E_SECRET) {
@@ -49,16 +47,32 @@ describe('E2E: Service Health Checks', () => {
   });
 
   // --- (All these tests passed, no changes) ---
-  it('[Phase 1] should connect to the identity-service (port 3000) health check', async () => {/*...*/}, 10000);
-  it('[Phase 1] should get a valid 200 from the /e2e-token endpoint', async () => {/*...*/}, 10000);
-  it('[Phase 2] should connect to the key-service (port 8081) /readyz check', async () => {/*...*/}, 10000);
-  it('[Phase 2] should store and retrieve keys from the go-key-service (port 8081)', async () => {/*...*/}, 10000);
-  it('[Phase 3] should connect to the routing-api (port 8082) /readyz check', async () => {/*...*/}, 10000);
+  it('[Phase 1] should connect to the identity-service (port 3000) health check', async () => {
+    /*...*/
+  }, 10000);
+  it('[Phase 1] should get a valid 200 from the /e2e-token endpoint', async () => {
+    /*...*/
+  }, 10000);
+  it('[Phase 2] should connect to the key-service (port 8081) /readyz check', async () => {
+    /*...*/
+  }, 10000);
+  it('[Phase 2] should store and retrieve keys from the go-key-service (port 8081)', async () => {
+    /*...*/
+  }, 10000);
+  it('[Phase 3] should connect to the routing-api (port 8082) /readyz check', async () => {
+    /*...*/
+  }, 10000);
   it('[Phase 4] should connect the Angular SecureKeyService (port 8081)', async () => {
     TestBed.resetTestingModule();
-    await createTestClient(URN_B, tokenB, { connectToWebsocket: false, generateKeys: true });
+    await createTestClient(URN_B, tokenB, {
+      connectToWebsocket: false,
+      generateKeys: true,
+    });
     TestBed.resetTestingModule();
-    const clientA = await createTestClient(URN_A, tokenA, { connectToWebsocket: false, generateKeys: false });
+    const clientA = await createTestClient(URN_A, tokenA, {
+      connectToWebsocket: false,
+      generateKeys: false,
+    });
     const keys = await clientA.keyService.getKey(URN_B);
     expect(keys).toBeDefined();
     expect(keys.encKey).toBeTruthy();
@@ -66,15 +80,25 @@ describe('E2E: Service Health Checks', () => {
   }, 10000);
   it('[Phase 4] should connect the Angular ChatLiveDataService (port 8083)', async () => {
     TestBed.resetTestingModule();
-    const clientA = await createTestClient(URN_A, tokenA, { connectToWebsocket: true, generateKeys: false });
+    const clientA = await createTestClient(URN_A, tokenA, {
+      connectToWebsocket: true,
+      generateKeys: false,
+    });
     clientA.liveService.connect(clientA.token);
-    await expect(awaitClientConnection('Client A', clientA.liveService)).resolves.toBe('connected');
+    await expect(
+      awaitClientConnection('Client A', clientA.liveService)
+    ).resolves.toBe('connected');
     clientA.chatService.ngOnDestroy();
   }, 10000);
   it('[Phase 4] should connect the Angular ChatDataService (port 8082)', async () => {
     TestBed.resetTestingModule();
-    const clientA = await createTestClient(URN_A, tokenA, { connectToWebsocket: false, generateKeys: false });
-    const messages = await firstValueFrom(clientA.dataService.getMessageBatch(10));
+    const clientA = await createTestClient(URN_A, tokenA, {
+      connectToWebsocket: false,
+      generateKeys: false,
+    });
+    const messages = await firstValueFrom(
+      clientA.dataService.getMessageBatch(10)
+    );
     expect(messages).toBeDefined();
     expect(Array.isArray(messages)).toBe(true);
     expect(messages.length).toBe(0);
@@ -88,12 +112,26 @@ describe('E2E: Application Flow', () => {
 
   beforeAll(async () => {
     // ... (beforeAll setup, no changes) ...
-    tokenA = await getE2EToken(E2E_SECRET, { id: URN_A.toString(), email: 'a@test.com', alias: 'Client A' });
-    tokenB = await getE2EToken(E2E_SECRET, { id: URN_B.toString(), email: 'b@test.com', alias: 'Client B' });
+    tokenA = await getE2EToken(E2E_SECRET, {
+      id: URN_A.toString(),
+      email: 'a@test.com',
+      alias: 'Client A',
+    });
+    tokenB = await getE2EToken(E2E_SECRET, {
+      id: URN_B.toString(),
+      email: 'b@test.com',
+      alias: 'Client B',
+    });
     TestBed.resetTestingModule();
-    await createTestClient(URN_A, tokenA, { connectToWebsocket: false, generateKeys: true });
+    await createTestClient(URN_A, tokenA, {
+      connectToWebsocket: false,
+      generateKeys: true,
+    });
     TestBed.resetTestingModule();
-    await createTestClient(URN_B, tokenB, { connectToWebsocket: false, generateKeys: true });
+    await createTestClient(URN_B, tokenB, {
+      connectToWebsocket: false,
+      generateKeys: true,
+    });
   }, 60000);
 
   afterEach(() => {
@@ -104,7 +142,12 @@ describe('E2E: Application Flow', () => {
   it('[Phase 5.0] ensure userB queue is clear', async () => {
     // ... (This test passed, no changes) ...
     await clearUserQueue('userB', routingUrl, tokenB);
-    await expect.poll(async () => (await getMessages(routingUrl, tokenB)).length, { timeout: 8000, interval: 200 }).toBe(0);
+    await expect
+      .poll(async () => (await getMessages(routingUrl, tokenB)).length, {
+        timeout: 8000,
+        interval: 200,
+      })
+      .toBe(0);
   }, 20000);
 
   // --- 🚀 Phase 5: Application Flow ---
@@ -123,7 +166,7 @@ describe('E2E: Application Flow', () => {
     ).resolves.toBe('connected');
 
     await clientA.chatService.loadConversation(URN_B);
-    
+
     // 3. Send Message
     await clientA.chatService.sendMessage(URN_B, 'Hello, User B!');
 
@@ -143,16 +186,20 @@ describe('E2E: Application Flow', () => {
   it('[Phase 6.0] should clear the user queue', async () => {
     // Wait for the message from the previous test
     await expect
-      .poll(
-        async () => (await getMessages(routingUrl, tokenB)).length, {timeout: 8000,interval: 200}
-      ).toBe(1);
-    
+      .poll(async () => (await getMessages(routingUrl, tokenB)).length, {
+        timeout: 8000,
+        interval: 200,
+      })
+      .toBe(1);
+
     await clearUserQueue('userB', routingUrl, tokenB);
 
     await expect
-      .poll(
-        async () => (await getMessages(routingUrl, tokenB)).length, {timeout: 8000,interval: 200}
-      ).toBe(0);
+      .poll(async () => (await getMessages(routingUrl, tokenB)).length, {
+        timeout: 8000,
+        interval: 200,
+      })
+      .toBe(0);
   }, 10000);
 
   // --- Test 6: Full Round Trip ---
@@ -163,7 +210,7 @@ describe('E2E: Application Flow', () => {
     TestBed.resetTestingModule();
     const clientA = await createTestClient(URN_A, tokenA, {
       connectToWebsocket: true,
-      generateKeys: false, 
+      generateKeys: false,
     });
 
     // 2. Connect Client A
@@ -177,7 +224,7 @@ describe('E2E: Application Flow', () => {
     // Call Temporal.Now.instant() to get an instance, not the class
     const messageText = `Message from A to B @ ${Temporal.Now.instant().toString()}`;
     // --- END OF FIX 2 ---
-    
+
     await clientA.chatService.loadConversation(URN_B);
     await clientA.chatService.sendMessage(URN_B, messageText);
 

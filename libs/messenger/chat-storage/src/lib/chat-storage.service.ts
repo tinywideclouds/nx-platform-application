@@ -1,3 +1,5 @@
+// libs/messenger/chat-storage/src/lib/chat-storage.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import {
   URN,
@@ -8,8 +10,8 @@ import { Dexie } from 'dexie';
 import {
   DecryptedMessage,
   ConversationSummary,
-  ConversationMetadata,
   MessageRecord,
+  ConversationIndexRecord,
 } from './chat-storage.models';
 import { MessengerDatabase } from './db/messenger.database';
 
@@ -20,19 +22,10 @@ export class ChatStorageService {
   private readonly db = inject(MessengerDatabase);
   private readonly logger = inject(Logger);
 
-  async clearDatabase(): Promise<void> {
-    await this.db.transaction(
-      'rw',
-      [this.db.messages, this.db.settings],
-      async () => {
-        await this.db.messages.clear();
-        await this.db.settings.clear(); // <--- Now the flag is truly gone
-      }
-    );
-  }
+  // --- WRITE PATH (Dual-Write Transaction) ---
 
   async saveMessage(message: DecryptedMessage): Promise<void> {
-    const record: MessageRecord = {
+    const msgRecord: MessageRecord = {
       ...message,
       senderId: message.senderId.toString(),
       recipientId: message.recipientId.toString(),
@@ -40,10 +33,131 @@ export class ChatStorageService {
       conversationUrn: message.conversationUrn.toString(),
     };
 
-    await this.db.messages.put(record);
+    const conversationUrnStr = message.conversationUrn.toString();
+    const now = new Date().toISOString();
+
+    // TRANSACTION: Ensure Message and Index are always in sync
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.conversations],
+      async () => {
+        // 1. Save the Message
+        await this.db.messages.put(msgRecord);
+
+        // 2. Update the Index (Upsert)
+        const existing = await this.db.conversations.get(conversationUrnStr);
+
+        // Logic: Is this message newer than what we have?
+        const isNewer =
+          !existing || message.sentTimestamp >= existing.lastActivityTimestamp;
+        const isOlder =
+          existing?.genesisTimestamp &&
+          message.sentTimestamp < existing.genesisTimestamp;
+
+        // Prepare update
+        const update: ConversationIndexRecord = existing || {
+          conversationUrn: conversationUrnStr,
+          lastActivityTimestamp: message.sentTimestamp,
+          snippet: '',
+          previewType: 'text',
+          unreadCount: 0,
+          genesisTimestamp: null, // Unknown initially
+          lastModified: now,
+        };
+
+        update.lastModified = now;
+
+        // If this is the newest message, update the Sidebar preview
+        if (isNewer) {
+          update.lastActivityTimestamp = message.sentTimestamp;
+          update.snippet = this.generateSnippet(message);
+          update.previewType = this.getPreviewType(message.typeId.toString());
+
+          // Increment unread only for incoming messages
+          if (message.status === 'received') {
+            update.unreadCount = (existing?.unreadCount || 0) + 1;
+          }
+        }
+
+        // If this message is OLDER than our known genesis, push boundaries back
+        if (isOlder) {
+          update.genesisTimestamp = message.sentTimestamp;
+        }
+
+        await this.db.conversations.put(update);
+      }
+    );
+  }
+
+  // --- READ PATH (Optimized) ---
+
+  /**
+   * Loads the Inbox INSTANTLY from the Index table.
+   * No heavy message scanning required.
+   */
+  async loadConversationSummaries(): Promise<ConversationSummary[]> {
+    const records = await this.db.conversations
+      .orderBy('lastActivityTimestamp')
+      .reverse() // Newest chats first
+      .toArray();
+
+    return records.map((r) => ({
+      conversationUrn: URN.parse(r.conversationUrn),
+      latestSnippet: r.snippet,
+      timestamp: r.lastActivityTimestamp as ISODateTimeString,
+      unreadCount: r.unreadCount,
+      previewType: r.previewType,
+    }));
+  }
+
+  /**
+   * Used by Repository to check boundaries.
+   */
+  async getConversationIndex(
+    urn: URN
+  ): Promise<ConversationIndexRecord | undefined> {
+    return this.db.conversations.get(urn.toString());
+  }
+
+  /**
+   * Repository calls this when it hits an empty cloud vault (End of History).
+   */
+  async setGenesisTimestamp(
+    urn: URN,
+    timestamp: ISODateTimeString
+  ): Promise<void> {
+    const strUrn = urn.toString();
+    const existing = await this.db.conversations.get(strUrn);
+    if (existing) {
+      await this.db.conversations.update(strUrn, {
+        genesisTimestamp: timestamp,
+      });
+    }
+  }
+
+  // --- SYNC & RESTORE HELPERS ---
+
+  /**
+   * Fetches the entire conversation index (Sidebar state).
+   * Used by Cloud Service to backup the global "Who I talk to" list.
+   */
+  async getAllConversations(): Promise<ConversationIndexRecord[]> {
+    return this.db.conversations.toArray();
+  }
+
+  /**
+   * Bulk restores the sidebar index.
+   * Used during "Fresh Install" to populate the UI instantly.
+   */
+  async bulkSaveConversations(
+    records: ConversationIndexRecord[]
+  ): Promise<void> {
+    await this.db.conversations.bulkPut(records);
   }
 
   async bulkSaveMessages(messages: DecryptedMessage[]): Promise<void> {
+    // NOTE: We do NOT calculate summaries here to keep restore fast.
+    // We assume the Global Index Restore handles the UI state.
     const records = messages.map((msg) => ({
       ...msg,
       senderId: msg.senderId.toString(),
@@ -51,147 +165,74 @@ export class ChatStorageService {
       typeId: msg.typeId.toString(),
       conversationUrn: msg.conversationUrn.toString(),
     }));
-
     await this.db.messages.bulkPut(records);
   }
 
-  /**
-   * Paged History Loader (Cache-Aside Support)
-   * Fetches the *latest* N messages before a specific timestamp.
-   * * @param conversationUrn The chat to query
-   * @param limit Number of messages to return (e.g. 30)
-   * @param beforeTimestamp Optional. If provided, fetches messages OLDER than this date.
-   */
+  // --- EXISTING METHODS (Maintained) ---
+
   async loadHistorySegment(
     conversationUrn: URN,
     limit: number,
     beforeTimestamp?: ISODateTimeString
   ): Promise<DecryptedMessage[]> {
     const urnStr = conversationUrn.toString();
-
-    // Upper Bound: If 'beforeTimestamp' exists, use it. Otherwise use Max Date (Now).
-    // We use a slightly smaller value than the input to exclude the cursor itself.
     const upperBound = beforeTimestamp || Dexie.maxKey;
 
     const records = await this.db.messages
       .where('[conversationUrn+sentTimestamp]')
-      .between(
-        [urnStr, Dexie.minKey], // Lower Bound: Beginning of time for this chat
-        [urnStr, upperBound], // Upper Bound: The cursor
-        true, // Include Lower
-        false // Exclude Upper (so we don't reload the message we are scrolling from)
-      )
-      .reverse() // Newest first
+      .between([urnStr, Dexie.minKey], [urnStr, upperBound], true, false)
+      .reverse()
       .limit(limit)
       .toArray();
 
-    // We return them reversed (Newest...Oldest) for easy UI appending,
-    // or you can .reverse() here to return (Oldest...Newest) depending on UI preference.
-    // Standard is usually to return Chronological (Oldest -> Newest) so the UI just pushes.
     return records.reverse().map(this.mapRecordToSmart);
   }
 
-  // --- Metadata / Genesis Markers ---
-
-  async getConversationMetadata(
-    urn: URN
-  ): Promise<ConversationMetadata | undefined> {
-    return this.db.conversation_metadata.get(urn.toString());
+  async clearDatabase(): Promise<void> {
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.settings, this.db.conversations],
+      async () => {
+        await this.db.messages.clear();
+        await this.db.settings.clear();
+        await this.db.conversations.clear();
+      }
+    );
   }
 
-  async setGenesisTimestamp(
-    urn: URN,
-    timestamp: ISODateTimeString
-  ): Promise<void> {
-    await this.db.conversation_metadata.put({
-      conversationUrn: urn.toString(),
-      genesisTimestamp: timestamp,
-      lastSyncedAt: new Date().toISOString() as ISODateTimeString,
-    });
-  }
-
-  async loadHistory(conversationUrn: URN): Promise<DecryptedMessage[]> {
-    const urnString = conversationUrn.toString();
-    // Use compound index for efficient retrieval sorted by time
-    const records = await this.db.messages
-      .where('[conversationUrn+sentTimestamp]')
-      .between([urnString, Dexie.minKey], [urnString, Dexie.maxKey])
-      .toArray();
-
-    return records.map(this.mapRecordToSmart);
-  }
-
-  /**
-   * SMART EXPORT: Fetch messages strictly within a time window.
-   * Used by Cloud Service to create "Monthly Vaults".
-   * @param start ISO Timestamp (Inclusive)
-   * @param end ISO Timestamp (Inclusive)
-   */
   async getMessagesInRange(
     start: ISODateTimeString,
     end: ISODateTimeString
   ): Promise<DecryptedMessage[]> {
-    // Uses the simple 'sentTimestamp' index
     const records = await this.db.messages
       .where('sentTimestamp')
       .between(start, end, true, true)
       .toArray();
-
     return records.map(this.mapRecordToSmart);
   }
 
-  /**
-   * METADATA: Get the total time range of stored messages.
-   * Used by Cloud Service to determine which months need backing up.
-   */
   async getDataRange(): Promise<{
     min: ISODateTimeString | null;
     max: ISODateTimeString | null;
   }> {
     const first = await this.db.messages.orderBy('sentTimestamp').first();
     const last = await this.db.messages.orderBy('sentTimestamp').last();
-
     return {
       min: (first?.sentTimestamp as ISODateTimeString) || null,
       max: (last?.sentTimestamp as ISODateTimeString) || null,
     };
   }
 
-  async loadConversationSummaries(): Promise<ConversationSummary[]> {
-    const newestMessages = new Map<string, MessageRecord>();
-
-    await this.db.messages
-      .orderBy('sentTimestamp')
-      .reverse()
-      .each((record: MessageRecord) => {
-        if (!newestMessages.has(record.conversationUrn)) {
-          newestMessages.set(record.conversationUrn, record);
-        }
-      });
-
-    const summaries: ConversationSummary[] = [];
-    for (const record of newestMessages.values()) {
-      summaries.push({
-        conversationUrn: URN.parse(record.conversationUrn),
-        timestamp: record.sentTimestamp,
-        latestSnippet: this.decodeSnippet(record.payloadBytes),
-        unreadCount: 0,
-      });
-    }
-    return summaries;
-  }
-
   async setCloudEnabled(enabled: boolean): Promise<void> {
-    await this.db.settings.put({
-      key: 'chat_cloud_enabled',
-      value: enabled,
-    });
+    await this.db.settings.put({ key: 'chat_cloud_enabled', value: enabled });
   }
 
   async isCloudEnabled(): Promise<boolean> {
-    const record = await this.db.settings.get('chat_cloud_enabled');
-    return record?.value === true;
+    const r = await this.db.settings.get('chat_cloud_enabled');
+    return r?.value === true;
   }
+
+  // --- PRIVATE MAPPER HELPERS ---
 
   private mapRecordToSmart(record: MessageRecord): DecryptedMessage {
     return {
@@ -203,11 +244,24 @@ export class ChatStorageService {
     };
   }
 
-  private decodeSnippet(bytes: Uint8Array): string {
-    try {
-      return new TextDecoder().decode(bytes);
-    } catch {
-      return 'Message';
+  private generateSnippet(msg: DecryptedMessage): string {
+    // Corrected Namespace
+    if (msg.typeId.toString() === 'urn:message:type:text') {
+      try {
+        return new TextDecoder().decode(msg.payloadBytes);
+      } catch {
+        return 'Message';
+      }
     }
+    return 'Media Message';
+  }
+
+  private getPreviewType(
+    typeIdStr: string
+  ): 'text' | 'image' | 'file' | 'other' {
+    // Corrected Namespace
+    if (typeIdStr === 'urn:message:type:text') return 'text';
+    if (typeIdStr.includes('image')) return 'image';
+    return 'other';
   }
 }

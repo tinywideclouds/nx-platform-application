@@ -25,7 +25,7 @@ describe('KeySettingsPageComponent', () => {
     open: vi.fn(),
   };
 
-  const mockUserUrn = URN.parse('urn:sm:user:test');
+  const mockUserUrn = URN.parse('urn:contacts:user:test');
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({

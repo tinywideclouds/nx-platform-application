@@ -27,7 +27,7 @@ import { SecureEnvelope } from '@nx-platform-application/platform-types';
 
 // --- Mock Data ---
 const mockSmartEnvelope: SecureEnvelope = {
-  recipientId: URN.parse('urn:sm:user:recipient'),
+  recipientId: URN.parse('urn:contacts:user:recipient'),
   encryptedData: new Uint8Array([1]),
   encryptedSymmetricKey: new Uint8Array([2]),
   signature: new Uint8Array([3]),
@@ -35,7 +35,7 @@ const mockSmartEnvelope: SecureEnvelope = {
 
 // The raw string returned by the serializer
 const mockJsonPayload =
-  '{"recipientId":"urn:sm:user:recipient","encryptedData":"AQ==","encryptedSymmetricKey":"Ag==","signature":"Aw=="}';
+  '{"recipientId":"urn:contacts:user:recipient","encryptedData":"AQ==","encryptedSymmetricKey":"Ag==","signature":"Aw=="}';
 
 const sendUrl = '/api/send';
 

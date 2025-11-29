@@ -32,7 +32,7 @@ import {
 
 // --- Mock Data ---
 const mockSmartEnvelope: SecureEnvelope = {
-  recipientId: URN.parse('urn:sm:user:test'),
+  recipientId: URN.parse('urn:contacts:user:test'),
   encryptedData: new Uint8Array([1]),
   encryptedSymmetricKey: new Uint8Array([2]),
   signature: new Uint8Array([3]),

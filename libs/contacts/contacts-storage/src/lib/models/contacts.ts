@@ -36,7 +36,7 @@ export interface ContactGroup extends Resource {
  */
 export interface IdentityLink {
   id?: number; // Auto-incrementing ID from Dexie
-  contactId: URN; // The local Contact URN (urn:sm:user:...)
+  contactId: URN; // The local Contact URN (urn:contacts:user:...)
   authUrn: URN; // The federated Sender URN (urn:auth:provider:...)
 }
 

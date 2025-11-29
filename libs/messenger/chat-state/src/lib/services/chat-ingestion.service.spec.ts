@@ -12,16 +12,16 @@ import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 // --- Fixtures ---
-const mockMyUrn = URN.parse('urn:sm:user:me');
+const mockMyUrn = URN.parse('urn:contacts:user:me');
 const mockSenderHandle = URN.parse('urn:lookup:email:sender@test.com');
-const mockSenderContact = URN.parse('urn:sm:user:sender'); // The local contact for that handle
+const mockSenderContact = URN.parse('urn:contacts:user:sender'); // The local contact for that handle
 
 const mockEnvelope = { recipientId: mockMyUrn } as any;
 const mockQueuedMsg: QueuedMessage = { id: 'q-1', envelope: mockEnvelope };
 const mockDecryptedPayload = {
   senderId: mockSenderHandle, // Payload contains the Handle
   sentTimestamp: '2025-01-01T12:00:00Z',
-  typeId: URN.parse('urn:sm:type:text'),
+  typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new TextEncoder().encode('Hello'),
 };
 
@@ -47,7 +47,7 @@ describe('ChatIngestionService', () => {
     mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
     mockStorageService.saveMessage.mockResolvedValue(undefined);
     mockContactsService.addToPending.mockResolvedValue(undefined);
-    
+
     // Default: Mapper resolves Handle -> Contact
     mockMapper.resolveToContact.mockResolvedValue(mockSenderContact);
 
@@ -87,7 +87,7 @@ describe('ChatIngestionService', () => {
 
     // 1. Decrypt
     expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalled();
-    
+
     // 2. Resolve Identity
     expect(mockMapper.resolveToContact).toHaveBeenCalledWith(mockSenderHandle);
 
@@ -103,16 +103,12 @@ describe('ChatIngestionService', () => {
 
   it('should GATEKEEPER: Drop blocked messages (checking resolved identity)', async () => {
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-    
+
     // Add the RESOLVED Contact URN to the blocked set
     const blocked = createBlockedSet();
     blocked.add(mockSenderContact.toString());
 
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      blocked
-    );
+    const result = await service.process({} as any, mockMyUrn, blocked);
 
     expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
     expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
@@ -121,15 +117,11 @@ describe('ChatIngestionService', () => {
 
   it('should GATEKEEPER: Add unknown sender to Pending', async () => {
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-    
+
     // Simulate Mapper returning the Handle itself (Unknown Stranger)
     mockMapper.resolveToContact.mockResolvedValue(mockSenderHandle);
 
-    await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet()
-    );
+    await service.process({} as any, mockMyUrn, createBlockedSet());
 
     expect(mockContactsService.addToPending).toHaveBeenCalledWith(
       mockSenderHandle

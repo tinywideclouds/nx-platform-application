@@ -6,12 +6,12 @@ import { URN, User } from '@nx-platform-application/platform-types';
  */
 export const MESSENGER_MOCK_USERS: User[] = [
   {
-    id: URN.parse('urn:sm:user:mock-alice'),
+    id: URN.parse('urn:contacts:user:mock-alice'),
     alias: 'Alice (Mock)',
     email: 'alice@mock.com',
   },
   {
-    id: URN.parse('urn:sm:user:mock-bob'),
+    id: URN.parse('urn:contacts:user:mock-bob'),
     alias: 'Bob (Mock)',
     email: 'bob@mock.com',
   },

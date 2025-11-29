@@ -13,8 +13,8 @@ interface AuthorizedUserDoc {
 export function UserToUserDoc(u: User): AuthorizedUserDoc {
   return {
     email: u.email,
-    alias: u.alias
-  }
+    alias: u.alias,
+  };
 }
 
 // 2. This is the object our internal services will return from lookups
@@ -89,9 +89,9 @@ export async function getUserProfile(
 
   // 4. This function MUST return the URN-based object
   // to match the 'User' type, as it's not part of the auth flow.
-  // It is creating a 'urn:sm:user' URN.
+  // It is creating a 'urn:contacts:user' URN.
   return {
-    id: URN.parse(`urn:sm:user:${userDoc.id}`), // <-- This is the platform ID
+    id: URN.parse(`urn:contacts:user:${userDoc.id}`), // <-- This is the platform ID
     email: userData.email,
     alias: userData.alias,
   };
@@ -99,12 +99,11 @@ export async function getUserProfile(
 
 export async function addAuthorizedUser(
   db: Firestore,
-  user: User 
+  user: User
 ): Promise<WriteResult | null> {
-
   const key = user.id.toString();
   const doc = UserToUserDoc(user);
 
   const r = await db.collection('authorized_users').doc(key).set(doc);
-  return r
+  return r;
 }

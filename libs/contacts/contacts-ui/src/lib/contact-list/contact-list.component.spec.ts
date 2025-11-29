@@ -11,7 +11,7 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
 
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: URN.parse('urn:sm:user:user-123'),
+    id: URN.parse('urn:contacts:user:user-123'),
     alias: 'johndoe',
     email: 'john@example.com',
     firstName: 'John',
@@ -21,7 +21,7 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
   },
   {
-    id: URN.parse('urn:sm:user:user-456'),
+    id: URN.parse('urn:contacts:user:user-456'),
     alias: 'janedoe',
     email: 'jane@example.com',
     firstName: 'Jane',
@@ -77,7 +77,7 @@ describe('ContactListComponent', () => {
 
   it('should highlight the selected contact based on input', () => {
     // Select the first contact
-    hostComponent.selectedId = 'urn:sm:user:user-123';
+    hostComponent.selectedId = 'urn:contacts:user:user-123';
     fixture.detectChanges();
 
     const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));

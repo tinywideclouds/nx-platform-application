@@ -106,16 +106,16 @@ const {
 // --- Fixtures ---
 
 // --- DOMAIN FIXTURES (with URNs) ---
-const mockContactUrn = URN.parse('urn:sm:user:user-123');
-const mockGroupUrn = URN.parse('urn:sm:group:grp-abc');
-const mockOtherContactUrn = URN.parse('urn:sm:user:user-456');
-const mockServiceContactUrn = URN.parse('urn:sm:service:msg-uuid-1');
+const mockContactUrn = URN.parse('urn:contacts:user:user-123');
+const mockGroupUrn = URN.parse('urn:contacts:group:grp-abc');
+const mockOtherContactUrn = URN.parse('urn:contacts:user:user-456');
+const mockServiceContactUrn = URN.parse('urn:message:service:msg-uuid-1');
 
 // Federated & Gatekeeper URNs
 const mockGoogleAuthUrn = URN.parse('urn:auth:google:bob-123');
 const mockSpammerUrn = URN.parse('urn:auth:google:spammer');
 const mockStrangerUrn = URN.parse('urn:auth:apple:stranger');
-const mockVoucherUrn = URN.parse('urn:sm:user:bob-contact'); // Bob (Local Contact)
+const mockVoucherUrn = URN.parse('urn:contacts:user:bob-contact'); // Bob (Local Contact)
 
 const mockServiceContact: ServiceContact = {
   id: mockServiceContactUrn,
@@ -254,7 +254,7 @@ describe('ContactsStorageService', () => {
       const searchEmail = 'work@example.com';
       const result = await service.findByEmail(searchEmail);
 
-      expect(mockDbTable.where).toHaveBeenCalledWith('emailAddresses');
+      expect(mockDbTable.where).toHaveBeenCalledWith('email');
       expect(mockDbTable.equals).toHaveBeenCalledWith(searchEmail);
       expect(result).toEqual(mockContact);
     });
@@ -328,7 +328,7 @@ describe('ContactsStorageService', () => {
     });
 
     it('should return an empty array if group not found', async () => {
-      const notFoundUrn = URN.parse('urn:sm:group:grp-not-found');
+      const notFoundUrn = URN.parse('urn:contacts:group:grp-not-found');
       mockDbGroupTable.get.mockResolvedValue(undefined);
 
       const result = await service.getContactsForGroup(notFoundUrn);

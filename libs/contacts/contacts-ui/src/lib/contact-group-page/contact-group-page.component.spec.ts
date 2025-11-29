@@ -18,8 +18,8 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 // --- Mocks Data ---
-const mockContactUrn = URN.parse('urn:sm:user:user-123');
-const mockGroupUrn = URN.parse('urn:sm:group:grp-123');
+const mockContactUrn = URN.parse('urn:contacts:user:user-123');
+const mockGroupUrn = URN.parse('urn:contacts:group:grp-123');
 
 const MOCK_CONTACTS: Contact[] = [
   {

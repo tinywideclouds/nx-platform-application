@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ChatOutboundService } from './chat-outbound.service';
 import { URN } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
 // Services
@@ -20,9 +20,9 @@ describe('ChatOutboundService', () => {
 
   // --- Fixtures ---
   const myUrn = URN.parse('urn:auth:user:me');
-  const contactUrn = URN.parse('urn:sm:user:bob');
+  const contactUrn = URN.parse('urn:contacts:user:bob');
   const handleUrn = URN.parse('urn:lookup:email:bob@test.com');
-  const typeId = URN.parse('urn:sm:type:text');
+  const typeId = URN.parse('urn:message:type:text');
   const payloadBytes = new Uint8Array([1, 2, 3]);
 
   beforeEach(() => {

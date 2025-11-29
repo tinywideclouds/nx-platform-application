@@ -8,7 +8,7 @@ import { UserPbSchema } from '@nx-platform-application/platform-protos/user/v1/u
 
 describe('user mappers', () => {
   // --- 2. Create a proper URN for the mock ---
-  const mockUrnString = 'urn:sm:user:user-123';
+  const mockUrnString = 'urn:contacts:user:user-123';
   const mockUrn = URN.parse(mockUrnString);
 
   const mockUser: User = {
@@ -31,7 +31,7 @@ describe('user mappers', () => {
 
   it('should correctly map UserPb back to User', () => {
     // Use a valid URN string for the mock proto
-    const mockPbId = 'urn:sm:user:pb-456';
+    const mockPbId = 'urn:contacts:user:pb-456';
     const mockUserPb = create(UserPbSchema, {
       id: mockPbId,
       alias: 'janedoe',

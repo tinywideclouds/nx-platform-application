@@ -22,25 +22,29 @@ export class ChatMessageMapper {
    */
   toView(msg: DecryptedMessage): ChatMessage {
     let textContent = '';
-    
-    // Eagerly decode text for 'urn:sm:type:text'
-    if (msg.typeId.toString() === 'urn:sm:type:text') {
+
+    // Eagerly decode text for 'urn:message:type:text'
+    if (msg.typeId.toString() === 'urn:message:type:text') {
       try {
         textContent = this.decoder.decode(msg.payloadBytes);
       } catch (e) {
-        this.logger.error('ChatMessageMapper: Failed to decode text payload', e);
+        this.logger.error(
+          'ChatMessageMapper: Failed to decode text payload',
+          e
+        );
         textContent = '[Error: Unreadable message]';
       }
     } else {
-        textContent = 'Unsupported Message Type';
+      this.logger.warn('type id', msg.typeId.toString());
+      textContent = 'Unsupported Message Type';
     }
-    
+
     return {
       id: msg.messageId,
       conversationUrn: msg.conversationUrn,
       senderId: msg.senderId,
-      sentTimestamp: msg.sentTimestamp as ISODateTimeString, 
-      
+      sentTimestamp: msg.sentTimestamp as ISODateTimeString,
+
       typeId: msg.typeId,
       payloadBytes: msg.payloadBytes,
       textContent: textContent,

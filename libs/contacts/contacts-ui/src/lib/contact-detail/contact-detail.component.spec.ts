@@ -12,7 +12,7 @@ import { MockComponent, MockProvider } from 'ng-mocks';
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { MatChipsModule } from '@angular/material/chips';
 
-const mockUrn = URN.parse('urn:sm:user:123');
+const mockUrn = URN.parse('urn:contacts:user:123');
 const mockContact: Contact = {
   id: mockUrn,
   alias: 'Test User',
@@ -24,7 +24,7 @@ const mockContact: Contact = {
   serviceContacts: {},
 };
 const mockGroup: ContactGroup = {
-  id: URN.parse('urn:sm:group:456'),
+  id: URN.parse('urn:contacts:group:456'),
   name: 'Test Group',
   contactIds: [mockUrn],
 };

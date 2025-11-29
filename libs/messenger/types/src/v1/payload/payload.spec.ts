@@ -42,8 +42,8 @@ describe('EncryptedMessagePayload Facade Mappers', () => {
 
   // --- Fixtures ---
   const mockTimestamp = new Date().toISOString() as ISODateTimeString;
-  const mockSenderUrnString = 'urn:sm:user:sender';
-  const mockTypeUrnString = 'urn:sm:type:text';
+  const mockSenderUrnString = 'urn:contacts:user:sender';
+  const mockTypeUrnString = 'urn:message:type:text';
   const mockBytes = new Uint8Array([1, 2, 3]);
 
   // --- THIS IS THE FIX ---
@@ -82,7 +82,9 @@ describe('EncryptedMessagePayload Facade Mappers', () => {
     mockToBinary = protoBuf.toBinary as Mock;
     mockFromBinary = protoBuf.fromBinary as Mock;
 
-    const platformTypes = await import('@nx-platform-application/platform-types');
+    const platformTypes = await import(
+      '@nx-platform-application/platform-types'
+    );
     mockUrnParse = platformTypes.URN.parse as Mock;
 
     vi.clearAllMocks();

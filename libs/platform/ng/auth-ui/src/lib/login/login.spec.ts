@@ -2,11 +2,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { User, URN } from '@nx-platform-application/platform-types';
-import { IAuthService, AUTH_API_URL } from '@nx-platform-application/platform-auth-access';
+import {
+  IAuthService,
+  AUTH_API_URL,
+} from '@nx-platform-application/platform-auth-access';
 import { LoginComponent } from './login';
 
 const mockUser: User = {
-  id: URN.parse('urn:sm:user:1'),
+  id: URN.parse('urn:contacts:user:1'),
   alias: 'Test User',
   email: 'test@example.com',
 };

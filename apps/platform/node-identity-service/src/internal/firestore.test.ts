@@ -13,7 +13,7 @@ import { User, URN } from '@nx-platform-application/platform-types';
 // --- FIRESTORE MOCK ---
 const mockDocGet = vi.fn();
 const mockDocSet = vi.fn();
-const mockDoc = vi.fn((docId) => ({ 
+const mockDoc = vi.fn((docId) => ({
   get: mockDocGet,
   set: mockDocSet,
   id: docId,
@@ -31,10 +31,14 @@ const mockCollection = vi.fn(() => ({
 vi.mock('@google-cloud/firestore', () => {
   // Mock the static WriteResult class
   class MockWriteResult {
-    isEqual(other: any): boolean { return true; }
-    get writeTime(): any { return { toDate: () => new Date() }; }
+    isEqual(other: any): boolean {
+      return true;
+    }
+    get writeTime(): any {
+      return { toDate: () => new Date() };
+    }
   }
-  
+
   return {
     Firestore: vi.fn(() => ({
       collection: mockCollection,
@@ -66,7 +70,7 @@ describe('Firestore Service (Unit)', () => {
       };
       // This function creates the old platform-specific URN
       const expectedUser: User = {
-        id: URN.parse(`urn:sm:user:${userId}`),
+        id: URN.parse(`urn:contacts:user:${userId}`),
         email: 'found@example.com',
         alias: 'FoundUser',
       };
@@ -145,9 +149,9 @@ describe('Firestore Service (Unit)', () => {
       const email = 'safe@example.com';
       const mockDocSnapshot = { exists: false };
       mockDocGet.mockResolvedValue(mockDocSnapshot);
-      
+
       const result = await isEmailBlocked(db, email);
-      
+
       expect(mockCollection).toHaveBeenCalledWith('blocked_users');
       expect(mockDoc).toHaveBeenCalledWith(email);
       expect(result).toBe(false);
@@ -164,7 +168,7 @@ describe('Firestore Service (Unit)', () => {
         email: 'test@example.com',
         alias: 'TestUser',
       };
-      
+
       // 2. This is the plain object that should be saved
       const expectedDocData = {
         email: 'test@example.com',
@@ -173,7 +177,7 @@ describe('Firestore Service (Unit)', () => {
 
       // 3. This is the string key that should be used
       const expectedDocId = 'urn:auth:google:12345';
-      
+
       // 4. Mock the result of the .set call
       mockDocSet.mockResolvedValue(new WriteResult());
 

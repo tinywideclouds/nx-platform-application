@@ -11,7 +11,10 @@ import {
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 // FIX: Import the correct storage service
-import { KeyStorageService, PublicKeyRecord } from '@nx-platform-application/messenger-key-storage';
+import {
+  KeyStorageService,
+  PublicKeyRecord,
+} from '@nx-platform-application/messenger-key-storage';
 
 import { KeyCacheService } from './key-cache.service';
 
@@ -37,7 +40,7 @@ const mockKeyStorageService = {
 };
 
 // --- Fixtures ---
-const mockUserUrn = URN.parse('urn:sm:user:test-user');
+const mockUserUrn = URN.parse('urn:contacts:user:test-user');
 const mockUserUrnString = mockUserUrn.toString();
 
 // Deterministic mock timestamps
@@ -95,7 +98,7 @@ describe('KeyCacheService', () => {
   });
 
   afterAll(() => {
-    temporalNowSpy.mockRestore(); 
+    temporalNowSpy.mockRestore();
   });
 
   it('should be created', () => {
@@ -115,7 +118,7 @@ describe('KeyCacheService', () => {
     expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
       mockUserUrnString,
       mockJsonKeys,
-      isoNow 
+      isoNow
     );
     expect(result).toBe(mockPublicKeys);
   });

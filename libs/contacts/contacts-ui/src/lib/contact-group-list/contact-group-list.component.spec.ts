@@ -9,12 +9,12 @@ import { ContactGroupListItemComponent } from '../contact-group-list-item/contac
 
 const MOCK_GROUPS: ContactGroup[] = [
   {
-    id: URN.parse('urn:sm:group:grp-123'),
+    id: URN.parse('urn:contacts:group:grp-123'),
     name: 'Family',
     contactIds: [],
   },
   {
-    id: URN.parse('urn:sm:group:grp-456'),
+    id: URN.parse('urn:contacts:group:grp-456'),
     name: 'Work',
     contactIds: [],
   },
@@ -66,7 +66,7 @@ describe('ContactGroupListComponent', () => {
   });
 
   it('should highlight the selected group based on input', () => {
-    hostComponent.selectedId = 'urn:sm:group:grp-456'; // Select the second one
+    hostComponent.selectedId = 'urn:contacts:group:grp-456'; // Select the second one
     fixture.detectChanges();
 
     const items = fixture.debugElement.queryAll(

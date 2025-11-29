@@ -11,7 +11,7 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
 
 // --- Mock Data ---
 const MOCK_CONTACT: Contact = {
-  id: URN.parse('urn:sm:user:user-123'),
+  id: URN.parse('urn:contacts:user:user-123'),
   alias: 'johndoe',
   email: 'john@example.com',
   firstName: 'John',
@@ -20,7 +20,7 @@ const MOCK_CONTACT: Contact = {
   emailAddresses: ['john@example.com'],
   serviceContacts: {
     messenger: {
-      id: URN.parse('urn:sm:service:msg-uuid-1'),
+      id: URN.parse('urn:message:service:msg-uuid-1'),
       alias: 'jd_messenger',
       lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
       profilePictureUrl: 'http://messenger.com/img.png',

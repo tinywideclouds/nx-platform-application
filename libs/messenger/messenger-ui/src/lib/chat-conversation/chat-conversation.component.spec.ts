@@ -11,8 +11,8 @@ import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 
 // --- Mocks ---
-const mockCurrentUserUrn = URN.parse('urn:sm:user:me');
-const mockRecipientUrn = URN.parse('urn:sm:user:other');
+const mockCurrentUserUrn = URN.parse('urn:contacts:user:me');
+const mockRecipientUrn = URN.parse('urn:contacts:user:other');
 
 const mockMessages: ChatMessage[] = [
   {
@@ -21,7 +21,7 @@ const mockMessages: ChatMessage[] = [
     senderId: mockRecipientUrn,
     textContent: 'Hello',
     timestamp: new Date(),
-    type: 'text'
+    type: 'text',
   },
   {
     id: '2',
@@ -29,8 +29,8 @@ const mockMessages: ChatMessage[] = [
     senderId: mockCurrentUserUrn,
     textContent: 'Hi there',
     timestamp: new Date(),
-    type: 'text'
-  }
+    type: 'text',
+  },
 ];
 
 const mockChatService = {
@@ -50,9 +50,7 @@ describe('ChatConversationComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [ChatConversationComponent, ReactiveFormsModule], // Updated import
-      providers: [
-        { provide: ChatService, useValue: mockChatService }
-      ]
+      providers: [{ provide: ChatService, useValue: mockChatService }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ChatConversationComponent);
@@ -81,7 +79,10 @@ describe('ChatConversationComponent', () => {
     btn.nativeElement.click();
 
     // 3. Verify
-    expect(mockChatService.sendMessage).toHaveBeenCalledWith(mockRecipientUrn, 'New Message');
+    expect(mockChatService.sendMessage).toHaveBeenCalledWith(
+      mockRecipientUrn,
+      'New Message'
+    );
     expect(component.messageControl.value).toBe(''); // Should reset
   });
 
@@ -92,7 +93,10 @@ describe('ChatConversationComponent', () => {
     const input = fixture.debugElement.query(By.css('input'));
     input.triggerEventHandler('keydown.enter', {});
 
-    expect(mockChatService.sendMessage).toHaveBeenCalledWith(mockRecipientUrn, 'Enter Key Msg');
+    expect(mockChatService.sendMessage).toHaveBeenCalledWith(
+      mockRecipientUrn,
+      'Enter Key Msg'
+    );
   });
 
   it('should not send empty message', () => {

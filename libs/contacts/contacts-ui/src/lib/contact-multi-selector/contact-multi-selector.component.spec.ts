@@ -12,7 +12,7 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
 // --- 3. Update Mock Contacts to use URNs ---
 const MOCK_CONTACTS: Contact[] = [
   {
-    id: URN.parse('urn:sm:user:user-123'),
+    id: URN.parse('urn:contacts:user:user-123'),
     alias: 'johndoe',
     email: 'john@example.com',
     firstName: 'John',
@@ -22,7 +22,7 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
   } as Contact,
   {
-    id: URN.parse('urn:sm:user:user-456'),
+    id: URN.parse('urn:contacts:user:user-456'),
     alias: 'janedoe',
     email: 'jane@example.com',
     firstName: 'Jane',
@@ -32,7 +32,7 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
   } as Contact,
   {
-    id: URN.parse('urn:sm:user:user-789'),
+    id: URN.parse('urn:contacts:user:user-789'),
     alias: 'alice',
     email: 'alice@example.com',
     firstName: 'Alice',
@@ -57,7 +57,7 @@ const MOCK_CONTACTS: Contact[] = [
 class TestHostComponent {
   allContacts = signal(MOCK_CONTACTS);
   // --- 5. Update selected strings to be full URNs ---
-  selected: string[] = ['urn:sm:user:user-456'];
+  selected: string[] = ['urn:contacts:user:user-456'];
 }
 
 describe('ContactMultiSelectorComponent', () => {
@@ -117,7 +117,7 @@ describe('ContactMultiSelectorComponent', () => {
   });
 
   it('should update "selectedIds" model on (change)', () => {
-    expect(hostComponent.selected).toEqual(['urn:sm:user:user-456']);
+    expect(hostComponent.selected).toEqual(['urn:contacts:user:user-456']);
 
     const firstCheckbox = fixture.debugElement.query(
       By.css('input[type="checkbox"]')
@@ -128,8 +128,8 @@ describe('ContactMultiSelectorComponent', () => {
     fixture.detectChanges();
 
     expect(hostComponent.selected).toEqual([
-      'urn:sm:user:user-456',
-      'urn:sm:user:user-123',
+      'urn:contacts:user:user-456',
+      'urn:contacts:user:user-123',
     ]);
 
     const secondCheckbox = componentEl.querySelectorAll<HTMLInputElement>(
@@ -139,6 +139,6 @@ describe('ContactMultiSelectorComponent', () => {
     secondCheckbox.click();
     fixture.detectChanges();
 
-    expect(hostComponent.selected).toEqual(['urn:sm:user:user-123']);
+    expect(hostComponent.selected).toEqual(['urn:contacts:user:user-123']);
   });
 });

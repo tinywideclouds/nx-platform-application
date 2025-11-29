@@ -32,7 +32,7 @@ describe('ChatKeyService', () => {
   };
 
   // --- Fixtures ---
-  const contactUrn = URN.parse('urn:sm:user:alice');
+  const contactUrn = URN.parse('urn:contacts:user:alice');
   const handleUrn = URN.parse('urn:lookup:email:alice@test.com');
 
   beforeEach(() => {
@@ -121,4 +121,4 @@ describe('ChatKeyService', () => {
       );
     });
   });
-}); 
+});

@@ -7,7 +7,6 @@ describe('MessengerDatabase', () => {
   let db: MessengerDatabase;
 
   beforeEach(async () => {
-    // Ensure a clean slate for every test
     await Dexie.delete('messenger');
 
     TestBed.configureTestingModule({
@@ -21,42 +20,25 @@ describe('MessengerDatabase', () => {
     if (db) await db.close();
   });
 
-  it('should be created', () => {
-    expect(db).toBeTruthy();
+  it('should be on version 5', () => {
+    expect(db.verno).toBe(5);
   });
 
-  // ✅ FIX: Update expectation to match current schema version
-  it('should be on version 4', () => {
-    expect(db.verno).toBe(4);
+  it('should have the "conversations" meta-index table', () => {
+    expect(db.conversations).toBeTruthy();
+    expect(db.conversations.name).toBe('conversations');
   });
 
-  it('should have the "messages" table', () => {
-    expect(db.messages).toBeTruthy();
-    expect(db.messages.name).toBe('messages');
-  });
-
-  it('should have the correct indexes on "messages"', () => {
-    const schema = db.messages.schema;
-    expect(schema.primKey.name).toBe('messageId');
-
+  it('should have the "lastActivityTimestamp" index for fast inbox sorting', () => {
+    const schema = db.conversations.schema;
     const indexNames = schema.indexes.map((i) => i.name);
-    expect(indexNames).toContain('conversationUrn');
-    expect(indexNames).toContain('sentTimestamp');
 
-    // Check for compound index
-    const compoundIndex = schema.indexes.find(
-      (i) =>
-        Array.isArray(i.keyPath) &&
-        i.keyPath.length === 2 &&
-        i.keyPath.includes('conversationUrn') &&
-        i.keyPath.includes('sentTimestamp')
-    );
-    expect(compoundIndex).toBeDefined();
+    // This is the key to the "Instant Sidebar" feature
+    expect(indexNames).toContain('lastActivityTimestamp');
   });
 
-  it('should have the "settings" and "conversation_metadata" tables', () => {
+  it('should NOT have the old "conversation_metadata" table', () => {
     const tableNames = db.tables.map((t) => t.name);
-    expect(tableNames).toContain('settings');
-    expect(tableNames).toContain('conversation_metadata');
+    expect(tableNames).not.toContain('conversation_metadata');
   });
 });

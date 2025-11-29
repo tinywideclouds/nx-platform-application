@@ -80,7 +80,7 @@ export class ChatIngestionService {
         );
 
         // 3. Identity Resolution (Handle -> Contact)
-        // If this handle belongs to "Bob", this returns "urn:sm:user:bob"
+        // If this handle belongs to "Bob", this returns "urn:contacts:user:bob"
         const resolvedSenderUrn = await this.mapper.resolveToContact(
           decrypted.senderId
         );

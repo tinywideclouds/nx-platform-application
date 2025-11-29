@@ -8,11 +8,11 @@ import { Logger } from '@nx-platform-application/console-logger';
 // IMPORT FROM PLATFORM
 import {
   CloudStorageProvider,
-  CloudBackupMetadata,
-  CLOUD_PROVIDERS, // Generic token
+  BackupFile, // ✅ FIXED: New Model Import
+  CLOUD_PROVIDERS,
 } from '@nx-platform-application/platform-cloud-access';
 
-import { BackupPayload } from './models/backup-payload.interface'; // Domain specific model
+import { BackupPayload } from './models/backup-payload.interface';
 
 const CURRENT_SCHEMA_VERSION = 4;
 
@@ -23,7 +23,6 @@ export class ContactsCloudService {
   private storage = inject(ContactsStorageService);
   private logger = inject(Logger);
 
-  // Inject generic providers from the Platform layer
   private providersList = inject(CLOUD_PROVIDERS, { optional: true }) || [];
 
   private providersMap = new Map<string, CloudStorageProvider>(
@@ -42,19 +41,23 @@ export class ContactsCloudService {
     }
   }
 
-  async backupToCloud(providerId: string): Promise<CloudBackupMetadata> {
+  /**
+   * Backs up contacts and groups to the cloud.
+   * Returns void as the platform provider handles the upload artifact.
+   */
+  async backupToCloud(providerId: string): Promise<void> {
     const provider = this.getProvider(providerId);
     this.logger.info(`[ContactsCloud] Starting backup to ${providerId}`);
 
     await this.ensurePermission(provider);
 
-    // 1. Snapshot Data (Domain Logic)
+    // 1. Snapshot Data
     const [contacts, groups] = await Promise.all([
       firstValueFrom(this.storage.contacts$),
       firstValueFrom(this.storage.groups$),
     ]);
 
-    // 2. Construct Payload (Domain Model)
+    // 2. Construct Payload
     const payload: BackupPayload = {
       version: CURRENT_SCHEMA_VERSION,
       timestamp: new Date().toISOString(),
@@ -63,22 +66,21 @@ export class ContactsCloudService {
       groups,
     };
 
-    // 3. Delegate Transport to Platform
+    // 3. Delegate Transport
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `contacts_backup_${dateStr}.json`;
 
-    // Platform provider handles the upload logic
-    return provider.uploadBackup(payload, filename);
+    await provider.uploadBackup(payload, filename);
+    this.logger.info(`[ContactsCloud] Upload complete: ${filename}`);
   }
 
   async restoreFromCloud(providerId: string, fileId: string): Promise<void> {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    // Platform provider handles download, we specify the expected type <BackupPayload>
     const payload = await provider.downloadBackup<BackupPayload>(fileId);
 
-    // 4. Validate & Merge (Domain Logic)
+    // 4. Validate & Merge
     if (payload.version > CURRENT_SCHEMA_VERSION) {
       this.logger.warn(
         `[ContactsCloud] Backup version ${payload.version} is newer than app schema.`
@@ -95,15 +97,15 @@ export class ContactsCloudService {
     this.logger.info('[ContactsCloud] Restore complete.');
   }
 
-  async listBackups(providerId: string): Promise<CloudBackupMetadata[]> {
+  async listBackups(providerId: string): Promise<BackupFile[]> {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    // Filter specifically for contact backups using the substring convention
+    // Filter specifically for contact backups
     return provider.listBackups('contacts_backup_');
   }
 
-  // ... Helpers (getProvider, ensurePermission, getDeviceInfo) remain similar
+  // --- Helpers ---
 
   private getProvider(id: string): CloudStorageProvider {
     const provider = this.providersMap.get(id);

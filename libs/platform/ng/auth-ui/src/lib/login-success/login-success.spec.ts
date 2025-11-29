@@ -7,7 +7,7 @@ import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { MockTestingAuthService } from '@nx-platform-application/platform-auth-access/testing';
 
 const mockUser: User = {
-  id: URN.parse('urn:sm:user:1'),
+  id: URN.parse('urn:contacts:user:1'),
   alias: 'Test User',
   email: 'test@example.com',
 };
@@ -31,7 +31,9 @@ describe('LoginSuccessComponent', () => {
       ],
     }).compileComponents();
 
-    mockAuthService = TestBed.inject(IAuthService) as unknown as MockTestingAuthService;
+    mockAuthService = TestBed.inject(
+      IAuthService
+    ) as unknown as MockTestingAuthService;
     fixture = TestBed.createComponent(LoginSuccessComponent);
   });
 
