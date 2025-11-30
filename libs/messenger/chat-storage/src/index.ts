@@ -1,2 +1,2 @@
 export * from './lib/chat-storage.service';
-export * from './lib/chat-storage.models';
+export * from './lib/chat.models';

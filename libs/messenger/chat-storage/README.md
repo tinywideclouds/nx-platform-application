@@ -7,49 +7,61 @@ This library provides the **Local Persistence Layer** for the Messenger applicat
 
 ## 🏗 Database Schema (`messenger`)
 
-The database is versioned and handles migrations automatically.
+---
 
-### 1. `messages` Table
+### 1. `messages` Table (Chat History)
 
-Stores the actual chat history.
+Stores the actual chat history (decrypted payload).
 
-- **PK:** `messageId` (String)
+- [cite_start]**PK:** `messageId` (String) [cite: 1]
 - **Indexes:**
-  - `conversationUrn`: For filtering by chat.
-  - `sentTimestamp`: For time-based sorting.
-  - `[conversationUrn+sentTimestamp]`: **Compound Index**. Critical for efficient "History Segment" queries (e.g., "Give me Bob's messages from last week").
+  - [cite_start]`conversationUrn`, `sentTimestamp` [cite: 1]
+  - `[conversationUrn+sentTimestamp]`: **Compound Index**. [cite_start]Critical for efficient "History Segment" queries (e.g., infinite scrolling)[cite: 1].
 
-### 2. `conversation_metadata` Table (New)
+### 2. `conversations` Table (The Sidebar Index)
 
-Tracks the synchronization state of each conversation.
+Tracks the synchronization state and UI preview for each conversation (formerly `conversation_metadata`).
 
-- **PK:** `conversationUrn` (String)
+- [cite_start]**PK:** `conversationUrn` (String) [cite: 1]
 - **Fields:**
-  - `genesisTimestamp`: The timestamp of the _absolute oldest_ message known to exist. If the UI scrolls past this date, we stop asking the cloud for more data.
-  - `lastSyncedAt`: Timestamp of the last successful ingestion.
+  - `lastActivityTimestamp`: Used to sort the Inbox view (newest first).
+  - `genesisTimestamp`: The timestamp of the _absolute oldest_ message known to exist (scroll boundary).
 
-### 3. `settings` Table (New)
+### 3. `tombstones` Table (NEW: Deletion Tracking)
 
-A simple Key-Value store for persisting application preferences within the encrypted boundary (unlike `localStorage`).
+**Crucial for Cloud Sync Integrity.** Tracks messages that were deleted locally and need to be removed from cloud vaults on other devices.
+
+- [cite_start]**PK:** `messageId` (String) [cite: 1]
+- **Indexes:**
+  - `deletedAt`: Used by the Cloud Service to query deletions within a specific monthly vault's time range.
+
+### 4. `settings` Table (Config)
+
+A simple Key-Value store for persisting application preferences within the encrypted boundary.
 
 - **PK:** `key` (String)
 - **Usage:** Stores flags like `chat_cloud_enabled` to persist the user's "Online/Offline" choice safely.
 
+---
+
 ## 🧩 Key Services
 
-### `ChatStorageService`
+### `ChatStorageService` (The Facade)
 
-The public API for database interaction.
+The public API for database interaction, acting as a facade that delegates complex atomic operations to dedicated strategies.
 
-#### Smart Querying
+#### Core Write/Delete Protocol
 
-- `loadHistorySegment(urn, limit, before?)`: Fetches a paged list of messages using the compound index. Used by the Repository for infinite scrolling.
-- `getMessagesInRange(start, end)`: Fetches messages strictly within a time window. Used by the Cloud Service to create "Monthly Vaults."
+- `saveMessage(message)`: **Dual-Write Transaction**. Atomically writes to `messages` and updates the `conversations` index.
+- `deleteMessage(messageId)`: **Delegated to `ChatDeletionStrategy`**. Performs a transactional delete from `messages` and writes a record to the `tombstones` table. If the deleted message was the newest, it automatically **rolls back the conversation snippet** to the previous message (Index Rollback Strategy).
 
-#### Bulk Operations
+#### Cloud Sync Helpers
 
-- `bulkSaveMessages(messages)`: Optimized method for inserting thousands of messages during a Cloud Restore operation.
+- `getMessagesInRange(start, end)`: Fetches local content for cloud vault creation.
+- `getTombstonesInRange(start, end)`: Fetches local deletion records to be pushed to the cloud merge process.
+- `bulkSaveMessages(messages)`: Optimized for inserting thousands of decrypted messages during a Cloud Restore.
 
-## 🛡 Security & Wipe
+#### Synchronization Strategies (Injected)
 
-- `clearDatabase()`: Performs a transactional wipe of **all tables**. This is used by the "Scorched Earth" logout to ensure no metadata or settings remain on the device.
+- `ChatMergeStrategy`: Handles conflict resolution when merging the Cloud Index (`chat_index.json`) with the local Index.
+- `ChatDeletionStrategy`: Encapsulates the transactional logic for deletion and index correction.

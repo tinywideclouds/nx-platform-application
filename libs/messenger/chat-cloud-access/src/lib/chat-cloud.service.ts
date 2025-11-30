@@ -6,7 +6,8 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   ChatStorageService,
   DecryptedMessage,
-  ConversationIndexRecord,
+  ConversationSyncState, // ✅ NEW: Public Domain Model
+  MessageTombstone, // ✅ NEW: Public Domain Model
 } from '@nx-platform-application/chat-storage';
 import {
   CLOUD_PROVIDERS,
@@ -19,7 +20,7 @@ import {
 } from '@nx-platform-application/platform-types';
 
 const VAULT_SCHEMA_VERSION = 1;
-const BASE_PATH = 'tinywide/messaging'; // 📂 Root Folder
+const BASE_PATH = 'tinywide/messaging';
 
 @Injectable({ providedIn: 'root' })
 export class ChatCloudService {
@@ -37,7 +38,7 @@ export class ChatCloudService {
     this.initCloudState();
   }
 
-  // ... (initCloudState, connect, disconnect methods remain same) ...
+  // --- Initialization & Connection ---
   private async initCloudState(): Promise<void> {
     try {
       const enabled = await this.storage.isCloudEnabled();
@@ -72,12 +73,13 @@ export class ChatCloudService {
     if (!provider) return;
 
     try {
+      // ✅ RETURNS: ConversationSyncState[] (Safe Domain Objects)
       const allConversations = await this.storage.getAllConversations();
       if (allConversations.length === 0) return;
 
-      // Path: tinywide/messaging/chat_index.json
       const path = `${BASE_PATH}/chat_index.json`;
 
+      // JSON.stringify handles URN.toString() automatically
       await provider.uploadFile(allConversations, path);
       this.logger.info(`[ChatCloud] Synced Global Index to ${path}`);
     } catch (e) {
@@ -94,13 +96,17 @@ export class ChatCloudService {
       const path = `${BASE_PATH}/chat_index.json`;
       this.logger.info(`[ChatCloud] Restoring Index from ${path}...`);
 
-      const index = await provider.downloadFile<ConversationIndexRecord[]>(
-        path
-      );
+      const rawIndex = await provider.downloadFile<any[]>(path);
 
-      if (index && Array.isArray(index) && index.length > 0) {
-        await this.storage.bulkSaveConversations(index);
-        this.logger.info(`[ChatCloud] Restored ${index.length} chats.`);
+      if (rawIndex && Array.isArray(rawIndex) && rawIndex.length > 0) {
+        // ✅ HYDRATION: Convert JSON strings back to URN objects
+        const hydratedIndex: ConversationSyncState[] = rawIndex.map((r) => ({
+          ...r,
+          conversationUrn: URN.parse(r.conversationUrn),
+        }));
+
+        await this.storage.bulkSaveConversations(hydratedIndex);
+        this.logger.info(`[ChatCloud] Restored ${hydratedIndex.length} chats.`);
         return true;
       }
     } catch (e) {
@@ -117,16 +123,14 @@ export class ChatCloudService {
     const provider = this.providers.find((p) => p.hasPermission());
     if (!provider) return 0;
 
-    const vaultId = this.getVaultIdFromDate(date); // e.g. "2024_05"
-    const year = vaultId.split('_')[0]; // "2024"
+    const vaultId = this.getVaultIdFromDate(date);
+    const year = vaultId.split('_')[0];
 
-    // Path: tinywide/messaging/2024/chat_vault_2024_05.json
     const vaultPath = `${BASE_PATH}/${year}/chat_vault_${vaultId}.json`;
     const manifestPath = `${BASE_PATH}/${year}/chat_manifest_${vaultId}.json`;
 
     // 1. GATEKEEPER CHECK (Manifest)
     if (filterUrn) {
-      // We pass the full path to checkManifest now
       const shouldDownload = await this.checkManifest(
         provider,
         manifestPath,
@@ -139,11 +143,15 @@ export class ChatCloudService {
 
     // 2. HEAVY LIFT (Download Vault)
     try {
-      // Use downloadFile (Generic) because it supports Path Resolution natively
       const vault = await provider.downloadFile<ChatVault>(vaultPath);
 
       if (vault && vault.messages && vault.messages.length > 0) {
-        await this.storage.bulkSaveMessages(vault.messages);
+        // ✅ HYDRATION: We must ensure JSON strings are converted to URNs
+        // Note: PayloadBytes hydration from JSON (base64/array) is handled
+        // by the StorageMapper, but URNs need to be correct before entry.
+        const hydratedMessages = vault.messages.map(this.hydrateMessage);
+
+        await this.storage.bulkSaveMessages(hydratedMessages);
         return vault.messages.length;
       }
     } catch (e) {
@@ -159,18 +167,118 @@ export class ChatCloudService {
     filterUrn: URN
   ): Promise<boolean> {
     try {
-      // Direct Path Access (No listing required)
       const manifest = await provider.downloadFile<VaultManifest>(manifestPath);
-
-      if (!manifest) return true; // Fail Open (Missing Manifest)
+      if (!manifest) return true;
 
       return manifest.participants.includes(filterUrn.toString());
     } catch (e) {
-      return true; // Fail Open (Error)
+      return true;
     }
   }
 
-  // --- BACKUP (Twin-File Strategy) ---
+  // --- BACKUP (Twin-File & Merge Strategy) ---
+
+  private async processVault(
+    provider: CloudStorageProvider,
+    vaultId: string,
+    month: Temporal.PlainYearMonth
+  ): Promise<void> {
+    const year = String(month.year);
+    const vaultPath = `${BASE_PATH}/${year}/chat_vault_${vaultId}.json`;
+    const manifestPath = `${BASE_PATH}/${year}/chat_manifest_${vaultId}.json`;
+
+    // 1. GET LOCAL DATA
+    const daysInMonth = month.daysInMonth;
+    const start = (month.toPlainDate({ day: 1 }).toString() +
+      'T00:00:00Z') as ISODateTimeString;
+    const end = (month.toPlainDate({ day: daysInMonth }).toString() +
+      'T23:59:59Z') as ISODateTimeString;
+
+    const localMessages = await this.storage.getMessagesInRange(start, end);
+    // ✅ RETURNS: MessageTombstone[] (Safe Domain Objects)
+    const localTombstones = await this.storage.getTombstonesInRange(start, end);
+
+    // 2. FETCH REMOTE
+    let remoteVault: ChatVault | null = null;
+    try {
+      remoteVault = await provider.downloadFile<ChatVault>(vaultPath);
+    } catch (e) {
+      // It's okay if it doesn't exist yet
+    }
+
+    // 3. MERGE LOGIC
+    const combinedMessages = new Map<string, DecryptedMessage>();
+    const combinedTombstones = new Map<string, MessageTombstone>();
+
+    // A. Load Remote (Hydrating types)
+    if (remoteVault) {
+      remoteVault.messages.forEach((m) =>
+        combinedMessages.set(m.messageId, this.hydrateMessage(m))
+      );
+      remoteVault.tombstones?.forEach((t) =>
+        combinedTombstones.set(t.messageId, this.hydrateTombstone(t))
+      );
+    }
+
+    // B. Overlay Local (Local is fresher)
+    localMessages.forEach((m) => combinedMessages.set(m.messageId, m));
+    localTombstones.forEach((t) => combinedTombstones.set(t.messageId, t));
+
+    // C. Apply Tombstones (The Pruning)
+    for (const [deadId] of combinedTombstones) {
+      combinedMessages.delete(deadId);
+    }
+
+    const finalMessages = Array.from(combinedMessages.values()).sort((a, b) =>
+      a.sentTimestamp.localeCompare(b.sentTimestamp)
+    );
+
+    const finalTombstones: MessageTombstone[] = Array.from(
+      combinedTombstones.values()
+    );
+
+    // 4. CHECK: Do we actually need to upload?
+    if (
+      finalMessages.length === 0 &&
+      (!remoteVault || remoteVault.messageCount === 0)
+    ) {
+      return;
+    }
+
+    // 5. CREATE PAYLOADS
+    const participants = Array.from(
+      new Set(finalMessages.map((m) => m.conversationUrn.toString()))
+    );
+
+    const vault: ChatVault = {
+      version: VAULT_SCHEMA_VERSION,
+      vaultId,
+      rangeStart: finalMessages[0]?.sentTimestamp || start,
+      rangeEnd: finalMessages[finalMessages.length - 1]?.sentTimestamp || end,
+      messageCount: finalMessages.length,
+      messages: finalMessages,
+      tombstones: finalTombstones,
+    };
+
+    const manifest: VaultManifest = {
+      version: VAULT_SCHEMA_VERSION,
+      vaultId,
+      participants,
+      messageCount: finalMessages.length,
+      rangeStart: vault.rangeStart,
+      rangeEnd: vault.rangeEnd,
+    };
+
+    // 6. UPLOAD
+    await Promise.all([
+      provider.uploadFile(manifest, manifestPath),
+      provider.uploadFile(vault, vaultPath),
+    ]);
+
+    this.logger.info(
+      `[ChatCloud] Merged & Uploaded ${vaultPath} (${finalMessages.length} msgs, ${finalTombstones.length} tombstones)`
+    );
+  }
 
   async backup(providerId: string): Promise<void> {
     if (!this.isCloudEnabled()) return;
@@ -186,13 +294,6 @@ export class ChatCloudService {
     try {
       const range = await this.storage.getDataRange();
 
-      // We still use listBackups for incremental logic, but we scope it loosely
-      // or we just overwrite recent months. For simplicity in this refactor,
-      // we will process the active vaults without checking 'listBackups' recursively.
-      // A full recursive list on a folder hierarchy is expensive.
-      // BETTER STRATEGY: Just upload the "Hot" months (e.g. current + last).
-      // Older months are immutable anyway.
-
       if (range.min && range.max) {
         const startObj = Temporal.PlainDate.from(range.min.substring(0, 10));
         const endObj = Temporal.PlainDate.from(range.max.substring(0, 10));
@@ -204,11 +305,8 @@ export class ChatCloudService {
             2,
             '0'
           )}`;
-
-          // Optimization: In a real app, you'd check a local "last_synced" map
-          // to avoid re-uploading old immutable months (like 2022).
-          // For this refactor, we process them.
-          await this.processVault(provider, vaultId, cursor);
+          // Using type assertion for private method call
+          await (this as any).processVault(provider, vaultId, cursor);
 
           cursor = cursor.add({ months: 1 });
         }
@@ -223,62 +321,32 @@ export class ChatCloudService {
     }
   }
 
-  private async processVault(
-    provider: CloudStorageProvider,
-    vaultId: string,
-    month: Temporal.PlainYearMonth
-  ): Promise<void> {
-    const daysInMonth = month.daysInMonth;
-    const start = month.toPlainDate({ day: 1 }).toString() + 'T00:00:00Z';
-    const end =
-      month.toPlainDate({ day: daysInMonth }).toString() + 'T23:59:59Z';
+  // --- Helpers ---
 
-    const messages = await this.storage.getMessagesInRange(
-      start as ISODateTimeString,
-      end as ISODateTimeString
-    );
-
-    if (messages.length === 0) return;
-
-    // 1. Create Payloads
-    const participants = Array.from(
-      new Set(messages.map((m) => m.conversationUrn.toString()))
-    );
-
-    const manifest: VaultManifest = {
-      version: VAULT_SCHEMA_VERSION,
-      vaultId,
-      participants,
-      messageCount: messages.length,
-      rangeStart: messages[0].sentTimestamp,
-      rangeEnd: messages[messages.length - 1].sentTimestamp,
+  /**
+   * Hydrates a JSON object (where IDs are strings) into a Domain Object (URNs)
+   */
+  private hydrateMessage(raw: any): DecryptedMessage {
+    return {
+      ...raw,
+      senderId: URN.parse(raw.senderId),
+      recipientId: URN.parse(raw.recipientId),
+      conversationUrn: URN.parse(raw.conversationUrn),
+      typeId: URN.parse(raw.typeId),
+      payloadBytes: new Uint8Array(Object.values(raw.payloadBytes || [])),
     };
-
-    const vault: ChatVault = {
-      version: VAULT_SCHEMA_VERSION,
-      vaultId,
-      rangeStart: messages[0].sentTimestamp,
-      rangeEnd: messages[messages.length - 1].sentTimestamp,
-      messageCount: messages.length,
-      messages,
-    };
-
-    // 2. Construct Paths
-    const year = String(month.year);
-    // Path: tinywide/messaging/2024/chat_manifest_2024_05.json
-    const manifestPath = `${BASE_PATH}/${year}/chat_manifest_${vaultId}.json`;
-    const vaultPath = `${BASE_PATH}/${year}/chat_vault_${vaultId}.json`;
-
-    // 3. Upload
-    await Promise.all([
-      provider.uploadFile(manifest, manifestPath), // Generic Upload
-      provider.uploadFile(vault, vaultPath), // Generic Upload
-    ]);
-
-    this.logger.info(`[ChatCloud] Uploaded ${vaultPath}`);
   }
 
-  // --- Helpers ---
+  /**
+   * Hydrates a JSON Tombstone into a Domain Tombstone
+   */
+  private hydrateTombstone(raw: any): MessageTombstone {
+    return {
+      ...raw,
+      conversationUrn: URN.parse(raw.conversationUrn),
+    };
+  }
+
   private async setCloudEnabled(enabled: boolean): Promise<void> {
     this._isCloudEnabled.set(enabled);
     await this.storage.setCloudEnabled(enabled);

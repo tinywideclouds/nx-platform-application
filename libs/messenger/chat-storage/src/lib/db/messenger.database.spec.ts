@@ -44,4 +44,19 @@ describe('MessengerDatabase', () => {
     // Dexie represents compound indexes with '+'
     expect(indexNames).toContain('[conversationUrn+sentTimestamp]');
   });
+
+  it('should have the "tombstones" table', () => {
+    expect(db.tombstones).toBeTruthy();
+    expect(db.tombstones.name).toBe('tombstones');
+  });
+
+  it('should index tombstones by "deletedAt" for backup ranges', () => {
+    const schema = db.tombstones.schema;
+    const indexNames = schema.indexes.map((i) => i.name);
+    expect(indexNames).toContain('deletedAt');
+  });
+
+  it('should enforce messageId as primary key for tombstones', () => {
+    expect(db.tombstones.schema.primKey.name).toBe('messageId');
+  });
 });

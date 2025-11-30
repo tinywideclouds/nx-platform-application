@@ -1,5 +1,3 @@
-// libs/messenger/chat-storage/src/lib/chat-storage.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import {
   URN,
@@ -8,13 +6,20 @@ import {
 import { Logger } from '@nx-platform-application/console-logger';
 import { Dexie } from 'dexie';
 import {
+  ConversationIndexRecord,
+  MessageRecord,
+} from './db/chat-storage.models';
+import {
   DecryptedMessage,
   ConversationSummary,
-  MessageRecord,
-  ConversationIndexRecord,
-} from './chat-storage.models';
+  MessageTombstone,
+  ConversationSyncState,
+} from './chat.models';
 import { MessengerDatabase } from './db/messenger.database';
-import { ChatMergeStrategy } from './chat-merge.strategy';
+import { ChatMergeStrategy } from './strategies/chat-merge.strategy';
+import { ChatDeletionStrategy } from './strategies/chat-deletion.strategy';
+import { ChatStorageMapper } from './db/chat-storage.mapper';
+import { generateSnippet, getPreviewType } from './chat-message.utils';
 
 @Injectable({
   providedIn: 'root',
@@ -22,66 +27,53 @@ import { ChatMergeStrategy } from './chat-merge.strategy';
 export class ChatStorageService {
   private readonly db = inject(MessengerDatabase);
   private readonly logger = inject(Logger);
-  private readonly mergeStrategy = inject(ChatMergeStrategy);
 
-  // --- WRITE PATH (Dual-Write Transaction) ---
+  // Strategies and Mapper
+  private readonly mergeStrategy = inject(ChatMergeStrategy);
+  private readonly deletionStrategy = inject(ChatDeletionStrategy);
+  private readonly mapper = inject(ChatStorageMapper);
+
+  // --- WRITE PATHS ---
 
   async saveMessage(message: DecryptedMessage): Promise<void> {
-    const msgRecord: MessageRecord = {
-      ...message,
-      senderId: message.senderId.toString(),
-      recipientId: message.recipientId.toString(),
-      typeId: message.typeId.toString(),
-      conversationUrn: message.conversationUrn.toString(),
-    };
-
+    const msgRecord = this.mapper.mapSmartToRecord(message);
     const conversationUrnStr = message.conversationUrn.toString();
     const now = new Date().toISOString();
 
-    // TRANSACTION: Ensure Message and Index are always in sync
     await this.db.transaction(
       'rw',
       [this.db.messages, this.db.conversations],
       async () => {
-        // 1. Save the Message
         await this.db.messages.put(msgRecord);
 
-        // 2. Update the Index (Upsert)
         const existing = await this.db.conversations.get(conversationUrnStr);
-
-        // Logic: Is this message newer than what we have?
         const isNewer =
           !existing || message.sentTimestamp >= existing.lastActivityTimestamp;
         const isOlder =
           existing?.genesisTimestamp &&
           message.sentTimestamp < existing.genesisTimestamp;
 
-        // Prepare update
         const update: ConversationIndexRecord = existing || {
           conversationUrn: conversationUrnStr,
           lastActivityTimestamp: message.sentTimestamp,
           snippet: '',
           previewType: 'text',
           unreadCount: 0,
-          genesisTimestamp: null, // Unknown initially
+          genesisTimestamp: null,
           lastModified: now,
         };
 
         update.lastModified = now;
 
-        // If this is the newest message, update the Sidebar preview
         if (isNewer) {
           update.lastActivityTimestamp = message.sentTimestamp;
-          update.snippet = this.generateSnippet(message);
-          update.previewType = this.getPreviewType(message.typeId.toString());
-
-          // Increment unread only for incoming messages
+          update.snippet = generateSnippet(message);
+          update.previewType = getPreviewType(message.typeId.toString());
           if (message.status === 'received') {
             update.unreadCount = (existing?.unreadCount || 0) + 1;
           }
         }
 
-        // If this message is OLDER than our known genesis, push boundaries back
         if (isOlder) {
           update.genesisTimestamp = message.sentTimestamp;
         }
@@ -91,12 +83,16 @@ export class ChatStorageService {
     );
   }
 
-  // --- READ PATH (Optimized) ---
+  async deleteMessage(messageId: string): Promise<void> {
+    return this.deletionStrategy.deleteMessage(this, messageId);
+  }
+
+  // --- READ PATHS (UI) ---
 
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     const records = await this.db.conversations
       .orderBy('lastActivityTimestamp')
-      .reverse() // Newest chats first
+      .reverse()
       .toArray();
 
     return records.map((r) => ({
@@ -107,66 +103,6 @@ export class ChatStorageService {
       previewType: r.previewType,
     }));
   }
-
-  async getConversationIndex(
-    urn: URN
-  ): Promise<ConversationIndexRecord | undefined> {
-    return this.db.conversations.get(urn.toString());
-  }
-
-  async setGenesisTimestamp(
-    urn: URN,
-    timestamp: ISODateTimeString
-  ): Promise<void> {
-    const strUrn = urn.toString();
-    const existing = await this.db.conversations.get(strUrn);
-    if (existing) {
-      await this.db.conversations.update(strUrn, {
-        genesisTimestamp: timestamp,
-      });
-    }
-  }
-
-  // --- SYNC & RESTORE HELPERS ---
-
-  async getAllConversations(): Promise<ConversationIndexRecord[]> {
-    return this.db.conversations.toArray();
-  }
-
-  /**
-   * Intelligently merges a Cloud Index into the Local Index.
-   * Delegates to ChatMergeStrategy to resolve conflicts.
-   */
-  async smartMergeConversations(
-    cloudIndex: ConversationIndexRecord[]
-  ): Promise<void> {
-    return this.mergeStrategy.merge(cloudIndex);
-  }
-
-  /**
-   * Alias for smartMerge.
-   * Used during "Fresh Install" to populate the UI instantly.
-   */
-  async bulkSaveConversations(
-    records: ConversationIndexRecord[]
-  ): Promise<void> {
-    return this.smartMergeConversations(records);
-  }
-
-  async bulkSaveMessages(messages: DecryptedMessage[]): Promise<void> {
-    // NOTE: We do NOT calculate summaries here to keep restore fast.
-    // We assume the Global Index Restore handles the UI state.
-    const records = messages.map((msg) => ({
-      ...msg,
-      senderId: msg.senderId.toString(),
-      recipientId: msg.recipientId.toString(),
-      typeId: msg.typeId.toString(),
-      conversationUrn: msg.conversationUrn.toString(),
-    }));
-    await this.db.messages.bulkPut(records);
-  }
-
-  // --- EXISTING METHODS (Maintained) ---
 
   async loadHistorySegment(
     conversationUrn: URN,
@@ -183,20 +119,31 @@ export class ChatStorageService {
       .limit(limit)
       .toArray();
 
-    return records.reverse().map(this.mapRecordToSmart);
+    return records.map((r) => this.mapper.mapRecordToSmart(r));
   }
 
-  async clearDatabase(): Promise<void> {
-    await this.db.transaction(
-      'rw',
-      [this.db.messages, this.db.settings, this.db.conversations],
-      async () => {
-        await this.db.messages.clear();
-        await this.db.settings.clear();
-        await this.db.conversations.clear();
-      }
-    );
+  // ✅ UPDATED: Returns Domain Object (SyncState) instead of DB Record
+  async getConversationIndex(
+    urn: URN
+  ): Promise<ConversationSyncState | undefined> {
+    const record = await this.db.conversations.get(urn.toString());
+    return record ? this.mapIndexRecordToSmart(record) : undefined;
   }
+
+  async setGenesisTimestamp(
+    urn: URN,
+    timestamp: ISODateTimeString
+  ): Promise<void> {
+    const strUrn = urn.toString();
+    const existing = await this.db.conversations.get(strUrn);
+    if (existing) {
+      await this.db.conversations.update(strUrn, {
+        genesisTimestamp: timestamp,
+      });
+    }
+  }
+
+  // --- SYNC HELPERS (Cloud Support) ---
 
   async getMessagesInRange(
     start: ISODateTimeString,
@@ -206,7 +153,24 @@ export class ChatStorageService {
       .where('sentTimestamp')
       .between(start, end, true, true)
       .toArray();
-    return records.map(this.mapRecordToSmart);
+    return records.map((r) => this.mapper.mapRecordToSmart(r));
+  }
+
+  // ✅ UPDATED: Returns Domain Objects (MessageTombstone)
+  async getTombstonesInRange(
+    start: ISODateTimeString,
+    end: ISODateTimeString
+  ): Promise<MessageTombstone[]> {
+    const records = await this.db.tombstones
+      .where('deletedAt')
+      .between(start, end, true, true)
+      .toArray();
+
+    return records.map((r) => ({
+      messageId: r.messageId,
+      conversationUrn: URN.parse(r.conversationUrn),
+      deletedAt: r.deletedAt as ISODateTimeString,
+    }));
   }
 
   async getDataRange(): Promise<{
@@ -221,6 +185,41 @@ export class ChatStorageService {
     };
   }
 
+  // ✅ UPDATED: Returns Domain Objects
+  async getAllConversations(): Promise<ConversationSyncState[]> {
+    const records = await this.db.conversations.toArray();
+    return records.map((r) => this.mapIndexRecordToSmart(r));
+  }
+
+  // --- CLOUD MERGE OPERATIONS ---
+
+  // ✅ UPDATED: Accepts Domain Objects, maps to DB, then calls Strategy
+  async smartMergeConversations(
+    cloudIndex: ConversationSyncState[]
+  ): Promise<void> {
+    const records: ConversationIndexRecord[] = cloudIndex.map((s) => ({
+      ...s,
+      conversationUrn: s.conversationUrn.toString(),
+      // Ensure ISO string types align with DB expectation
+      lastActivityTimestamp: s.lastActivityTimestamp,
+      lastModified: s.lastModified,
+      genesisTimestamp: s.genesisTimestamp,
+    }));
+
+    return this.mergeStrategy.merge(records);
+  }
+
+  async bulkSaveConversations(records: ConversationSyncState[]): Promise<void> {
+    return this.smartMergeConversations(records);
+  }
+
+  async bulkSaveMessages(messages: DecryptedMessage[]): Promise<void> {
+    const records = messages.map((m) => this.mapper.mapSmartToRecord(m));
+    await this.db.messages.bulkPut(records);
+  }
+
+  // --- SETTINGS & CLEANUP ---
+
   async setCloudEnabled(enabled: boolean): Promise<void> {
     await this.db.settings.put({ key: 'chat_cloud_enabled', value: enabled });
   }
@@ -230,36 +229,50 @@ export class ChatStorageService {
     return r?.value === true;
   }
 
-  // --- PRIVATE MAPPER HELPERS ---
-
-  private mapRecordToSmart(record: MessageRecord): DecryptedMessage {
-    return {
-      ...record,
-      senderId: URN.parse(record.senderId),
-      recipientId: URN.parse(record.recipientId),
-      typeId: URN.parse(record.typeId),
-      conversationUrn: URN.parse(record.conversationUrn),
-    };
-  }
-
-  private generateSnippet(msg: DecryptedMessage): string {
-    // FIX: Using correct namespace 'urn:message:type:text'
-    if (msg.typeId.toString() === 'urn:message:type:text') {
-      try {
-        return new TextDecoder().decode(msg.payloadBytes);
-      } catch {
-        return 'Message';
+  async clearDatabase(): Promise<void> {
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.messages,
+        this.db.settings,
+        this.db.conversations,
+        this.db.tombstones,
+      ],
+      async () => {
+        await this.db.messages.clear();
+        await this.db.settings.clear();
+        await this.db.conversations.clear();
+        await this.db.tombstones.clear();
       }
-    }
-    return 'Media Message';
+    );
   }
 
-  private getPreviewType(
+  // --- HELPERS (Internal & Public Delegation) ---
+
+  public mapRecordToSmart(record: MessageRecord): DecryptedMessage {
+    return this.mapper.mapRecordToSmart(record);
+  }
+
+  public generateSnippet(msg: DecryptedMessage): string {
+    return generateSnippet(msg);
+  }
+
+  public getPreviewType(
     typeIdStr: string
   ): 'text' | 'image' | 'file' | 'other' {
-    // FIX: Using correct namespace
-    if (typeIdStr === 'urn:message:type:text') return 'text';
-    if (typeIdStr.includes('image')) return 'image';
-    return 'other';
+    return getPreviewType(typeIdStr);
+  }
+
+  // Private Mapper for the Index
+  private mapIndexRecordToSmart(
+    record: ConversationIndexRecord
+  ): ConversationSyncState {
+    return {
+      ...record,
+      conversationUrn: URN.parse(record.conversationUrn),
+      lastActivityTimestamp: record.lastActivityTimestamp as ISODateTimeString,
+      lastModified: record.lastModified as ISODateTimeString,
+      genesisTimestamp: (record.genesisTimestamp as ISODateTimeString) || null,
+    };
   }
 }

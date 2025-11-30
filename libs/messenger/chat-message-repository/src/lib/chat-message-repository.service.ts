@@ -9,6 +9,7 @@ import {
   ChatStorageService,
   DecryptedMessage,
   ConversationSummary,
+  ConversationSyncState, // ✅ NEW: Import Domain Model, not DB Record
 } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
 import { Temporal } from '@js-temporal/polyfill';
@@ -56,9 +57,10 @@ export class ChatMessageRepository {
       (query.beforeTimestamp as ISODateTimeString) || undefined;
 
     // 1. GENESIS CHECK (Optimization)
-    const index = await this.storage.getConversationIndex(
-      query.conversationUrn
-    );
+    // ✅ Returns ConversationSyncState (Domain Object)
+    const index: ConversationSyncState | undefined =
+      await this.storage.getConversationIndex(query.conversationUrn);
+
     if (
       index?.genesisTimestamp &&
       beforeTimestamp &&
@@ -130,7 +132,6 @@ export class ChatMessageRepository {
 
   private async performInboxHydration(): Promise<void> {
     // STRATEGY 1: Global Index (The "Bill from 2022" Fix)
-    // This is the new logic we enabled.
     const indexRestored = await this.cloud.restoreIndex();
 
     if (indexRestored) {
@@ -138,7 +139,6 @@ export class ChatMessageRepository {
     }
 
     // STRATEGY 2: Recent Scan (Fallback for Legacy Backups)
-    // Only runs if 'chat_index.json' is missing from the cloud.
     const MAX_MONTHS_BACK = 3;
     let monthsChecked = 0;
     let cursor = Temporal.Now.plainDateISO();

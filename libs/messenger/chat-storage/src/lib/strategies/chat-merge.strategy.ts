@@ -2,8 +2,8 @@
 
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessengerDatabase } from './db/messenger.database';
-import { ConversationIndexRecord } from './chat-storage.models';
+import { MessengerDatabase } from '../db/messenger.database';
+import { ConversationIndexRecord } from '../db/chat-storage.models';
 
 @Injectable({ providedIn: 'root' })
 export class ChatMergeStrategy {

@@ -18,6 +18,12 @@ export interface MessageRecord {
   conversationUrn: string;
 }
 
+export interface DeletedMessageRecord {
+  messageId: string; // PK
+  conversationUrn: string; // Helpful for context, though not strictly required for the sync logic
+  deletedAt: string; // ISO Timestamp (Indexed for range queries)
+}
+
 /**
  * NEW: The Meta-Index Record
  * Acts as the source of truth for the Inbox AND the scroll boundaries.
@@ -38,26 +44,4 @@ export interface ConversationIndexRecord {
 
   /** SYNC LOGIC (Optimistic Concurrency) */
   lastModified: string;
-}
-
-// --- DOMAIN MODELS (Application) ---
-
-export interface DecryptedMessage {
-  messageId: string;
-  senderId: URN;
-  recipientId: URN;
-  sentTimestamp: ISODateTimeString;
-  typeId: URN;
-  payloadBytes: Uint8Array;
-  status: 'pending' | 'sent' | 'received';
-  conversationUrn: URN;
-}
-
-export interface ConversationSummary {
-  conversationUrn: URN;
-  latestSnippet: string;
-  timestamp: ISODateTimeString;
-  unreadCount: number;
-  // Helpful for UI icons
-  previewType: 'text' | 'image' | 'file' | 'other';
 }

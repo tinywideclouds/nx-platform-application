@@ -84,7 +84,9 @@ export class ChatConversationService {
         });
 
         // Map & Reverse (Repo gives Newest->Oldest, UI wants Oldest->Newest)
-        const viewMessages = result.messages.map((m) => this.mapper.toView(m));
+        const viewMessages = result.messages
+          .reverse()
+          .map((m) => this.mapper.toView(m));
 
         this.messages.set(viewMessages);
         this.genesisReached.set(result.genesisReached);

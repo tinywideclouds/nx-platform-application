@@ -1,6 +1,9 @@
 // libs/messenger/chat-cloud-access/src/lib/models/chat-vault.interface.ts
 
-import { DecryptedMessage } from '@nx-platform-application/chat-storage';
+import {
+  DecryptedMessage,
+  MessageTombstone, // ✅ Updated Import (Public Domain Model)
+} from '@nx-platform-application/chat-storage';
 
 export interface ChatVault {
   /** Schema version (e.g., 1) */
@@ -15,20 +18,16 @@ export interface ChatVault {
   messageCount: number;
   /** The actual message data */
   messages: DecryptedMessage[];
+
+  // ✅ Updated Type: Uses the clean domain contract
+  tombstones: MessageTombstone[];
 }
 
-/**
- * NEW: The "Gatekeeper"
- * A lightweight digest of a vault used to avoid downloading heavy data
- * if the user isn't looking for anyone in this specific time period.
- */
 export interface VaultManifest {
   version: number;
   vaultId: string; // "2024_01"
 
-  /** * A unified set of ALL Conversation URNs present in the vault.
-   * This is our Bloom Filter / Lookup Index.
-   */
+  /** A unified set of ALL Conversation URNs present in the vault. */
   participants: string[];
 
   /** Metadata to help UI show loading state */

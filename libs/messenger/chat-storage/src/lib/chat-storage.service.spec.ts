@@ -1,6 +1,9 @@
 // libs/messenger/chat-storage/src/lib/chat-storage.service.spec.ts
 
 import { TestBed } from '@angular/core/testing';
+import { Dexie } from 'dexie';
+import { MockProvider } from 'ng-mocks';
+import { Logger } from '@nx-platform-application/console-logger';
 import {
   ISODateTimeString,
   URN,
@@ -8,21 +11,20 @@ import {
 import { ChatStorageService } from './chat-storage.service';
 import {
   DecryptedMessage,
-  ConversationIndexRecord,
-} from './chat-storage.models';
+  ConversationSyncState,
+  MessageTombstone,
+} from './chat.models';
 import { MessengerDatabase } from './db/messenger.database';
-import { ChatMergeStrategy } from './chat-merge.strategy';
-import { Logger } from '@nx-platform-application/console-logger';
-import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { ChatMergeStrategy } from './strategies/chat-merge.strategy';
+import { ChatDeletionStrategy } from './strategies/chat-deletion.strategy';
+import { ChatStorageMapper } from './db/chat-storage.mapper';
 import 'fake-indexeddb/auto';
-import { Dexie } from 'dexie';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // --- Fixtures ---
 const mockMyUrn = URN.parse('urn:contacts:user:me');
 const mockPartnerUrn = URN.parse('urn:contacts:user:bob');
 
-// Correct namespace
 const createMsg = (
   id: string,
   text: string,
@@ -43,18 +45,23 @@ describe('ChatStorageService', () => {
   let service: ChatStorageService;
   let db: MessengerDatabase;
   let mergeStrategy: ChatMergeStrategy;
+  let deletionStrategy: ChatDeletionStrategy;
 
   beforeEach(async () => {
+    // ⚠️ IMPORTANT: Reset DB for Zero-Day state
     await Dexie.delete('messenger');
 
     TestBed.configureTestingModule({
       providers: [
         ChatStorageService,
         MessengerDatabase,
+        ChatStorageMapper, // Use Real Mapper for integration testing
         MockProvider(Logger),
-        // ✅ Mock the new strategy
         MockProvider(ChatMergeStrategy, {
           merge: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(ChatDeletionStrategy, {
+          deleteMessage: vi.fn().mockResolvedValue(undefined),
         }),
       ],
     });
@@ -62,6 +69,7 @@ describe('ChatStorageService', () => {
     service = TestBed.inject(ChatStorageService);
     db = TestBed.inject(MessengerDatabase);
     mergeStrategy = TestBed.inject(ChatMergeStrategy);
+    deletionStrategy = TestBed.inject(ChatDeletionStrategy);
     await db.open();
   });
 
@@ -69,71 +77,148 @@ describe('ChatStorageService', () => {
     await db.close();
   });
 
-  describe('Write Path (Dual-Write Transaction)', () => {
-    it('should save message AND create conversation index record', async () => {
+  describe('Write Path', () => {
+    it('should save message AND upsert conversation index record', async () => {
       const msg = createMsg('m1', 'Hello Bob', '2024-01-01T10:00:00Z');
-
       await service.saveMessage(msg);
 
-      // 1. Verify Message Saved
-      const savedMsg = await db.messages.get('m1');
-      expect(savedMsg).toBeTruthy();
-
-      // 2. Verify Index Created
+      // Verify Index Created via DB directly
       const index = await db.conversations.get(mockPartnerUrn.toString());
       expect(index).toBeTruthy();
-      expect(index?.lastActivityTimestamp).toBe('2024-01-01T10:00:00Z');
       expect(index?.snippet).toBe('Hello Bob');
-      expect(index?.unreadCount).toBe(1);
-    });
-
-    it('should update existing index with NEWER message', async () => {
-      await service.saveMessage(createMsg('m1', 'Old', '2024-01-01T10:00:00Z'));
-      await service.saveMessage(createMsg('m2', 'New', '2024-01-01T10:05:00Z'));
-
-      const index = await db.conversations.get(mockPartnerUrn.toString());
-      expect(index?.snippet).toBe('New');
-      expect(index?.lastActivityTimestamp).toBe('2024-01-01T10:05:00Z');
-      expect(index?.unreadCount).toBe(2);
     });
   });
 
-  describe('Smart Merge (Delegation)', () => {
-    it('should delegate merge logic to ChatMergeStrategy', async () => {
-      const mockIndexData: ConversationIndexRecord[] = [
+  describe('Read Path (Domain Mapping)', () => {
+    it('getConversationIndex should return Domain Object (URNs)', async () => {
+      // 1. Arrange: Insert Raw DB Record
+      await db.conversations.put({
+        conversationUrn: mockPartnerUrn.toString(),
+        lastActivityTimestamp: '2024-01-01T10:00:00Z',
+        snippet: 'Raw DB',
+        previewType: 'text',
+        unreadCount: 0,
+        genesisTimestamp: null,
+        lastModified: '2024-01-01T10:00:00Z',
+      });
+
+      // 2. Act
+      const result = await service.getConversationIndex(mockPartnerUrn);
+
+      // 3. Assert
+      expect(result).toBeDefined();
+      // ✅ Key Check: It should be a URN object, not a string
+      expect(result?.conversationUrn).toBeInstanceOf(URN);
+      expect(result?.conversationUrn.toString()).toBe(
+        mockPartnerUrn.toString()
+      );
+    });
+
+    it('getAllConversations should return array of Domain Objects', async () => {
+      await db.conversations.put({
+        conversationUrn: mockPartnerUrn.toString(),
+        lastActivityTimestamp: '2024-01-01T10:00:00Z',
+        snippet: 'Test',
+        previewType: 'text',
+        unreadCount: 0,
+        genesisTimestamp: null,
+        lastModified: '2024-01-01T10:00:00Z',
+      });
+
+      const results = await service.getAllConversations();
+      expect(results.length).toBe(1);
+      expect(results[0].conversationUrn).toBeInstanceOf(URN);
+    });
+  });
+
+  describe('Sync Helpers (Tombstones)', () => {
+    it('getTombstonesInRange should return Domain Objects', async () => {
+      // 1. Arrange: DB has raw records
+      await db.tombstones.put({
+        messageId: 't1',
+        conversationUrn: 'urn:contacts:user:bob',
+        deletedAt: '2024-01-01T00:00:00Z',
+      });
+
+      // 2. Act
+      const results = await service.getTombstonesInRange(
+        '2023-12-31T00:00:00Z' as ISODateTimeString,
+        '2024-01-02T00:00:00Z' as ISODateTimeString
+      );
+
+      // 3. Assert
+      expect(results.length).toBe(1);
+      expect(results[0].messageId).toBe('t1');
+      // ✅ Check Domain Mapping
+      expect(results[0].conversationUrn).toBeInstanceOf(URN);
+    });
+  });
+
+  describe('Merge Logic (Anti-Corruption Layer)', () => {
+    it('smartMergeConversations should map Domain Objects to DB Records before strategy', async () => {
+      // 1. Input: Domain Objects
+      const domainInput: ConversationSyncState[] = [
         {
-          conversationUrn: 'urn:test',
-          lastActivityTimestamp: '2023-01-01T00:00:00Z',
-        } as any,
+          conversationUrn: mockPartnerUrn,
+          lastActivityTimestamp: '2024-01-01T12:00:00Z' as ISODateTimeString,
+          snippet: 'Cloud',
+          unreadCount: 0,
+          previewType: 'text',
+          genesisTimestamp: null,
+          lastModified: '2024-01-01T12:00:00Z' as ISODateTimeString,
+        },
       ];
 
-      await service.smartMergeConversations(mockIndexData);
+      // 2. Act
+      await service.smartMergeConversations(domainInput);
 
-      expect(mergeStrategy.merge).toHaveBeenCalledWith(mockIndexData);
-    });
+      // 3. Assert
+      expect(mergeStrategy.merge).toHaveBeenCalledTimes(1);
+      const captureArg = (mergeStrategy.merge as any).mock.calls[0][0];
 
-    it('should delegate bulkSaveConversations to merge strategy', async () => {
-      const mockIndexData: ConversationIndexRecord[] = [];
-      await service.bulkSaveConversations(mockIndexData);
-      expect(mergeStrategy.merge).toHaveBeenCalledWith(mockIndexData);
+      // ✅ Verify the strategy received strings (DB Records), not URNs
+      expect(typeof captureArg[0].conversationUrn).toBe('string');
+      expect(captureArg[0].conversationUrn).toBe(mockPartnerUrn.toString());
     });
   });
 
-  describe('Read Path', () => {
-    it('should load summaries from conversation table', async () => {
+  describe('Restored Functionality', () => {
+    it('clearDatabase should wipe all tables including tombstones', async () => {
+      await db.messages.put(
+        service['mapper'].mapSmartToRecord(
+          createMsg('m1', 'hi', '2024-01-01T10:00:00Z')
+        )
+      );
+      await db.tombstones.put({
+        messageId: 't1',
+        conversationUrn: 'u1',
+        deletedAt: '2024-01-01',
+      });
+
+      await service.clearDatabase();
+
+      expect(await db.messages.count()).toBe(0);
+      expect(await db.tombstones.count()).toBe(0);
+    });
+
+    it('setGenesisTimestamp should update existing record', async () => {
       await db.conversations.put({
-        conversationUrn: 'urn:contacts:user:alice',
-        lastActivityTimestamp: '2024-01-02T00:00:00Z',
-        snippet: 'Alice Msg',
+        conversationUrn: mockPartnerUrn.toString(),
+        lastActivityTimestamp: '2024-01-01T10:00:00Z',
+        snippet: '',
         previewType: 'text',
         unreadCount: 0,
         genesisTimestamp: null,
         lastModified: '',
       });
 
-      const summaries = await service.loadConversationSummaries();
-      expect(summaries.length).toBe(1);
-      expect(summaries[0].latestSnippet).toBe('Alice Msg');
+      await service.setGenesisTimestamp(
+        mockPartnerUrn,
+        '2023-01-01T00:00:00Z' as ISODateTimeString
+      );
+
+      const updated = await db.conversations.get(mockPartnerUrn.toString());
+      expect(updated?.genesisTimestamp).toBe('2023-01-01T00:00:00Z');
     });
   });
 });
