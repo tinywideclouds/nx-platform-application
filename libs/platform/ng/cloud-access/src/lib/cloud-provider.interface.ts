@@ -1,5 +1,3 @@
-// libs/platform/cloud-access/src/lib/cloud-storage-provider.interface.ts
-
 import { BackupFile } from './models/cloud-storage.models';
 
 export interface CloudStorageProvider {
@@ -13,8 +11,10 @@ export interface CloudStorageProvider {
 
   /**
    * Request OAuth/API access from the user.
+   * @param scopes Optional list of specific scopes to request (e.g. ['https://.../contacts'])
+   * If omitted, the provider should request its default base scope.
    */
-  requestAccess(): Promise<boolean>;
+  requestAccess(scopes?: string[]): Promise<boolean>;
 
   /**
    * Check if we currently hold a valid token.

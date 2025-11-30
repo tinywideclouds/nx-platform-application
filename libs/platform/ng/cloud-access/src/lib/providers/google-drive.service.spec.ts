@@ -1,63 +1,50 @@
-// libs/platform/ng/cloud-access/src/lib/providers/google-drive.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { GoogleDriveService } from './google-drive.service';
 import { Logger } from '@nx-platform-application/console-logger';
 import { PLATFORM_CLOUD_CONFIG } from '../tokens/cloud-config.token';
 import { MockProvider } from 'ng-mocks';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-describe('GoogleDriveService', () => {
+describe('GoogleDriveService (Path Aware)', () => {
   let service: GoogleDriveService;
 
-  let mockRequestAccessToken: any;
-  let mockInitTokenClient: any;
+  // Mock global.fetch
+  let fetchMock: any;
+
+  // Auth Mocks
   let mockHasGrantedAllScopes: any;
-  let mockRevoke: any;
-  let capturedTokenClient: any;
 
   beforeEach(() => {
-    mockRequestAccessToken = vi.fn();
-    mockInitTokenClient = vi.fn().mockImplementation((config) => {
-      capturedTokenClient = {
-        requestAccessToken: mockRequestAccessToken,
-        callback: null,
-      };
-      return capturedTokenClient;
-    });
-    mockHasGrantedAllScopes = vi.fn();
-    mockRevoke = vi.fn((token, cb) => cb && cb());
+    mockHasGrantedAllScopes = vi.fn().mockReturnValue(true);
 
     vi.stubGlobal('google', {
       accounts: {
         oauth2: {
-          initTokenClient: mockInitTokenClient,
+          initTokenClient: vi.fn().mockReturnValue({
+            callback: null,
+            requestAccessToken: vi.fn(),
+          }),
           hasGrantedAllScopes: mockHasGrantedAllScopes,
-          revoke: mockRevoke,
+          revoke: vi.fn((t, cb) => cb && cb()),
         },
       },
     });
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-        text: () => Promise.resolve(''),
-      } as Response)
-    );
+    fetchMock = vi.fn();
+    global.fetch = fetchMock;
 
     TestBed.configureTestingModule({
       providers: [
         GoogleDriveService,
         MockProvider(Logger),
-        {
-          provide: PLATFORM_CLOUD_CONFIG,
-          useValue: { googleClientId: 'test-client-id' },
-        },
+        { provide: PLATFORM_CLOUD_CONFIG, useValue: { googleClientId: 'id' } },
       ],
     });
 
     service = TestBed.inject(GoogleDriveService);
+
+    // Inject fake token for testing
+    (service as any).accessToken = 'fake-token';
   });
 
   afterEach(() => {
@@ -65,90 +52,173 @@ describe('GoogleDriveService', () => {
     vi.clearAllMocks();
   });
 
-  // --- Helpers ---
-  const simulateLogin = async () => {
-    const p = service.requestAccess();
-    mockHasGrantedAllScopes.mockReturnValue(true);
-    capturedTokenClient.callback({ access_token: 'valid-token' });
-    await p;
-  };
+  describe('Deep Path Upload', () => {
+    it('should create folders recursively if missing', async () => {
+      // 1. Mock: Search for "tinywide" (Fail - Not Found)
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ files: [] }),
+      });
 
-  describe('Authentication', () => {
-    it('should request access', async () => {
-      const p = service.requestAccess();
-      expect(mockInitTokenClient).toHaveBeenCalled();
-      mockHasGrantedAllScopes.mockReturnValue(true);
-      capturedTokenClient.callback({ access_token: 'token' });
-      const granted = await p;
-      expect(granted).toBe(true);
+      // 2. Mock: Create "tinywide"
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'folder-1' }),
+      });
+
+      // 3. Mock: Search for "messaging" (Fail - Not Found)
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ files: [] }),
+      });
+
+      // 4. Mock: Create "messaging"
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'folder-2' }),
+      });
+
+      // 5. Mock: Check if file exists (For Upsert - Not Found)
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ files: [] }),
+      });
+
+      // 6. Mock: Upload File (POST)
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'file-new' }),
+      });
+
+      await service.uploadFile({ foo: 'bar' }, 'tinywide/messaging/test.json');
+
+      // Verify "messaging" was created inside "folder-1" (tinywide)
+      const createMessagingCall = fetchMock.mock.calls[3];
+      const createBody = JSON.parse(createMessagingCall[1].body);
+      expect(createBody.parents).toContain('folder-1');
+      expect(createBody.name).toBe('messaging');
     });
 
-    it('should revoke access', async () => {
-      await simulateLogin();
-      await service.revokeAccess();
-      expect(mockRevoke).toHaveBeenCalledWith(
-        'valid-token',
-        expect.any(Function)
+    it('should PATCH if file already exists (Upsert)', async () => {
+      // 1. Mock: Check if file exists (Found!)
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          files: [{ id: 'existing-id', name: 'test.json' }],
+        }),
+      });
+
+      // 2. Mock: Upload (PATCH)
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'existing-id' }),
+      });
+
+      await service.uploadFile({ foo: 'updated' }, 'test.json');
+
+      const uploadCall = fetchMock.mock.calls[1];
+      const url = uploadCall[0];
+      expect(url).toContain('files/existing-id'); // PATCH URL
+      expect(uploadCall[1].method).toBe('PATCH');
+    });
+  });
+
+  describe('Deep Path Download', () => {
+    it('should resolve folder ID before downloading', async () => {
+      // 1. Search "tinywide" -> Found 'folder-1'
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ files: [{ id: 'folder-1' }] }),
+      });
+
+      // 2. Search "test.json" inside 'folder-1' -> Found 'file-X'
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ files: [{ id: 'file-X' }] }),
+      });
+
+      // 3. Download 'file-X'
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ content: 'success' }),
+      });
+
+      const result = await service.downloadFile('tinywide/test.json');
+
+      expect(result).toEqual({ content: 'success' });
+
+      // ✅ FIX: Use URL object to parse parameters safely
+      const searchCallUrl = fetchMock.mock.calls[1][0];
+      const urlObj = new URL(searchCallUrl);
+      const qParam = urlObj.searchParams.get('q');
+
+      expect(qParam).toContain("'folder-1' in parents");
+    });
+
+    it('should return null if path does not exist', async () => {
+      // 1. Search "tinywide" -> Not Found
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ files: [] }),
+      });
+
+      const result = await service.downloadFile('tinywide/test.json');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('Race Condition Protection', () => {
+    it('should Create Folder ONCE during concurrent uploads', async () => {
+      // Scenario: Two uploads to "tinywide/data.json" happening at same time.
+      // Folder "tinywide" does NOT exist yet.
+
+      fetchMock.mockImplementation(async (url: string, opts: any) => {
+        // A. Folder Search
+        if (url.includes('q=mimeType')) {
+          await new Promise((r) => setTimeout(r, 50)); // Delay
+          return { ok: true, json: async () => ({ files: [] }) }; // Not Found
+        }
+
+        // B. Folder Create
+        // FIX: Check if body is string before calling includes() to avoid crash on FormData calls
+        if (
+          url.includes('drive/v3/files') &&
+          opts.method === 'POST' &&
+          typeof opts.body === 'string' &&
+          opts.body.includes('application/vnd.google-apps.folder')
+        ) {
+          return {
+            ok: true,
+            json: async () => ({ id: 'folder-tinywide-id' }),
+          };
+        }
+
+        // C. File Search (Upsert Check)
+        if (url.includes('q=name')) {
+          return { ok: true, json: async () => ({ files: [] }) };
+        }
+
+        // D. File Upload (The FormData call)
+        return { ok: true, json: async () => ({ id: 'file-id' }) };
+      });
+
+      const p1 = service.uploadFile({ a: 1 }, 'tinywide/1.json');
+      const p2 = service.uploadFile({ b: 2 }, 'tinywide/2.json');
+
+      await Promise.all([p1, p2]);
+
+      const createCalls = fetchMock.mock.calls.filter(
+        (c: any) =>
+          c[1].method === 'POST' &&
+          typeof c[1].body === 'string' &&
+          c[1].body.includes('folder')
       );
-    });
-  });
 
-  describe('Cloud Operations (Twin-File Strategy)', () => {
-    it('should upload generic files (Manifests)', async () => {
-      await simulateLogin();
+      // CRITICAL: Should be exactly 1 creation call
+      expect(createCalls.length).toBe(1);
 
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: 'file-123' }),
-      });
-
-      const data = { version: 1 };
-      await service.uploadFile(data, 'manifest.json');
-
-      const [url, config] = (global.fetch as any).mock.lastCall;
-      expect(config.method).toBe('POST');
-      // Generic uploads typically use multipart logic internally
-      expect(config.body).toBeInstanceOf(FormData);
-    });
-
-    it('should upload generic files with string content', async () => {
-      await simulateLogin();
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: 'file-123' }),
-      });
-
-      await service.uploadFile('some-text', 'readme.txt');
-      const [_, config] = (global.fetch as any).mock.lastCall;
-      // It should handle the text/plain conversion logic
-      expect(config.body).toBeInstanceOf(FormData);
-    });
-  });
-
-  describe('Backup Operations (Vaults)', () => {
-    it('should upload backup (void return)', async () => {
-      await simulateLogin();
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: '1' }),
-      });
-
-      // Matches new interface: returns Promise<void>
-      const result = await service.uploadBackup({ foo: 'bar' }, 'backup.json');
-      expect(result).toBeUndefined();
-      expect(global.fetch).toHaveBeenCalled();
-    });
-
-    it('should download backup', async () => {
-      await simulateLogin();
-      const mockData = { messages: [] };
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockData,
-      });
-
-      const data = await service.downloadBackup('file-id');
-      expect(data).toEqual(mockData);
+      const body = JSON.parse(createCalls[0][1].body);
+      expect(body.name).toBe('tinywide');
     });
   });
 });

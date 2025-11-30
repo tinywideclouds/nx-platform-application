@@ -21,7 +21,7 @@ export const messengerRoutes: Routes = [
       {
         path: '',
         redirectTo: 'conversations',
-        pathMatch: 'full'
+        pathMatch: 'full',
       },
       // === STATE 1: CONVERSATIONS ===
       {
@@ -40,30 +40,34 @@ export const messengerRoutes: Routes = [
                   contactId: (route: ActivatedRouteSnapshot) => {
                     const id = route.parent?.paramMap.get('id');
                     return id ? URN.parse(id) : null;
-                  }
-                }
-              }
-            ]
-          }
-        ]
+                  },
+                },
+              },
+            ],
+          },
+        ],
       },
       // === STATE 2: COMPOSE ===
       {
         path: 'compose',
-        component: MessengerComposePageComponent
+        component: MessengerComposePageComponent,
       },
       // === STATE 3: CONTACTS (Lazy) ===
       {
         path: 'contacts',
-        loadComponent: () => 
-          import('@nx-platform-application/contacts-ui').then(m => m.ContactsViewerComponent)
+        loadComponent: () =>
+          import('@nx-platform-application/contacts-ui').then(
+            (m) => m.ContactsViewerComponent
+          ),
       },
       // === STATE 4: SETTINGS (Lazy - NEW) ===
       {
         path: 'settings',
-        loadChildren: () => 
-          import('@nx-platform-application/messenger-settings-ui').then(m => m.settingsRoutes)
-      }
-    ]
-  }
+        loadChildren: () =>
+          import('@nx-platform-application/messenger-settings-ui').then(
+            (m) => m.settingsRoutes
+          ),
+      },
+    ],
+  },
 ];

@@ -73,66 +73,7 @@
     </div>
   </div>
 
-  <div
-    class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mt-6"
-  >
-    <div
-      class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-2">
-        <mat-icon class="text-blue-600">cloud_queue</mat-icon>
-        <h3 class="font-bold text-gray-900 text-sm">Cloud Synchronization</h3>
-      </div>
-
-      @if (isCloudEnabled()) {
-      <span
-        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-      >
-        <span
-          class="w-2 h-2 mr-1.5 bg-green-400 rounded-full animate-pulse"
-        ></span>
-        Online
-      </span>
-      } @else {
-      <span
-        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-      >
-        Offline
-      </span>
-      }
-    </div>
-
-    @if (isBackingUp()) {
-    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-    }
-
-    <div class="p-6">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="text-sm text-gray-600 leading-relaxed max-w-lg">
-            Backup your message history to your personal
-            <strong>Google Drive</strong>. Backups are encrypted locally before
-            upload.
-          </p>
-
-          @if (lastBackup()) {
-          <p class="text-xs text-gray-400 mt-2">
-            Last backup: {{ lastBackup() | date : 'medium' }}
-          </p>
-          }
-        </div>
-
-        <button
-          mat-stroked-button
-          [color]="isCloudEnabled() ? 'warn' : 'primary'"
-          (click)="onToggleCloud()"
-          [disabled]="isBackingUp()"
-        >
-          @if (isCloudEnabled()) { Disconnect } @else { Connect Drive }
-        </button>
-      </div>
-    </div>
-  </div>
+  <lib-messenger-sync-card class="mt-6 block" />
 
   <div
     class="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden mt-8"

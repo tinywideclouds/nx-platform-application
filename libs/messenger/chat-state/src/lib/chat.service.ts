@@ -104,7 +104,8 @@ export class ChatService {
       const authToken = this.authService.getJwtToken();
       if (!authToken) throw new Error('No valid session token.');
 
-      await Promise.all([this.refreshIdentityMap(), this.refreshBlockedSet()]);
+      //TODO build block behaviour but within messenger not contacts
+      await Promise.all([this.refreshIdentityMap()]); // , this.refreshBlockedSet()]);
 
       const summaries =
         await this.conversationService.loadConversationSummaries();
@@ -257,16 +258,6 @@ export class ChatService {
       this.identityLinkMap.set(newMap);
     } catch (e) {
       this.logger.error('Failed to load identity links', e);
-    }
-  }
-
-  private async refreshBlockedSet(): Promise<void> {
-    try {
-      const blockedUrns =
-        await this.contactsService.getAllBlockedIdentityUrns();
-      this.blockedSet.set(new Set(blockedUrns));
-    } catch (e) {
-      this.logger.error('Failed to load blocked list', e);
     }
   }
 

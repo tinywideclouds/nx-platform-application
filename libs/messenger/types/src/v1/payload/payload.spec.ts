@@ -46,15 +46,24 @@ describe('EncryptedMessagePayload Facade Mappers', () => {
   const mockTypeUrnString = 'urn:message:type:text';
   const mockBytes = new Uint8Array([1, 2, 3]);
 
-  // --- THIS IS THE FIX ---
   // 1. Create the mock URN objects as stable fixtures
   const mockSenderUrnObj = {
     toString: () => mockSenderUrnString,
     urn: mockSenderUrnString,
+    namespace: '',
+    entityType: '',
+    entityId: '',
+    toJSON: vi.fn(),
+    equals: vi.fn(),
   };
   const mockTypeUrnObj = {
     toString: () => mockTypeUrnString,
     urn: mockTypeUrnString,
+    namespace: '',
+    entityType: '',
+    entityId: '',
+    toJSON: vi.fn(),
+    equals: vi.fn(),
   };
   // --- END FIX ---
 

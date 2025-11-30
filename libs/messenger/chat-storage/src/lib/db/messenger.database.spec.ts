@@ -1,12 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { MessengerDatabase } from './messenger.database';
-import 'fake-indexeddb/auto';
 import { Dexie } from 'dexie';
+import 'fake-indexeddb/auto';
 
 describe('MessengerDatabase', () => {
   let db: MessengerDatabase;
 
   beforeEach(async () => {
+    // Crucial: Delete any existing DB to ensure we test the fresh creation
     await Dexie.delete('messenger');
 
     TestBed.configureTestingModule({
@@ -21,7 +22,7 @@ describe('MessengerDatabase', () => {
   });
 
   it('should be on version 5', () => {
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(5); // Updated from 5
   });
 
   it('should have the "conversations" meta-index table', () => {
@@ -33,12 +34,14 @@ describe('MessengerDatabase', () => {
     const schema = db.conversations.schema;
     const indexNames = schema.indexes.map((i) => i.name);
 
-    // This is the key to the "Instant Sidebar" feature
     expect(indexNames).toContain('lastActivityTimestamp');
   });
 
-  it('should NOT have the old "conversation_metadata" table', () => {
-    const tableNames = db.tables.map((t) => t.name);
-    expect(tableNames).not.toContain('conversation_metadata');
+  it('should have the compound index on messages', () => {
+    const schema = db.messages.schema;
+    const indexNames = schema.indexes.map((i) => i.name);
+
+    // Dexie represents compound indexes with '+'
+    expect(indexNames).toContain('[conversationUrn+sentTimestamp]');
   });
 });

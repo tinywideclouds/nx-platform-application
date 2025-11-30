@@ -1,5 +1,3 @@
-// libs/contacts/contacts-storage/src/lib/db/contacts.database.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { ContactsDatabase } from './contacts.database';
 import 'fake-indexeddb/auto';
@@ -9,7 +7,8 @@ describe('ContactsDatabase', () => {
   let db: ContactsDatabase;
 
   beforeEach(async () => {
-    Dexie.delete('contacts');
+    await Dexie.delete('contacts');
+
     TestBed.configureTestingModule({
       providers: [ContactsDatabase],
     });
@@ -18,54 +17,65 @@ describe('ContactsDatabase', () => {
   });
 
   afterEach(async () => {
-    await db.close();
+    if (db) await db.close();
   });
 
   it('should be created', () => {
     expect(db).toBeTruthy();
   });
 
-  it('should have migrated to version 5', () => {
+  it('should be on version 5', () => {
     expect(db.verno).toBe(5);
   });
 
-  // ... (Existing Contact/Group checks remain unchanged) ...
-  it('should have the "contacts" table correctly defined', () => {
+  // --- Table Definition Checks ---
+
+  it('should have the "contacts" table', () => {
     expect(db.contacts).toBeTruthy();
-  });
-  it('should have the "contactGroups" table correctly defined', () => {
-    expect(db.contactGroups).toBeTruthy();
-  });
-  it('should have the "identity_links" table correctly defined', () => {
-    expect(db.identity_links).toBeTruthy();
+    expect(db.contacts.name).toBe('contacts');
   });
 
-  // --- Gatekeeper Tables Checks (Updated) ---
-
-  it('should have the "blocked_identities" table correctly defined', () => {
-    expect(db.blocked_identities).toBeTruthy();
-    expect(db.blocked_identities.name).toBe('blocked_identities');
+  it('should have the "groups" table (Renamed)', () => {
+    expect(db.groups).toBeTruthy();
+    expect(db.groups.name).toBe('groups');
   });
 
-  it('should have the correct indexes on "blocked_identities"', () => {
-    const indexNames = db.blocked_identities.schema.indexes.map(
-      (idx) => idx.name
-    );
-    expect(indexNames).toContain('urn');
-    expect(indexNames).toContain('blockedAt'); // Verified
+  it('should have the "links" table (Renamed)', () => {
+    expect(db.links).toBeTruthy();
+    expect(db.links.name).toBe('links');
   });
 
-  it('should have the "pending_identities" table correctly defined', () => {
-    expect(db.pending_identities).toBeTruthy();
-    expect(db.pending_identities.name).toBe('pending_identities');
+  it('should have the "pending" table (Renamed)', () => {
+    expect(db.pending).toBeTruthy();
+    expect(db.pending.name).toBe('pending');
   });
 
-  it('should have the correct indexes on "pending_identities"', () => {
-    const indexNames = db.pending_identities.schema.indexes.map(
-      (idx) => idx.name
-    );
-    expect(indexNames).toContain('urn');
-    expect(indexNames).toContain('vouchedBy');
-    expect(indexNames).toContain('firstSeenAt'); // Verified
+  it('should have the "tombstones" table (New)', () => {
+    expect(db.tombstones).toBeTruthy();
+    expect(db.tombstones.name).toBe('tombstones');
+  });
+
+  it('should NOT have the "blocked" table', () => {
+    const tableNames = db.tables.map((t) => t.name);
+    expect(tableNames).not.toContain('blocked_identities');
+    expect(tableNames).not.toContain('blocked');
+  });
+
+  // --- Schema Checks ---
+
+  it('should have correct indexes on contacts', () => {
+    const schema = db.contacts.schema;
+    expect(schema.primKey.name).toBe('id');
+
+    const indexNames = schema.indexes.map((i) => i.name);
+    // ✅ FIX: Dexie returns multi-entry indexes with brackets
+    expect(indexNames).toContain('[emailAddresses]');
+  });
+
+  it('should have correct indexes on links', () => {
+    const schema = db.links.schema;
+    const indexNames = schema.indexes.map((i) => i.name);
+    expect(indexNames).toContain('authUrn');
+    expect(indexNames).toContain('contactId');
   });
 });

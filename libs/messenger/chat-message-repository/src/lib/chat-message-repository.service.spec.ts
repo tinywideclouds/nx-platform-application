@@ -8,12 +8,14 @@ import {
   ChatStorageService,
   DecryptedMessage,
   ConversationIndexRecord,
+  ConversationSummary,
 } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { signal } from '@angular/core'; // ✅ Import signal
+import { signal } from '@angular/core';
 
+// Test Helpers
 const mockUrn = URN.parse('urn:contacts:user:bob');
 const mockMsg = (id: string, ts: string): DecryptedMessage =>
   ({
@@ -41,6 +43,7 @@ describe('ChatMessageRepository', () => {
         MockProvider(ChatCloudService, {
           isCloudEnabled: signal(true),
           restoreVaultForDate: vi.fn().mockResolvedValue(0),
+          restoreIndex: vi.fn().mockResolvedValue(false), // Default: Index missing
         }),
       ],
     });
@@ -54,7 +57,64 @@ describe('ChatMessageRepository', () => {
     vi.restoreAllMocks();
   });
 
-  describe('getMessages (Orchestrator)', () => {
+  describe('getConversationSummaries (Inbox Hydration)', () => {
+    it('LOCAL HIT: should return local summaries immediately if data exists', async () => {
+      // 1. Setup: Local storage has data
+      const mockSummaries = [
+        { conversationUrn: mockUrn },
+      ] as ConversationSummary[];
+      vi.spyOn(storage, 'loadConversationSummaries').mockResolvedValue(
+        mockSummaries
+      );
+
+      // 2. Action
+      const result = await service.getConversationSummaries();
+
+      // 3. Assert
+      expect(result).toEqual(mockSummaries);
+      expect(cloud.restoreIndex).not.toHaveBeenCalled();
+      expect(cloud.restoreVaultForDate).not.toHaveBeenCalled();
+    });
+
+    it('GLOBAL INDEX HIT: should download Index and stop scanning', async () => {
+      // 1. Setup: Local storage is empty
+      vi.spyOn(storage, 'loadConversationSummaries')
+        .mockResolvedValueOnce([]) // First check: Empty
+        .mockResolvedValueOnce([{ conversationUrn: mockUrn } as any]); // Second check: Populated
+
+      // 2. Setup: Cloud Index exists
+      vi.spyOn(cloud, 'restoreIndex').mockResolvedValue(true);
+
+      // 3. Action
+      await service.getConversationSummaries();
+
+      // 4. Assert
+      expect(cloud.restoreIndex).toHaveBeenCalled(); // Primary strategy
+      expect(cloud.restoreVaultForDate).not.toHaveBeenCalled(); // Fallback skipped
+      // Verify re-query
+      expect(storage.loadConversationSummaries).toHaveBeenCalledTimes(2);
+    });
+
+    it('FALLBACK SCAN: should scan recent months if Global Index is missing', async () => {
+      // 1. Setup: Local empty
+      vi.spyOn(storage, 'loadConversationSummaries').mockResolvedValue([]);
+
+      // 2. Setup: Global Index Missing (Legacy/Corruption)
+      vi.spyOn(cloud, 'restoreIndex').mockResolvedValue(false);
+
+      // 3. Setup: Scan finds data in the current month
+      vi.spyOn(cloud, 'restoreVaultForDate').mockResolvedValue(10);
+
+      // 4. Action
+      await service.getConversationSummaries();
+
+      // 5. Assert
+      expect(cloud.restoreIndex).toHaveBeenCalled();
+      expect(cloud.restoreVaultForDate).toHaveBeenCalled(); // Fallback triggered
+    });
+  });
+
+  describe('getMessages (History Detail)', () => {
     const query: HistoryQuery = {
       conversationUrn: mockUrn,
       limit: 10,

@@ -1,28 +1,18 @@
-// libs/platform/cloud-access/src/lib/providers/in-memory-cloud.provider.ts
-
 import { Injectable } from '@angular/core';
 import { CloudStorageProvider } from '../cloud-provider.interface';
 import { BackupFile } from '../models/cloud-storage.models';
 
-/**
- * A volatile in-memory cloud provider for testing and development.
- * Simulates network latency and storage operations.
- */
 @Injectable()
 export class InMemoryCloudProvider implements CloudStorageProvider {
   readonly providerId = 'in-memory';
-  readonly displayName = 'Local Memory (Dev)';
-
+  readonly displayName = 'Local Memory';
   private _hasPermission = false;
 
-  // The "Cloud" Storage
-  // Key = Filename, Value = JSON String
+  // Key = Full Path (e.g. "tinywide/contacts/backup.json")
   private storage = new Map<string, string>();
-
-  // File Metadata
   private metadata = new Map<string, BackupFile>();
 
-  async requestAccess(): Promise<boolean> {
+  async requestAccess(scopes?: string[]): Promise<boolean> {
     this._hasPermission = true;
     return true;
   }
@@ -30,75 +20,61 @@ export class InMemoryCloudProvider implements CloudStorageProvider {
   hasPermission(): boolean {
     return this._hasPermission;
   }
-
   async revokeAccess(): Promise<void> {
     this._hasPermission = false;
   }
 
-  async listBackups(prefix: string): Promise<BackupFile[]> {
+  async listBackups(query: string): Promise<BackupFile[]> {
     this.checkAuth();
-    // Simulate Network Latency
-    await this.delay(200);
-
     const results: BackupFile[] = [];
-    for (const [name, meta] of this.metadata.entries()) {
-      if (name.startsWith(prefix)) {
+    for (const [path, meta] of this.metadata.entries()) {
+      // Simple string matching to simulate search
+      if (path.includes(query) || meta.name.includes(query)) {
         results.push(meta);
       }
     }
     return results;
   }
 
-  async uploadFile<T>(data: T, filename: string): Promise<void> {
+  async uploadFile<T>(data: T, path: string): Promise<void> {
     this.checkAuth();
-    await this.delay(300);
-
     const content = JSON.stringify(data);
-    this.storage.set(filename, content);
+    this.storage.set(path, content);
 
-    // Update Metadata
-    this.metadata.set(filename, {
-      fileId: `id-${filename}`, // Simple mock ID
-      name: filename,
+    // Extract filename from path for metadata
+    const name = path.split('/').pop() || path;
+
+    this.metadata.set(path, {
+      fileId: `id-${path}`,
+      name: name,
       createdAt: new Date().toISOString(),
       sizeBytes: content.length,
     });
   }
 
-  async downloadFile<T>(filename: string): Promise<T | null> {
+  async downloadFile<T>(path: string): Promise<T | null> {
     this.checkAuth();
-    await this.delay(200);
-
-    const content = this.storage.get(filename);
+    // Simulate path resolution: direct lookup
+    const content = this.storage.get(path);
     if (!content) return null;
-
     return JSON.parse(content) as T;
   }
 
-  // For InMemory, Backup/File logic is identical (no compression)
-  async uploadBackup(data: any, filename: string): Promise<void> {
-    return this.uploadFile(data, filename);
+  // Alias for generic backup methods
+  async uploadBackup(data: any, path: string): Promise<void> {
+    return this.uploadFile(data, path);
   }
 
   async downloadBackup<T>(fileId: string): Promise<T> {
     this.checkAuth();
-    await this.delay(200);
-
-    // Reverse lookup ID -> Filename (Mock logic)
-    const filename = fileId.replace('id-', '');
-    const content = this.storage.get(filename);
-
-    if (!content) throw new Error(`File not found: ${fileId}`);
+    // Reverse lookup (Mock logic: fileId is "id-" + path)
+    const path = fileId.replace('id-', '');
+    const content = this.storage.get(path);
+    if (!content) throw new Error('File not found');
     return JSON.parse(content) as T;
   }
 
-  // --- Helpers ---
-
   private checkAuth() {
-    if (!this._hasPermission) throw new Error('Cloud Access Denied');
-  }
-
-  private delay(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    if (!this._hasPermission) throw new Error('Access Denied');
   }
 }

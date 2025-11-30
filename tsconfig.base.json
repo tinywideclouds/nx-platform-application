@@ -58,6 +58,9 @@
       "@nx-platform-application/message-content": [
         "libs/messenger/message-content/src/index.ts"
       ],
+      "@nx-platform-application/messenger-cloud-sync": [
+        "libs/messenger/cloud-sync/src/index.ts"
+      ],
       "@nx-platform-application/messenger-crypto-bridge": [
         "libs/messenger/crypto-bridge/src/index.ts"
       ],

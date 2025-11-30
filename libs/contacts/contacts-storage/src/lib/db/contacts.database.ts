@@ -5,63 +5,38 @@ import {
   StorableContact,
   StorableGroup,
   StorableIdentityLink,
-  StorableBlockedIdentity,
   StorablePendingIdentity,
+  ContactTombstone,
 } from '../models/contacts';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsDatabase extends PlatformDexieService {
   contacts!: Table<StorableContact, string>;
-  contactGroups!: Table<StorableGroup, string>;
-  identity_links!: Table<StorableIdentityLink, number>;
-
-  // Gatekeeper Tables
-  blocked_identities!: Table<StorableBlockedIdentity, number>;
-  pending_identities!: Table<StorablePendingIdentity, number>;
+  groups!: Table<StorableGroup, string>;
+  links!: Table<StorableIdentityLink, number>;
+  pending!: Table<StorablePendingIdentity, number>;
+  tombstones!: Table<ContactTombstone, string>;
 
   constructor() {
     super('contacts');
 
-    // v1
     this.version(1).stores({
-      contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
-    });
+      contacts:
+        'id, alias, email, [emailAddresses], [phoneNumbers], isFavorite',
 
-    // v2
-    this.version(2).stores({
-      contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
-      contactGroups: 'id, name, *contactIds',
-    });
+      groups: 'id, name, *contactIds',
 
-    // v3
-    this.version(3).stores({
-      contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
-      contactGroups: 'id, name, *contactIds',
-      identity_links: '++id, contactId, authUrn',
-    });
+      links: '++id, authUrn, contactId',
 
-    // v4: Gatekeeper
-    this.version(4).stores({
-      contacts: 'id, alias, isFavorite, *phoneNumbers, *emailAddresses',
-      contactGroups: 'id, name, *contactIds',
-      identity_links: '++id, contactId, authUrn',
-      blocked_identities: '++id, urn, blockedAt',
-      pending_identities: '++id, urn, vouchedBy, firstSeenAt',
-    });
+      pending: '++id, urn, firstSeenAt',
 
-    // v5: Fix - Add 'email' index for primary email lookups
-    this.version(5).stores({
-      contacts: 'id, alias, email, isFavorite, *phoneNumbers, *emailAddresses',
-      contactGroups: 'id, name, *contactIds',
-      identity_links: '++id, contactId, authUrn',
-      blocked_identities: '++id, urn, blockedAt',
-      pending_identities: '++id, urn, vouchedBy, firstSeenAt',
+      tombstones: 'urn',
     });
 
     this.contacts = this.table('contacts');
-    this.contactGroups = this.table('contactGroups');
-    this.identity_links = this.table('identity_links');
-    this.blocked_identities = this.table('blocked_identities');
-    this.pending_identities = this.table('pending_identities');
+    this.groups = this.table('groups');
+    this.links = this.table('links');
+    this.pending = this.table('pending');
+    this.tombstones = this.table('tombstones');
   }
 }

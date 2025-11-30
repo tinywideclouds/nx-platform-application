@@ -14,6 +14,7 @@ import {
   ConversationIndexRecord,
 } from './chat-storage.models';
 import { MessengerDatabase } from './db/messenger.database';
+import { ChatMergeStrategy } from './chat-merge.strategy';
 
 @Injectable({
   providedIn: 'root',
@@ -21,6 +22,7 @@ import { MessengerDatabase } from './db/messenger.database';
 export class ChatStorageService {
   private readonly db = inject(MessengerDatabase);
   private readonly logger = inject(Logger);
+  private readonly mergeStrategy = inject(ChatMergeStrategy);
 
   // --- WRITE PATH (Dual-Write Transaction) ---
 
@@ -91,10 +93,6 @@ export class ChatStorageService {
 
   // --- READ PATH (Optimized) ---
 
-  /**
-   * Loads the Inbox INSTANTLY from the Index table.
-   * No heavy message scanning required.
-   */
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     const records = await this.db.conversations
       .orderBy('lastActivityTimestamp')
@@ -110,18 +108,12 @@ export class ChatStorageService {
     }));
   }
 
-  /**
-   * Used by Repository to check boundaries.
-   */
   async getConversationIndex(
     urn: URN
   ): Promise<ConversationIndexRecord | undefined> {
     return this.db.conversations.get(urn.toString());
   }
 
-  /**
-   * Repository calls this when it hits an empty cloud vault (End of History).
-   */
   async setGenesisTimestamp(
     urn: URN,
     timestamp: ISODateTimeString
@@ -137,22 +129,28 @@ export class ChatStorageService {
 
   // --- SYNC & RESTORE HELPERS ---
 
-  /**
-   * Fetches the entire conversation index (Sidebar state).
-   * Used by Cloud Service to backup the global "Who I talk to" list.
-   */
   async getAllConversations(): Promise<ConversationIndexRecord[]> {
     return this.db.conversations.toArray();
   }
 
   /**
-   * Bulk restores the sidebar index.
+   * Intelligently merges a Cloud Index into the Local Index.
+   * Delegates to ChatMergeStrategy to resolve conflicts.
+   */
+  async smartMergeConversations(
+    cloudIndex: ConversationIndexRecord[]
+  ): Promise<void> {
+    return this.mergeStrategy.merge(cloudIndex);
+  }
+
+  /**
+   * Alias for smartMerge.
    * Used during "Fresh Install" to populate the UI instantly.
    */
   async bulkSaveConversations(
     records: ConversationIndexRecord[]
   ): Promise<void> {
-    await this.db.conversations.bulkPut(records);
+    return this.smartMergeConversations(records);
   }
 
   async bulkSaveMessages(messages: DecryptedMessage[]): Promise<void> {
@@ -245,7 +243,7 @@ export class ChatStorageService {
   }
 
   private generateSnippet(msg: DecryptedMessage): string {
-    // Corrected Namespace
+    // FIX: Using correct namespace 'urn:message:type:text'
     if (msg.typeId.toString() === 'urn:message:type:text') {
       try {
         return new TextDecoder().decode(msg.payloadBytes);
@@ -259,7 +257,7 @@ export class ChatStorageService {
   private getPreviewType(
     typeIdStr: string
   ): 'text' | 'image' | 'file' | 'other' {
-    // Corrected Namespace
+    // FIX: Using correct namespace
     if (typeIdStr === 'urn:message:type:text') return 'text';
     if (typeIdStr.includes('image')) return 'image';
     return 'other';

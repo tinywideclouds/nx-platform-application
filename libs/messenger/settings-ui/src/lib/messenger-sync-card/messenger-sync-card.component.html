@@ -1,0 +1,62 @@
+<mat-card class="sync-card">
+  <mat-card-header>
+    <mat-card-title>Cloud Backup & Restore</mat-card-title>
+    <mat-card-subtitle> Sync your data with Google Drive </mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="options-grid">
+      <mat-checkbox
+        [checked]="syncContacts()"
+        (change)="syncContacts.set($event.checked)"
+        [disabled]="isSyncing()"
+      >
+        Sync Contacts
+      </mat-checkbox>
+
+      <mat-checkbox
+        [checked]="syncMessages()"
+        (change)="syncMessages.set($event.checked)"
+        [disabled]="isSyncing()"
+      >
+        Sync Messages
+      </mat-checkbox>
+    </div>
+
+    @if (lastResult(); as res) {
+    <div class="status-box" [class.error]="!res.success">
+      @if (res.success) {
+      <div class="success-row">
+        <mat-icon color="primary">check_circle</mat-icon>
+        <span>Sync Complete ({{ res.timestamp | date : 'shortTime' }})</span>
+      </div>
+      } @if (!res.success) {
+      <div class="error-row">
+        <mat-icon color="warn">error</mat-icon>
+        <span>Sync Failed</span>
+      </div>
+      } @if (res.errors.length > 0) {
+      <ul class="error-list">
+        @for (err of res.errors; track err) {
+        <li>{{ err }}</li>
+        }
+      </ul>
+      }
+    </div>
+    } @if (isSyncing()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+  </mat-card-content>
+
+  <mat-card-actions align="end">
+    <button
+      mat-flat-button
+      color="primary"
+      (click)="triggerSync()"
+      [disabled]="isSyncing() || (!syncContacts() && !syncMessages())"
+    >
+      <mat-icon>{{ isSyncing() ? 'sync' : 'cloud_upload' }}</mat-icon>
+      {{ isSyncing() ? 'Syncing...' : 'Sync Now' }}
+    </button>
+  </mat-card-actions>
+</mat-card>

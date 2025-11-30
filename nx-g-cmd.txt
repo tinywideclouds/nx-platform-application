@@ -80,3 +80,5 @@ nx g @nx/angular:library --name=platform-cloud-access --directory=libs/platform/
 
 nx g @nx/angular:library --name=chat-message-repository --directory=libs/messenger/chat-message-repository --tags="scope:messenger"
 
+nx g @nx/angular:library --name=messenger-cloud-sync --directory=libs/messenger/cloud-sync --tags="scope:messenger"
+

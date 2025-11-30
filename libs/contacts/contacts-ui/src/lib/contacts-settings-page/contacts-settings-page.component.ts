@@ -5,24 +5,18 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatListModule } from '@angular/material/list';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatExpansionModule } from '@angular/material/expansion';
 
-import {
-  ContactsStorageService,
-  PendingIdentity,
-} from '@nx-platform-application/contacts-storage';
 import {
   ContactsCloudService,
   CloudBackupMetadata,
 } from '@nx-platform-application/contacts-cloud-access';
 
-import { PendingListComponent } from '../pending-list/pending-list.component';
+// ✅ Import the new sub-component
+import { ContactsSecurityComponent } from '../contacts-security/contacts-security.component';
 
 @Component({
   selector: 'contacts-settings-page',
@@ -31,24 +25,18 @@ import { PendingListComponent } from '../pending-list/pending-list.component';
     CommonModule,
     MatButtonModule,
     MatIconModule,
-    MatListModule,
     MatCardModule,
     MatProgressBarModule,
-    MatExpansionModule,
-    PendingListComponent,
+    ContactsSecurityComponent, // ✅ Use the sub-component
   ],
   templateUrl: './contacts-settings-page.component.html',
   styleUrl: './contacts-settings-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactsSettingsPageComponent {
-  private contactsService = inject(ContactsStorageService);
   private cloudService = inject(ContactsCloudService);
 
-  // --- DATA SIGNALS ---
-  pending = toSignal(this.contactsService.pending$, { initialValue: [] });
-
-  // --- CLOUD STATE ---
+  // --- CLOUD STATE (Kept here for Contacts App) ---
   isBackingUp = signal(false);
   isRestoring = signal(false);
   cloudBackups = signal<CloudBackupMetadata[]>([]);
@@ -58,19 +46,6 @@ export class ContactsSettingsPageComponent {
       this.refreshBackups();
     }
   }
-
-  // --- ACTIONS: GATEKEEPER ---
-
-  async approveIdentity(pending: PendingIdentity) {
-    await this.contactsService.deletePending(pending.urn);
-  }
-
-  async blockPending(pending: PendingIdentity) {
-    await this.contactsService.blockIdentity(pending.urn, 'Blocked');
-    await this.contactsService.deletePending(pending.urn);
-  }
-
-  // --- ACTIONS: CLOUD ---
 
   async refreshBackups() {
     try {

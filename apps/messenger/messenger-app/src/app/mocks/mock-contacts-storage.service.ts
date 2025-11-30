@@ -5,7 +5,6 @@ import {
   Contact,
   ContactGroup,
   PendingIdentity,
-  BlockedIdentity,
   IdentityLink,
 } from '@nx-platform-application/contacts-storage';
 import {
@@ -24,6 +23,7 @@ const MOCK_CONTACTS: Contact[] = [
     surname: 'Anderson',
     email: 'alice@mock.com',
     phoneNumbers: ['+15550001'],
+    lastModified: '' as ISODateTimeString,
     emailAddresses: ['alice@mock.com'],
     serviceContacts: {
       messenger: {
@@ -41,6 +41,7 @@ const MOCK_CONTACTS: Contact[] = [
     surname: 'Brown',
     email: 'bob@mock.com',
     phoneNumbers: ['+15550002'],
+    lastModified: '' as ISODateTimeString,
     emailAddresses: ['bob@mock.com'],
     serviceContacts: {
       messenger: {
@@ -81,15 +82,6 @@ const MOCK_PENDING: PendingIdentity[] = [
   },
 ];
 
-const MOCK_BLOCKED: BlockedIdentity[] = [
-  {
-    id: 201,
-    urn: URN.parse('urn:auth:google:spammer'),
-    blockedAt: '2025-11-01T12:00:00Z' as ISODateTimeString,
-    reason: 'Spam detected',
-  },
-];
-
 @Injectable()
 export class MockContactsStorageService {
   // --- Streams ---
@@ -98,7 +90,6 @@ export class MockContactsStorageService {
 
   // New Gatekeeper Streams
   readonly pending$: Observable<PendingIdentity[]> = of(MOCK_PENDING);
-  readonly blocked$: Observable<BlockedIdentity[]> = of(MOCK_BLOCKED);
 
   // --- Core CRUD ---
   async saveContact(contact: Contact): Promise<void> {
@@ -130,10 +121,6 @@ export class MockContactsStorageService {
 
   async getAllIdentityLinks(): Promise<IdentityLink[]> {
     return []; // Empty for now, or could add mock links
-  }
-
-  async getAllBlockedIdentityUrns(): Promise<string[]> {
-    return MOCK_BLOCKED.map((b) => b.urn.toString());
   }
 
   async getLinkedIdentities(contactId: URN): Promise<URN[]> {

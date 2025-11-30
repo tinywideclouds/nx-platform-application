@@ -11,7 +11,10 @@ import {
   Contact,
   ContactGroup,
 } from '@nx-platform-application/contacts-storage';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 // Toolbar Removed
@@ -79,6 +82,7 @@ export class ContactDetailComponent {
       email: '',
       firstName: '',
       surname: '',
+      lastModified: '' as ISODateTimeString,
       phoneNumbers: [],
       emailAddresses: [],
       serviceContacts: {},

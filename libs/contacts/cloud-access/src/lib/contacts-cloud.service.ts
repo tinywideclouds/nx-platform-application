@@ -1,28 +1,21 @@
-// libs/contacts/cloud-access/src/lib/contacts-cloud.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Logger } from '@nx-platform-application/console-logger';
-
-// IMPORT FROM PLATFORM
 import {
   CloudStorageProvider,
-  BackupFile, // ✅ FIXED: New Model Import
+  BackupFile,
   CLOUD_PROVIDERS,
 } from '@nx-platform-application/platform-cloud-access';
-
 import { BackupPayload } from './models/backup-payload.interface';
 
 const CURRENT_SCHEMA_VERSION = 4;
+const BASE_PATH = 'tinywide/contacts';
 
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable({ providedIn: 'root' })
 export class ContactsCloudService {
   private storage = inject(ContactsStorageService);
   private logger = inject(Logger);
-
   private providersList = inject(CLOUD_PROVIDERS, { optional: true }) || [];
 
   private providersMap = new Map<string, CloudStorageProvider>(
@@ -41,50 +34,50 @@ export class ContactsCloudService {
     }
   }
 
-  /**
-   * Backs up contacts and groups to the cloud.
-   * Returns void as the platform provider handles the upload artifact.
-   */
   async backupToCloud(providerId: string): Promise<void> {
     const provider = this.getProvider(providerId);
-    this.logger.info(`[ContactsCloud] Starting backup to ${providerId}`);
-
     await this.ensurePermission(provider);
 
-    // 1. Snapshot Data
+    // 1. Snapshot
     const [contacts, groups] = await Promise.all([
       firstValueFrom(this.storage.contacts$),
       firstValueFrom(this.storage.groups$),
     ]);
 
-    // 2. Construct Payload
     const payload: BackupPayload = {
       version: CURRENT_SCHEMA_VERSION,
       timestamp: new Date().toISOString(),
-      sourceDevice: this.getDeviceInfo(),
+      sourceDevice:
+        typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
       contacts,
       groups,
     };
 
-    // 3. Delegate Transport
+    // 2. Construct Path
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `contacts_backup_${dateStr}.json`;
+    const path = `${BASE_PATH}/contacts_backup_${dateStr}.json`;
 
-    await provider.uploadBackup(payload, filename);
-    this.logger.info(`[ContactsCloud] Upload complete: ${filename}`);
+    // 3. Upload
+    // Use generic upload (Path Aware)
+    await provider.uploadBackup(payload, path);
+    this.logger.info(`[ContactsCloud] Uploaded to ${path}`);
   }
 
-  async restoreFromCloud(providerId: string, fileId: string): Promise<void> {
+  async restoreFromCloud(providerId: string, filename: string): Promise<void> {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    const payload = await provider.downloadBackup<BackupPayload>(fileId);
+    // If filename doesn't contain path, assume it's in base path
+    const path = filename.includes('/') ? filename : `${BASE_PATH}/${filename}`;
 
-    // 4. Validate & Merge
-    if (payload.version > CURRENT_SCHEMA_VERSION) {
-      this.logger.warn(
-        `[ContactsCloud] Backup version ${payload.version} is newer than app schema.`
-      );
+    this.logger.info(`[ContactsCloud] Restoring from ${path}...`);
+
+    // ✅ FIX: Use downloadFile (Path Aware) instead of downloadBackup (ID only)
+    const payload = await provider.downloadFile<BackupPayload>(path);
+
+    // ✅ FIX: Handle null return (File Not Found)
+    if (!payload) {
+      throw new Error(`Backup file not found at path: ${path}`);
     }
 
     if (payload.contacts?.length) {
@@ -93,7 +86,6 @@ export class ContactsCloudService {
     for (const group of payload.groups || []) {
       await this.storage.saveGroup(group);
     }
-
     this.logger.info('[ContactsCloud] Restore complete.');
   }
 
@@ -101,16 +93,16 @@ export class ContactsCloudService {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    // Filter specifically for contact backups
+    // List is tricky with hierarchy.
+    // We search for files containing 'contacts_backup_' globally or in specific folder.
+    // Given GoogleDriveService implementation, we pass the partial name.
     return provider.listBackups('contacts_backup_');
   }
 
-  // --- Helpers ---
-
   private getProvider(id: string): CloudStorageProvider {
-    const provider = this.providersMap.get(id);
-    if (!provider) throw new Error(`Cloud provider '${id}' not configured.`);
-    return provider;
+    const p = this.providersMap.get(id);
+    if (!p) throw new Error(`Provider ${id} not found`);
+    return p;
   }
 
   private async ensurePermission(
@@ -118,14 +110,8 @@ export class ContactsCloudService {
   ): Promise<void> {
     if (!provider.hasPermission()) {
       if (!(await provider.requestAccess())) {
-        throw new Error('User denied cloud storage access.');
+        throw new Error('Access denied');
       }
     }
-  }
-
-  private getDeviceInfo(): string {
-    return typeof navigator !== 'undefined'
-      ? navigator.userAgent
-      : 'Unknown Device';
   }
 }

@@ -6,23 +6,18 @@ import {
 } from '@nx-platform-application/platform-types';
 
 export interface ServiceContact extends Resource {
-  alias: string; // User alias or username specific to that service
+  alias: string;
   profilePictureUrl?: string;
   lastSeen: ISODateTimeString;
 }
 
-/**
- * A Contact represents a person in the local address book.
- * It extends the base User identity with local-specific fields.
- */
 export interface Contact extends User {
   firstName: string;
   surname: string;
-
-  phoneNumbers: string[]; // E.164 formatted phone numbers
-  emailAddresses: string[]; // Verified email addresses
-
+  phoneNumbers: string[];
+  emailAddresses: string[];
   serviceContacts: Record<string, ServiceContact>;
+  lastModified: ISODateTimeString;
 }
 
 export interface ContactGroup extends Resource {
@@ -31,45 +26,27 @@ export interface ContactGroup extends Resource {
   contactIds: URN[];
 }
 
-/**
- * Represents a link between a local Contact and a federated Authentication URN.
- */
 export interface IdentityLink {
-  id?: number; // Auto-incrementing ID from Dexie
-  contactId: URN; // The local Contact URN (urn:contacts:user:...)
-  authUrn: URN; // The federated Sender URN (urn:auth:provider:...)
-}
-
-// --- GATEKEEPER MODELS ---
-
-/**
- * Represents an Authentication URN that has been explicitly blocked.
- * Messages from this URN will be silently dropped.
- */
-export interface BlockedIdentity {
   id?: number;
-  urn: URN; // The Sender URN to block
-  blockedAt: ISODateTimeString;
-  reason?: string;
+  contactId: URN;
+  authUrn: URN;
 }
 
-/**
- * The "Waiting Room".
- * Represents an identity that has contacted us (or been introduced)
- * but is not yet a trusted Contact or explicitly Blocked.
- */
 export interface PendingIdentity {
   id?: number;
-  urn: URN; // The Stranger's URN
+  urn: URN;
   firstSeenAt: ISODateTimeString;
-
-  // If present, this person was introduced by a trusted contact.
-  // If missing, this is a random "Unknown Sender".
   vouchedBy?: URN;
-  note?: string; // "This is my cousin June"
+  note?: string;
 }
 
-// --- Storable Models (Primitives) ---
+// ✅ NEW: Sync Logic
+export interface ContactTombstone {
+  urn: string;
+  deletedAt: ISODateTimeString;
+}
+
+// --- STORABLE MODELS (Primitives) ---
 
 export interface StorableServiceContact {
   id: string;
@@ -87,6 +64,8 @@ export interface StorableContact {
   phoneNumbers: string[];
   emailAddresses: string[];
   serviceContacts: Record<string, StorableServiceContact>;
+  // ✅ NEW: Sync Metadata
+  lastModified: ISODateTimeString;
 }
 
 export interface StorableGroup {
@@ -102,20 +81,10 @@ export interface StorableIdentityLink {
   authUrn: string;
 }
 
-export interface StorableBlockedIdentity {
-  id?: number;
-  urn: string;
-  blockedAt: ISODateTimeString;
-  reason?: string;
-}
-
-/**
- * Storable version of PendingIdentity.
- */
 export interface StorablePendingIdentity {
   id?: number;
-  urn: string; // Indexed
+  urn: string;
   firstSeenAt: ISODateTimeString;
-  vouchedBy?: string; // Indexed (optional)
+  vouchedBy?: string;
   note?: string;
 }

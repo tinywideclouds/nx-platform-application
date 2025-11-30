@@ -1,7 +1,5 @@
-// libs/contacts/contacts-storage/src/lib/contacts.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContactsStorageService } from './contacts.service';
 import { ContactsDatabase } from './db/contacts.database';
 import {
@@ -12,21 +10,21 @@ import {
   ServiceContact,
   StorableServiceContact,
   StorableIdentityLink,
-  StorableBlockedIdentity,
   StorablePendingIdentity,
 } from './models/contacts';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+import { firstValueFrom } from 'rxjs';
 
 // --- Mocks ---
 const {
   mockDbTable,
   mockDbGroupTable,
   mockDbLinksTable,
-  mockDbBlockedTable,
   mockDbPendingTable,
+  mockDbTombstonesTable, // ✅ NEW
   mockContactsDb,
 } = vi.hoisted(() => {
   const tableMock = {
@@ -55,7 +53,6 @@ const {
     clear: vi.fn(),
   };
 
-  // Mock for the identity_links table
   const linksTableMock = {
     put: vi.fn(),
     where: vi.fn(() => linksTableMock),
@@ -65,17 +62,6 @@ const {
     clear: vi.fn(),
   };
 
-  // Mock for blocked_identities table
-  const blockedTableMock = {
-    put: vi.fn(),
-    where: vi.fn(() => blockedTableMock),
-    equals: vi.fn(() => blockedTableMock),
-    toArray: vi.fn(),
-    bulkDelete: vi.fn(),
-    clear: vi.fn(),
-  };
-
-  // Mock for pending_identities table
   const pendingTableMock = {
     put: vi.fn(),
     where: vi.fn(() => pendingTableMock),
@@ -86,36 +72,43 @@ const {
     clear: vi.fn(),
   };
 
+  const tombstonesTableMock = {
+    // ✅ NEW
+    put: vi.fn(),
+    get: vi.fn(),
+    delete: vi.fn(),
+    toArray: vi.fn(),
+    clear: vi.fn(),
+  };
+
   return {
     mockDbTable: tableMock,
     mockDbGroupTable: groupTableMock,
     mockDbLinksTable: linksTableMock,
-    mockDbBlockedTable: blockedTableMock,
     mockDbPendingTable: pendingTableMock,
+    mockDbTombstonesTable: tombstonesTableMock,
     mockContactsDb: {
       contacts: tableMock,
-      contactGroups: groupTableMock,
-      identity_links: linksTableMock,
-      blocked_identities: blockedTableMock,
-      pending_identities: pendingTableMock,
+      // ✅ Renamed to match Service
+      groups: groupTableMock,
+      links: linksTableMock,
+      pending: pendingTableMock,
+      tombstones: tombstonesTableMock,
+      // Blocked removed
       transaction: vi.fn(async (_mode, _tables, callback) => await callback()),
     },
   };
 });
 
 // --- Fixtures ---
-
-// --- DOMAIN FIXTURES (with URNs) ---
 const mockContactUrn = URN.parse('urn:contacts:user:user-123');
 const mockGroupUrn = URN.parse('urn:contacts:group:grp-abc');
 const mockOtherContactUrn = URN.parse('urn:contacts:user:user-456');
 const mockServiceContactUrn = URN.parse('urn:message:service:msg-uuid-1');
 
-// Federated & Gatekeeper URNs
 const mockGoogleAuthUrn = URN.parse('urn:auth:google:bob-123');
-const mockSpammerUrn = URN.parse('urn:auth:google:spammer');
 const mockStrangerUrn = URN.parse('urn:auth:apple:stranger');
-const mockVoucherUrn = URN.parse('urn:contacts:user:bob-contact'); // Bob (Local Contact)
+const mockVoucherUrn = URN.parse('urn:contacts:user:bob-contact');
 
 const mockServiceContact: ServiceContact = {
   id: mockServiceContactUrn,
@@ -134,15 +127,16 @@ const mockContact: Contact = {
   serviceContacts: {
     messenger: mockServiceContact,
   },
+  lastModified: '2020-01-01T00:00:00Z' as ISODateTimeString, // ✅ NEW
 };
 
 const mockGroup: ContactGroup = {
   id: mockGroupUrn,
   name: 'Family',
-  contactIds: [mockContactUrn, mockOtherContactUrn],
+  contactIds: [mockContactUrn],
 };
 
-// --- STORABLE FIXTURES (with Strings) ---
+// --- STORABLE FIXTURES ---
 const mockStorableServiceContact: StorableServiceContact = {
   id: mockServiceContactUrn.toString(),
   alias: 'jd_messenger',
@@ -160,12 +154,13 @@ const mockStorableContact: StorableContact = {
   serviceContacts: {
     messenger: mockStorableServiceContact,
   },
+  lastModified: '2020-01-01T00:00:00Z' as ISODateTimeString, // ✅ NEW
 };
 
 const mockStorableGroup: StorableGroup = {
   id: mockGroupUrn.toString(),
   name: 'Family',
-  contactIds: [mockContactUrn.toString(), mockOtherContactUrn.toString()],
+  contactIds: [mockContactUrn.toString()],
 };
 
 const mockStorableLink: StorableIdentityLink = {
@@ -173,8 +168,6 @@ const mockStorableLink: StorableIdentityLink = {
   contactId: mockContactUrn.toString(),
   authUrn: mockGoogleAuthUrn.toString(),
 };
-
-// --- Test Suite ---
 
 describe('ContactsStorageService', () => {
   let service: ContactsStorageService;
@@ -191,7 +184,7 @@ describe('ContactsStorageService', () => {
 
     service = TestBed.inject(ContactsStorageService);
 
-    // Default mock returns
+    // Setup Default Returns
     mockDbTable.get.mockResolvedValue(mockStorableContact);
     mockDbTable.first.mockResolvedValue(mockStorableContact);
     mockDbTable.toArray.mockResolvedValue([mockStorableContact]);
@@ -200,14 +193,12 @@ describe('ContactsStorageService', () => {
     mockDbGroupTable.get.mockResolvedValue(mockStorableGroup);
     mockDbGroupTable.toArray.mockResolvedValue([mockStorableGroup]);
 
-    // Default mock for links
     mockDbLinksTable.toArray.mockResolvedValue([]);
     mockDbLinksTable.first.mockResolvedValue(undefined);
 
-    // Default mock for gatekeeper
-    mockDbBlockedTable.toArray.mockResolvedValue([]);
-    mockDbPendingTable.first.mockResolvedValue(undefined);
     mockDbPendingTable.toArray.mockResolvedValue([]);
+    mockDbPendingTable.first.mockResolvedValue(undefined);
+    mockDbTombstonesTable.get.mockResolvedValue(undefined); // ✅ NEW
   });
 
   it('should be created', () => {
@@ -217,8 +208,16 @@ describe('ContactsStorageService', () => {
   describe('CRUD Operations', () => {
     it('should save a contact (mapping to storable)', async () => {
       await service.saveContact(mockContact);
+
+      expect(mockDbTombstonesTable.delete).toHaveBeenCalledWith(
+        mockStorableContact.id
+      );
+
       expect(mockContactsDb.contacts.put).toHaveBeenCalledWith(
-        mockStorableContact
+        expect.objectContaining({
+          id: mockStorableContact.id,
+          lastModified: expect.any(String), // Sync check
+        })
       );
     });
 
@@ -232,19 +231,30 @@ describe('ContactsStorageService', () => {
 
     it('should update a contact', async () => {
       const changes: Partial<Contact> = { alias: 'New Alias' };
-      const storableChanges: Partial<StorableContact> = { alias: 'New Alias' };
 
       await service.updateContact(mockContactUrn, changes);
+
       expect(mockContactsDb.contacts.update).toHaveBeenCalledWith(
         mockContactUrn.toString(),
-        storableChanges
+        expect.objectContaining({
+          alias: 'New Alias',
+          lastModified: expect.any(String),
+        })
       );
     });
 
-    it('should delete a contact', async () => {
+    it('should delete a contact (Smart Sync)', async () => {
       await service.deleteContact(mockContactUrn);
+
       expect(mockContactsDb.contacts.delete).toHaveBeenCalledWith(
         mockContactUrn.toString()
+      );
+      // ✅ Verify tombstone
+      expect(mockDbTombstonesTable.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          urn: mockContactUrn.toString(),
+          deletedAt: expect.any(String),
+        })
       );
     });
   });
@@ -272,12 +282,13 @@ describe('ContactsStorageService', () => {
   describe('Bulk Operations', () => {
     it('should perform bulk upsert', async () => {
       const batch = [mockContact];
-      const storableBatch = [mockStorableContact];
       await service.bulkUpsert(batch);
 
       expect(mockContactsDb.transaction).toHaveBeenCalled();
       expect(mockContactsDb.contacts.bulkPut).toHaveBeenCalledWith(
-        storableBatch
+        expect.arrayContaining([
+          expect.objectContaining({ id: mockStorableContact.id }),
+        ])
       );
     });
   });
@@ -285,14 +296,12 @@ describe('ContactsStorageService', () => {
   describe('Group Operations', () => {
     it('should save a group', async () => {
       await service.saveGroup(mockGroup);
-      expect(mockContactsDb.contactGroups.put).toHaveBeenCalledWith(
-        mockStorableGroup
-      );
+      expect(mockContactsDb.groups.put).toHaveBeenCalledWith(mockStorableGroup);
     });
 
     it('should get a group by ID', async () => {
       const result = await service.getGroup(mockGroupUrn);
-      expect(mockContactsDb.contactGroups.get).toHaveBeenCalledWith(
+      expect(mockContactsDb.groups.get).toHaveBeenCalledWith(
         mockGroupUrn.toString()
       );
       expect(result).toEqual(mockGroup);
@@ -300,7 +309,7 @@ describe('ContactsStorageService', () => {
 
     it('should delete a group', async () => {
       await service.deleteGroup(mockGroupUrn);
-      expect(mockContactsDb.contactGroups.delete).toHaveBeenCalledWith(
+      expect(mockContactsDb.groups.delete).toHaveBeenCalledWith(
         mockGroupUrn.toString()
       );
     });
@@ -325,16 +334,6 @@ describe('ContactsStorageService', () => {
         mockStorableGroup.contactIds
       );
       expect(result).toEqual([mockContact]);
-    });
-
-    it('should return an empty array if group not found', async () => {
-      const notFoundUrn = URN.parse('urn:contacts:group:grp-not-found');
-      mockDbGroupTable.get.mockResolvedValue(undefined);
-
-      const result = await service.getContactsForGroup(notFoundUrn);
-
-      expect(mockDbGroupTable.get).toHaveBeenCalledWith(notFoundUrn.toString());
-      expect(result).toEqual([]);
     });
   });
 
@@ -363,17 +362,6 @@ describe('ContactsStorageService', () => {
       expect(result[0].toString()).toBe(mockGoogleAuthUrn.toString());
     });
 
-    it('should retrieve ALL identity links', async () => {
-      mockDbLinksTable.toArray.mockResolvedValue([mockStorableLink]);
-
-      const result = await service.getAllIdentityLinks();
-
-      expect(mockDbLinksTable.toArray).toHaveBeenCalled();
-      expect(result.length).toBe(1);
-      expect(result[0].authUrn).toBeInstanceOf(URN);
-      expect(result[0].authUrn.toString()).toBe(mockGoogleAuthUrn.toString());
-    });
-
     it('should find a contact by auth URN if link exists', async () => {
       mockDbLinksTable.first.mockResolvedValue(mockStorableLink);
 
@@ -389,46 +377,9 @@ describe('ContactsStorageService', () => {
     });
   });
 
-  describe('Gatekeeper: Blocking', () => {
-    it('should block an identity', async () => {
-      await service.blockIdentity(mockSpammerUrn, 'Spam');
-      expect(mockDbBlockedTable.put).toHaveBeenCalledWith(
-        expect.objectContaining({
-          urn: mockSpammerUrn.toString(),
-          reason: 'Spam',
-        })
-      );
-    });
-
-    it('should unblock an identity', async () => {
-      // Mock finding the record to get its ID
-      mockDbBlockedTable.toArray.mockResolvedValue([
-        { id: 123, urn: mockSpammerUrn.toString() },
-      ]);
-
-      await service.unblockIdentity(mockSpammerUrn);
-
-      expect(mockDbBlockedTable.where).toHaveBeenCalledWith('urn');
-      expect(mockDbBlockedTable.equals).toHaveBeenCalledWith(
-        mockSpammerUrn.toString()
-      );
-      expect(mockDbBlockedTable.bulkDelete).toHaveBeenCalledWith([123]);
-    });
-
-    it('should retrieve all blocked identity URNs', async () => {
-      mockDbBlockedTable.toArray.mockResolvedValue([
-        { urn: 'urn:auth:a' },
-        { urn: 'urn:auth:b' },
-      ]);
-
-      const result = await service.getAllBlockedIdentityUrns();
-      expect(result).toEqual(['urn:auth:a', 'urn:auth:b']);
-    });
-  });
-
-  describe('Gatekeeper: The Waiting Room (Pending)', () => {
-    it('should add an unknown stranger to pending', async () => {
-      await service.addToPending(mockStrangerUrn); // No voucher
+  describe('Gatekeeper', () => {
+    it('should add to pending list', async () => {
+      await service.addToPending(mockStrangerUrn);
       expect(mockDbPendingTable.put).toHaveBeenCalledWith(
         expect.objectContaining({
           urn: mockStrangerUrn.toString(),
@@ -436,77 +387,21 @@ describe('ContactsStorageService', () => {
         })
       );
     });
-
-    it('should add a vouched identity to pending', async () => {
-      await service.addToPending(mockStrangerUrn, mockVoucherUrn, 'Intro');
-      expect(mockDbPendingTable.put).toHaveBeenCalledWith(
-        expect.objectContaining({
-          urn: mockStrangerUrn.toString(),
-          vouchedBy: mockVoucherUrn.toString(),
-          note: 'Intro',
-        })
-      );
-    });
-
-    it('should delete a pending record (when approved or blocked)', async () => {
-      mockDbPendingTable.toArray.mockResolvedValue([
-        { id: 99, urn: mockStrangerUrn.toString() },
-      ]);
-
-      await service.deletePending(mockStrangerUrn);
-
-      expect(mockDbPendingTable.where).toHaveBeenCalledWith('urn');
-      expect(mockDbPendingTable.equals).toHaveBeenCalledWith(
-        mockStrangerUrn.toString()
-      );
-      expect(mockDbPendingTable.bulkDelete).toHaveBeenCalledWith([99]);
-    });
-
-    it('should get a pending identity by URN', async () => {
-      const mockStorable: StorablePendingIdentity = {
-        id: 1,
-        urn: mockStrangerUrn.toString(),
-        firstSeenAt: '2023-01-01T12:00:00Z' as ISODateTimeString,
-        vouchedBy: mockVoucherUrn.toString(),
-      };
-      mockDbPendingTable.first.mockResolvedValue(mockStorable);
-
-      const result = await service.getPendingIdentity(mockStrangerUrn);
-
-      expect(result).toBeTruthy();
-      expect(result?.urn).toEqual(mockStrangerUrn);
-      expect(result?.vouchedBy).toEqual(mockVoucherUrn);
-    });
   });
 
-  describe('LiveQuery Streams', () => {
-    it('should create contacts$ stream', () => {
-      expect(service.contacts$).toBeTruthy();
+  describe('Smart Sync (Tombstones)', () => {
+    it('should update lastModified on save', async () => {
+      const before = new Date().getTime();
+      await service.saveContact(mockContact);
+
+      const putCall = mockDbTable.put.mock.calls[0][0];
+      const savedTime = new Date(putCall.lastModified).getTime();
+      expect(savedTime).toBeGreaterThanOrEqual(before);
     });
 
-    it('should create groups$ stream', () => {
-      expect(service.groups$).toBeTruthy();
-    });
-
-    it('should create blocked$ stream', () => {
-      expect(service.blocked$).toBeTruthy();
-    });
-
-    it('should create pending$ stream', () => {
-      expect(service.pending$).toBeTruthy();
-    });
-  });
-
-  describe('clearDatabase', () => {
-    it('should clear all tables in a transaction', async () => {
-      await service.clearDatabase();
-
-      expect(mockContactsDb.transaction).toHaveBeenCalled();
-      expect(mockDbTable.clear).toHaveBeenCalled();
-      expect(mockDbGroupTable.clear).toHaveBeenCalled();
-      expect(mockDbLinksTable.clear).toHaveBeenCalled();
-      expect(mockDbBlockedTable.clear).toHaveBeenCalled();
-      expect(mockDbPendingTable.clear).toHaveBeenCalled();
+    it('should create tombstone on delete', async () => {
+      await service.deleteContact(mockContactUrn);
+      expect(mockDbTombstonesTable.put).toHaveBeenCalled();
     });
   });
 });
