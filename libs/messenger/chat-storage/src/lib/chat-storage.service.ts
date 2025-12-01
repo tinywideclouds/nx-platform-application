@@ -83,6 +83,21 @@ export class ChatStorageService {
     );
   }
 
+  /**
+   * Resets the unread count for a conversation to 0.
+   * * PREP WORK: This is where we will hook in the "Send Read Receipt" logic later.
+   */
+  async markConversationAsRead(urn: URN): Promise<void> {
+    const strUrn = urn.toString();
+
+    // We use update() instead of put() to ensure we don't accidentally create
+    // a record if one doesn't exist (though it should).
+    // This is also atomic within Dexie.
+    await this.db.conversations.update(strUrn, {
+      unreadCount: 0,
+    });
+  }
+
   async deleteMessage(messageId: string): Promise<void> {
     return this.deletionStrategy.deleteMessage(this, messageId);
   }
@@ -122,7 +137,7 @@ export class ChatStorageService {
     return records.map((r) => this.mapper.mapRecordToSmart(r));
   }
 
-  // ✅ UPDATED: Returns Domain Object (SyncState) instead of DB Record
+  // Returns Domain Object (SyncState) instead of DB Record
   async getConversationIndex(
     urn: URN
   ): Promise<ConversationSyncState | undefined> {
@@ -156,7 +171,7 @@ export class ChatStorageService {
     return records.map((r) => this.mapper.mapRecordToSmart(r));
   }
 
-  // ✅ UPDATED: Returns Domain Objects (MessageTombstone)
+  // Returns Domain Objects (MessageTombstone)
   async getTombstonesInRange(
     start: ISODateTimeString,
     end: ISODateTimeString
@@ -185,7 +200,7 @@ export class ChatStorageService {
     };
   }
 
-  // ✅ UPDATED: Returns Domain Objects
+  //  Returns Domain Objects
   async getAllConversations(): Promise<ConversationSyncState[]> {
     const records = await this.db.conversations.toArray();
     return records.map((r) => this.mapIndexRecordToSmart(r));
@@ -193,7 +208,7 @@ export class ChatStorageService {
 
   // --- CLOUD MERGE OPERATIONS ---
 
-  // ✅ UPDATED: Accepts Domain Objects, maps to DB, then calls Strategy
+  // Accepts Domain Objects, maps to DB, then calls Strategy
   async smartMergeConversations(
     cloudIndex: ConversationSyncState[]
   ): Promise<void> {

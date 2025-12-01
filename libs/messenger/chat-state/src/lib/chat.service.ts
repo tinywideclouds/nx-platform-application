@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
+// libs/messenger/chat-state/src/lib/chat.service.ts
 import {
   Injectable,
   signal,
@@ -13,7 +13,6 @@ import {
   URN,
 } from '@nx-platform-application/platform-types';
 import { filter, firstValueFrom, interval } from 'rxjs';
-import { Temporal } from '@js-temporal/polyfill';
 
 // --- Services ---
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
@@ -29,11 +28,11 @@ import {
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { SyncOptions } from '@nx-platform-application/messenger-cloud-sync';
 
-// --- Child Service (Active Chat State) ---
+// --- Orchestrators & Workers ---
+import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.service';
 import { ChatConversationService } from './services/chat-conversation.service';
-
-// WORKERS & HELPERS
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
 
@@ -52,7 +51,9 @@ export class ChatService {
   private readonly storageService = inject(ChatStorageService);
   private readonly keyService = inject(KeyCacheService);
   private readonly contactsService = inject(ContactsStorageService);
-  private readonly destroyRef = inject(DestroyRef);
+
+  // ✅ NEW: Sync Orchestrator
+  private readonly syncOrchestrator = inject(ChatSyncOrchestratorService);
 
   // --- Child Service (Active Chat State) ---
   private readonly conversationService = inject(ChatConversationService);
@@ -60,6 +61,8 @@ export class ChatService {
   // WORKERS
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly keyWorker = inject(ChatKeyService);
+
+  private readonly destroyRef = inject(DestroyRef);
 
   // --- Internal State (Global) ---
   private myKeys = signal<PrivateKeys | null>(null);
@@ -79,6 +82,7 @@ export class ChatService {
   public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
   public readonly isRecipientKeyMissing =
     this.conversationService.isRecipientKeyMissing;
+  public readonly firstUnreadId = this.conversationService.firstUnreadId;
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -104,8 +108,7 @@ export class ChatService {
       const authToken = this.authService.getJwtToken();
       if (!authToken) throw new Error('No valid session token.');
 
-      //TODO build block behaviour but within messenger not contacts
-      await Promise.all([this.refreshIdentityMap()]); // , this.refreshBlockedSet()]);
+      await this.refreshIdentityMap();
 
       const summaries =
         await this.conversationService.loadConversationSummaries();
@@ -146,6 +149,30 @@ export class ChatService {
     }
   }
 
+  // --- Sync Action (Delegated) ---
+
+  /**
+   * Facade for the Sync Process.
+   * Delegates heavy logic to ChatSyncOrchestratorService.
+   */
+  public async sync(options: SyncOptions): Promise<void> {
+    // 1. Delegate Logic
+    const success = await this.syncOrchestrator.performSync(options);
+
+    // 2. Refresh State (The "Kick")
+    if (success) {
+      if (options.syncMessages) {
+        await this.refreshActiveConversations();
+      }
+      if (options.syncContacts) {
+        await this.refreshIdentityMap();
+        // Reloading summaries ensures contact names/avatars are updated
+        await this.refreshActiveConversations();
+      }
+      this.logger.info('ChatService: State refreshed after sync.');
+    }
+  }
+
   public async resetIdentityKeys(): Promise<void> {
     const userUrn = this.currentUserUrn();
     const currentUser = this.authService.currentUser();
@@ -178,10 +205,8 @@ export class ChatService {
         this.blockedSet()
       );
 
-      // 1. Delegate Updates to Active View
       this.conversationService.upsertMessages(newMessages);
 
-      // 2. Update Inbox List if needed
       if (newMessages.length > 0) {
         this.refreshActiveConversations();
       }
@@ -190,8 +215,12 @@ export class ChatService {
 
   // --- Delegated Actions ---
 
-  public loadConversation(urn: URN | null): Promise<void> {
-    return this.conversationService.loadConversation(urn);
+  public async loadConversation(urn: URN | null): Promise<void> {
+    await this.conversationService.loadConversation(urn);
+
+    if (urn) {
+      this.handleReadStatusUpdate(urn);
+    }
   }
 
   public loadMoreMessages(): Promise<void> {
@@ -216,9 +245,6 @@ export class ChatService {
     this.refreshActiveConversations();
   }
 
-  /**
-   * Sends a contact card/share to the recipient.
-   */
   public async sendContactShare(
     recipientUrn: URN,
     data: ContactSharePayload
@@ -241,6 +267,17 @@ export class ChatService {
   }
 
   // --- Private Helpers ---
+
+  private handleReadStatusUpdate(urn: URN): void {
+    this.activeConversations.update((list) =>
+      list.map((c) => {
+        if (c.conversationUrn.toString() === urn.toString()) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      })
+    );
+  }
 
   private async refreshActiveConversations(): Promise<void> {
     const summaries =
@@ -334,8 +371,6 @@ export class ChatService {
     this.identityLinkMap.set(new Map());
     this.blockedSet.set(new Set());
     this.activeConversations.set([]);
-
-    // Reset Child Service State indirectly via loading null
     this.conversationService.loadConversation(null);
   }
 }

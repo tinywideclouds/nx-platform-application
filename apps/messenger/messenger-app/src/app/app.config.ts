@@ -131,12 +131,12 @@ export const appConfig: ApplicationConfig = {
     chatProvider,
     contactsProvider,
     ...devProviders,
-    mockUserProvider, // <-- Provider remains
+    mockUserProvider,
     ...cloudProviders,
     {
       provide: LOGGER_CONFIG,
       useValue: {
-        level: isDevMode() ? LogLevel.DEBUG : LogLevel.WARN,
+        level: LogLevel.DEBUG,
       },
     },
     {

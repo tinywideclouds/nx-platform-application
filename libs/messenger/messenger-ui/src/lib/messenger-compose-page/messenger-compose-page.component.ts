@@ -9,7 +9,10 @@ import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 
 // LAYOUT
-import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-toolkit';
+import {
+  MasterDetailLayoutComponent,
+  FeaturePlaceholderComponent,
+} from '@nx-platform-application/platform-ui-toolkit';
 
 // FEATURES
 import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
@@ -27,6 +30,7 @@ import {
     CommonModule,
     MatIconModule,
     MasterDetailLayoutComponent,
+    FeaturePlaceholderComponent,
     ContactsSidebarComponent,
   ],
   templateUrl: './messenger-compose-page.component.html',

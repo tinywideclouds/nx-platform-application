@@ -54,6 +54,8 @@ export class ContactsSidebarComponent {
   showAddActions = input(true);
   selectionMode = input(false);
 
+  title = input<string>('Contacts');
+
   // --- OUTPUTS ---
   contactSelected = output<Contact>();
   groupSelected = output<ContactGroup>();

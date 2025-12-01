@@ -87,6 +87,58 @@ describe('ChatStorageService', () => {
       expect(index).toBeTruthy();
       expect(index?.snippet).toBe('Hello Bob');
     });
+
+    it('should increment unreadCount for received messages', async () => {
+      // 1. Arrange: Existing conversation with 0 unread
+      await db.conversations.put({
+        conversationUrn: mockPartnerUrn.toString(),
+        lastActivityTimestamp: '2024-01-01T09:00:00Z',
+        snippet: 'Old',
+        previewType: 'text',
+        unreadCount: 0,
+        genesisTimestamp: null,
+        lastModified: '2024-01-01T09:00:00Z',
+      });
+
+      // 2. Act: Save new received message
+      const msg = createMsg('m2', 'New', '2024-01-01T10:00:00Z', 'received');
+      await service.saveMessage(msg);
+
+      // 3. Assert
+      const index = await db.conversations.get(mockPartnerUrn.toString());
+      expect(index?.unreadCount).toBe(1);
+    });
+  });
+
+  // ✅ NEW TEST SUITE FOR READ STATUS
+  describe('Read Status (Unread Count)', () => {
+    it('markConversationAsRead should reset unreadCount to 0', async () => {
+      // 1. Arrange: Conversation with 5 unread messages
+      await db.conversations.put({
+        conversationUrn: mockPartnerUrn.toString(),
+        lastActivityTimestamp: '2024-01-01T10:00:00Z',
+        snippet: 'Pending...',
+        previewType: 'text',
+        unreadCount: 5,
+        genesisTimestamp: null,
+        lastModified: '2024-01-01T10:00:00Z',
+      });
+
+      // 2. Act
+      await service.markConversationAsRead(mockPartnerUrn);
+
+      // 3. Assert
+      const index = await db.conversations.get(mockPartnerUrn.toString());
+      expect(index?.unreadCount).toBe(0);
+    });
+
+    it('markConversationAsRead should do nothing if conversation does not exist', async () => {
+      const ghostUrn = URN.parse('urn:contacts:user:ghost');
+      await service.markConversationAsRead(ghostUrn);
+
+      const index = await db.conversations.get(ghostUrn.toString());
+      expect(index).toBeUndefined();
+    });
   });
 
   describe('Read Path (Domain Mapping)', () => {

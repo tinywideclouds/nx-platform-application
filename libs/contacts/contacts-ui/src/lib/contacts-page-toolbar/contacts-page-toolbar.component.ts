@@ -13,7 +13,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 
 const COMPACT_THRESHOLD_REM = 24; // ~384px at 16px base
 
-export type pageMode = "full" | "compact";
+export type pageMode = 'full' | 'compact';
 
 @Component({
   selector: 'contacts-page-toolbar',
@@ -29,12 +29,14 @@ export class ContactsPageToolbarComponent implements OnDestroy {
   private elementWidth = signal(0);
   private compactBreakpointPx = 0;
 
+  title = input<string>('Contacts');
+
   /** * Forces the toolbar into icon-only mode regardless of width.
    * Useful for sidebars or narrow contexts.
    */
   forceIconMode = input(false);
 
-  /** * The internal mode, computed from the component's own width. 
+  /** * The internal mode, computed from the component's own width.
    * Defaults to 'compact' to prevent layout shift/flicker on init.
    */
   public readonly mode = computed<pageMode>(() => {
@@ -71,10 +73,10 @@ export class ContactsPageToolbarComponent implements OnDestroy {
     // Setup ResizeObserver with requestAnimationFrame debouncing
     this.resizeObserver = new ResizeObserver((entries) => {
       if (this.rafId) cancelAnimationFrame(this.rafId);
-      
+
       this.rafId = requestAnimationFrame(() => {
-          this.elementWidth.set(entries[0].contentRect.width);
-          this.rafId = null;
+        this.elementWidth.set(entries[0].contentRect.width);
+        this.rafId = null;
       });
     });
 

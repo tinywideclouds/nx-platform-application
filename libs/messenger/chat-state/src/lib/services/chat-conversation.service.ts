@@ -6,7 +6,10 @@ import { Logger } from '@nx-platform-application/console-logger';
 
 // Data Layer
 import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import { ConversationSummary } from '@nx-platform-application/chat-storage';
+import {
+  ChatStorageService,
+  ConversationSummary,
+} from '@nx-platform-application/chat-storage';
 
 // Helpers
 import { ChatKeyService } from './chat-key.service';
@@ -22,20 +25,16 @@ import {
 } from '@nx-platform-application/message-content';
 import { PrivateKeys } from '@nx-platform-application/messenger-crypto-bridge';
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 @Injectable({ providedIn: 'root' })
 export class ChatConversationService {
   private logger = inject(Logger);
   private repository = inject(ChatMessageRepository);
+  private storage = inject(ChatStorageService);
   private keyWorker = inject(ChatKeyService);
   private mapper = inject(ChatMessageMapper);
   private outbound = inject(ChatOutboundService);
-
-  // We need to update the summary list in storage/service when sending
-  // Ideally this signal should live here or we emit an event,
-  // but for now let's expose an update method or keep summaries in ChatService.
-  // We will emit "Activity" so ChatService can update the list.
 
   // --- State ---
   public readonly selectedConversation = signal<URN | null>(null);
@@ -44,26 +43,29 @@ export class ChatConversationService {
   public readonly isLoadingHistory = signal<boolean>(false);
   public readonly isRecipientKeyMissing = signal<boolean>(false);
 
-  // Lock for async operations (prevent race conditions)
+  // NEW: Holds the ID of the first unread message to drive the UI Divider
+  public readonly firstUnreadId = signal<string | null>(null);
+
   private operationLock = Promise.resolve();
 
-  /**
-   * Ensure mconversations and summaries are central to here even if this is only a wrapper
-   * @returns Promise<ConversationSummary[]>
-   */
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     return this.repository.getConversationSummaries();
   }
 
-  /**
-   * Loads the INITIAL page of the conversation.
-   */
   async loadConversation(urn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
-      if (this.selectedConversation()?.toString() === urn?.toString()) return;
+      // Optimization: If already selected, just re-mark as read (don't reload)
+      if (
+        this.selectedConversation()?.toString() === urn?.toString() &&
+        urn !== null
+      ) {
+        await this.storage.markConversationAsRead(urn);
+        return;
+      }
 
       this.selectedConversation.set(urn);
       this.genesisReached.set(false);
+      this.firstUnreadId.set(null); // Reset boundary
 
       if (!urn) {
         this.messages.set([]);
@@ -71,22 +73,44 @@ export class ChatConversationService {
         return;
       }
 
-      // 1. Check Keys
+      // 1. SNAPSHOT: Get Unread Count *Before* wiping it
+      // We need this to calculate the fetch limit and the divider position
+      const index = await this.storage.getConversationIndex(urn);
+      const unreadCount = index?.unreadCount || 0;
+
+      // 2. Mark as Read (Local UI Fix)
+      await this.storage.markConversationAsRead(urn);
+
+      // 3. Check Keys
       const hasKeys = await this.keyWorker.checkRecipientKeys(urn);
       this.isRecipientKeyMissing.set(!hasKeys);
 
-      // 2. Load Data
+      // 4. Load Data (The "Catch-Up" Fetch)
       this.isLoadingHistory.set(true);
       try {
+        // Expand limit to ensure we see all unread messages + context
+        const limit = Math.max(DEFAULT_PAGE_SIZE, unreadCount + 5);
+
         const result = await this.repository.getMessages({
           conversationUrn: urn,
-          limit: PAGE_SIZE,
+          limit: limit,
         });
 
-        // Map & Reverse (Repo gives Newest->Oldest, UI wants Oldest->Newest)
+        // Map & Reverse (Oldest -> Newest)
         const viewMessages = result.messages
           .reverse()
           .map((m) => this.mapper.toView(m));
+
+        // 5. Calculate "New Messages" Boundary
+        if (unreadCount > 0 && viewMessages.length > 0) {
+          // If we have 10 unread, the *last* 10 are new.
+          // The first unread is at index: Length - Unread
+          const boundaryIndex = Math.max(0, viewMessages.length - unreadCount);
+          const boundaryMsg = viewMessages[boundaryIndex];
+          if (boundaryMsg) {
+            this.firstUnreadId.set(boundaryMsg.id);
+          }
+        }
 
         this.messages.set(viewMessages);
         this.genesisReached.set(result.genesisReached);
@@ -96,9 +120,6 @@ export class ChatConversationService {
     });
   }
 
-  /**
-   * Infinite Scroll Loader
-   */
   async loadMoreMessages(): Promise<void> {
     if (this.isLoadingHistory() || this.genesisReached()) return;
 
@@ -110,12 +131,11 @@ export class ChatConversationService {
 
       this.isLoadingHistory.set(true);
       try {
-        // Oldest is at index 0
         const oldestMsg = currentMsgs[0];
 
         const result = await this.repository.getMessages({
           conversationUrn: urn,
-          limit: PAGE_SIZE,
+          limit: DEFAULT_PAGE_SIZE,
           beforeTimestamp: oldestMsg.sentTimestamp,
         });
 
@@ -133,9 +153,6 @@ export class ChatConversationService {
     });
   }
 
-  /**
-   * Sending Logic
-   */
   async sendMessage(
     recipientUrn: URN,
     text: string,
@@ -159,9 +176,6 @@ export class ChatConversationService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  /**
-   * Called by Ingestion Service when new messages arrive from network.
-   */
   upsertMessages(messages: ChatMessage[]): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
@@ -169,8 +183,11 @@ export class ChatConversationService {
     const relevant = messages.filter(
       (msg) => msg.conversationUrn.toString() === activeConvo.toString()
     );
+
     if (relevant.length > 0) {
       this.messages.update((current) => [...current, ...relevant]);
+      // Mark read if active (Live Chat)
+      this.storage.markConversationAsRead(activeConvo);
     }
   }
 

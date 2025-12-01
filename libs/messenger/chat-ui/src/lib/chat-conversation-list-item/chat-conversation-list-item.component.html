@@ -19,7 +19,7 @@
         {{ name() }}
       </div>
       <div class="text-xs text-gray-500 flex-shrink-0 ml-2">
-        {{ timestamp() | slice: 11:16 }}
+        {{ timestamp() | date : 'shortTime' }}
       </div>
     </div>
 

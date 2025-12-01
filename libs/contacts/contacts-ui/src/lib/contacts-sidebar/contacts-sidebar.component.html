@@ -1,5 +1,5 @@
 <div class="h-full flex flex-col bg-white">
-  <contacts-page-toolbar #toolbar>
+  <contacts-page-toolbar [title]="title()" #toolbar>
     <div class="flex items-center gap-2">
       @if (showAddActions()) { @if (toolbar.mode() === 'full') {
       <a

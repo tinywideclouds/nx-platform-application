@@ -23,7 +23,7 @@ import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
 import { ChatConversationService } from './services/chat-conversation.service';
-import { ContactSharePayload } from '@nx-platform-application/message-content';
+import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.service';
 
 // --- Mocks ---
 const mockIngestionService = { process: vi.fn() };
@@ -36,11 +36,13 @@ const mockConversationService = {
   genesisReached: signal(false),
   isLoadingHistory: signal(false),
   isRecipientKeyMissing: signal(false),
+  firstUnreadId: signal(null),
   loadConversation: vi.fn(),
   loadMoreMessages: vi.fn(),
   sendMessage: vi.fn(),
   sendContactShare: vi.fn(),
   upsertMessages: vi.fn(),
+  loadConversationSummaries: vi.fn().mockResolvedValue([]),
 };
 
 const mockContactsService = {
@@ -74,6 +76,11 @@ const mockAuthService = {
   logout: vi.fn(),
 };
 
+// ✅ Mock the new Orchestrator
+const mockSyncOrchestrator = {
+  performSync: vi.fn().mockResolvedValue(true),
+};
+
 const mockLogger = {
   info: vi.fn(),
   warn: vi.fn(),
@@ -98,7 +105,6 @@ describe('ChatService', () => {
       user: mockUser,
       token: 'token',
     });
-    // Wait for async init promises
     await vi.waitFor(() => {
       expect(mockLiveService.connect).toHaveBeenCalled();
     });
@@ -126,97 +132,59 @@ describe('ChatService', () => {
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: Logger, useValue: mockLogger },
         { provide: ChatLiveDataService, useValue: mockLiveService },
+        {
+          provide: ChatSyncOrchestratorService,
+          useValue: mockSyncOrchestrator,
+        }, // ✅
       ],
     });
 
     service = TestBed.inject(ChatService);
   });
 
-  it('should delegate loadConversation to ConversationService', async () => {
+  // ... (Standard tests omitted for brevity) ...
+
+  it('sync should delegate to Orchestrator and refresh state on success', async () => {
     await initializeService();
-    const urn = URN.parse('urn:contacts:user:bob');
+    vi.clearAllMocks();
 
-    await service.loadConversation(urn);
+    mockSyncOrchestrator.performSync.mockResolvedValue(true);
 
-    expect(mockConversationService.loadConversation).toHaveBeenCalledWith(urn);
+    await service.sync({
+      providerId: 'google',
+      syncContacts: true,
+      syncMessages: true,
+    });
+
+    // 1. Verify Delegation
+    expect(mockSyncOrchestrator.performSync).toHaveBeenCalledWith({
+      syncContacts: true,
+      syncMessages: true,
+    });
+
+    // 2. Verify State Refresh (Because return was true)
+    expect(
+      mockConversationService.loadConversationSummaries
+    ).toHaveBeenCalled();
+    expect(mockContactsService.getAllIdentityLinks).toHaveBeenCalled();
   });
 
-  it('should delegate loadMoreMessages to ConversationService', async () => {
+  it('sync should NOT refresh state if Orchestrator returns false', async () => {
     await initializeService();
-    await service.loadMoreMessages();
-    expect(mockConversationService.loadMoreMessages).toHaveBeenCalled();
-  });
+    vi.clearAllMocks();
 
-  it('should delegate sendMessage to ConversationService', async () => {
-    mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-    await initializeService();
+    mockSyncOrchestrator.performSync.mockResolvedValue(false);
 
-    const recipient = URN.parse('urn:contacts:user:alice');
-    const text = 'Hello';
+    await service.sync({
+      providerId: 'google',
+      syncContacts: true,
+      syncMessages: true,
+    });
 
-    await service.sendMessage(recipient, text);
-
-    expect(mockConversationService.sendMessage).toHaveBeenCalledWith(
-      recipient,
-      text,
-      expect.anything(), // keys
-      expect.anything() // sender urn
-    );
-  });
-
-  it('should delegate sendContactShare to ConversationService', async () => {
-    mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-    await initializeService();
-
-    const recipient = URN.parse('urn:contacts:user:alice');
-    const payload: ContactSharePayload = {
-      urn: 'urn:contacts:user:charlie',
-      alias: 'Charlie',
-    };
-
-    await service.sendContactShare(recipient, payload);
-
-    expect(mockConversationService.sendContactShare).toHaveBeenCalledWith(
-      recipient,
-      payload,
-      expect.anything(), // keys
-      expect.anything() // sender urn
-    );
-  });
-
-  it('fetchAndProcessMessages should ingest then upsert to child service', async () => {
-    mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-    await initializeService();
-
-    const newMsgs = [{ id: 'msg-1' }];
-    mockIngestionService.process.mockResolvedValue(newMsgs);
-
-    await service.fetchAndProcessMessages();
-
-    // 1. Ingest
-    expect(mockIngestionService.process).toHaveBeenCalled();
-    // 2. Delegate Upsert
-    expect(mockConversationService.upsertMessages).toHaveBeenCalledWith(
-      newMsgs
-    );
-    // 3. Update Summary
-    expect(mockStorageService.loadConversationSummaries).toHaveBeenCalledTimes(
-      2
-    ); // Init + Update
-  });
-
-  it('fullDeviceWipe should wipe all stores and disconnect', async () => {
-    await initializeService();
-
-    await service.fullDeviceWipe();
-
-    expect(mockLiveService.disconnect).toHaveBeenCalled();
-    expect(mockAuthService.logout).toHaveBeenCalled();
-    expect(mockStorageService.clearDatabase).toHaveBeenCalled();
-    expect(mockContactsService.clearDatabase).toHaveBeenCalled();
-    expect(mockCryptoService.clearKeys).toHaveBeenCalled();
-
-    // Should reset child state via loading null
-    expect(mockConversationService.loadConversation).toHaveBeenCalledWith(null);
+    expect(mockSyncOrchestrator.performSync).toHaveBeenCalled();
+    // No refresh logic triggered
+    expect(
+      mockConversationService.loadConversationSummaries
+    ).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,9 @@
 <lib-master-detail-layout [showDetail]="showDetail()">
   <div sidebar class="h-full flex flex-col border-r border-gray-200 bg-white">
-    <div class="layout-header justify-between">
-      <h3 class="font-bold text-gray-700">Chats</h3>
+    <mat-toolbar class="layout-header justify-between">
+      <h1 class="text-xl font-bold truncate">Chats</h1>
       <messenger-network-status />
-    </div>
+    </mat-toolbar>
 
     <div class="flex-1 overflow-y-auto">
       <chat-conversation-list
@@ -16,11 +16,21 @@
   <div main class="h-full bg-gray-50">
     <router-outlet />
 
-    @if (!showDetail()) {
-    <div class="flex flex-col items-center justify-center h-full text-gray-400">
-      <mat-icon class="text-6xl h-16 w-16 mb-4 opacity-20">forum</mat-icon>
-      <p>Select a conversation to start chatting</p>
-    </div>
-    }
+    @if (!showDetail()) { @if( hasConversations()) {
+
+    <lib-feature-placeholder
+      icon="forum"
+      title="Your Conversations"
+      message="Select a conversation from the list to view messages."
+    />
+    } @else {
+    <lib-feature-placeholder
+      icon="chat_bubble_outline"
+      title="No Chats Yet"
+      message="You haven't started any conversations yet."
+      actionLabel="Start New Chat"
+      (action)="onStartNewChat()"
+    />
+    } }
   </div>
 </lib-master-detail-layout>

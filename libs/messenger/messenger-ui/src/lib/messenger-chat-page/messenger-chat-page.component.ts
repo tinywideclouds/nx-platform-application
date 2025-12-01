@@ -1,3 +1,5 @@
+// libs/messenger/messenger-ui/src/lib/messenger-chat-page/messenger-chat-page.component.ts
+
 import {
   Component,
   inject,
@@ -9,7 +11,10 @@ import { Router, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 
 // LAYOUT
-import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-toolkit';
+import {
+  MasterDetailLayoutComponent,
+  FeaturePlaceholderComponent,
+} from '@nx-platform-application/platform-ui-toolkit';
 
 // FEATURES
 import {
@@ -26,6 +31,7 @@ import {
 } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { MatIconModule } from '@angular/material/icon';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { MessengerNetworkStatusComponent } from '../messenger-network-status/messenger-network-status.component';
 
 @Component({
@@ -35,9 +41,11 @@ import { MessengerNetworkStatusComponent } from '../messenger-network-status/mes
     CommonModule,
     RouterOutlet,
     MatIconModule,
+    MatToolbarModule,
     MasterDetailLayoutComponent,
     ChatConversationListComponent,
     MessengerNetworkStatusComponent,
+    FeaturePlaceholderComponent,
   ],
   templateUrl: './messenger-chat-page.component.html',
   styleUrl: './messenger-chat-page.component.scss',
@@ -53,7 +61,6 @@ export class MessengerChatPageComponent {
     initialValue: [] as Contact[],
   });
 
-  // Added: Needed to validate group chats
   private allGroups = toSignal(this.contactsService.groups$, {
     initialValue: [] as ContactGroup[],
   });
@@ -125,5 +132,12 @@ export class MessengerChatPageComponent {
     this.router.navigate(['/messenger', 'conversations', id.toString()]);
   }
 
+  onStartNewChat() {
+    this.router.navigate(['/messenger', 'compose']);
+  }
+
   showDetail = computed(() => !!this.selectedConversationUrn());
+
+  // Helper to check if we have any chats at all (for the Empty State)
+  hasConversations = computed(() => this.conversationsList().length > 0);
 }

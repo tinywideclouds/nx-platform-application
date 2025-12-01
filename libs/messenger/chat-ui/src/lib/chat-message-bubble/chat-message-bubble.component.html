@@ -1,18 +1,30 @@
 <div
-  class="flex w-full"
+  class="flex w-full py-1"
   [ngClass]="{
     'justify-end': direction() === 'outbound',
     'justify-start': direction() === 'inbound'
   }"
 >
   <div
-    class="max-w-[80%] rounded-lg p-3"
+    class="max-w-[85%] lg:max-w-md rounded-lg p-3 shadow-sm animate-pop-in origin-center"
     [ngClass]="{
       'bg-blue-600 text-white': direction() === 'outbound',
-      'bg-gray-200 text-gray-900': direction() === 'inbound'
+      'bg-white text-gray-800 border border-gray-100': direction() === 'inbound'
     }"
     data-testid="chat-bubble"
   >
-    {{ message() }}
+    <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ message() }}</p>
+
+    @if (timestamp(); as ts) {
+    <div
+      class="text-[10px] text-right mt-1 select-none"
+      [ngClass]="{
+        'text-blue-100': direction() === 'outbound',
+        'text-gray-400': direction() === 'inbound'
+      }"
+    >
+      {{ ts | date : 'shortTime' }}
+    </div>
+    }
   </div>
 </div>

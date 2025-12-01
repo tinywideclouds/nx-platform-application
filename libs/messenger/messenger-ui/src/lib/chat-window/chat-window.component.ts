@@ -3,6 +3,7 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  DestroyRef,
   inject,
   computed,
   effect,
@@ -122,6 +123,13 @@ export class ChatWindowComponent {
     }
     return null;
   });
+
+  constructor() {
+    // MODERN CLEANUP: Reset service when this component is destroyed
+    inject(DestroyRef).onDestroy(() => {
+      this.chatService.loadConversation(null);
+    });
+  }
 
   // --- REFACTOR: Field Initializer Effect ---
   // Cleaned up from constructor injection

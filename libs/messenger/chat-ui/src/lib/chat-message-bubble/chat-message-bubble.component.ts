@@ -2,6 +2,7 @@
 
 import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 export type ChatBubbleDirection = 'inbound' | 'outbound';
 
@@ -14,7 +15,8 @@ export type ChatBubbleDirection = 'inbound' | 'outbound';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatMessageBubbleComponent {
-  // Refactored to Signal Inputs
-  message = input.required<string>();
+  message = input.required<string | undefined>();
   direction = input.required<ChatBubbleDirection>();
+
+  timestamp = input<ISODateTimeString | string | undefined>(undefined);
 }

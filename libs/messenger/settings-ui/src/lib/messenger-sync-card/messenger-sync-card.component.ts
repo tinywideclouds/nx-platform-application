@@ -1,3 +1,5 @@
+// libs/messenger/settings-ui/src/lib/messenger-sync-card/messenger-sync-card.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
@@ -14,6 +16,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 // Domain Imports
 import { CloudSyncService } from '@nx-platform-application/messenger-cloud-sync';
+import { ChatService } from '@nx-platform-application/chat-state'; // ✅ Import Orchestrator
 
 @Component({
   selector: 'lib-messenger-sync-card',
@@ -32,45 +35,51 @@ import { CloudSyncService } from '@nx-platform-application/messenger-cloud-sync'
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessengerSyncCardComponent {
+  // 1. Inject Orchestrator for ACTIONS (Sync + Refresh)
+  private chatService = inject(ChatService);
+
+  // 2. Inject Coordinator for STATE (Progress + Results)
   private syncService = inject(CloudSyncService);
+
   private snackBar = inject(MatSnackBar);
 
   // --- Local UI State ---
   syncContacts = signal(true);
   syncMessages = signal(true);
 
-  // --- Delegated Service State ---
+  // --- Delegated Service State (Read from Sync Service) ---
   isSyncing = this.syncService.isSyncing;
   lastResult = this.syncService.lastSyncResult;
 
   async triggerSync(): Promise<void> {
-    const providerId = 'google'; // Future: Injectable token
+    const providerId = 'google';
 
     try {
-      // 1. Explicit Connection (Directly attached to the click event)
-      // FIX: We now pass the user's intent (contacts/messages) so the service
-      // can request ALL necessary scopes in this single user-gesture window.
+      // AUTH CHECK: We still check permissions via the Sync Service
+      // because ChatService doesn't expose auth methods.
       if (!this.syncService.hasPermission(providerId)) {
         const authorized = await this.syncService.connect(providerId, {
           syncContacts: this.syncContacts(),
           syncMessages: this.syncMessages(),
         });
 
-        if (!authorized) {
-          // User cancelled or closed the popup
-          return;
-        }
+        if (!authorized) return;
       }
 
-      // 2. Background Sync (Safe to run async)
-      // The auth token is now cached with the correct scopes.
-      const result = await this.syncService.syncNow({
-        providerId,
+      // ACTION: We call the ChatService Orchestrator
+      // This ensures that when the sync finishes, the Inbox and Contacts
+      // are immediately refreshed in the UI.
+      await this.chatService.sync({
+        providerId: 'google',
         syncContacts: this.syncContacts(),
         syncMessages: this.syncMessages(),
       });
 
-      if (result.success) {
+      // The ChatService.sync() awaits the result internally, so we can check
+      // the result signal immediately after.
+      const result = this.lastResult();
+
+      if (result?.success) {
         this.snackBar.open('Sync completed successfully', 'Close', {
           duration: 3000,
         });
