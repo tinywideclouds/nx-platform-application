@@ -1,4 +1,4 @@
-import { create, toJson, fromJson } from "@bufbuild/protobuf";
+import { create, toJson, fromJson } from '@bufbuild/protobuf';
 import { URN } from '../net/urn';
 
 // --- Protobuf Imports (This is the *only* file allowed to do this) ---\
@@ -16,6 +16,7 @@ export interface SecureEnvelope {
   encryptedSymmetricKey: Uint8Array;
   encryptedData: Uint8Array;
   signature: Uint8Array;
+  isEphemeral?: boolean;
 }
 
 // --- Mappers (Smart <-> Proto) [Refactored] ---
@@ -25,7 +26,9 @@ export interface SecureEnvelope {
  * to the "dumb" Protobuf message.
  * (This is now an internal helper)
  */
-export function secureEnvelopeToProto(envelope: SecureEnvelope): SecureEnvelopePb {
+export function secureEnvelopeToProto(
+  envelope: SecureEnvelope
+): SecureEnvelopePb {
   return create(SecureEnvelopePbSchema, {
     // SENDER_ID and MESSAGE_ID removed
     recipientId: envelope.recipientId.toString(),
@@ -33,6 +36,7 @@ export function secureEnvelopeToProto(envelope: SecureEnvelope): SecureEnvelopeP
     encryptedSymmetricKey: envelope.encryptedSymmetricKey,
     encryptedData: envelope.encryptedData,
     signature: envelope.signature,
+    isEphemeral: envelope.isEphemeral,
   });
 }
 
@@ -41,13 +45,16 @@ export function secureEnvelopeToProto(envelope: SecureEnvelope): SecureEnvelopeP
  * SecureEnvelope interface.
  * (This is now an internal helper)
  */
-export function secureEnvelopeFromProto(envelopePb: SecureEnvelopePb): SecureEnvelope {
+export function secureEnvelopeFromProto(
+  envelopePb: SecureEnvelopePb
+): SecureEnvelope {
   return {
     // SENDER_ID and MESSAGE_ID removed
     recipientId: URN.parse(envelopePb.recipientId),
     encryptedSymmetricKey: envelopePb.encryptedSymmetricKey,
     encryptedData: envelopePb.encryptedData,
     signature: envelopePb.signature,
+    isEphemeral: envelopePb.isEphemeral,
   };
 }
 

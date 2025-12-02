@@ -26,6 +26,9 @@ message SecureEnvelopePb {
   // sender's *signing key*. This is mission-critical for the
   // recipient to verify the sender's authenticity.
   bytes signature = 4;
+
+  // If true, a Router will DROP this message if the user is offline or after a given time it will vanish
+  bool is_ephemeral = 5;
 }
 
 // A wrapper message for a list of secure envelopes.
