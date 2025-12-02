@@ -7,6 +7,7 @@ import {
   computed,
   DestroyRef,
 } from '@angular/core';
+import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   ISODateTimeString,
@@ -83,6 +84,7 @@ export class ChatService {
   public readonly isRecipientKeyMissing =
     this.conversationService.isRecipientKeyMissing;
   public readonly firstUnreadId = this.conversationService.firstUnreadId;
+  public readonly typingActivity = signal<Map<string, number>>(new Map());
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -96,6 +98,10 @@ export class ChatService {
     this.destroyRef.onDestroy(() => {
       this.liveService.disconnect();
     });
+  }
+
+  public notifyTyping(): void {
+    this.conversationService.notifyTyping();
   }
 
   private async init(): Promise<void> {
@@ -144,11 +150,33 @@ export class ChatService {
       this.liveService.connect(authToken);
       this.handleConnectionStatus();
       this.initLiveSubscriptions();
+      this.initTypingOrchestration(); // +New Init Call
     } catch (error) {
       this.logger.error('ChatService: Failed initialization', error);
     }
   }
 
+  // ✅ NEW: Throttled Sending Logic
+  private initTypingOrchestration(): void {
+    // We listen to the UI trigger, but throttle it to max 1 packet per 3s
+    this.conversationService.typingTrigger$
+      .pipe(throttleTime(3000), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        const keys = this.myKeys();
+        const sender = this.currentUserUrn();
+
+        // Only send if we are authenticated and have keys
+        if (keys && sender) {
+          this.logger.debug('ChatService: Sending typing indicator...');
+          // Fire and forget (Ephemeral)
+          this.conversationService
+            .sendTypingIndicator(keys, sender)
+            .catch((err) =>
+              this.logger.warn('Failed to send typing indicator', err)
+            );
+        }
+      });
+  }
   // --- Sync Action (Delegated) ---
 
   /**
@@ -199,17 +227,52 @@ export class ChatService {
         return;
       }
 
-      const newMessages = await this.ingestionService.process(
+      // Ingestion now returns object with messages AND typing indicators
+      const result = await this.ingestionService.process(
         myKeys,
         myUrn,
         this.blockedSet()
       );
 
-      this.conversationService.upsertMessages(newMessages);
-
-      if (newMessages.length > 0) {
+      // 1. Delegate Updates to Active View (Messages)
+      if (result.messages.length > 0) {
+        this.conversationService.upsertMessages(result.messages);
         this.refreshActiveConversations();
+
+        // INTERCEPT: A real message kills the typing indicator
+        this.updateTypingActivity(result.typingIndicators, result.messages);
+      } else if (result.typingIndicators.length > 0) {
+        // Only typing indicators arrived
+        this.updateTypingActivity(result.typingIndicators, []);
       }
+    });
+  }
+
+  /**
+   * Updates the typing map.
+   * - Adds new indicators with current timestamp.
+   * - Removes indicators if a Real Message arrived from that user.
+   */
+  private updateTypingActivity(indicators: URN[], realMessages: any[]): void {
+    this.typingActivity.update((map) => {
+      const newMap = new Map(map);
+      const now = Date.now();
+
+      // 1. Add/Update Typing
+      indicators.forEach((urn) => {
+        newMap.set(urn.toString(), now);
+      });
+
+      // 2. Remove Typing if Real Message Arrived
+      // (This creates the "Ghost Bubble pops into Real Bubble" effect)
+      realMessages.forEach((msg) => {
+        const sender = msg.senderId.toString();
+        if (newMap.has(sender)) {
+          newMap.delete(sender);
+        }
+      });
+
+      return newMap;
     });
   }
 

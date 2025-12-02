@@ -1,6 +1,7 @@
 // libs/messenger/chat-state/src/lib/services/chat-conversation.service.ts
 
 import { Injectable, inject, signal, WritableSignal } from '@angular/core';
+import { Subject } from 'rxjs';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 
@@ -26,6 +27,7 @@ import {
 import { PrivateKeys } from '@nx-platform-application/messenger-crypto-bridge';
 
 const DEFAULT_PAGE_SIZE = 50;
+const MESSAGE_TYPE_TYPING = 'urn:message:type:indicator:typing';
 
 @Injectable({ providedIn: 'root' })
 export class ChatConversationService {
@@ -43,8 +45,11 @@ export class ChatConversationService {
   public readonly isLoadingHistory = signal<boolean>(false);
   public readonly isRecipientKeyMissing = signal<boolean>(false);
 
-  // NEW: Holds the ID of the first unread message to drive the UI Divider
+  // Holds the ID of the first unread message to drive the "New Messages" divider
   public readonly firstUnreadId = signal<string | null>(null);
+
+  // Subject to trigger typing events (consumed by ChatService for throttling)
+  public readonly typingTrigger$ = new Subject<void>();
 
   private operationLock = Promise.resolve();
 
@@ -67,7 +72,7 @@ export class ChatConversationService {
       this.genesisReached.set(false);
       this.firstUnreadId.set(null); // Reset boundary
 
-      // ✅ FIX: Clear the stage immediately!
+      // Clear the stage immediately!
       // This forces the UI into "Loading" state (spinner) instead of showing stale data.
       this.messages.set([]);
 
@@ -77,6 +82,7 @@ export class ChatConversationService {
       }
 
       // 1. SNAPSHOT: Get Unread Count *Before* wiping it
+      // We need this to calculate the fetch limit and the divider position
       const index = await this.storage.getConversationIndex(urn);
       const unreadCount = index?.unreadCount || 0;
 
@@ -98,13 +104,15 @@ export class ChatConversationService {
           limit: limit,
         });
 
-        // Map & Reverse (Oldest -> Newest)
+        // Map & Reverse (Oldest -> Newest for UI)
         const viewMessages = result.messages
           .reverse()
           .map((m) => this.mapper.toView(m));
 
         // 5. Calculate "New Messages" Boundary
         if (unreadCount > 0 && viewMessages.length > 0) {
+          // If we have 10 unread, the *last* 10 are new.
+          // The first unread is at index: Length - Unread
           const boundaryIndex = Math.max(0, viewMessages.length - unreadCount);
           const boundaryMsg = viewMessages[boundaryIndex];
           if (boundaryMsg) {
@@ -131,6 +139,7 @@ export class ChatConversationService {
 
       this.isLoadingHistory.set(true);
       try {
+        // Oldest is at index 0
         const oldestMsg = currentMsgs[0];
 
         const result = await this.repository.getMessages({
@@ -152,6 +161,34 @@ export class ChatConversationService {
       }
     });
   }
+
+  // --- Typing Logic ---
+
+  notifyTyping(): void {
+    if (this.selectedConversation()) {
+      this.typingTrigger$.next();
+    }
+  }
+
+  async sendTypingIndicator(myKeys: PrivateKeys, myUrn: URN): Promise<void> {
+    const recipient = this.selectedConversation();
+    if (!recipient) return;
+
+    // Empty payload for typing indicator
+    const bytes = new Uint8Array([]);
+    const typeId = URN.parse(MESSAGE_TYPE_TYPING);
+
+    await this.outbound.send(
+      myKeys,
+      myUrn,
+      recipient,
+      typeId,
+      bytes,
+      { isEphemeral: true } // Skip Storage
+    );
+  }
+
+  // --- Sending Logic ---
 
   async sendMessage(
     recipientUrn: URN,

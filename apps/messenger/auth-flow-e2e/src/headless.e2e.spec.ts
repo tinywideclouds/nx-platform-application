@@ -2,13 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { URN } from '@nx-platform-application/platform-types';
 import { firstValueFrom } from 'rxjs';
 
-import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
   clearUserQueue,
   getE2EToken,
   awaitClientConnection,
   getMessages,
-  delay,
 } from './test-helpers';
 import { createTestClient, routingUrl } from './client-setup';
 import { Temporal } from '@js-temporal/polyfill';

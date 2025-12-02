@@ -1,3 +1,5 @@
+// libs/messenger/chat-state/src/lib/services/chat-outbound.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
 import { ChatOutboundService } from './chat-outbound.service';
 import { URN } from '@nx-platform-application/platform-types';
@@ -17,6 +19,7 @@ describe('ChatOutboundService', () => {
   let service: ChatOutboundService;
   let storageService: ChatStorageService;
   let sendService: ChatSendService;
+  let cryptoService: MessengerCryptoService;
 
   // --- Fixtures ---
   const myUrn = URN.parse('urn:auth:user:me');
@@ -24,6 +27,14 @@ describe('ChatOutboundService', () => {
   const handleUrn = URN.parse('urn:lookup:email:bob@test.com');
   const typeId = URN.parse('urn:message:type:text');
   const payloadBytes = new Uint8Array([1, 2, 3]);
+
+  // Mock Envelope returned by crypto service
+  const mockSignedEnvelope = {
+    recipientId: handleUrn,
+    encryptedData: new Uint8Array([]),
+    signature: new Uint8Array([9]),
+    isEphemeral: false, // Default state from crypto
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,9 +46,7 @@ describe('ChatOutboundService', () => {
           sendMessage: vi.fn().mockReturnValue(of(undefined)),
         }),
         MockProvider(MessengerCryptoService, {
-          encryptAndSign: vi
-            .fn()
-            .mockResolvedValue({ signature: new Uint8Array([9]) }),
+          encryptAndSign: vi.fn().mockResolvedValue({ ...mockSignedEnvelope }), // Return copy
         }),
         MockProvider(ChatStorageService, {
           saveMessage: vi.fn().mockResolvedValue(undefined),
@@ -55,13 +64,14 @@ describe('ChatOutboundService', () => {
     service = TestBed.inject(ChatOutboundService);
     storageService = TestBed.inject(ChatStorageService);
     sendService = TestBed.inject(ChatSendService);
+    cryptoService = TestBed.inject(MessengerCryptoService);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('should save OPTIMISTICALLY (pending) -> Send -> Save (sent)', async () => {
+  it('should save OPTIMISTICALLY (pending) -> Send -> Save (sent) for normal messages', async () => {
     await service.send({} as any, myUrn, contactUrn, typeId, payloadBytes);
 
     // 1. Verify Sequence: Expect 2 saves (Pending, then Sent)
@@ -111,7 +121,46 @@ describe('ChatOutboundService', () => {
       expect.objectContaining({ status: 'pending' })
     );
 
-    // Should catch error and return null
+    // Should catch error and return the optimistic object (so UI shows pending state)
+    expect(result).toBeTruthy();
+    expect(result?.status).toBe('pending');
+  });
+
+  it('should SKIP storage and SET flag for Ephemeral messages', async () => {
+    // Act: Send with isEphemeral = true
+    await service.send({} as any, myUrn, contactUrn, typeId, payloadBytes, {
+      isEphemeral: true,
+    });
+
+    // 1. Storage should NOT be called
+    expect(storageService.saveMessage).not.toHaveBeenCalled();
+
+    // 2. Verify Network Call contained the flag
+    expect(sendService.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isEphemeral: true, // ✅ Key Assertion
+      })
+    );
+  });
+
+  it('should not fail if ephemeral sending fails', async () => {
+    vi.spyOn(sendService, 'sendMessage').mockReturnValue(
+      of(null).pipe(() => {
+        throw new Error('Net Error');
+      })
+    );
+
+    const result = await service.send(
+      {} as any,
+      myUrn,
+      contactUrn,
+      typeId,
+      payloadBytes,
+      { isEphemeral: true }
+    );
+
+    expect(storageService.saveMessage).not.toHaveBeenCalled();
+    // Should return null (failure handled gracefully)
     expect(result).toBeNull();
   });
 });

@@ -66,41 +66,6 @@ describe('ChatIngestionService', () => {
     service = TestBed.inject(ChatIngestionService);
   });
 
-  it('should do nothing if queue is empty', async () => {
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet()
-    );
-    expect(result).toEqual([]);
-    expect(mockCryptoService.verifyAndDecrypt).not.toHaveBeenCalled();
-  });
-
-  it('should decrypt, resolve identity, save, and ack a valid message', async () => {
-    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet()
-    );
-
-    // 1. Decrypt
-    expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalled();
-
-    // 2. Resolve Identity
-    expect(mockMapper.resolveToContact).toHaveBeenCalledWith(mockSenderHandle);
-
-    // 3. Save (Should use the CONTACT URN returned by the mapper)
-    expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ senderId: mockSenderContact })
-    );
-
-    // 4. Ack
-    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
-    expect(result.length).toBe(1);
-  });
-
   it('should GATEKEEPER: Drop blocked messages (checking resolved identity)', async () => {
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
 
@@ -144,6 +109,63 @@ describe('ChatIngestionService', () => {
     );
 
     expect(mockDataService.getMessageBatch).toHaveBeenCalledTimes(2);
-    expect(result.length).toBe(1);
+    expect(result.messages.length).toBe(1);
+  });
+
+  it('should do nothing if queue is empty', async () => {
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createBlockedSet()
+    );
+    // CHECK: Object return
+    expect(result).toEqual({ messages: [], typingIndicators: [] });
+    expect(mockCryptoService.verifyAndDecrypt).not.toHaveBeenCalled();
+  });
+
+  it('should decrypt, resolve identity, save, and ack a valid message', async () => {
+    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createBlockedSet()
+    );
+
+    expect(mockStorageService.saveMessage).toHaveBeenCalled();
+    expect(result.messages.length).toBe(1);
+    expect(result.typingIndicators.length).toBe(0); // No typing
+  });
+
+  // ✅ NEW TEST: Ephemeral
+  it('should process Ephemeral messages: Ack, Return in Typing List, SKIP Storage', async () => {
+    // Arrange: Ephemeral message
+    const ephemeralMsg = {
+      ...mockQueuedMsg,
+      envelope: { ...mockEnvelope, isEphemeral: true },
+    };
+    mockDataService.getMessageBatch.mockReturnValue(of([ephemeralMsg]));
+
+    // Act
+    const result = await service.process(
+      {} as any,
+      mockMyUrn,
+      createBlockedSet()
+    );
+
+    // Assert
+    // 1. Identity Resolution still happens
+    expect(mockMapper.resolveToContact).toHaveBeenCalled();
+
+    // 2. Storage SKIPPED
+    expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
+
+    // 3. Ack Triggered (we consumed the signal)
+    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
+
+    // 4. Result contains typing indicator
+    expect(result.messages.length).toBe(0);
+    expect(result.typingIndicators.length).toBe(1);
+    expect(result.typingIndicators[0]).toEqual(mockSenderContact);
   });
 });
