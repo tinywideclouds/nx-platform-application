@@ -67,14 +67,16 @@ export class ChatConversationService {
       this.genesisReached.set(false);
       this.firstUnreadId.set(null); // Reset boundary
 
+      // ✅ FIX: Clear the stage immediately!
+      // This forces the UI into "Loading" state (spinner) instead of showing stale data.
+      this.messages.set([]);
+
       if (!urn) {
-        this.messages.set([]);
         this.isRecipientKeyMissing.set(false);
         return;
       }
 
       // 1. SNAPSHOT: Get Unread Count *Before* wiping it
-      // We need this to calculate the fetch limit and the divider position
       const index = await this.storage.getConversationIndex(urn);
       const unreadCount = index?.unreadCount || 0;
 
@@ -103,8 +105,6 @@ export class ChatConversationService {
 
         // 5. Calculate "New Messages" Boundary
         if (unreadCount > 0 && viewMessages.length > 0) {
-          // If we have 10 unread, the *last* 10 are new.
-          // The first unread is at index: Length - Unread
           const boundaryIndex = Math.max(0, viewMessages.length - unreadCount);
           const boundaryMsg = viewMessages[boundaryIndex];
           if (boundaryMsg) {

@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../../dist/out-tsc",
-    "composite": true,
+    "composite": false,
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,
@@ -17,8 +17,5 @@
     "vitest.config.ts",
     "vitest.config.mts"
   ],
-  "include": [
-    "src/**/*.ts",
-    "src/index.ts"
-  ]
+  "include": ["src/**/*.ts", "src/index.ts"]
 }

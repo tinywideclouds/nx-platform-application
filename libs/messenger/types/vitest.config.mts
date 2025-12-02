@@ -6,9 +6,7 @@ import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/types',
-  plugins: [
-    nxViteTsPaths()
-  ],
+  plugins: [nxViteTsPaths()],
   test: {
     name: 'messenger-types',
     watch: false,
@@ -20,6 +18,5 @@ export default defineConfig(() => ({
       reportsDirectory: '../../../coverage/libs/messenger/types',
       provider: 'v8' as const,
     },
-    // setupFiles: ['src/test-setup.ts'],
   },
 }));

@@ -52,9 +52,6 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
-      "@nx-platform-application/internal-tools": [
-        "libs/internal-tools/src/index.ts"
-      ],
       "@nx-platform-application/message-content": [
         "libs/messenger/message-content/src/index.ts"
       ],

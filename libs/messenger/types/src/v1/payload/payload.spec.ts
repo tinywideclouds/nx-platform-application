@@ -6,7 +6,7 @@ import {
 
 // --- Mocks ---
 vi.mock('@bufbuild/protobuf', () => ({
-  create: vi.fn((_schema, data) => ({ ...data })), // Simple pass-through
+  create: vi.fn((_schema, data) => ({ ...data })),
   toBinary: vi.fn(),
   fromBinary: vi.fn(),
 }));
