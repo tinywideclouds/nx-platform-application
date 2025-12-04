@@ -1,0 +1,1 @@
+gcloud run deploy node-identity-service --source dist/apps/platform/node-identity-service  --project gemini-power-test --region europe-west1 --allow-unauthenticated

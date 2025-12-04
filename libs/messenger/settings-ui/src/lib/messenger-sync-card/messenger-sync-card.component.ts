@@ -16,7 +16,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 // Domain Imports
 import { CloudSyncService } from '@nx-platform-application/messenger-cloud-sync';
-import { ChatService } from '@nx-platform-application/chat-state'; // ✅ Import Orchestrator
+import { ChatService } from '@nx-platform-application/chat-state';
 
 @Component({
   selector: 'lib-messenger-sync-card',

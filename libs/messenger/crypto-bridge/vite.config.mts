@@ -11,6 +11,7 @@ export default defineConfig(() => ({
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
 
   build: {
+    emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
       name: 'messenger-crypto-bridge',

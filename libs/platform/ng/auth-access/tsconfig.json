@@ -1,13 +1,14 @@
 {
   "extends": "../../../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2022",
+    "target": "esnext",
     "strict": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "module": "preserve"
+    "module": "esnext",
+    "moduleResolution": "nodenext"
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

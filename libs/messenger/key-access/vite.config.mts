@@ -16,6 +16,7 @@ export default defineConfig(() => ({
     nxCopyAssetsPlugin(['*.md']),
   ],
   build: {
+    emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
       name: 'messenger-key-access',

@@ -116,6 +116,9 @@ export class ChatService {
 
       await this.refreshIdentityMap();
 
+      this.liveService.connect(authToken);
+      this.handleConnectionStatus();
+
       const summaries =
         await this.conversationService.loadConversationSummaries();
       this.activeConversations.set(summaries);
@@ -147,10 +150,8 @@ export class ChatService {
         if (keys) this.myKeys.set(keys);
       }
 
-      this.liveService.connect(authToken);
-      this.handleConnectionStatus();
       this.initLiveSubscriptions();
-      this.initTypingOrchestration(); // +New Init Call
+      this.initTypingOrchestration();
     } catch (error) {
       this.logger.error('ChatService: Failed initialization', error);
     }

@@ -35,11 +35,23 @@ export function configureGoogleStrategy(
     );
   }
 
+  logger.info(
+    {
+      configuredCallback: config.googleAuthCallback,
+      envVar: process.env.GOOGLE_AUTH_CALLBACK,
+      type: typeof config.googleAuthCallback,
+    },
+    'DEBUG: Inspecting Callback URL'
+  );
+
+  const allowProxy = process.env.NODE_ENV === 'production';
+
   const googleStrategyOptions = {
     clientID: config.googleClientId,
     clientSecret: config.googleClientSecret,
     callbackURL: config.googleAuthCallback,
     passReqToCallback: true,
+    proxy: allowProxy,
   } as const;
 
   const googleVerifyCallback = async (
@@ -56,7 +68,9 @@ export function configureGoogleStrategy(
     const pictureUrl = profile.photos?.[0]?.value;
 
     if (!email || !idToken || !googleId) {
-      const err = new Error('Email, ID token, or Google ID missing from profile.');
+      const err = new Error(
+        'Email, ID token, or Google ID missing from profile.'
+      );
       logger.error({ profile }, 'Google profile was missing required fields.');
       return done(err);
     }
@@ -68,7 +82,7 @@ export function configureGoogleStrategy(
       if (decision.isAuthorized) {
         // 5. CONSTRUCT FEDERATED IDENTITY
         const federatedUrn = URN.parse(`urn:auth:google:${googleId}`);
-        
+
         const user: User = {
           id: federatedUrn,
           email: email,
@@ -80,7 +94,7 @@ export function configureGoogleStrategy(
           { userId: user.id.toString(), email, provider: 'google' },
           'User authorized successfully.'
         );
-        
+
         // 6. GENERATE TOKEN & ATTACH
         // This is the object that will be passed to serializeUser
         const internalToken = await generateToken(user, idToken);

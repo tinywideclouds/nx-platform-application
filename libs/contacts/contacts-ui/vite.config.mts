@@ -19,36 +19,35 @@ export default defineConfig(() => ({
     }),
   ],
 
-  // build: {
-  //   emptyOutDir: true,
-  //   reportCompressedSize: true,
-  //   lib: {
-  //     entry: 'src/index.ts',
-  //     fileName: 'index',
-  //     formats: ['es' as const],
-  //   },
-  //   commonjsOptions: {
-  //     transformMixedEsModules: true,
-  //   },
-  //   rollupOptions: {
-  //     // EXTERNALIZE DEPENDENCIES
-  //     external: [
-  //       // 1. Angular & RxJS Framework
-  //       '@angular/core',
-  //       '@angular/common',
-  //       '@angular/router', // UI lib uses RouterLink
-  //       '@angular/forms', // If you use forms later
-  //       'rxjs',
-  //       'rxjs/operators',
+  build: {
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    lib: {
+      entry: 'src/index.ts',
+      fileName: 'index',
+      formats: ['es' as const],
+    },
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      // EXTERNALIZE DEPENDENCIES
+      external: [
+        // 1. Angular & RxJS Framework
+        '@angular/core',
+        '@angular/common',
+        '@angular/router',
+        '@angular/forms',
+        'rxjs',
+        'rxjs/operators',
 
-  //       // 2. Internal Dependencies
-  //       // CRITICAL: Do not bundle the data access layer.
-  //       // Let the App provide the singleton instance.
-  //       '@nx-platform-application/contacts-storage',
+        // 2. Internal Dependencies
+        // Let the App provide the singleton instance.
+        '@nx-platform-application/contacts-storage',
 
-  //       // 3. Shared Types (if used directly in components)
-  //       '@nx-platform-application/platform-types',
-  //     ],
-  //   },
-  // },
+        // 3. Shared Types (if used directly in components)
+        '@nx-platform-application/platform-types',
+      ],
+    },
+  },
 }));

@@ -9,6 +9,7 @@ export default defineConfig(() => ({
   cacheDir: '../../../node_modules/.vite/libs/messenger/chat-storage',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   build: {
+    emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
       name: 'chat-storage',
@@ -21,7 +22,7 @@ export default defineConfig(() => ({
         '@angular/core',
         '@angular/common/http',
         'rxjs',
-        '@nx-platform-application/console-logger'
+        '@nx-platform-application/console-logger',
       ],
     },
   },

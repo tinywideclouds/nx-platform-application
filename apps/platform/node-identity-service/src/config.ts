@@ -21,6 +21,7 @@ interface Config {
   issuer: string;
   port: number;
   clientUrl: string;
+  allowedOrigins: string[];
   sessionSecret: string;
   jwtSecret: string;
   jwtAudience: string;
@@ -64,6 +65,9 @@ export const config: Config = {
   issuer: process.env.ISSUER || 'http://localhost',
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
   clientUrl: process.env.CLIENT_URL || 'http://localhost:4200',
+  allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:4200')
+    .split(',')
+    .map((origin) => origin.trim()),
   sessionSecret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
   jwtSecret: process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
   jwtPrivateKey: process.env.JWT_PRIVATE_KEY || DEFAULT_JWT_PRIVATE_KEY,
@@ -104,6 +108,7 @@ const requiredConfigMap: Record<keyof Config, string> = {
   internalApiKey: 'INTERNAL_API_KEY',
   sessionSecret: 'SESSION_SECRET',
   clientUrl: 'CLIENT_URL',
+  allowedOrigins: 'localhost:4200',
   // --- These are not checked here ---
   issuer: '',
   port: '',
@@ -153,7 +158,10 @@ try {
         'Missing required testing variable: E2E_TEST_SECRET. This is required for non-production environments.'
       );
     } else {
-      console.warn("[WARNING] E2E_TEST_SECRET is set. Ensure this is only used in testing environments.", config.e2eTestSecret);
+      console.warn(
+        '[WARNING] E2E_TEST_SECRET is set. Ensure this is only used in testing environments.',
+        config.e2eTestSecret
+      );
     }
   }
 } catch (error) {

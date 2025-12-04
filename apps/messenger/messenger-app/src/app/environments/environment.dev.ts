@@ -7,9 +7,8 @@ export const environment = {
   identityServiceUrl: '/api/auth',
   keyServiceUrl: '/api/keys',
   routingServiceUrl: '/api/routing',
-  wssUrl: 'socket',
-  logLevel: 'debug',
-
+  wssUrl: 'ws://localhost:4200/connect',
   googleClientId:
     '885150127230-v1co0gles0clk1ara7h63qirvcjd59g8.apps.googleusercontent.com',
+  logLevel: 'debug',
 };

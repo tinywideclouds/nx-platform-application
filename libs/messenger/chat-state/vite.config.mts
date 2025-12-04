@@ -12,6 +12,7 @@ export default defineConfig(() => ({
   cacheDir: '../../../node_modules/.vite/libs/messenger/chat-state',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   build: {
+    emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
       name: 'chat-state',

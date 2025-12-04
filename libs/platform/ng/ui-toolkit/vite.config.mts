@@ -18,7 +18,7 @@ export default defineConfig(() => ({
     // This tells Vite to build a library, not an app
     lib: {
       entry: 'src/index.ts',
-      name: 'ui-toolkit',
+      name: 'platform-ui-toolkit',
       fileName: 'index',
       formats: ['es' as const],
     },

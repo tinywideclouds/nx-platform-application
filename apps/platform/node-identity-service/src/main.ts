@@ -21,9 +21,7 @@ import { validateJwtConfiguration } from './internal/services/jwt-validator.serv
 import { centralErrorHandler } from './internal/middleware/error.middleware.js';
 
 // --- 1. Import new Policy framework ---
-import {
-  IAuthorizationPolicy,
-} from './internal/auth/policies/authorization.policy.js';
+import { IAuthorizationPolicy } from './internal/auth/policies/authorization.policy.js';
 import { AllowAllPolicy } from './internal/auth/policies/allow-all.policy.js';
 import { MembershipPolicy } from './internal/auth/policies/membership.policy.js';
 import { BlockPolicy } from './internal/auth/policies/block.policy.js';
@@ -69,16 +67,25 @@ async function startServer() {
     switch (config.authPolicy) {
       case 'MEMBERSHIP':
         authPolicy = new MembershipPolicy(db);
-        logger.info({ component: 'AuthPolicy', policy: 'MEMBERSHIP' }, 'Using MEMBERSHIP authorization policy.');
+        logger.info(
+          { component: 'AuthPolicy', policy: 'MEMBERSHIP' },
+          'Using MEMBERSHIP authorization policy.'
+        );
         break;
       case 'BLOCK':
         authPolicy = new BlockPolicy(db);
-        logger.info({ component: 'AuthPolicy', policy: 'BLOCK' }, 'Using BLOCK authorization policy.');
+        logger.info(
+          { component: 'AuthPolicy', policy: 'BLOCK' },
+          'Using BLOCK authorization policy.'
+        );
         break;
       case 'ALLOW_ALL':
       default:
         authPolicy = new AllowAllPolicy();
-        logger.info({ component: 'AuthPolicy', policy: 'ALLOW_ALL' }, 'Using ALLOW_ALL authorization policy.');
+        logger.info(
+          { component: 'AuthPolicy', policy: 'ALLOW_ALL' },
+          'Using ALLOW_ALL authorization policy.'
+        );
     }
     // ---
 
@@ -93,12 +100,16 @@ async function startServer() {
 
     const app = express();
 
+    // Required for Express to respect X-Forwarded-* headers from NGINX
+    app.set('trust proxy', true);
+    logger.info('set trust proxy to: true');
+
     // --- CORE MIDDLEWARE ---
     app.use(pinoHttp({ logger }));
     app.use(helmet());
     app.use(
       cors({
-        origin: config.clientUrl,
+        origin: config.allowedOrigins,
         credentials: true,
       })
     );

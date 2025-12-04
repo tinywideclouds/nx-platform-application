@@ -8,4 +8,20 @@ export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../../node_modules/.vite/libs/messenger/settings-ui',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
+
+  build: {
+    outDir: '../../../dist/libs/messenger/settings-ui',
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    // This tells Vite to build a library, not an app
+    lib: {
+      entry: 'src/index.ts',
+      name: 'messenger-settings-ui',
+      fileName: 'index',
+      formats: ['es' as const],
+    },
+  },
 }));

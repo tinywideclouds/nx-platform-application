@@ -13,6 +13,7 @@ export default defineConfig(() => ({
   //  plugins: [ nxViteTsPaths() ],
   // },
   build: {
+    emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
       name: 'chat-live-data',
@@ -25,7 +26,7 @@ export default defineConfig(() => ({
         '@angular/core',
         '@angular/common/http',
         'rxjs',
-        '@nx-platform-application/console-logger'
+        '@nx-platform-application/console-logger',
       ],
     },
   },

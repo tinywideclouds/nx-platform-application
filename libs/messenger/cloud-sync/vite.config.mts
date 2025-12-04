@@ -12,4 +12,22 @@ export default defineConfig(() => ({
   // worker: {
   //  plugins: [ nxViteTsPaths() ],
   // },
+  build: {
+    emptyOutDir: true,
+    lib: {
+      entry: 'src/index.ts',
+      name: 'messenger-cloud-sync',
+      fileName: (format: any) => `index.${format}.js`,
+      formats: ['es' as const],
+    },
+    // You also must externalize your dependencies
+    rollupOptions: {
+      external: [
+        '@angular/core',
+        '@angular/common/http',
+        'rxjs',
+        '@nx-platform-application/console-logger',
+      ],
+    },
+  },
 }));

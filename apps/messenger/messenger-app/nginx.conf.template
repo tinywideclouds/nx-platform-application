@@ -1,0 +1,127 @@
+# 1. Custom Log Format (Keeps your debug visibility)
+log_format upstream_debug '[$time_local] $remote_addr - $remote_user - "request" $status $body_bytes_sent | UPSTREAM: $upstream_addr | URI: $uri | REWRITE: $upstream_http_location';
+
+server {
+    listen       8080;
+    server_name  localhost;
+
+    # 2. Dynamic Logging Level
+    error_log   /var/log/nginx/error.log ${NGINX_LOG_LEVEL};
+    access_log  /var/log/nginx/access.log upstream_debug;
+
+    root         /usr/share/nginx/html;
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # 3. Main SPA Route
+    location / {
+        index  index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 4. Static Assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, no-transform";
+    }
+
+    # --- MICROSERVICES PROXY CONFIGURATION ---
+
+    # SERVICE 1: IDENTITY
+    # Fix: NO Rewrite (Matches local proxy.conf.json)
+    location /api/auth {
+        proxy_pass ${IDENTITY_SERVICE_URL};
+        
+        # Cloud Run Routing (Required for 502 fix)
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        
+        # --- CONTEXT HEADERS (Fixes the Redirect/Session) ---
+        # Tells Node the original domain (messenger-app...)
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # Tells Node the original protocol (https)
+        proxy_set_header X-Forwarded-Proto $scheme; 
+        
+        # Tells Node the original User IP
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # ----------------------------------------------------
+        
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
+    }
+
+    # SERVICE 2: CONTACTS
+    # Fix: NO Rewrite (Matches local proxy.conf.json)
+    location /api/contacts {
+        proxy_pass ${CONTACTS_SERVICE_URL};
+        
+        # --- CLOUD RUN REQUIRED HEADERS ---
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        # ----------------------------------
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
+    }
+
+    # SERVICE 3: KEYS
+    # Fix: KEEP Rewrite (Matches local proxy.conf.json)
+    location /api/keys {
+        rewrite ^/api/keys/(.*) /keys/$1 break;
+        proxy_pass ${KEY_SERVICE_URL};
+        
+        # --- CLOUD RUN REQUIRED HEADERS ---
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        # ----------------------------------
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
+    }
+
+    # SERVICE 4: ROUTING
+    # Fix: KEEP Rewrite (Matches local proxy.conf.json)
+    location /api/routing {
+        rewrite ^/api/routing/(.*) /api/$1 break;
+        proxy_pass ${ROUTING_SERVICE_URL};
+        
+        # --- CLOUD RUN REQUIRED HEADERS ---
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        # ----------------------------------
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
+    }
+
+    # SERVICE 5: MESSENGER
+    # Fix: KEEP Rewrite (Matches local proxy.conf.json)
+    location /api/messenger {
+        rewrite ^/api/messenger/(.*) /api/$1 break;
+        proxy_pass ${ROUTING_SERVICE_URL};
+        
+        # --- CLOUD RUN REQUIRED HEADERS ---
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        # ----------------------------------
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
+    }
+
+    # SERVICE 6: WEBSOCKETS
+    # Fix: Added SNI + Upgrade Headers
+    location /connect {
+        proxy_pass ${WSS_URL};
+        
+        # --- CLOUD RUN REQUIRED HEADERS ---
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        # ----------------------------------
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+    }
+}

@@ -1,0 +1,33 @@
+.git
+.gitignore
+.angular
+.github
+.nx
+.vscode 
+.idea
+node_modules
+build
+coverage
+*.log
+tmp
+tools
+
+# Explicitly allow dist so we can upload the artifacts
+
+# Ignore everything inside dist...
+dist/*
+
+# ...but allow the 'apps' folder (so we can look inside it)
+!dist/apps/
+
+# ...ignore everything inside 'apps'...
+dist/apps/*
+
+# ...but allow the 'messenger' folder
+!dist/apps/messenger/
+
+# ...ignore everything inside 'messenger'...
+dist/apps/messenger/*
+
+# ...FINALLY, keep the actual app you want!
+!dist/apps/messenger/messenger-app/

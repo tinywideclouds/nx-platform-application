@@ -9,4 +9,22 @@ export default defineConfig(() => ({
   cacheDir:
     '../../../node_modules/.vite/libs/messenger/chat-message-repository',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
+  build: {
+    emptyOutDir: true,
+    lib: {
+      entry: 'src/index.ts',
+      name: 'chat-message-repository',
+      fileName: (format: any) => `index.${format}.js`,
+      formats: ['es' as const],
+    },
+    // You also must externalize your dependencies
+    rollupOptions: {
+      external: [
+        '@angular/core',
+        '@angular/common/http',
+        'rxjs',
+        '@nx-platform-application/console-logger',
+      ],
+    },
+  },
 }));

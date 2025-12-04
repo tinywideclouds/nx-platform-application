@@ -1,0 +1,13 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-f',
+        'apps/messenger/messenger-app/Dockerfile',
+        '-t',
+        '${_IMAGE_NAME}',
+        '.',
+      ]
+images:
+  - '${_IMAGE_NAME}'

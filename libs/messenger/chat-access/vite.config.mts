@@ -13,6 +13,7 @@ export default defineConfig(() => ({
   //  plugins: [ nxViteTsPaths() ],
   // },
   build: {
+    emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
       name: 'chat-access',

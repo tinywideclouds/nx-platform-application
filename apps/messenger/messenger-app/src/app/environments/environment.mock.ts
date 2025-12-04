@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
   useMocks: true,
-  identityServiceUrl: 'auth/',
+  identityServiceUrl: '/api/auth',
   keyServiceUrl: '/api/keys',
   routingServiceUrl: '/api/routing',
   wssUrl: 'socket',

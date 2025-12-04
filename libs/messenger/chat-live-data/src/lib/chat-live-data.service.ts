@@ -13,7 +13,7 @@ import {
   defer,
 } from 'rxjs';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
-import { WSS_URL_TOKEN } from './live-data.config'; 
+import { WSS_URL_TOKEN } from './live-data.config';
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -31,21 +31,25 @@ export type ConnectionStatus =
 })
 export class ChatLiveDataService implements OnDestroy {
   private readonly logger = inject(Logger);
-  private readonly baseApiUrl = inject(WSS_URL_TOKEN, { optional: true }) ?? 'api/connect';
+  private readonly baseApiUrl =
+    inject(WSS_URL_TOKEN, { optional: true }) ?? 'api/connect';
 
   private socket$?: WebSocketSubject<unknown>;
   private subscription?: Subscription;
 
-  private readonly statusSubject = new BehaviorSubject<ConnectionStatus>('disconnected');
+  private readonly statusSubject = new BehaviorSubject<ConnectionStatus>(
+    'disconnected'
+  );
   public readonly status$ = this.statusSubject.asObservable();
 
   private readonly messageSubject = new Subject<void>();
-  
+
   /**
    * Emits whenever a message is received from the WebSocket.
    * The payload is void as the message acts as a signal to refresh data.
    */
-  public readonly incomingMessage$: Observable<void> = this.messageSubject.asObservable();
+  public readonly incomingMessage$: Observable<void> =
+    this.messageSubject.asObservable();
 
   constructor() {
     this.logger.info('ChatLiveDataService initialized');
@@ -60,13 +64,16 @@ export class ChatLiveDataService implements OnDestroy {
     if (this.subscription) {
       return;
     }
+    this.logger.info('connecting websocket', this.baseApiUrl);
     this.statusSubject.next('connecting');
 
     // defer() ensures the WebSocket is created only when subscribed to,
     // and recreated fresh on retries.
     const stream$ = defer(() => {
-      this.logger.info(`WSS: Creating WebSocket connection to: ${this.baseApiUrl}`);
-      
+      this.logger.info(
+        `WSS: Creating WebSocket connection to: ${this.baseApiUrl}`
+      );
+
       this.socket$ = webSocket({
         url: this.baseApiUrl,
         protocol: [jwtToken],
@@ -78,7 +85,9 @@ export class ChatLiveDataService implements OnDestroy {
         },
         closeObserver: {
           next: (closeEvent) => {
-            this.logger.debug(`WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`);
+            this.logger.debug(
+              `WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`
+            );
             if (this.statusSubject.value !== 'disconnected') {
               this.statusSubject.next('disconnected');
             }
@@ -97,12 +106,17 @@ export class ChatLiveDataService implements OnDestroy {
         delay: (error, retryCount) => {
           // Exponential backoff: 1s, 2s, 4s... capped at 30s
           const delay = Math.min(1000 * 2 ** retryCount, 30000);
-          this.logger.warn(`WebSocket retry attempt ${retryCount}, delay ${delay}ms`);
+          this.logger.warn(
+            `WebSocket retry attempt ${retryCount}, delay ${delay}ms`
+          );
           return timer(delay);
         },
       }),
       catchError((err) => {
-        this.logger.error('ChatLiveDataService: Unrecoverable WebSocket error', err);
+        this.logger.error(
+          'ChatLiveDataService: Unrecoverable WebSocket error',
+          err
+        );
         return EMPTY;
       })
     );
@@ -135,7 +149,7 @@ export class ChatLiveDataService implements OnDestroy {
       this.socket$.complete();
       this.socket$ = undefined;
     }
-    
+
     if (this.subscription) {
       this.subscription.unsubscribe();
       this.subscription = undefined;

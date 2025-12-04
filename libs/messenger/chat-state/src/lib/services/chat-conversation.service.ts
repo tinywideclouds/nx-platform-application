@@ -22,12 +22,12 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
+  MessageTypingIndicastor,
   ContactSharePayload,
 } from '@nx-platform-application/message-content';
 import { PrivateKeys } from '@nx-platform-application/messenger-crypto-bridge';
 
 const DEFAULT_PAGE_SIZE = 50;
-const MESSAGE_TYPE_TYPING = 'urn:message:type:indicator:typing';
 
 @Injectable({ providedIn: 'root' })
 export class ChatConversationService {
@@ -176,13 +176,12 @@ export class ChatConversationService {
 
     // Empty payload for typing indicator
     const bytes = new Uint8Array([]);
-    const typeId = URN.parse(MESSAGE_TYPE_TYPING);
 
     await this.outbound.send(
       myKeys,
       myUrn,
       recipient,
-      typeId,
+      MessageTypingIndicastor,
       bytes,
       { isEphemeral: true } // Skip Storage
     );

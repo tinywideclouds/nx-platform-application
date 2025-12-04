@@ -1,0 +1,18 @@
+gcloud run deploy node-identity-service \
+  --source dist/apps/platform/node-identity-service \
+  --project gemini-power-test \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --set-env-vars="GCP_PROJECT_ID=gemini-power-test" \
+  --set-env-vars="CORS_ALLOWED_ORIGINS=https://messenger-app-885150127230.europe-west1.run.app"
+  --set-env-vars="GOOGLE_CLIENT_ID=885150127230-v1co0gles0clk1ara7h63qirvcjd59g8.apps.googleusercontent.com" \
+  --set-env-vars="GOOGLE_AUTH_CALLBACK=https://node-identity-service-uc.a.run.app/api/auth/google/callback" \
+  --set-env-vars="GOOGLE_REDIRECT_URL_SUCCESS=https://your-frontend.com/login-success" \
+  --set-env-vars="GOOGLE_REDIRECT_URL_FAILURE=https://your-frontend.com/login?error=unauthorized" \
+  --set-env-vars="CLIENT_URL=https://your-frontend.com" \
+  --set-env-vars="JWT_AUDIENCE=action-intention-services" \
+  --set-secrets="SESSION_SECRET=SESSION_SECRET:latest" \
+  --set-secrets="JWT_SECRET=JWT_SECRET:latest" \
+  --set-secrets="JWT_PRIVATE_KEY=JWT_PRIVATE_KEY:latest" \
+  --set-secrets="INTERNAL_API_KEY=INTERNAL_API_KEY:latest" \
+  --set-secrets="GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest"
