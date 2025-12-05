@@ -26,6 +26,7 @@ import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
   ChatStorageService,
   ConversationSummary,
+  DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
@@ -114,7 +115,27 @@ export class ChatService {
       const authToken = this.authService.getJwtToken();
       if (!authToken) throw new Error('No valid session token.');
 
+      // 2. Identity Map (Existing)
       await this.refreshIdentityMap();
+
+      // ✅ 3. WIRE UP BLOCKED LIST (The Missing Piece)
+      // We subscribe to the live storage stream.
+      // This handles Init, Local Block actions, AND Cloud Sync updates automatically.
+      this.contactsService.blocked$
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((blockedList) => {
+          const newSet = new Set<string>();
+          for (const b of blockedList) {
+            // Filter: Only block if scope is 'all' or 'messenger'
+            if (b.scopes.includes('all') || b.scopes.includes('messenger')) {
+              newSet.add(b.urn.toString());
+            }
+          }
+          this.blockedSet.set(newSet);
+          this.logger.debug(
+            `ChatService: Updated block list (${newSet.size} entries)`
+          );
+        });
 
       this.liveService.connect(authToken);
       this.handleConnectionStatus();
@@ -436,5 +457,70 @@ export class ChatService {
     this.blockedSet.set(new Set());
     this.activeConversations.set([]);
     this.conversationService.loadConversation(null);
+  }
+
+  //Block / Pending user logic
+  /**
+   * Pass-through to fetch quarantined messages for review.
+   */
+  public async getQuarantinedMessages(urn: URN): Promise<DecryptedMessage[]> {
+    return this.storageService.getQuarantinedMessages(urn);
+  }
+
+  /**
+   * Pass-through to promote messages when accepting a request.
+   */
+  public async promoteQuarantinedMessages(
+    oldUrn: URN,
+    newUrn: URN
+  ): Promise<void> {
+    return this.storageService.promoteQuarantinedMessages(oldUrn, newUrn);
+  }
+
+  /**
+   * ORCHESTRATOR: Performs the full "Block" workflow.
+   * 1. Adds identity to Block List (Contacts).
+   * 2. Removes from Pending List (Contacts).
+   * 3. Deletes any Quarantined content (Chat).
+   */
+  public async block(
+    urns: URN[],
+    scope: 'messenger' | 'all' = 'messenger'
+  ): Promise<void> {
+    // We execute these in parallel for speed, though sequentially is safer for error recovery.
+    // Given IndexedDB is local, parallel is fine.
+
+    // 1. Add to Block List
+    await Promise.all(
+      urns.map((urn) => this.contactsService.blockIdentity(urn, [scope]))
+    );
+
+    // 2. Remove from Pending
+    await Promise.all(
+      urns.map((urn) => this.contactsService.deletePending(urn))
+    );
+
+    // 3. Clear Content
+    await Promise.all(
+      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn))
+    );
+
+    // NOTE: We do NOT need to manually refresh 'blockedSet' here.
+    // The write to contactsService.blockIdentity will trigger the live query
+    // in init(), which updates the signal automatically.
+  }
+
+  public async dismissPending(
+    urns: URN[],
+    scope: 'messenger' | 'all' = 'messenger'
+  ): Promise<void> {
+    await Promise.all(
+      urns.map((urn) => this.contactsService.deletePending(urn))
+    );
+
+    // 2. Cleanup Content (via ChatService)
+    await Promise.all(
+      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn))
+    );
   }
 }

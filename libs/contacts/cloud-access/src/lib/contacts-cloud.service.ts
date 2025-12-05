@@ -9,7 +9,7 @@ import {
 } from '@nx-platform-application/platform-cloud-access';
 import { BackupPayload } from './models/backup-payload.interface';
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5; // Bumped version for Block Support
 const BASE_PATH = 'tinywide/contacts';
 
 @Injectable({ providedIn: 'root' })
@@ -38,10 +38,11 @@ export class ContactsCloudService {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    // 1. Snapshot
-    const [contacts, groups] = await Promise.all([
+    // 1. Snapshot (Parallel Fetch)
+    const [contacts, groups, blocked] = await Promise.all([
       firstValueFrom(this.storage.contacts$),
       firstValueFrom(this.storage.groups$),
+      firstValueFrom(this.storage.blocked$), // ✅ Fetch Blocked
     ]);
 
     const payload: BackupPayload = {
@@ -51,6 +52,7 @@ export class ContactsCloudService {
         typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
       contacts,
       groups,
+      blocked, // ✅ Add to Payload
     };
 
     // 2. Construct Path
@@ -58,7 +60,6 @@ export class ContactsCloudService {
     const path = `${BASE_PATH}/contacts_backup_${dateStr}.json`;
 
     // 3. Upload
-    // Use generic upload (Path Aware)
     await provider.uploadBackup(payload, path);
     this.logger.info(`[ContactsCloud] Uploaded to ${path}`);
   }
@@ -67,35 +68,44 @@ export class ContactsCloudService {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    // If filename doesn't contain path, assume it's in base path
     const path = filename.includes('/') ? filename : `${BASE_PATH}/${filename}`;
-
     this.logger.info(`[ContactsCloud] Restoring from ${path}...`);
 
-    // ✅ FIX: Use downloadFile (Path Aware) instead of downloadBackup (ID only)
     const payload = await provider.downloadFile<BackupPayload>(path);
 
-    // ✅ FIX: Handle null return (File Not Found)
     if (!payload) {
       throw new Error(`Backup file not found at path: ${path}`);
     }
 
+    // 1. Restore Contacts
     if (payload.contacts?.length) {
       await this.storage.bulkUpsert(payload.contacts);
     }
+
+    // 2. Restore Groups
     for (const group of payload.groups || []) {
       await this.storage.saveGroup(group);
     }
+
+    // 3. Restore Blocked Identities ✅
+    if (payload.blocked?.length) {
+      this.logger.info(
+        `[ContactsCloud] Restoring ${payload.blocked.length} blocked identities...`
+      );
+      // We run these in parallel as they are independent
+      await Promise.all(
+        payload.blocked.map((b) =>
+          this.storage.blockIdentity(b.urn, b.scopes, b.reason)
+        )
+      );
+    }
+
     this.logger.info('[ContactsCloud] Restore complete.');
   }
 
   async listBackups(providerId: string): Promise<BackupFile[]> {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
-
-    // List is tricky with hierarchy.
-    // We search for files containing 'contacts_backup_' globally or in specific folder.
-    // Given GoogleDriveService implementation, we pass the partial name.
     return provider.listBackups('contacts_backup_');
   }
 

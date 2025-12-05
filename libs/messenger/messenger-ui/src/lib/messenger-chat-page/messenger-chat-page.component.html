@@ -1,9 +1,9 @@
-<lib-master-detail-layout [showDetail]="showDetail()">
+<lib-master-detail-layout [showDetail]="showDetail() || showRequestsPane()">
   <div sidebar class="h-full flex flex-col border-r border-gray-200 bg-white">
     <mat-toolbar
       class="layout-header justify-between bg-white border-b border-gray-100 !h-14 px-2"
     >
-      <div class="flex items-center gap-2 overflow-hidden">
+      <div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
         <button
           mat-icon-button
           [color]="sidebarMode() === 'new' ? 'warn' : 'primary'"
@@ -22,13 +22,30 @@
         </h1>
       </div>
 
-      <lib-list-filter
-        [(query)]="searchQuery"
-        [placeholder]="
-          sidebarMode() === 'new' ? 'Search contacts...' : 'Search chats...'
-        "
-        class="flex-shrink-0 ml-2"
-      />
+      <div class="flex items-center">
+        <lib-list-filter
+          [(query)]="searchQuery"
+          [placeholder]="
+            sidebarMode() === 'new' ? 'Search contacts...' : 'Search chats...'
+          "
+          class="flex-shrink-0 ml-1"
+        />
+
+        @if (pendingRequests().length > 0) {
+        <button
+          mat-icon-button
+          (click)="toggleRequestsPane()"
+          [color]="showRequestsPane() ? 'accent' : 'warn'"
+          matTooltip="Review Message Requests"
+          class="ml-1 relative"
+        >
+          <mat-icon>mark_email_unread</mat-icon>
+          <span
+            class="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"
+          ></span>
+        </button>
+        }
+      </div>
     </mat-toolbar>
 
     <div class="flex-1 overflow-y-auto overflow-x-hidden relative">
@@ -76,16 +93,39 @@
   </div>
 
   <div main class="h-full bg-gray-50">
+    @if (showRequestsPane()) {
+    <messenger-message-request-review
+      [requests]="pendingRequests()"
+      [previewMessages]="previewMessages()"
+      (peek)="onPeekRequests($event)"
+      (accept)="onAcceptRequest($event)"
+      (block)="onBlockRequest($event)"
+      (dismiss)="onDismissRequest($event)"
+      (blockAll)="onBlockAll()"
+    />
+    } @else {
     <router-outlet />
 
-    @if (!showDetail()) {
+    @if (!showDetail()) { @if (hasConversations()) {
     <lib-feature-placeholder
       icon="forum"
       title="Your Conversations"
-      message="Select a conversation or start a new one to begin messaging."
-      [actionLabel]="'Start New Chat'"
+      message="Select a conversation from the list to view messages."
+    />
+    } @else {
+    <lib-feature-placeholder
+      icon="chat_bubble_outline"
+      title="No Chats Yet"
+      message="You haven't started any conversations yet."
+      actionLabel="Start New Chat"
       (action)="setSidebarMode('new')"
     />
-    }
+    } @if (pendingRequests().length > 0) {
+    <div class="flex justify-center -mt-10 pb-10 relative z-10">
+      <button mat-stroked-button color="warn" (click)="toggleRequestsPane()">
+        You have {{ pendingRequests().length }} message request(s)
+      </button>
+    </div>
+    } } }
   </div>
 </lib-master-detail-layout>

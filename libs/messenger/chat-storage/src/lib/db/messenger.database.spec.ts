@@ -21,8 +21,8 @@ describe('MessengerDatabase', () => {
     if (db) await db.close();
   });
 
-  it('should be on version 5', () => {
-    expect(db.verno).toBe(5); // Updated from 5
+  it('should be on version 6', () => {
+    expect(db.verno).toBe(6); // Updated from 5
   });
 
   it('should have the "conversations" meta-index table', () => {
@@ -58,5 +58,10 @@ describe('MessengerDatabase', () => {
 
   it('should enforce messageId as primary key for tombstones', () => {
     expect(db.tombstones.schema.primKey.name).toBe('messageId');
+  });
+
+  it('should have the "quarantined_messages" table', () => {
+    expect(db.quarantined_messages).toBeTruthy();
+    expect(db.quarantined_messages.name).toBe('quarantined_messages');
   });
 });

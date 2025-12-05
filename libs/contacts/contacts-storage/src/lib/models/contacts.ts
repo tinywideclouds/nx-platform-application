@@ -40,7 +40,15 @@ export interface PendingIdentity {
   note?: string;
 }
 
-// ✅ NEW: Sync Logic
+// ✅ NEW: Blocked Identity
+export interface BlockedIdentity {
+  id?: number;
+  urn: URN;
+  blockedAt: ISODateTimeString;
+  scopes: string[]; // e.g. ['all'] or ['messenger', 'calls']
+  reason?: string;
+}
+
 export interface ContactTombstone {
   urn: string;
   deletedAt: ISODateTimeString;
@@ -64,7 +72,6 @@ export interface StorableContact {
   phoneNumbers: string[];
   emailAddresses: string[];
   serviceContacts: Record<string, StorableServiceContact>;
-  // ✅ NEW: Sync Metadata
   lastModified: ISODateTimeString;
 }
 
@@ -87,4 +94,13 @@ export interface StorablePendingIdentity {
   firstSeenAt: ISODateTimeString;
   vouchedBy?: string;
   note?: string;
+}
+
+// ✅ NEW: Storable Blocked Identity
+export interface StorableBlockedIdentity {
+  id?: number;
+  urn: string;
+  blockedAt: ISODateTimeString;
+  scopes: string[];
+  reason?: string;
 }

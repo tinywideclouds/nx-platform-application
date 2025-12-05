@@ -12,35 +12,33 @@ export class MessengerDatabase extends PlatformDexieService {
   messages!: Table<MessageRecord, string>;
   settings!: Table<{ key: string; value: any }, string>;
   conversations!: Table<ConversationIndexRecord, string>;
-  // NEW: The Graveyard 🪦
   tombstones!: Table<DeletedMessageRecord, string>;
+  // ✅ NEW: Quarantine Table
+  quarantined_messages!: Table<MessageRecord, string>;
 
   constructor() {
     super('messenger');
 
-    // Zero-Day Schema: Version 1 (Clean Slate)
-    this.version(5).stores({
-      // Primary Content
-      // [conversationUrn+sentTimestamp] -> For History Segments
+    // Version 6: Add Quarantine Table
+    this.version(6).stores({
       messages:
         'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
 
-      // Config
       settings: 'key',
 
-      // Inbox Index
-      // lastActivityTimestamp -> For Inbox Sorting
       conversations: 'conversationUrn, lastActivityTimestamp',
 
-      // Deletion Tracking
-      // messageId -> PK (Fast lookups)
-      // deletedAt -> Index (For range queries during incremental backup)
       tombstones: 'messageId, deletedAt',
+
+      // ✅ NEW: Quarantined Messages
+      // Simple index on conversationUrn is enough for lookup
+      quarantined_messages: 'messageId, conversationUrn',
     });
 
     this.messages = this.table('messages');
     this.settings = this.table('settings');
     this.conversations = this.table('conversations');
     this.tombstones = this.table('tombstones');
+    this.quarantined_messages = this.table('quarantined_messages');
   }
 }

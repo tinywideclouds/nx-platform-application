@@ -6,6 +6,7 @@ import {
   StorableGroup,
   StorableIdentityLink,
   StorablePendingIdentity,
+  StorableBlockedIdentity,
   ContactTombstone,
 } from '../models/contacts';
 
@@ -15,20 +16,24 @@ export class ContactsDatabase extends PlatformDexieService {
   groups!: Table<StorableGroup, string>;
   links!: Table<StorableIdentityLink, number>;
   pending!: Table<StorablePendingIdentity, number>;
+  blocked!: Table<StorableBlockedIdentity, number>;
   tombstones!: Table<ContactTombstone, string>;
 
   constructor() {
     super('contacts');
 
-    this.version(1).stores({
-      contacts:
-        'id, alias, email, [emailAddresses], [phoneNumbers], isFavorite',
+    // VERSION 3: Fix Index Syntax for Arrays (* instead of [])
+    this.version(3).stores({
+      // CHANGE: Use * for MultiEntry indexes (arrays of strings)
+      contacts: 'id, alias, email, *emailAddresses, *phoneNumbers, isFavorite',
 
       groups: 'id, name, *contactIds',
 
       links: '++id, authUrn, contactId',
 
       pending: '++id, urn, firstSeenAt',
+
+      blocked: '++id, urn, blockedAt',
 
       tombstones: 'urn',
     });
@@ -37,6 +42,7 @@ export class ContactsDatabase extends PlatformDexieService {
     this.groups = this.table('groups');
     this.links = this.table('links');
     this.pending = this.table('pending');
+    this.blocked = this.table('blocked');
     this.tombstones = this.table('tombstones');
   }
 }

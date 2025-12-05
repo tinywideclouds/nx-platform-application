@@ -71,7 +71,10 @@ export class MessengerHomePageComponent {
       .afterClosed()
       .subscribe((confirmed) => {
         if (confirmed) {
-          this.authService.logout();
+          this.authService.logout().subscribe({
+            next: () => this.router.navigate(['/login']), // Or your public route
+            error: () => this.router.navigate(['/login']), // Fail safe
+          });
         }
       });
   }

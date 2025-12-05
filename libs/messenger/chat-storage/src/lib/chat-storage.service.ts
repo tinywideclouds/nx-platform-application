@@ -290,4 +290,92 @@ export class ChatStorageService {
       genesisTimestamp: (record.genesisTimestamp as ISODateTimeString) || null,
     };
   }
+
+  async saveQuarantinedMessage(message: DecryptedMessage): Promise<void> {
+    const msgRecord = this.mapper.mapSmartToRecord(message);
+    // Simple direct write. No conversation index update (invisible).
+    await this.db.quarantined_messages.put(msgRecord);
+  }
+
+  async getQuarantinedMessages(urn: URN): Promise<DecryptedMessage[]> {
+    const records = await this.db.quarantined_messages
+      .where('conversationUrn')
+      .equals(urn.toString())
+      .toArray();
+
+    return records.map((r) => this.mapper.mapRecordToSmart(r));
+  }
+
+  async deleteQuarantinedMessages(urn: URN): Promise<void> {
+    const urnStr = urn.toString();
+    const records = await this.db.quarantined_messages
+      .where('conversationUrn')
+      .equals(urnStr)
+      .toArray();
+    const ids = records.map((r) => r.messageId);
+    await this.db.quarantined_messages.bulkDelete(ids);
+  }
+
+  /**
+   * Moves messages from Quarantine to Main storage and rewrites their Conversation ID.
+   * @param oldUrn The Handle/Pending URN (e.g. urn:lookup:email:stranger@test.com)
+   * @param newUrn THE NEW CONTACT URN (e.g. urn:contacts:user:uuid-123)
+   */
+  async promoteQuarantinedMessages(oldUrn: URN, newUrn: URN): Promise<void> {
+    const oldUrnStr = oldUrn.toString();
+    const newUrnStr = newUrn.toString();
+
+    await this.db.transaction(
+      'rw',
+      [this.db.quarantined_messages, this.db.messages, this.db.conversations],
+      async () => {
+        // 1. Fetch
+        const quarantined = await this.db.quarantined_messages
+          .where('conversationUrn')
+          .equals(oldUrnStr)
+          .toArray();
+
+        if (quarantined.length === 0) return;
+
+        // 2. Rewrite Conversation ID (Mandatory)
+        const toSave = quarantined.map((record) => ({
+          ...record,
+          conversationUrn: newUrnStr,
+        }));
+
+        await this.db.messages.bulkPut(toSave);
+
+        // 3. Update/Create Conversation Index for the NEW Contact
+        // Sort to find latest
+        toSave.sort((a, b) => (b.sentTimestamp > a.sentTimestamp ? 1 : -1));
+        const latest = toSave[0];
+        const latestSmart = this.mapper.mapRecordToSmart(latest);
+
+        const existing = await this.db.conversations.get(newUrnStr);
+        const now = new Date().toISOString();
+
+        const update: any = existing || {
+          conversationUrn: newUrnStr,
+          lastActivityTimestamp: latest.sentTimestamp,
+          snippet: '',
+          previewType: 'text',
+          unreadCount: 0,
+          genesisTimestamp: null,
+          lastModified: now,
+        };
+
+        update.lastActivityTimestamp = latest.sentTimestamp;
+        update.snippet = generateSnippet(latestSmart);
+        update.previewType = getPreviewType(latest.typeId);
+        update.unreadCount = (existing?.unreadCount || 0) + toSave.length;
+        update.lastModified = now;
+
+        await this.db.conversations.put(update);
+
+        // 4. Cleanup Quarantine (using OLD key)
+        const idsToDelete = quarantined.map((m) => m.messageId);
+        await this.db.quarantined_messages.bulkDelete(idsToDelete);
+      }
+    );
+  }
 }

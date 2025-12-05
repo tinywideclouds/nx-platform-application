@@ -3,6 +3,7 @@
 import {
   Contact,
   ContactGroup,
+  BlockedIdentity,
 } from '@nx-platform-application/contacts-storage';
 
 export interface BackupPayload {
@@ -11,4 +12,5 @@ export interface BackupPayload {
   sourceDevice: string;
   contacts: Contact[];
   groups: ContactGroup[];
+  blocked: BlockedIdentity[];
 }

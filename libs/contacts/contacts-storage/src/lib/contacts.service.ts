@@ -1,5 +1,3 @@
-// libs/contacts/contacts-storage/src/lib/contacts.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';
 import { Observable, from } from 'rxjs';
@@ -13,9 +11,10 @@ import {
   StorableServiceContact,
   ServiceContact,
   IdentityLink,
-  StorableIdentityLink,
   StorablePendingIdentity,
   PendingIdentity,
+  StorableBlockedIdentity, // New
+  BlockedIdentity, // New
   ContactTombstone,
 } from './models/contacts';
 import {
@@ -29,44 +28,35 @@ import {
 export class ContactsStorageService {
   private readonly db = inject(ContactsDatabase);
 
-  // --- Mappers (RESTORED) ---
+  // --- Mappers ---
+  // ... (Existing mappers hidden for brevity) ...
   private mapStorableToContact(c: StorableContact): Contact {
     const serviceContacts: Record<string, ServiceContact> = {};
-
     for (const [key, s] of Object.entries(c.serviceContacts || {})) {
       if (s) {
-        serviceContacts[key] = {
-          ...s,
-          id: URN.parse(s.id),
-        };
+        serviceContacts[key] = { ...s, id: URN.parse(s.id) };
       }
     }
-
     return {
       ...c,
       id: URN.parse(c.id),
       serviceContacts,
-      lastModified: c.lastModified, // ✅ Pass through
+      lastModified: c.lastModified,
     };
   }
 
   private mapContactToStorable(c: Contact): StorableContact {
     const serviceContacts: Record<string, StorableServiceContact> = {};
-
     for (const [key, s] of Object.entries(c.serviceContacts || {})) {
       if (s) {
-        serviceContacts[key] = {
-          ...s,
-          id: s.id.toString(),
-        };
+        serviceContacts[key] = { ...s, id: s.id.toString() };
       }
     }
-
     return {
       ...c,
       id: c.id.toString(),
       serviceContacts,
-      lastModified: c.lastModified, // ✅ Pass through
+      lastModified: c.lastModified,
     };
   }
 
@@ -94,6 +84,14 @@ export class ContactsStorageService {
     };
   }
 
+  // ✅ New Mapper
+  private mapStorableToBlocked(b: StorableBlockedIdentity): BlockedIdentity {
+    return {
+      ...b,
+      urn: URN.parse(b.urn),
+    };
+  }
+
   // --- LiveQuery Streams ---
 
   readonly contacts$: Observable<Contact[]> = from(
@@ -113,29 +111,31 @@ export class ContactsStorageService {
     map((storables) => storables.map((c) => this.mapStorableToContact(c)))
   );
 
-  // ✅ UPDATED: Use 'groups'
   readonly groups$: Observable<ContactGroup[]> = from(
     liveQuery(() => this.db.groups.orderBy('name').toArray())
   ).pipe(map((storables) => storables.map((g) => this.mapStorableToGroup(g))));
 
-  // ✅ UPDATED: Use 'pending'
   readonly pending$: Observable<PendingIdentity[]> = from(
     liveQuery(() => this.db.pending.orderBy('firstSeenAt').toArray())
   ).pipe(
     map((storables) => storables.map((p) => this.mapStorableToPending(p)))
   );
 
-  // REMOVED: blocked$ (Moved to Messenger)
+  // ✅ NEW: Blocked Stream
+  readonly blocked$: Observable<BlockedIdentity[]> = from(
+    liveQuery(() => this.db.blocked.orderBy('blockedAt').toArray())
+  ).pipe(
+    map((storables) => storables.map((b) => this.mapStorableToBlocked(b)))
+  );
 
   // --- CRUD Methods ---
+  // ... (Existing saveContact, getContact, etc. unchanged) ...
 
   async saveContact(contact: Contact): Promise<void> {
-    // ✅ SMART SYNC: Update timestamp
     const now = new Date().toISOString() as ISODateTimeString;
     const contactWithTime = { ...contact, lastModified: now };
     const storable = this.mapContactToStorable(contactWithTime);
 
-    // ✅ SMART SYNC: Transaction
     await this.db.transaction(
       'rw',
       [this.db.contacts, this.db.tombstones],
@@ -153,7 +153,6 @@ export class ContactsStorageService {
       ...simpleChanges
     } = changes;
 
-    // ✅ SMART SYNC: Update Timestamp
     const storableChanges: Partial<StorableContact> = {
       ...simpleChanges,
       lastModified: new Date().toISOString() as ISODateTimeString,
@@ -179,8 +178,6 @@ export class ContactsStorageService {
   async deleteContact(id: URN): Promise<void> {
     const urnStr = id.toString();
     const now = new Date().toISOString() as ISODateTimeString;
-
-    // ✅ SMART SYNC: Create Tombstone
     await this.db.transaction(
       'rw',
       [this.db.contacts, this.db.tombstones],
@@ -217,16 +214,13 @@ export class ContactsStorageService {
     });
   }
 
-  // --- Group Methods ---
-
+  // --- Group Methods (Unchanged) ---
   async saveGroup(group: ContactGroup): Promise<void> {
     const storable = this.mapGroupToStorable(group);
-    // ✅ UPDATED: Use 'groups'
     await this.db.groups.put(storable);
   }
 
   async getGroup(id: URN): Promise<ContactGroup | undefined> {
-    // ✅ UPDATED: Use 'groups'
     const storable = await this.db.groups.get(id.toString());
     return storable ? this.mapStorableToGroup(storable) : undefined;
   }
@@ -246,7 +240,6 @@ export class ContactsStorageService {
   async getContactsForGroup(groupId: URN): Promise<Contact[]> {
     const groupStorable = await this.db.groups.get(groupId.toString());
     if (!groupStorable || groupStorable.contactIds.length === 0) return [];
-
     const contactIdStrings = groupStorable.contactIds;
     const storables = await this.db.contacts.bulkGet(contactIdStrings);
     return storables
@@ -254,10 +247,8 @@ export class ContactsStorageService {
       .map((c) => this.mapStorableToContact(c));
   }
 
-  // --- Identity Links ---
-
+  // --- Identity Links (Unchanged) ---
   async linkIdentityToContact(contactId: URN, authUrn: URN): Promise<void> {
-    // ✅ UPDATED: Use 'links'
     await this.db.links.put({
       contactId: contactId.toString(),
       authUrn: authUrn.toString(),
@@ -265,7 +256,6 @@ export class ContactsStorageService {
   }
 
   async getLinkedIdentities(contactId: URN): Promise<URN[]> {
-    // ✅ UPDATED: Use 'links'
     const list = await this.db.links
       .where('contactId')
       .equals(contactId.toString())
@@ -293,14 +283,11 @@ export class ContactsStorageService {
   }
 
   // --- Gatekeeper: Pending ---
-
   async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
-    // ✅ UPDATED: Use 'pending'
     const existing = await this.db.pending
       .where('urn')
       .equals(urn.toString())
       .first();
-
     const pending: StorablePendingIdentity = {
       id: existing?.id,
       urn: urn.toString(),
@@ -318,9 +305,7 @@ export class ContactsStorageService {
       .where('urn')
       .equals(urn.toString())
       .first();
-
-    if (!storable) return null;
-    return this.mapStorableToPending(storable);
+    return storable ? this.mapStorableToPending(storable) : null;
   }
 
   async deletePending(urn: URN): Promise<void> {
@@ -328,13 +313,53 @@ export class ContactsStorageService {
       .where('urn')
       .equals(urn.toString())
       .toArray();
-
     const idsToDelete = records
       .map((r) => r.id!)
       .filter((id) => id !== undefined);
     if (idsToDelete.length > 0) {
       await this.db.pending.bulkDelete(idsToDelete);
     }
+  }
+
+  // --- Gatekeeper: Blocking (NEW) ---
+
+  async blockIdentity(
+    urn: URN,
+    scopes: string[] = ['all'],
+    reason?: string
+  ): Promise<void> {
+    const existing = await this.db.blocked
+      .where('urn')
+      .equals(urn.toString())
+      .first();
+
+    const blocked: StorableBlockedIdentity = {
+      id: existing?.id,
+      urn: urn.toString(),
+      blockedAt:
+        existing?.blockedAt ?? (new Date().toISOString() as ISODateTimeString),
+      scopes: scopes,
+      reason: reason ?? existing?.reason,
+    };
+    await this.db.blocked.put(blocked);
+  }
+
+  async unblockIdentity(urn: URN): Promise<void> {
+    const records = await this.db.blocked
+      .where('urn')
+      .equals(urn.toString())
+      .toArray();
+    const idsToDelete = records
+      .map((r) => r.id!)
+      .filter((id) => id !== undefined);
+    if (idsToDelete.length > 0) {
+      await this.db.blocked.bulkDelete(idsToDelete);
+    }
+  }
+
+  async getAllBlockedIdentities(): Promise<BlockedIdentity[]> {
+    const list = await this.db.blocked.toArray();
+    return list.map((b) => this.mapStorableToBlocked(b));
   }
 
   // --- Sync Helpers ---
@@ -360,6 +385,7 @@ export class ContactsStorageService {
         this.db.groups,
         this.db.links,
         this.db.pending,
+        this.db.blocked, // New
         this.db.tombstones,
       ],
       () => {
@@ -368,6 +394,7 @@ export class ContactsStorageService {
           this.db.groups.clear(),
           this.db.links.clear(),
           this.db.pending.clear(),
+          this.db.blocked.clear(), // New
           this.db.tombstones.clear(),
         ]);
       }

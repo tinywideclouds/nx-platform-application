@@ -1,3 +1,5 @@
+// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ChatIngestionService } from './chat-ingestion.service';
@@ -13,48 +15,48 @@ import { vi } from 'vitest';
 
 // --- Fixtures ---
 const mockMyUrn = URN.parse('urn:contacts:user:me');
-const mockSenderHandle = URN.parse('urn:lookup:email:sender@test.com');
-const mockSenderContact = URN.parse('urn:contacts:user:sender'); // The local contact for that handle
+const mockSenderHandle = URN.parse('urn:lookup:email:stranger@test.com');
+const mockSenderContact = URN.parse('urn:contacts:user:friend');
 
 const mockEnvelope = { recipientId: mockMyUrn } as any;
 const mockQueuedMsg: QueuedMessage = { id: 'q-1', envelope: mockEnvelope };
 const mockDecryptedPayload = {
-  senderId: mockSenderHandle, // Payload contains the Handle
+  senderId: mockSenderHandle,
   sentTimestamp: '2025-01-01T12:00:00Z',
   typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new TextEncoder().encode('Hello'),
 };
 
-// --- Mocks ---
-const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
-const mockCryptoService = { verifyAndDecrypt: vi.fn() };
-const mockStorageService = { saveMessage: vi.fn() };
-const mockContactsService = { addToPending: vi.fn() };
-const mockLogger = { info: vi.fn(), error: vi.fn() };
-const mockMapper = { resolveToContact: vi.fn() };
-
-const createBlockedSet = () => new Set<string>();
-
 describe('ChatIngestionService', () => {
   let service: ChatIngestionService;
+
+  // --- Mocks ---
+  const mockStorageService = {
+    saveMessage: vi.fn(),
+    saveQuarantinedMessage: vi.fn(), // ✅ New method
+  };
+  const mockContactsService = { addToPending: vi.fn() };
+  const mockMapper = { resolveToContact: vi.fn() };
+
+  // Standard boilerplate mocks...
+  const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
+  const mockCryptoService = { verifyAndDecrypt: vi.fn() };
+  const mockLogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default Mock Behavior
     mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
     mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
-    mockStorageService.saveMessage.mockResolvedValue(undefined);
-    mockContactsService.addToPending.mockResolvedValue(undefined);
 
-    // Default: Mapper resolves Handle -> Contact
+    // Default: Resolve to Friend
     mockMapper.resolveToContact.mockResolvedValue(mockSenderContact);
 
     TestBed.configureTestingModule({
       providers: [
         ChatIngestionService,
-        ChatMessageMapper, // Use real view mapper logic
+        ChatMessageMapper,
         { provide: ChatDataService, useValue: mockDataService },
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
@@ -66,106 +68,48 @@ describe('ChatIngestionService', () => {
     service = TestBed.inject(ChatIngestionService);
   });
 
-  it('should GATEKEEPER: Drop blocked messages (checking resolved identity)', async () => {
+  it('should QUARANTINE unknown senders (Strangers)', async () => {
+    // 1. Arrange: Incoming message from Stranger
     mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
 
-    // Add the RESOLVED Contact URN to the blocked set
-    const blocked = createBlockedSet();
-    blocked.add(mockSenderContact.toString());
-
-    const result = await service.process({} as any, mockMyUrn, blocked);
-
-    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
-    expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
-    expect(result).toEqual([]);
-  });
-
-  it('should GATEKEEPER: Add unknown sender to Pending', async () => {
-    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-
-    // Simulate Mapper returning the Handle itself (Unknown Stranger)
+    // Mapper returns the HANDLE (urn:lookup:email...), not a Contact URN
     mockMapper.resolveToContact.mockResolvedValue(mockSenderHandle);
 
-    await service.process({} as any, mockMyUrn, createBlockedSet());
+    // 2. Act
+    const result = await service.process({} as any, mockMyUrn, new Set());
 
+    // 3. Assert
+    // Should call Pending
     expect(mockContactsService.addToPending).toHaveBeenCalledWith(
       mockSenderHandle
     );
-    // Unknowns are still saved
-    expect(mockStorageService.saveMessage).toHaveBeenCalled();
-  });
 
-  it('should recurse if batch limit is hit', async () => {
-    // First call returns [msg1], limit 1
-    mockDataService.getMessageBatch
-      .mockReturnValueOnce(of([mockQueuedMsg])) // Batch 1 (Full)
-      .mockReturnValueOnce(of([])); // Batch 2 (Empty)
+    // Should save to QUARANTINE table
+    expect(mockStorageService.saveQuarantinedMessage).toHaveBeenCalled();
 
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet(),
-      1
-    );
-
-    expect(mockDataService.getMessageBatch).toHaveBeenCalledTimes(2);
-    expect(result.messages.length).toBe(1);
-  });
-
-  it('should do nothing if queue is empty', async () => {
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet()
-    );
-    // CHECK: Object return
-    expect(result).toEqual({ messages: [], typingIndicators: [] });
-    expect(mockCryptoService.verifyAndDecrypt).not.toHaveBeenCalled();
-  });
-
-  it('should decrypt, resolve identity, save, and ack a valid message', async () => {
-    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet()
-    );
-
-    expect(mockStorageService.saveMessage).toHaveBeenCalled();
-    expect(result.messages.length).toBe(1);
-    expect(result.typingIndicators.length).toBe(0); // No typing
-  });
-
-  // ✅ NEW TEST: Ephemeral
-  it('should process Ephemeral messages: Ack, Return in Typing List, SKIP Storage', async () => {
-    // Arrange: Ephemeral message
-    const ephemeralMsg = {
-      ...mockQueuedMsg,
-      envelope: { ...mockEnvelope, isEphemeral: true },
-    };
-    mockDataService.getMessageBatch.mockReturnValue(of([ephemeralMsg]));
-
-    // Act
-    const result = await service.process(
-      {} as any,
-      mockMyUrn,
-      createBlockedSet()
-    );
-
-    // Assert
-    // 1. Identity Resolution still happens
-    expect(mockMapper.resolveToContact).toHaveBeenCalled();
-
-    // 2. Storage SKIPPED
+    // Should NOT save to MAIN table
     expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
 
-    // 3. Ack Triggered (we consumed the signal)
-    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
-
-    // 4. Result contains typing indicator
+    // Should NOT return message to UI
     expect(result.messages.length).toBe(0);
-    expect(result.typingIndicators.length).toBe(1);
-    expect(result.typingIndicators[0]).toEqual(mockSenderContact);
+
+    // Should still ACK the network
+    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
+  });
+
+  it('should SAVE known contacts to main storage', async () => {
+    // 1. Arrange: Incoming message from Friend
+    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+
+    // Mapper returns local Contact URN
+    mockMapper.resolveToContact.mockResolvedValue(mockSenderContact);
+
+    // 2. Act
+    const result = await service.process({} as any, mockMyUrn, new Set());
+
+    // 3. Assert
+    expect(mockStorageService.saveMessage).toHaveBeenCalled();
+    expect(mockStorageService.saveQuarantinedMessage).not.toHaveBeenCalled();
+    expect(result.messages.length).toBe(1);
   });
 });

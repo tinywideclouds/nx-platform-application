@@ -40,17 +40,12 @@ export class ChatIngestionService {
   private mapper = inject(ContactMessengerMapper);
   private viewMapper = inject(ChatMessageMapper);
 
-  /**
-   * Runs the ingestion pipeline.
-   * Handles both Persistent (DB) and Ephemeral (Memory) message paths.
-   */
   async process(
     myKeys: PrivateKeys,
     myUrn: URN,
     blockedSet: Set<string>,
     batchLimit = 50
   ): Promise<IngestionResult> {
-    // 1. Fetch
     const queuedMessages = await firstValueFrom(
       this.dataService.getMessageBatch(batchLimit)
     );
@@ -81,6 +76,10 @@ export class ChatIngestionService {
         );
         const resolvedSenderStr = resolvedSenderUrn.toString();
 
+        this.logger.debug(
+          `Ingestion: Resolved ${decrypted.senderId} -> ${resolvedSenderStr}`
+        );
+
         // 4. Gatekeeper: Block Check
         if (blockedSet.has(resolvedSenderStr)) {
           this.logger.info(
@@ -90,24 +89,18 @@ export class ChatIngestionService {
           continue;
         }
 
-        // 5. Gatekeeper: Pending Check
-        if (resolvedSenderUrn.entityType !== 'user') {
-          await this.contactsService.addToPending(resolvedSenderUrn);
-          this.logger.info(`Added ${resolvedSenderStr} to pending list.`);
-        }
-
-        // --- FORK: Check Ephemeral Flag ---
-        // If true, we consume the signal but DO NOT persist.
+        // --- FORK: Ephemeral (Typing Indicators) ---
         if (msg.envelope.isEphemeral) {
-          this.logger.debug(
-            `Ingestion: Received typing indicator from ${resolvedSenderStr}`
-          );
           typingIndicators.push(resolvedSenderUrn);
-          processedIds.push(msg.id); // Ack it so we don't download it again
-          continue; // SKIP Storage
+          processedIds.push(msg.id);
+          continue;
         }
 
-        // 6. Map & Save (Storage Model)
+        // 5. Gatekeeper: Unknown User Check
+        // If entityType is NOT 'user' (e.g., 'email' handle), it's a stranger.
+        // Known contacts are resolved to 'urn:contacts:user:...' by the mapper.
+        const isStranger = resolvedSenderUrn.entityType !== 'user';
+
         const newDecryptedMsg = this.mapPayloadToDecrypted(
           msg,
           decrypted,
@@ -115,13 +108,31 @@ export class ChatIngestionService {
           myUrn
         );
 
+        if (isStranger) {
+          // --- QUARANTINE PATH ---
+          this.logger.info(
+            `Quarantining message from stranger: ${resolvedSenderStr}`
+          );
+
+          // A. Save to Quarantine Table (Hidden from Main UI)
+          await this.storageService.saveQuarantinedMessage(newDecryptedMsg);
+
+          // B. Add to Pending List
+          await this.contactsService.addToPending(resolvedSenderUrn);
+
+          // C. Ack network (we have it), but DO NOT add to validViewMessages
+          processedIds.push(msg.id);
+          continue;
+        }
+
+        // --- HAPPY PATH (Known Contact) ---
         await this.storageService.saveMessage(newDecryptedMsg);
 
-        // 7. Convert to View Model
         validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
         processedIds.push(msg.id);
       } catch (error) {
         this.logger.error('Ingestion: Failed to process message', error, msg);
+        // Ack errors to prevent infinite loops, or use Dead Letter Queue logic here
         processedIds.push(msg.id);
       }
     }
@@ -131,16 +142,14 @@ export class ChatIngestionService {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
     }
 
-    // 9. Recursive Pull (if batch was full)
+    // 9. Recursive Pull
     if (queuedMessages.length === batchLimit) {
-      this.logger.info('Ingestion: Queue full, triggering recursive pull.');
       const nextBatch = await this.process(
         myKeys,
         myUrn,
         blockedSet,
         batchLimit
       );
-
       return {
         messages: [...validViewMessages, ...nextBatch.messages],
         typingIndicators: [...typingIndicators, ...nextBatch.typingIndicators],
@@ -179,7 +188,22 @@ export class ChatIngestionService {
     };
   }
 
-  private getConversationUrn(urn1: URN, urn2: URN, myUrn: URN): URN {
-    return urn1.toString() === myUrn.toString() ? urn2 : urn1;
+  /**
+   * Determines the canonical Conversation ID.
+   */
+  private getConversationUrn(
+    senderUrn: URN,
+    recipientUrn: URN,
+    myUrn: URN
+  ): URN {
+    // 1. Group Chat: The Conversation is the GROUP URN.
+    if (recipientUrn.entityType === 'group') {
+      return recipientUrn;
+    }
+
+    // 2. 1:1 Chat: The Conversation is the OTHER PERSON.
+    // If I sent it, convo is Recipient.
+    // If they sent it, convo is Sender.
+    return senderUrn.toString() === myUrn.toString() ? recipientUrn : senderUrn;
   }
 }

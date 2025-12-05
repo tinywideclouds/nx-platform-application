@@ -273,4 +273,45 @@ describe('ChatStorageService', () => {
       expect(updated?.genesisTimestamp).toBe('2023-01-01T00:00:00Z');
     });
   });
+
+  describe('Quarantine Logic', () => {
+    it('should save to quarantine table WITHOUT updating conversation index', async () => {
+      const msg = createMsg('q1', 'Secret', '2024-01-01T10:00:00Z');
+      await service.saveQuarantinedMessage(msg);
+
+      // Verify Quarantine
+      const qMsg = await db.quarantined_messages.get('q1');
+      expect(qMsg).toBeTruthy();
+
+      // Verify NO Index
+      const index = await db.conversations.get(mockPartnerUrn.toString());
+      expect(index).toBeUndefined();
+    });
+
+    it('should promote messages to main table and update index', async () => {
+      // 1. Arrange: Quarantine messages
+      const msg1 = createMsg('q1', 'Hello', '2024-01-01T10:00:00Z');
+      const msg2 = createMsg('q2', 'World', '2024-01-01T10:05:00Z'); // Newer
+      await service.saveQuarantinedMessage(msg1);
+      await service.saveQuarantinedMessage(msg2);
+
+      // 2. Act
+      await service.promoteQuarantinedMessages(mockPartnerUrn);
+
+      // 3. Assert
+      // Quarantine Empty?
+      const qCount = await db.quarantined_messages.count();
+      expect(qCount).toBe(0);
+
+      // Main Table Populated?
+      const mainMsgs = await db.messages.toArray();
+      expect(mainMsgs.length).toBe(2);
+
+      // Index Updated?
+      const index = await db.conversations.get(mockPartnerUrn.toString());
+      expect(index).toBeTruthy();
+      expect(index?.snippet).toBe('World'); // Latest message
+      expect(index?.unreadCount).toBe(2);
+    });
+  });
 });

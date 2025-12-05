@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
 
 const mockAuthService = {
   currentUser: signal({
@@ -13,7 +14,7 @@ const mockAuthService = {
     alias: 'TestUser',
     email: 'test@test.com',
   }),
-  logout: vi.fn(),
+  logout: vi.fn().mockReturnValue(of(undefined)),
 };
 
 describe('MessengerHomePageComponent', () => {
