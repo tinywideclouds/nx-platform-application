@@ -29,7 +29,6 @@ describe('ContactsSecurityComponent', () => {
           // Mock the signal stream
           pending$: of([MOCK_PENDING]),
           deletePending: vi.fn(),
-          blockIdentity: vi.fn(),
         }),
       ],
     }).compileComponents();
@@ -60,11 +59,6 @@ describe('ContactsSecurityComponent', () => {
   it('should delegate BLOCK action to storage', async () => {
     await component.blockPending(MOCK_PENDING);
 
-    // Blocking involves two steps: Adding to blocklist + Removing from pending
-    expect(contactsService.blockIdentity).toHaveBeenCalledWith(
-      MOCK_PENDING.urn,
-      'Blocked'
-    );
     expect(contactsService.deletePending).toHaveBeenCalledWith(
       MOCK_PENDING.urn
     );

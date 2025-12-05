@@ -1,36 +1,91 @@
 <lib-master-detail-layout [showDetail]="showDetail()">
   <div sidebar class="h-full flex flex-col border-r border-gray-200 bg-white">
-    <mat-toolbar class="layout-header justify-between">
-      <h1 class="text-xl font-bold truncate">Chats</h1>
-      <messenger-network-status />
+    <mat-toolbar
+      class="layout-header justify-between bg-white border-b border-gray-100 !h-14 px-2"
+    >
+      <div class="flex items-center gap-2 overflow-hidden">
+        <button
+          mat-icon-button
+          [color]="sidebarMode() === 'new' ? 'warn' : 'primary'"
+          [matTooltip]="
+            sidebarMode() === 'list' ? 'Start New Chat' : 'Back to Chats'
+          "
+          (click)="setSidebarMode(sidebarMode() === 'list' ? 'new' : 'list')"
+        >
+          <mat-icon>{{
+            sidebarMode() === 'list' ? 'edit_square' : 'close'
+          }}</mat-icon>
+        </button>
+
+        <h1 class="text-lg font-bold truncate select-none">
+          @if (sidebarMode() === 'new') { New Chat } @else { Chats }
+        </h1>
+      </div>
+
+      <lib-list-filter
+        [(query)]="searchQuery"
+        [placeholder]="
+          sidebarMode() === 'new' ? 'Search contacts...' : 'Search chats...'
+        "
+        class="flex-shrink-0 ml-2"
+      />
     </mat-toolbar>
 
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-y-auto overflow-x-hidden relative">
+      @if (sidebarMode() === 'new') {
+      <contacts-sidebar
+        [selectionMode]="true"
+        [showAddActions]="true"
+        [showFilter]="false"
+        [filterQuery]="searchQuery()"
+        (contactSelected)="onNewChatSelected($event)"
+        (groupSelected)="onNewChatSelected($event)"
+      />
+      } @else { @if (conversationsList().length > 0) {
       <chat-conversation-list
         [items]="conversationsList()"
         (conversationSelected)="onConversationSelected($event)"
       />
+      } @else {
+      <div
+        class="flex flex-col items-center justify-center h-48 text-gray-400 p-4 text-center"
+      >
+        @if (searchQuery()) {
+        <mat-icon class="text-4xl mb-2 !w-8 !h-8 text-gray-300"
+          >search_off</mat-icon
+        >
+        <p class="text-sm">No results for "{{ searchQuery() }}"</p>
+        } @else {
+        <div class="flex flex-col items-center gap-2">
+          <mat-icon class="text-4xl text-gray-300"
+            >chat_bubble_outline</mat-icon
+          >
+          <p class="text-sm">No active chats.</p>
+          <button
+            mat-stroked-button
+            color="primary"
+            (click)="setSidebarMode('new')"
+          >
+            Start a Conversation
+          </button>
+        </div>
+        }
+      </div>
+      } }
     </div>
   </div>
 
   <div main class="h-full bg-gray-50">
     <router-outlet />
 
-    @if (!showDetail()) { @if( hasConversations()) {
-
+    @if (!showDetail()) {
     <lib-feature-placeholder
       icon="forum"
       title="Your Conversations"
-      message="Select a conversation from the list to view messages."
+      message="Select a conversation or start a new one to begin messaging."
+      [actionLabel]="'Start New Chat'"
+      (action)="setSidebarMode('new')"
     />
-    } @else {
-    <lib-feature-placeholder
-      icon="chat_bubble_outline"
-      title="No Chats Yet"
-      message="You haven't started any conversations yet."
-      actionLabel="Start New Chat"
-      (action)="onStartNewChat()"
-    />
-    } }
+    }
   </div>
 </lib-master-detail-layout>

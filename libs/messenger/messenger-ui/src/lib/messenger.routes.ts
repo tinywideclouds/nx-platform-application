@@ -4,14 +4,11 @@ import { URN } from '@nx-platform-application/platform-types';
 // SHELL
 import { MessengerHomePageComponent } from './messenger-home-page/messenger-home-page.component';
 
-// FEATURE: CHAT / CONVERSATIONS
+// FEATURE: CHAT
 import { MessengerChatPageComponent } from './messenger-chat-page/messenger-chat-page.component';
 import { ChatWindowComponent } from './chat-window/chat-window.component';
 import { ChatConversationComponent } from './chat-conversation/chat-conversation.component';
 import { ChatContactDetailWrapperComponent } from './chat-contact-detail-wrapper/chat-contact-detail-wrapper.component';
-
-// FEATURE: COMPOSE
-import { MessengerComposePageComponent } from './messenger-compose-page/messenger-compose-page.component';
 
 export const messengerRoutes: Routes = [
   {
@@ -23,7 +20,7 @@ export const messengerRoutes: Routes = [
         redirectTo: 'conversations',
         pathMatch: 'full',
       },
-      // === STATE 1: CONVERSATIONS ===
+      // === MAIN CHAT PAGE (Handles both List and New Chat modes via ?sidebar=new) ===
       {
         path: 'conversations',
         component: MessengerChatPageComponent,
@@ -47,12 +44,12 @@ export const messengerRoutes: Routes = [
           },
         ],
       },
-      // === STATE 2: COMPOSE ===
+      // === REDIRECT LEGACY COMPOSE ===
       {
         path: 'compose',
-        component: MessengerComposePageComponent,
+        redirectTo: 'conversations?sidebar=new'
       },
-      // === STATE 3: CONTACTS (Lazy) ===
+      // === CONTACTS VIEWER (Standalone) ===
       {
         path: 'contacts',
         loadComponent: () =>
@@ -60,7 +57,7 @@ export const messengerRoutes: Routes = [
             (m) => m.ContactsViewerComponent
           ),
       },
-      // === STATE 4: SETTINGS (Lazy - NEW) ===
+      // === SETTINGS ===
       {
         path: 'settings',
         loadChildren: () =>

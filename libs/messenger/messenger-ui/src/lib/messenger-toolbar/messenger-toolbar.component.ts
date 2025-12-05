@@ -1,6 +1,9 @@
-// libs/messenger/messenger-ui/src/lib/messenger-toolbar/messenger-toolbar.component.ts
-
-import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  input,
+  output,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,7 +12,11 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { User } from '@nx-platform-application/platform-types';
 
-export type SidebarView = 'conversations' | 'compose' | 'contacts';
+// IMPORT NETWORK STATUS
+import { MessengerNetworkStatusComponent } from '../messenger-network-status/messenger-network-status.component';
+
+export type SidebarView = 'conversations' | 'contacts';
+// Note: Removed 'compose' from type as it's no longer a top-level view
 
 @Component({
   selector: 'messenger-toolbar',
@@ -20,7 +27,8 @@ export type SidebarView = 'conversations' | 'compose' | 'contacts';
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MessengerNetworkStatusComponent, // Added to imports
   ],
   templateUrl: './messenger-toolbar.component.html',
   styleUrl: './messenger-toolbar.component.scss',
@@ -29,18 +37,18 @@ export type SidebarView = 'conversations' | 'compose' | 'contacts';
 export class MessengerToolbarComponent {
   currentUser = input.required<User | null>();
   activeView = input<SidebarView>('conversations');
-  isComposeActive = input(false);
+
+  // REMOVED: isComposeActive input (no longer needed)
 
   // Sidebar Navigation Actions
   viewConversations = output<void>();
-  viewCompose = output<void>();
   viewContacts = output<void>();
-  
+
+  // REMOVED: viewCompose output
+
   // User Menu Actions
-  viewSettings = output<void>(); // <--- NEW
+  viewSettings = output<void>();
   logout = output<void>();
-  
-  // REMOVED: resetKeys output (moved to Settings UI)
 
   get initials(): string {
     const user = this.currentUser();

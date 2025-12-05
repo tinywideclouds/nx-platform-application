@@ -1,19 +1,20 @@
-// libs/messenger/messenger-ui/src/lib/messenger-chat-page/messenger-chat-page.component.ts
-
 import {
   Component,
   inject,
   computed,
   ChangeDetectionStrategy,
+  signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs/operators';
 
-// LAYOUT
+// LAYOUT & SHARED
 import {
   MasterDetailLayoutComponent,
   FeaturePlaceholderComponent,
+  ListFilterComponent,
 } from '@nx-platform-application/platform-ui-toolkit';
 
 // FEATURES
@@ -21,6 +22,7 @@ import {
   ChatConversationListComponent,
   ConversationViewItem,
 } from '@nx-platform-application/chat-ui';
+import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 
 // SERVICES
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -30,9 +32,12 @@ import {
   ContactGroup,
 } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
+
+// MATERIAL
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { MessengerNetworkStatusComponent } from '../messenger-network-status/messenger-network-status.component';
+import { MatButtonModule } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 @Component({
   selector: 'messenger-chat-page',
@@ -42,10 +47,13 @@ import { MessengerNetworkStatusComponent } from '../messenger-network-status/mes
     RouterOutlet,
     MatIconModule,
     MatToolbarModule,
+    MatButtonModule,
+    MatTooltipModule,
     MasterDetailLayoutComponent,
     ChatConversationListComponent,
-    MessengerNetworkStatusComponent,
     FeaturePlaceholderComponent,
+    ContactsSidebarComponent,
+    ListFilterComponent,
   ],
   templateUrl: './messenger-chat-page.component.html',
   styleUrl: './messenger-chat-page.component.scss',
@@ -53,8 +61,28 @@ import { MessengerNetworkStatusComponent } from '../messenger-network-status/mes
 })
 export class MessengerChatPageComponent {
   protected router = inject(Router);
+  private route = inject(ActivatedRoute);
   private chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
+
+  // --- UI STATE (Route Driven) ---
+  /**
+   * 'new' = Show Contacts/Groups Tabs
+   * 'list' = Show Active Conversations
+   */
+  sidebarMode = toSignal(
+    this.route.queryParams.pipe(
+      map((params) => (params['sidebar'] === 'new' ? 'new' : 'list'))
+    ),
+    { initialValue: 'list' }
+  );
+
+  // --- UI STATE (Local) ---
+  /**
+   * The single source of truth for the filter string.
+   * Feeds into EITHER conversationsList OR contacts-sidebar.
+   */
+  searchQuery = signal<string>('');
 
   // --- DATA SOURCES ---
   private allContacts = toSignal(this.contactsService.contacts$, {
@@ -68,15 +96,21 @@ export class MessengerChatPageComponent {
   private activeConversations = this.chatService.activeConversations;
   private selectedConversationUrn = this.chatService.selectedConversation;
 
-  /**
-   * Transforms raw summaries into view models.
-   * FILTERS OUT: Conversations where the Contact/Group is not known (Pending/Blocked).
-   */
+  // --- COMPUTED: Filtered Conversation List ---
   conversationsList = computed<ConversationViewItem[]>(() => {
     const summaries = this.activeConversations();
     const contacts = this.allContacts();
     const groups = this.allGroups();
     const activeUrn = this.selectedConversationUrn();
+
+    // 1. Prepare Filter Tokens (Forgiving Logic)
+    const rawQuery = this.searchQuery();
+    const tokens = rawQuery
+      ? rawQuery
+          .toLowerCase()
+          .split(' ')
+          .filter((t) => t.length > 0)
+      : [];
 
     const validItems: ConversationViewItem[] = [];
 
@@ -86,10 +120,9 @@ export class MessengerChatPageComponent {
       let initials = '';
       let profilePictureUrl: string | undefined;
 
-      // 1. User Logic
+      // 2a. Resolve User
       if (urn.entityType === 'user') {
         const contact = contacts.find((c) => c.id.equals(urn));
-
         // GATEKEEPER: If not in contacts, skip it.
         if (!contact) continue;
 
@@ -99,18 +132,24 @@ export class MessengerChatPageComponent {
         profilePictureUrl =
           contact.serviceContacts['messenger']?.profilePictureUrl;
       }
-      // 2. Group Logic
+      // 2b. Resolve Group
       else {
         const group = groups.find((g) => g.id.toString() === urn.toString());
-
-        // GATEKEEPER: If group not found, skip it.
         if (!group) continue;
 
         name = group.name;
         initials = 'G';
       }
 
-      // 3. Construct View Item
+      // 3. Apply Filter (Token-based)
+      // If tokens exist, ALL tokens must be present in the name
+      if (tokens.length > 0) {
+        const searchableText = name.toLowerCase();
+        const isMatch = tokens.every((token) => searchableText.includes(token));
+        if (!isMatch) continue;
+      }
+
+      // 4. Construct View Item
       validItems.push({
         id: urn,
         name,
@@ -128,16 +167,28 @@ export class MessengerChatPageComponent {
 
   // --- ACTIONS ---
 
+  setSidebarMode(mode: 'list' | 'new') {
+    // UX: Clear the filter when switching modes to avoid confusion
+    this.searchQuery.set('');
+
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { sidebar: mode === 'new' ? 'new' : null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
   onConversationSelected(id: URN) {
     this.router.navigate(['/messenger', 'conversations', id.toString()]);
   }
 
-  onStartNewChat() {
-    this.router.navigate(['/messenger', 'compose']);
+  onNewChatSelected(item: Contact | ContactGroup) {
+    // 1. Close the "New Chat" sidebar (return to list)
+    this.setSidebarMode('list');
+    // 2. Navigate to the selected conversation
+    this.router.navigate(['/messenger', 'conversations', item.id.toString()]);
   }
 
   showDetail = computed(() => !!this.selectedConversationUrn());
-
-  // Helper to check if we have any chats at all (for the Empty State)
   hasConversations = computed(() => this.conversationsList().length > 0);
 }

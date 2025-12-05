@@ -1,7 +1,13 @@
 <div class="h-full flex flex-col bg-white">
   <contacts-page-toolbar [title]="title()" #toolbar>
     <div class="flex items-center gap-2">
-      @if (showAddActions()) { @if (toolbar.mode() === 'full') {
+      @if (showFilter()) {
+      <lib-list-filter
+        [(query)]="filterQuery"
+        placeholder="Search contacts..."
+        class="mr-2"
+      />
+      } @if (showAddActions()) { @if (toolbar.mode() === 'full') {
       <a
         mat-stroked-button
         color="primary"
@@ -47,25 +53,21 @@
   >
     <mat-tab label="Contacts">
       <div class="h-full overflow-y-auto pt-2">
-        @if (contacts(); as list) {
         <contacts-list
-          [contacts]="list"
+          [contacts]="filteredContacts()"
           [selectedId]="selectedId()"
           (contactSelected)="contactSelected.emit($event)"
         />
-        }
       </div>
     </mat-tab>
 
     <mat-tab label="Groups">
       <div class="h-full overflow-y-auto pt-2">
-        @if (groups(); as list) {
         <contacts-group-list
-          [groups]="list"
+          [groups]="filteredGroups()"
           [selectedId]="selectedId()"
           (groupSelected)="groupSelected.emit($event)"
         />
-        }
       </div>
     </mat-tab>
   </mat-tab-group>
