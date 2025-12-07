@@ -5,10 +5,6 @@ syntax = "proto3";
 // The package name mirrors your directory structure.
 package src.types.routing.v1;
 
-// This is the crucial part for Go.
-// This tells the Go protoc-plugin to place the generated file in
-// this Go package. You'll need to adjust this path to match
-// your 'gen-platform' module's structure.
 option go_package = "github.com/tinywideclouds/gen-platform/go/types/routing/v1;routing_v1";
 
 // --- How Imports Work ---
@@ -31,8 +27,7 @@ message QueuedMessagePb {
   src.types.secure.v1.SecureEnvelopePb envelope = 2;
 }
 
-// QueuedMessageListPb is the payload returned by the 'GET /api/messages'
-// endpoint. It's just a list of the wrapper messages.
+// QueuedMessageListPb is just a list of the wrapper messages.
 message QueuedMessageListPb {
   repeated QueuedMessagePb messages = 1;
 }

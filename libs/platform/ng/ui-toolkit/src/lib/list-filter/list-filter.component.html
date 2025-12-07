@@ -12,6 +12,7 @@
     >
     <input
       #filterInput
+      aria-label="filter list"
       type="text"
       [ngModel]="query()"
       (ngModelChange)="onQueryChange($event)"
