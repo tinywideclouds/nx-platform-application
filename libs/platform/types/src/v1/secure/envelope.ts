@@ -8,6 +8,12 @@ import {
   SecureEnvelopeListPbSchema,
 } from '@nx-platform-application/platform-protos/secure/v1/envelope_pb';
 
+enum Priority {
+  Low = 1,
+  // You can skip numbers. 'Medium' isn't required,
+  // but if you added it without a value, it would auto-increment to 2.
+  High = 5,
+}
 // --- Smart Interface (Refactored) ---
 // This interface is now minimal and matches the new .proto contract.
 // senderId, messageId, etc., are all GONE.
@@ -17,6 +23,7 @@ export interface SecureEnvelope {
   encryptedData: Uint8Array;
   signature: Uint8Array;
   isEphemeral?: boolean;
+  priority?: Priority;
 }
 
 // --- Mappers (Smart <-> Proto) [Refactored] ---
@@ -37,6 +44,7 @@ export function secureEnvelopeToProto(
     encryptedData: envelope.encryptedData,
     signature: envelope.signature,
     isEphemeral: envelope.isEphemeral,
+    priority: envelope.priority,
   });
 }
 
@@ -55,6 +63,7 @@ export function secureEnvelopeFromProto(
     encryptedData: envelopePb.encryptedData,
     signature: envelopePb.signature,
     isEphemeral: envelopePb.isEphemeral,
+    priority: envelopePb.priority as Priority | undefined,
   };
 }
 
