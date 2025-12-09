@@ -8,7 +8,7 @@ import {
 } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
-const mockLogger = { error: vi.fn() };
+const mockLogger = { error: vi.fn(), warn: vi.fn(), info: vi.fn() };
 
 const mockDecryptedMsg: DecryptedMessage = {
   messageId: 'msg-1',

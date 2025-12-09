@@ -8,33 +8,34 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
-import { ContactMessengerMapper } from './contact-messenger.mapper';
+
+// [Refactor] Use the new Adapter Interface
+import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 
 @Injectable({ providedIn: 'root' })
 export class ChatKeyService {
   private logger = inject(Logger);
   private keyService = inject(KeyCacheService);
   private cryptoService = inject(MessengerCryptoService);
-  private mapper = inject(ContactMessengerMapper);
+
+  // [Refactor] Inject the interface
+  private identityResolver = inject(IdentityResolver);
 
   /**
    * Checks if valid public keys exist for a recipient.
-   * Handles identity resolution automatically via the Mapper.
-   * @returns true if keys exist, false otherwise.
+   * Handles identity resolution automatically via the Adapter.
    */
   public async checkRecipientKeys(urn: URN): Promise<boolean> {
-    // Groups handle keys differently (not checked here)
     if (urn.entityType !== 'user') {
       return true;
     }
 
     try {
       // 1. Resolve Contact -> Handle
-      // The mapper handles the "Identity Link" or "Email Discovery" logic
-      const targetUrn = await this.mapper.resolveToHandle(urn);
+      // The adapter handles the "Identity Link" or "Email Discovery" logic
+      const targetUrn = await this.identityResolver.resolveToHandle(urn);
 
       // 2. Check Cache/Network for keys
-      // This now queries /api/keys/urn:lookup:email:bob@gmail.com
       const hasKeys = await this.keyService.hasKeys(targetUrn);
 
       if (!hasKeys) {
@@ -49,9 +50,6 @@ export class ChatKeyService {
     }
   }
 
-  /**
-   * Performs the "Scorched Earth" reset of the current user's identity.
-   */
   public async resetIdentityKeys(
     userUrn: URN,
     userEmail?: string
@@ -63,7 +61,6 @@ export class ChatKeyService {
     const result = await this.cryptoService.generateAndStoreKeys(userUrn);
 
     if (userEmail) {
-      // Explicitly claim the Handle so discovery works immediately
       const handleUrn = URN.create('email', userEmail, 'lookup');
       this.logger.info(`Re-claiming public handle: ${handleUrn.toString()}`);
       await this.keyService.storeKeys(handleUrn, result.publicKeys);

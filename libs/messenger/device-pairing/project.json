@@ -6,11 +6,21 @@
   "projectType": "library",
   "tags": ["scope:messenger"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/device-pairing",
+        "configFile": "libs/messenger/device-pairing/vite.config.mts"
+      }
+    },
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "../../../coverage/libs/messenger/device-pairing"
+        "reportsDirectory": "../../../coverage/libs/messenger/device-pairing",
+        "configFile": "libs/messenger/device-pairing/vitest.config.mts"
       }
     },
     "lint": {

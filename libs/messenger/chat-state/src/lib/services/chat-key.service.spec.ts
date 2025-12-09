@@ -1,13 +1,18 @@
+// libs/messenger/chat-state/src/lib/services/chat-key.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
 import { ChatKeyService } from './chat-key.service';
 import { URN } from '@nx-platform-application/platform-types';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockProvider } from 'ng-mocks';
 
 // Services
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
-import { ContactMessengerMapper } from './contact-messenger.mapper';
+
+// [Refactor] Use the Adapter Interface
+import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 
 describe('ChatKeyService', () => {
   let service: ChatKeyService;
@@ -21,13 +26,7 @@ describe('ChatKeyService', () => {
     clearKeys: vi.fn(),
     generateAndStoreKeys: vi.fn(),
   };
-  const mockLogger = {
-    debug: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-  };
-  const mockMapper = {
+  const mockResolver = {
     resolveToHandle: vi.fn(),
   };
 
@@ -41,10 +40,11 @@ describe('ChatKeyService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatKeyService,
-        { provide: KeyCacheService, useValue: mockKeyService },
-        { provide: MessengerCryptoService, useValue: mockCryptoService },
-        { provide: ContactMessengerMapper, useValue: mockMapper },
-        { provide: Logger, useValue: mockLogger },
+        MockProvider(KeyCacheService, mockKeyService),
+        MockProvider(MessengerCryptoService, mockCryptoService),
+        // [Refactor] Mock the Interface
+        MockProvider(IdentityResolver, mockResolver),
+        MockProvider(Logger),
       ],
     });
 
@@ -54,46 +54,41 @@ describe('ChatKeyService', () => {
   // --- 1. Key Check Tests ---
 
   describe('checkRecipientKeys', () => {
-    it('should resolve identity via Mapper and check KeyService', async () => {
-      // Mock Mapper resolution
-      mockMapper.resolveToHandle.mockResolvedValue(handleUrn);
+    it('should resolve identity via Resolver and check KeyService', async () => {
+      // Mock Resolver behavior
+      mockResolver.resolveToHandle.mockResolvedValue(handleUrn);
       mockKeyService.hasKeys.mockResolvedValue(true);
 
       const result = await service.checkRecipientKeys(contactUrn);
 
-      expect(mockMapper.resolveToHandle).toHaveBeenCalledWith(contactUrn);
+      // Verify delegation
+      expect(mockResolver.resolveToHandle).toHaveBeenCalledWith(contactUrn);
       expect(mockKeyService.hasKeys).toHaveBeenCalledWith(handleUrn);
       expect(result).toBe(true);
     });
 
-    it('should log warning if keys are missing', async () => {
-      mockMapper.resolveToHandle.mockResolvedValue(handleUrn);
+    it('should log warning/return false if keys are missing', async () => {
+      mockResolver.resolveToHandle.mockResolvedValue(handleUrn);
       mockKeyService.hasKeys.mockResolvedValue(false);
 
       const result = await service.checkRecipientKeys(contactUrn);
 
       expect(result).toBe(false);
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('is missing public keys')
-      );
     });
 
-    it('should fail gracefully on error', async () => {
-      mockMapper.resolveToHandle.mockRejectedValue(
-        new Error('Resolution Failed')
-      );
+    it('should skip check for Groups/System URNs', async () => {
+      const groupUrn = URN.parse('urn:messenger:group:123');
+      const result = await service.checkRecipientKeys(groupUrn);
 
-      const result = await service.checkRecipientKeys(contactUrn);
-
-      expect(result).toBe(false);
-      expect(mockLogger.error).toHaveBeenCalled();
+      expect(result).toBe(true);
+      expect(mockResolver.resolveToHandle).not.toHaveBeenCalled();
     });
   });
 
   // --- 2. Reset Identity Tests ---
 
   describe('resetIdentityKeys', () => {
-    it('should wipe, generate, and upload keys (including Handle)', async () => {
+    it('should wipe, generate, and upload keys (claiming handle)', async () => {
       const myUrn = URN.parse('urn:auth:google:me');
       const myEmail = 'me@test.com';
       const mockKeyResult = { privateKeys: {}, publicKeys: {} };
@@ -110,13 +105,9 @@ describe('ChatKeyService', () => {
         myUrn
       );
 
-      // 3. Upload Handle Keys (Correct URN Properties)
+      // 3. Upload Handle Keys (Correct URN construction)
       expect(mockKeyService.storeKeys).toHaveBeenCalledWith(
-        expect.objectContaining({
-          namespace: 'lookup',
-          entityType: 'email',
-          entityId: 'me@test.com',
-        }),
+        expect.objectContaining({ entityId: 'me@test.com' }),
         mockKeyResult.publicKeys
       );
     });

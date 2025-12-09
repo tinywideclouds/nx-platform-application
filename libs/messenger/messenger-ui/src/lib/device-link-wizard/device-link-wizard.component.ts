@@ -15,7 +15,9 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { QRCodeComponent } from 'angularx-qrcode';
 
-import { ChatService, LinkSession } from '@nx-platform-application/chat-state';
+import { DevicePairingSession } from '@nx-platform-application/messenger-types';
+
+import { ChatService } from '@nx-platform-application/chat-state';
 // We need to import the scanner if we want to use it here.
 // Assuming QrScannerComponent is exported from settings-ui or we moved it to a shared place.
 // For this example, I'll assume we can import it from where we defined it.
@@ -49,7 +51,7 @@ export class DeviceLinkWizardComponent implements OnInit, OnDestroy {
   // State
   step = signal<WizardStep>('CHOICE');
   mode = signal<LinkMode>('SHOW'); // Default to showing QR
-  session = signal<LinkSession | null>(null);
+  session = signal<DevicePairingSession | null>(null);
 
   private pollInterval: any;
 

@@ -17,6 +17,7 @@ export default defineConfig({
   ],
   test: {
     name: 'messenger-device-pairing',
+
     watch: false,
     globals: true,
     environment: 'jsdom',

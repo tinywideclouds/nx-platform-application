@@ -1,1 +1,1 @@
-export * from './lib/messenger-device-pairing/messenger-device-pairing';
+export * from './lib/device-pairing.service';

@@ -40,9 +40,12 @@ import {
   ChatDataService,
   ChatSendService,
 } from '@nx-platform-application/chat-access';
-// --- NEW IMPORT ---
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { vi, Mocked } from 'vitest';
+
+// [Refactor] New Dependencies
+import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 vi.mock('@js-temporal/polyfill', () => ({
   Temporal: {
@@ -116,19 +119,31 @@ const mockCryptoService = {
   encryptAndSign: vi.fn(),
   generateAndStoreKeys: vi.fn(),
 };
+
 const mockStorageService = {
-  loadConversationSummaries: vi.fn(),
-  saveMessage: vi.fn(),
-  loadHistory: vi.fn(),
+  loadConversationSummaries: vi.fn().mockResolvedValue([]),
+  saveMessage: vi.fn().mockResolvedValue(undefined),
+
+  loadHistorySegment: vi.fn().mockResolvedValue([]),
+  loadHistory: vi.fn().mockResolvedValue([]),
+
   getKey: vi.fn(),
   storeKey: vi.fn(),
   clearAllMessages: vi.fn(),
+
+  // Previously added methods
+  getConversationIndex: vi.fn().mockResolvedValue({ unreadCount: 0 }),
+  markConversationAsRead: vi.fn().mockResolvedValue(undefined),
+  saveQuarantinedMessage: vi.fn().mockResolvedValue(undefined),
+  deleteQuarantinedMessages: vi.fn().mockResolvedValue(undefined),
 };
 const mockLogger = {
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
   debug: vi.fn(),
+  groupCollapsed: vi.fn(),
+  groupEnd: vi.fn(),
 };
 const mockLiveService = {
   connect: vi.fn(),
@@ -141,12 +156,24 @@ const mockKeyService = { getPublicKey: vi.fn() };
 const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
 const mockSendService = { sendMessage: vi.fn() };
 
-// --- NEW MOCK ---
 const mockContactsService = {
   getAllIdentityLinks: vi.fn(),
   getAllBlockedIdentityUrns: vi.fn(),
   addToPending: vi.fn(),
   getLinkedIdentities: vi.fn(),
+};
+
+// [Refactor] Mock Resolver
+const mockResolver = {
+  resolveToContact: vi.fn((urn) => Promise.resolve(urn)),
+  resolveToHandle: vi.fn((urn) => Promise.resolve(urn)),
+  getStorageUrn: vi.fn((urn) => Promise.resolve(urn)),
+};
+
+// [Refactor] Mock Pairing
+const mockPairing = {
+  startReceiverSession: vi.fn(),
+  pollForReceiverSync: vi.fn(),
 };
 
 vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'mock-uuid') });
@@ -206,8 +233,10 @@ describe('ChatService (Race Condition Test)', () => {
         { provide: KeyCacheService, useValue: mockKeyService },
         { provide: ChatDataService, useValue: mockDataService },
         { provide: ChatSendService, useValue: mockSendService },
-        // Provide the mock
         { provide: ContactsStorageService, useValue: mockContactsService },
+        // [Refactor] Missing Providers Added
+        { provide: IdentityResolver, useValue: mockResolver },
+        { provide: DevicePairingService, useValue: mockPairing },
       ],
     });
   });
@@ -229,10 +258,6 @@ describe('ChatService (Race Condition Test)', () => {
 
     mockStorageService.loadHistory.mockResolvedValue(staleHistory);
     mockDataService.getMessageBatch.mockReturnValue(of([newQueuedMessage]));
-
-    // Need to allow unknown senders (or mock links) for this test
-    // Since the payload sender is not linked, it will hit addToPending
-    // which is mocked to resolve safely.
 
     await initializeService();
 

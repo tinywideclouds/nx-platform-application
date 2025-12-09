@@ -17,14 +17,14 @@ import {
 } from '@nx-platform-application/messenger-types';
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/message-content';
 
-import { HotQueueSpy } from '../workers/hot-queue-spy.service';
+import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
 
 @Injectable({ providedIn: 'root' })
 export class SenderHostedFlowService {
   private logger = inject(Logger);
   private crypto = inject(MessengerCryptoService);
   private sendService = inject(ChatSendService);
-  private spy = inject(HotQueueSpy);
+  private spy = inject(HotQueueMonitor);
 
   /**
    * ROLE: SOURCE (The Logged-in Device)

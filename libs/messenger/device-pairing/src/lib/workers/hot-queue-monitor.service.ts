@@ -10,7 +10,7 @@ import { MessengerCryptoService } from '@nx-platform-application/messenger-crypt
 const DEVICE_SYNC_TYPE = 'urn:message:type:device-sync';
 
 @Injectable({ providedIn: 'root' })
-export class HotQueueSpy {
+export class HotQueueMonitor {
   private logger = inject(Logger);
   private dataService = inject(ChatDataService);
   private crypto = inject(MessengerCryptoService);

@@ -6,7 +6,7 @@ import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 // Flows
 import { ReceiverHostedFlowService } from './flows/receiver-hosted-flow.service';
 import { SenderHostedFlowService } from './flows/sender-hosted-flow.service';
-import { HotQueueSpy } from './workers/hot-queue-spy.service';
+import { HotQueueMonitor } from './workers/hot-queue-monitor.service';
 
 /**
  * THE FACADE
@@ -17,7 +17,7 @@ import { HotQueueSpy } from './workers/hot-queue-spy.service';
 export class DevicePairingService {
   private receiverFlow = inject(ReceiverHostedFlowService);
   private senderFlow = inject(SenderHostedFlowService);
-  private spy = inject(HotQueueSpy);
+  private spy = inject(HotQueueMonitor);
 
   // --- MODE A: RECEIVER-HOSTED (Target shows QR) ---
 

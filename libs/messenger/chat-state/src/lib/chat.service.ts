@@ -33,11 +33,13 @@ import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.s
 import { ChatConversationService } from './services/chat-conversation.service';
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
-import { DeviceLinkService } from './services/device-link.service';
-import { LinkSession } from './services/chat-interfaces';
+
+// [Refactor] New Library Import
+import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 // Types
 import { ContactSharePayload } from '@nx-platform-application/message-content';
+import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 export type OnboardingState =
   | 'CHECKING'
@@ -62,7 +64,9 @@ export class ChatService {
   private readonly conversationService = inject(ChatConversationService);
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly keyWorker = inject(ChatKeyService);
-  private readonly deviceLinkWorker = inject(DeviceLinkService);
+
+  // [Refactor] The New Ceremony Coordinator
+  private readonly pairingService = inject(DevicePairingService);
 
   private readonly destroyRef = inject(DestroyRef);
 
@@ -77,6 +81,9 @@ export class ChatService {
     signal([]);
 
   public readonly onboardingState = signal<OnboardingState>('CHECKING');
+
+  // [Refactor] Ceremony Flag (Pauses Ingestion)
+  public readonly isCeremonyActive = signal<boolean>(false);
 
   // --- Delegated State (Active Chat Level) ---
   public readonly messages = this.conversationService.messages;
@@ -171,30 +178,46 @@ export class ChatService {
     return true;
   }
 
-  // --- Device Linking Facade ---
+  // --- Device Linking Facade (Refactored) ---
+
+  /**
+   * CANCEL LINKING
+   * Call this from UI to exit the "Ceremony" state and resume normal chat.
+   */
+  public cancelLinking(): void {
+    this.isCeremonyActive.set(false);
+  }
 
   /**
    * TARGET ROLE (New Device): Receiver-Hosted Flow
-   * Generates a session and returns the QR payload to display.
    */
-  public async startTargetLinkSession(): Promise<LinkSession> {
+  public async startTargetLinkSession(): Promise<DevicePairingSession> {
     if (this.onboardingState() !== 'REQUIRES_LINKING') {
       throw new Error(
         'Device Linking is only available during onboarding halt.'
       );
     }
-    // We must ensure the socket is connected so the server sees us as "Online"
-    // and sends the High Priority message to the Hot Queue (though Express Lane logic bypasses this requirement,
-    // being online is safer for delivery speed).
+
+    // Connect socket for the Hot Queue
     const token = this.authService.getJwtToken();
     if (token) this.liveService.connect(token);
 
-    return this.deviceLinkWorker.startTargetSession();
+    // [Refactor] Use new lib
+    // Note: sessionPrivateKey is in the result, the UI must hold it
+    const session = await this.pairingService.startReceiverSession();
+
+    // Remap to LinkSession interface for UI compatibility
+    return {
+      sessionId: session.sessionId,
+      qrPayload: session.qrPayload,
+      publicKey: session.publicKey,
+      privateKey: session.privateKey,
+      mode: 'RECEIVER_HOSTED',
+    };
   }
 
   /**
-   * TARGET ROLE (New Device): Polling Loop
-   * Checks for the sync message. If found, automatically transitions state.
+   * TARGET ROLE (New Device): Polling Loop (Spy)
    */
   public async checkForSyncMessage(
     sessionPrivateKey: CryptoKey
@@ -202,9 +225,10 @@ export class ChatService {
     const urn = this.currentUserUrn();
     if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') return false;
 
-    const keys = await this.deviceLinkWorker.checkForSyncMessage(
-      urn,
-      sessionPrivateKey
+    // [Refactor] Use new lib's dedicated poller
+    const keys = await this.pairingService.pollForReceiverSync(
+      sessionPrivateKey,
+      urn
     );
 
     if (keys) {
@@ -216,7 +240,6 @@ export class ChatService {
 
   /**
    * TARGET ROLE (New Device): Sender-Hosted Flow (Fallback)
-   * Consumes a "Dead Drop" QR code from the Source device.
    */
   public async redeemSourceSession(qrCode: string): Promise<void> {
     const urn = this.currentUserUrn();
@@ -224,11 +247,11 @@ export class ChatService {
       throw new Error('Invalid State for redeeming session');
     }
 
-    // Connect socket to fetch the message
     const token = this.authService.getJwtToken();
     if (token) this.liveService.connect(token);
 
-    const keys = await this.deviceLinkWorker.redeemSourceSession(qrCode, urn);
+    // [Refactor] Use new lib
+    const keys = await this.pairingService.redeemSenderSession(qrCode, urn);
 
     if (keys) {
       await this.finalizeLinking(keys);
@@ -249,19 +272,38 @@ export class ChatService {
       throw new Error('Cannot link device: You are not authenticated.');
     }
 
-    await this.deviceLinkWorker.linkTargetDevice(qrCode, urn, keys);
+    try {
+      // [Refactor] Enter Ceremony (Pause Ingestion)
+      this.isCeremonyActive.set(true);
+
+      await this.pairingService.linkTargetDevice(qrCode, keys, urn);
+    } finally {
+      // [Refactor] Exit Ceremony (Resume Ingestion)
+      this.isCeremonyActive.set(false);
+    }
   }
 
   /**
    * SOURCE ROLE (Existing Device): Sender-Hosted Flow
    * Generates a "Dead Drop" QR code for the target to scan.
    */
-  public async startSourceLinkSession(): Promise<LinkSession> {
+  public async startSourceLinkSession(): Promise<DevicePairingSession> {
     const urn = this.currentUserUrn();
     const keys = this.myKeys();
     if (!urn || !keys) throw new Error('Not authenticated');
 
-    return this.deviceLinkWorker.startSourceSession(urn, keys);
+    // [Refactor] Enter Ceremony (Pause Ingestion)
+    // Note: The UI must call cancelLinking() to exit this state!
+    this.isCeremonyActive.set(true);
+
+    const session = await this.pairingService.startSenderSession(keys, urn);
+
+    return {
+      sessionId: session.sessionId,
+      qrPayload: session.qrPayload,
+      oneTimeKey: session.oneTimeKey,
+      mode: 'SENDER_HOSTED',
+    };
   }
 
   // --- Boot & Reset Logic ---
@@ -390,17 +432,22 @@ export class ChatService {
 
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
+      // [Refactor] The Gatekeepers
+      // 1. Must be READY (Keys loaded)
+      // 2. Must NOT be in a Ceremony (Linking a device)
       if (this.onboardingState() !== 'READY') return;
+      if (this.isCeremonyActive()) return;
+
       const myKeys = this.myKeys();
       const myUrn = this.currentUserUrn();
       if (!myKeys || !myUrn) return;
 
+      // [Refactor] Clean call (no safe mode args)
       const result = await this.ingestionService.process(
         myKeys,
         myUrn,
         this.blockedSet(),
-        50,
-        false
+        50
       );
 
       if (result.messages.length > 0) {

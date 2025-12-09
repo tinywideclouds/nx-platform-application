@@ -13,8 +13,11 @@ import {
   DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+
+// Adapters & Mappers
 import { ChatMessageMapper } from './chat-message.mapper';
-import { ContactMessengerMapper } from './contact-messenger.mapper';
+// [Refactor] We now inject the abstract contract, not the concrete implementation
+import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 
 // Types
 import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
@@ -26,7 +29,7 @@ import {
 export interface IngestionResult {
   messages: ChatMessage[];
   typingIndicators: URN[];
-  syncPayload?: EncryptedMessagePayload; // ✅ New field for Trojan Horse payload
+  // [Removed] syncPayload - Device Pairing is now handled by the 'Ceremony' lib
 }
 
 @Injectable({ providedIn: 'root' })
@@ -36,16 +39,22 @@ export class ChatIngestionService {
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
   private contactsService = inject(ContactsStorageService);
-  private mapper = inject(ContactMessengerMapper);
+
+  // [Refactor] Swapped for the clean interface
+  private identityResolver = inject(IdentityResolver);
   private viewMapper = inject(ChatMessageMapper);
 
+  /**
+   * Processes the inbound message queue.
+   * STRICT: Requires valid Identity Keys.
+   */
   async process(
-    myKeys: PrivateKeys | null,
+    myKeys: PrivateKeys, // [Refactor] No longer nullable. Must be authenticated.
     myUrn: URN,
     blockedSet: Set<string>,
-    batchLimit = 50,
-    safeMode = false, // ✅ New Flag
-    sessionPrivateKey: CryptoKey | null = null // ✅ New Key for Sync
+    batchLimit = 50
+    // [Removed] safeMode
+    // [Removed] sessionPrivateKey
   ): Promise<IngestionResult> {
     const queuedMessages = await firstValueFrom(
       this.dataService.getMessageBatch(batchLimit)
@@ -56,63 +65,27 @@ export class ChatIngestionService {
     }
 
     this.logger.info(
-      `Ingestion: Processing ${queuedMessages.length} messages... (SafeMode: ${safeMode})`
+      `Ingestion: Processing ${queuedMessages.length} messages...`
     );
 
     const processedIds: string[] = [];
     const validViewMessages: ChatMessage[] = [];
     const typingIndicators: URN[] = [];
-    let foundSyncPayload: EncryptedMessagePayload | undefined;
 
     for (const msg of queuedMessages) {
       try {
-        let decrypted: EncryptedMessagePayload;
+        // 1. Decrypt (Standard Path Only)
+        // We only support Identity Keys here. Handshakes happen in DevicePairingService.
+        const decrypted: EncryptedMessagePayload =
+          await this.cryptoService.verifyAndDecrypt(msg.envelope, myKeys);
 
-        // --- Decryption Fork ---
-        if (myKeys) {
-          // Normal Operation
-          decrypted = await this.cryptoService.verifyAndDecrypt(
-            msg.envelope,
-            myKeys
-          );
-        } else if (sessionPrivateKey && safeMode) {
-          // Linking Operation
-          // We only try to decrypt if we have the session key.
-          try {
-            decrypted = await this.cryptoService.decryptSyncMessage(
-              msg.envelope,
-              sessionPrivateKey
-            );
-          } catch (e) {
-            // If this message wasn't encrypted for our session key, it will fail.
-            // In Safe Mode, we just SKIP it (do not ack, do not log error as fatal).
-            this.logger.debug(
-              `Skipping unreadable message in Safe Mode: ${msg.id}`
-            );
-            continue;
-          }
-        } else {
-          throw new Error('No keys available for decryption');
-        }
+        // [Removed] 'urn:message:type:device-sync' check.
+        // If a sync message arrives here, it's treated as an unsupported message type
+        // or filtered out by the UI, but it doesn't trigger logic.
 
-        // --- Check for Device Sync ---
-        // Note: We need to define this URN constant, using string literal for now
-        if (decrypted.typeId.toString() === 'urn:message:type:device-sync') {
-          this.logger.info('Ingestion: Received Device Sync Message!');
-          foundSyncPayload = decrypted;
-          processedIds.push(msg.id);
-          continue; // Don't show in UI
-        }
-
-        // --- Normal Pipeline (Only if we have myKeys) ---
-        // If we decrypted with SessionKey but it wasn't a sync message (unlikely but possible),
-        // we shouldn't try to process it as a chat message.
-        if (!myKeys) {
-          continue;
-        }
-
-        // 3. Identity Resolution (Handle -> Contact)
-        const resolvedSenderUrn = await this.mapper.resolveToContact(
+        // 2. Identity Resolution (Handle -> Contact)
+        // Uses the new Adapter
+        const resolvedSenderUrn = await this.identityResolver.resolveToContact(
           decrypted.senderId
         );
         const resolvedSenderStr = resolvedSenderUrn.toString();
@@ -121,7 +94,7 @@ export class ChatIngestionService {
           `Ingestion: Resolved ${decrypted.senderId} -> ${resolvedSenderStr}`
         );
 
-        // 4. Gatekeeper: Block Check
+        // 3. Gatekeeper: Block Check
         if (blockedSet.has(resolvedSenderStr)) {
           this.logger.info(
             `Dropped message from blocked identity: ${resolvedSenderStr}`
@@ -130,7 +103,7 @@ export class ChatIngestionService {
           continue;
         }
 
-        // --- FORK: Ephemeral (Typing Indicators) ---
+        // 4. Ephemeral Check (Typing Indicators)
         if (msg.envelope.isEphemeral) {
           typingIndicators.push(resolvedSenderUrn);
           processedIds.push(msg.id);
@@ -138,8 +111,6 @@ export class ChatIngestionService {
         }
 
         // 5. Gatekeeper: Unknown User Check
-        // If entityType is NOT 'user' (e.g., 'email' handle), it's a stranger.
-        // Known contacts are resolved to 'urn:contacts:user:...' by the mapper.
         const isStranger = resolvedSenderUrn.entityType !== 'user';
 
         const newDecryptedMsg = this.mapPayloadToDecrypted(
@@ -155,13 +126,9 @@ export class ChatIngestionService {
             `Quarantining message from stranger: ${resolvedSenderStr}`
           );
 
-          // A. Save to Quarantine Table (Hidden from Main UI)
           await this.storageService.saveQuarantinedMessage(newDecryptedMsg);
-
-          // B. Add to Pending List
           await this.contactsService.addToPending(resolvedSenderUrn);
 
-          // C. Ack network (we have it), but DO NOT add to validViewMessages
           processedIds.push(msg.id);
           continue;
         }
@@ -173,47 +140,33 @@ export class ChatIngestionService {
         processedIds.push(msg.id);
       } catch (error) {
         this.logger.error('Ingestion: Failed to process message', error, msg);
-
-        // ✅ SAFE MODE: Do NOT Ack messages we failed to process
-        if (safeMode) {
-          this.logger.warn(
-            `SafeMode: Skipping ACK for failed message ${msg.id}`
-          );
-          continue;
-        }
-
-        // Standard Mode: Ack to prevent infinite loops, or use Dead Letter Queue logic here
+        // We ack failed messages to prevent infinite loops (Dead Letter strategy)
         processedIds.push(msg.id);
       }
     }
 
-    // 8. Ack Batch
+    // 6. Ack Batch
     if (processedIds.length > 0) {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
     }
 
-    // 9. Recursive Pull
-    // In Safe Mode, we probably don't want to recurse infinitely if we are blocked.
-    if (queuedMessages.length === batchLimit && !safeMode) {
+    // 7. Recursive Pull
+    if (queuedMessages.length === batchLimit) {
       const nextBatch = await this.process(
         myKeys,
         myUrn,
         blockedSet,
-        batchLimit,
-        safeMode,
-        sessionPrivateKey
+        batchLimit
       );
       return {
         messages: [...validViewMessages, ...nextBatch.messages],
         typingIndicators: [...typingIndicators, ...nextBatch.typingIndicators],
-        syncPayload: foundSyncPayload || nextBatch.syncPayload,
       };
     }
 
     return {
       messages: validViewMessages,
       typingIndicators,
-      syncPayload: foundSyncPayload,
     };
   }
 
@@ -243,22 +196,14 @@ export class ChatIngestionService {
     };
   }
 
-  /**
-   * Determines the canonical Conversation ID.
-   */
   private getConversationUrn(
     senderUrn: URN,
     recipientUrn: URN,
     myUrn: URN
   ): URN {
-    // 1. Group Chat: The Conversation is the GROUP URN.
     if (recipientUrn.entityType === 'group') {
       return recipientUrn;
     }
-
-    // 2. 1:1 Chat: The Conversation is the OTHER PERSON.
-    // If I sent it, convo is Recipient.
-    // If they sent it, convo is Sender.
     return senderUrn.toString() === myUrn.toString() ? recipientUrn : senderUrn;
   }
 }
