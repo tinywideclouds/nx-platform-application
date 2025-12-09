@@ -9,7 +9,7 @@ import {
   signal,
   computed,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   ReactiveFormsModule,
@@ -33,14 +33,13 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
   selector: 'contacts-group-form',
   standalone: true,
   imports: [
-    CommonModule,
     ReactiveFormsModule,
     ContactMultiSelectorComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
-    ContactAvatarComponent,
-  ],
+    ContactAvatarComponent
+],
   templateUrl: './contact-group-form.component.html',
   styleUrl: './contact-group-form.component.scss',
 })

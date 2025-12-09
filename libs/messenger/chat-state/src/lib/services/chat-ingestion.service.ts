@@ -1,5 +1,3 @@
-// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -28,6 +26,7 @@ import {
 export interface IngestionResult {
   messages: ChatMessage[];
   typingIndicators: URN[];
+  syncPayload?: EncryptedMessagePayload; // ✅ New field for Trojan Horse payload
 }
 
 @Injectable({ providedIn: 'root' })
@@ -41,10 +40,12 @@ export class ChatIngestionService {
   private viewMapper = inject(ChatMessageMapper);
 
   async process(
-    myKeys: PrivateKeys,
+    myKeys: PrivateKeys | null,
     myUrn: URN,
     blockedSet: Set<string>,
-    batchLimit = 50
+    batchLimit = 50,
+    safeMode = false, // ✅ New Flag
+    sessionPrivateKey: CryptoKey | null = null // ✅ New Key for Sync
   ): Promise<IngestionResult> {
     const queuedMessages = await firstValueFrom(
       this.dataService.getMessageBatch(batchLimit)
@@ -55,20 +56,60 @@ export class ChatIngestionService {
     }
 
     this.logger.info(
-      `Ingestion: Processing ${queuedMessages.length} messages...`
+      `Ingestion: Processing ${queuedMessages.length} messages... (SafeMode: ${safeMode})`
     );
 
     const processedIds: string[] = [];
     const validViewMessages: ChatMessage[] = [];
     const typingIndicators: URN[] = [];
+    let foundSyncPayload: EncryptedMessagePayload | undefined;
 
     for (const msg of queuedMessages) {
       try {
-        // 2. Decrypt
-        const decrypted = await this.cryptoService.verifyAndDecrypt(
-          msg.envelope,
-          myKeys
-        );
+        let decrypted: EncryptedMessagePayload;
+
+        // --- Decryption Fork ---
+        if (myKeys) {
+          // Normal Operation
+          decrypted = await this.cryptoService.verifyAndDecrypt(
+            msg.envelope,
+            myKeys
+          );
+        } else if (sessionPrivateKey && safeMode) {
+          // Linking Operation
+          // We only try to decrypt if we have the session key.
+          try {
+            decrypted = await this.cryptoService.decryptSyncMessage(
+              msg.envelope,
+              sessionPrivateKey
+            );
+          } catch (e) {
+            // If this message wasn't encrypted for our session key, it will fail.
+            // In Safe Mode, we just SKIP it (do not ack, do not log error as fatal).
+            this.logger.debug(
+              `Skipping unreadable message in Safe Mode: ${msg.id}`
+            );
+            continue;
+          }
+        } else {
+          throw new Error('No keys available for decryption');
+        }
+
+        // --- Check for Device Sync ---
+        // Note: We need to define this URN constant, using string literal for now
+        if (decrypted.typeId.toString() === 'urn:message:type:device-sync') {
+          this.logger.info('Ingestion: Received Device Sync Message!');
+          foundSyncPayload = decrypted;
+          processedIds.push(msg.id);
+          continue; // Don't show in UI
+        }
+
+        // --- Normal Pipeline (Only if we have myKeys) ---
+        // If we decrypted with SessionKey but it wasn't a sync message (unlikely but possible),
+        // we shouldn't try to process it as a chat message.
+        if (!myKeys) {
+          continue;
+        }
 
         // 3. Identity Resolution (Handle -> Contact)
         const resolvedSenderUrn = await this.mapper.resolveToContact(
@@ -132,7 +173,16 @@ export class ChatIngestionService {
         processedIds.push(msg.id);
       } catch (error) {
         this.logger.error('Ingestion: Failed to process message', error, msg);
-        // Ack errors to prevent infinite loops, or use Dead Letter Queue logic here
+
+        // ✅ SAFE MODE: Do NOT Ack messages we failed to process
+        if (safeMode) {
+          this.logger.warn(
+            `SafeMode: Skipping ACK for failed message ${msg.id}`
+          );
+          continue;
+        }
+
+        // Standard Mode: Ack to prevent infinite loops, or use Dead Letter Queue logic here
         processedIds.push(msg.id);
       }
     }
@@ -143,22 +193,27 @@ export class ChatIngestionService {
     }
 
     // 9. Recursive Pull
-    if (queuedMessages.length === batchLimit) {
+    // In Safe Mode, we probably don't want to recurse infinitely if we are blocked.
+    if (queuedMessages.length === batchLimit && !safeMode) {
       const nextBatch = await this.process(
         myKeys,
         myUrn,
         blockedSet,
-        batchLimit
+        batchLimit,
+        safeMode,
+        sessionPrivateKey
       );
       return {
         messages: [...validViewMessages, ...nextBatch.messages],
         typingIndicators: [...typingIndicators, ...nextBatch.typingIndicators],
+        syncPayload: foundSyncPayload || nextBatch.syncPayload,
       };
     }
 
     return {
       messages: validViewMessages,
       typingIndicators,
+      syncPayload: foundSyncPayload,
     };
   }
 

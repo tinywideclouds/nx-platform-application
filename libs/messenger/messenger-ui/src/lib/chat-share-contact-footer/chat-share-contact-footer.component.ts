@@ -9,7 +9,7 @@ import {
   output,
   input,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -25,11 +25,10 @@ import { URN } from '@nx-platform-application/platform-types';
   selector: 'messenger-share-contact-footer',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    MatAutocompleteModule,
-  ],
+    MatAutocompleteModule
+],
   templateUrl: './chat-share-contact-footer.component.html',
   styleUrl: './chat-share-contact-footer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

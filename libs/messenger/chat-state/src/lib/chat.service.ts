@@ -1,4 +1,3 @@
-// libs/messenger/chat-state/src/lib/chat.service.ts
 import {
   Injectable,
   signal,
@@ -9,10 +8,7 @@ import {
 } from '@angular/core';
 import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
+import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 import { filter, firstValueFrom, interval } from 'rxjs';
 
 // --- Services ---
@@ -37,9 +33,17 @@ import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.s
 import { ChatConversationService } from './services/chat-conversation.service';
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
+import { DeviceLinkService } from './services/device-link.service';
+import { LinkSession } from './services/chat-interfaces';
 
 // Types
 import { ContactSharePayload } from '@nx-platform-application/message-content';
+
+export type OnboardingState =
+  | 'CHECKING'
+  | 'READY'
+  | 'REQUIRES_LINKING'
+  | 'GENERATING';
 
 @Injectable({
   providedIn: 'root',
@@ -54,15 +58,11 @@ export class ChatService {
   private readonly keyService = inject(KeyCacheService);
   private readonly contactsService = inject(ContactsStorageService);
 
-  // ✅ NEW: Sync Orchestrator
   private readonly syncOrchestrator = inject(ChatSyncOrchestratorService);
-
-  // --- Child Service (Active Chat State) ---
   private readonly conversationService = inject(ChatConversationService);
-
-  // WORKERS
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly keyWorker = inject(ChatKeyService);
+  private readonly deviceLinkWorker = inject(DeviceLinkService);
 
   private readonly destroyRef = inject(DestroyRef);
 
@@ -75,6 +75,8 @@ export class ChatService {
   // --- Public State (App Level) ---
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
+
+  public readonly onboardingState = signal<OnboardingState>('CHECKING');
 
   // --- Delegated State (Active Chat Level) ---
   public readonly messages = this.conversationService.messages;
@@ -105,92 +107,254 @@ export class ChatService {
     this.conversationService.notifyTyping();
   }
 
+  // --- Initialization Logic ---
+
   private async init(): Promise<void> {
     try {
+      this.onboardingState.set('CHECKING');
       await firstValueFrom(this.authService.sessionLoaded$);
 
       const currentUser = this.authService.currentUser();
       if (!currentUser) throw new Error('Authentication failed.');
 
-      const authToken = this.authService.getJwtToken();
-      if (!authToken) throw new Error('No valid session token.');
-
-      // 2. Identity Map (Existing)
       await this.refreshIdentityMap();
-
-      // ✅ 3. WIRE UP BLOCKED LIST (The Missing Piece)
-      // We subscribe to the live storage stream.
-      // This handles Init, Local Block actions, AND Cloud Sync updates automatically.
-      this.contactsService.blocked$
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe((blockedList) => {
-          const newSet = new Set<string>();
-          for (const b of blockedList) {
-            // Filter: Only block if scope is 'all' or 'messenger'
-            if (b.scopes.includes('all') || b.scopes.includes('messenger')) {
-              newSet.add(b.urn.toString());
-            }
-          }
-          this.blockedSet.set(newSet);
-          this.logger.debug(
-            `ChatService: Updated block list (${newSet.size} entries)`
-          );
-        });
-
-      this.liveService.connect(authToken);
-      this.handleConnectionStatus();
-
-      const summaries =
-        await this.conversationService.loadConversationSummaries();
-      this.activeConversations.set(summaries);
+      this.initBlockListSubscription();
 
       const senderUrn = this.currentUserUrn();
-      if (senderUrn) {
-        let keys = await this.cryptoService.loadMyKeys(senderUrn);
+      if (!senderUrn) throw new Error('No user URN found');
 
-        if (!keys) {
-          const existsOnServer = await this.keyService.hasKeys(senderUrn);
+      // 2. Fetch KEY STATE
+      const [localKeys, serverKeys] = await Promise.all([
+        this.cryptoService.loadMyKeys(senderUrn),
+        this.keyService.getPublicKey(senderUrn),
+      ]);
 
-          if (existsOnServer) {
-            this.logger.warn(
-              'New device detected. Keys exist on server but not locally.'
-            );
-          } else {
-            this.logger.info('New user detected. Generating keys...');
-            try {
-              keys = await this.keyWorker.resetIdentityKeys(
-                senderUrn,
-                currentUser.email
-              );
-            } catch (genError) {
-              this.logger.error('Failed to generate initial keys', genError);
-            }
-          }
-        }
-
-        if (keys) this.myKeys.set(keys);
+      // 3. Decision Matrix
+      if (!localKeys && !serverKeys) {
+        this.onboardingState.set('GENERATING');
+        await this.performFirstTimeSetup(senderUrn, currentUser.email);
+        return;
       }
 
-      this.initLiveSubscriptions();
-      this.initTypingOrchestration();
+      const isConsistent = await this.checkIntegrity(
+        senderUrn,
+        localKeys,
+        serverKeys
+      );
+
+      if (!isConsistent) {
+        this.logger.warn('Identity Conflict detected. Halting.');
+        this.onboardingState.set('REQUIRES_LINKING');
+        return;
+      }
+
+      if (localKeys) {
+        this.myKeys.set(localKeys);
+        this.completeBootSequence();
+      }
     } catch (error) {
       this.logger.error('ChatService: Failed initialization', error);
     }
   }
 
-  // ✅ NEW: Throttled Sending Logic
+  private async checkIntegrity(
+    urn: URN,
+    local: PrivateKeys | null,
+    server: PublicKeys | null
+  ): Promise<boolean> {
+    if (!local && server) return false;
+    if (local && server) {
+      const match = await this.cryptoService.verifyKeysMatch(urn, server);
+      if (!match) return false;
+    }
+    if (local && !server) return false;
+    return true;
+  }
+
+  // --- Device Linking Facade ---
+
+  /**
+   * TARGET ROLE (New Device): Receiver-Hosted Flow
+   * Generates a session and returns the QR payload to display.
+   */
+  public async startTargetLinkSession(): Promise<LinkSession> {
+    if (this.onboardingState() !== 'REQUIRES_LINKING') {
+      throw new Error(
+        'Device Linking is only available during onboarding halt.'
+      );
+    }
+    // We must ensure the socket is connected so the server sees us as "Online"
+    // and sends the High Priority message to the Hot Queue (though Express Lane logic bypasses this requirement,
+    // being online is safer for delivery speed).
+    const token = this.authService.getJwtToken();
+    if (token) this.liveService.connect(token);
+
+    return this.deviceLinkWorker.startTargetSession();
+  }
+
+  /**
+   * TARGET ROLE (New Device): Polling Loop
+   * Checks for the sync message. If found, automatically transitions state.
+   */
+  public async checkForSyncMessage(
+    sessionPrivateKey: CryptoKey
+  ): Promise<boolean> {
+    const urn = this.currentUserUrn();
+    if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') return false;
+
+    const keys = await this.deviceLinkWorker.checkForSyncMessage(
+      urn,
+      sessionPrivateKey
+    );
+
+    if (keys) {
+      await this.finalizeLinking(keys);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * TARGET ROLE (New Device): Sender-Hosted Flow (Fallback)
+   * Consumes a "Dead Drop" QR code from the Source device.
+   */
+  public async redeemSourceSession(qrCode: string): Promise<void> {
+    const urn = this.currentUserUrn();
+    if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') {
+      throw new Error('Invalid State for redeeming session');
+    }
+
+    // Connect socket to fetch the message
+    const token = this.authService.getJwtToken();
+    if (token) this.liveService.connect(token);
+
+    const keys = await this.deviceLinkWorker.redeemSourceSession(qrCode, urn);
+
+    if (keys) {
+      await this.finalizeLinking(keys);
+    } else {
+      throw new Error('Sync message not found yet. Please try again.');
+    }
+  }
+
+  /**
+   * SOURCE ROLE (Existing Device): Receiver-Hosted Flow
+   * Scans a target's QR code and sends the keys.
+   */
+  public async linkTargetDevice(qrCode: string): Promise<void> {
+    const urn = this.currentUserUrn();
+    const keys = this.myKeys();
+
+    if (!urn || !keys) {
+      throw new Error('Cannot link device: You are not authenticated.');
+    }
+
+    await this.deviceLinkWorker.linkTargetDevice(qrCode, urn, keys);
+  }
+
+  /**
+   * SOURCE ROLE (Existing Device): Sender-Hosted Flow
+   * Generates a "Dead Drop" QR code for the target to scan.
+   */
+  public async startSourceLinkSession(): Promise<LinkSession> {
+    const urn = this.currentUserUrn();
+    const keys = this.myKeys();
+    if (!urn || !keys) throw new Error('Not authenticated');
+
+    return this.deviceLinkWorker.startSourceSession(urn, keys);
+  }
+
+  // --- Boot & Reset Logic ---
+
+  public async performIdentityReset(): Promise<void> {
+    const urn = this.currentUserUrn();
+    const user = this.authService.currentUser();
+    if (!urn || !user) return;
+
+    this.logger.warn('ChatService: Performing Identity Reset...');
+    this.onboardingState.set('GENERATING');
+
+    try {
+      const newKeys = await this.keyWorker.resetIdentityKeys(urn, user.email);
+      this.myKeys.set(newKeys);
+      await this.completeBootSequence();
+    } catch (e) {
+      this.logger.error('Identity Reset Failed', e);
+      this.onboardingState.set('REQUIRES_LINKING');
+    }
+  }
+
+  private async performFirstTimeSetup(urn: URN, email?: string): Promise<void> {
+    this.logger.info('New user detected. Generating keys...');
+    try {
+      const keys = await this.keyWorker.resetIdentityKeys(urn, email);
+      this.myKeys.set(keys);
+      await this.completeBootSequence();
+    } catch (genError) {
+      this.logger.error('Failed to generate initial keys', genError);
+      throw genError;
+    }
+  }
+
+  public async completeBootSequence(): Promise<void> {
+    this.logger.info('ChatService: Completing boot sequence (READY)...');
+    this.onboardingState.set('READY');
+
+    const authToken = this.authService.getJwtToken();
+    if (authToken) {
+      this.liveService.connect(authToken);
+      this.handleConnectionStatus();
+    }
+
+    const summaries =
+      await this.conversationService.loadConversationSummaries();
+    this.activeConversations.set(summaries);
+
+    this.initLiveSubscriptions();
+    this.initTypingOrchestration();
+    this.fetchAndProcessMessages();
+  }
+
+  public async finalizeLinking(restoredKeys: PrivateKeys): Promise<void> {
+    if (this.onboardingState() !== 'REQUIRES_LINKING') {
+      this.logger.warn(
+        'finalizeLinking called but state is not REQUIRES_LINKING'
+      );
+      return;
+    }
+
+    const urn = this.currentUserUrn();
+    if (urn) {
+      await this.cryptoService.storeMyKeys(urn, restoredKeys);
+    }
+
+    this.myKeys.set(restoredKeys);
+    await this.completeBootSequence();
+  }
+
+  // --- Standard Operations (Pass-Throughs) ---
+
+  private initBlockListSubscription(): void {
+    this.contactsService.blocked$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((blockedList) => {
+        const newSet = new Set<string>();
+        for (const b of blockedList) {
+          if (b.scopes.includes('all') || b.scopes.includes('messenger')) {
+            newSet.add(b.urn.toString());
+          }
+        }
+        this.blockedSet.set(newSet);
+      });
+  }
+
   private initTypingOrchestration(): void {
-    // We listen to the UI trigger, but throttle it to max 1 packet per 3s
     this.conversationService.typingTrigger$
       .pipe(throttleTime(3000), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         const keys = this.myKeys();
         const sender = this.currentUserUrn();
-
-        // Only send if we are authenticated and have keys
         if (keys && sender) {
-          this.logger.debug('ChatService: Sending typing indicator...');
-          // Fire and forget (Ephemeral)
           this.conversationService
             .sendTypingIndicator(keys, sender)
             .catch((err) =>
@@ -199,36 +363,23 @@ export class ChatService {
         }
       });
   }
-  // --- Sync Action (Delegated) ---
 
-  /**
-   * Facade for the Sync Process.
-   * Delegates heavy logic to ChatSyncOrchestratorService.
-   */
   public async sync(options: SyncOptions): Promise<void> {
-    // 1. Delegate Logic
+    if (this.onboardingState() !== 'READY') return;
     const success = await this.syncOrchestrator.performSync(options);
-
-    // 2. Refresh State (The "Kick")
     if (success) {
-      if (options.syncMessages) {
-        await this.refreshActiveConversations();
-      }
+      if (options.syncMessages) await this.refreshActiveConversations();
       if (options.syncContacts) {
         await this.refreshIdentityMap();
-        // Reloading summaries ensures contact names/avatars are updated
         await this.refreshActiveConversations();
       }
-      this.logger.info('ChatService: State refreshed after sync.');
     }
   }
 
   public async resetIdentityKeys(): Promise<void> {
     const userUrn = this.currentUserUrn();
     const currentUser = this.authService.currentUser();
-
     if (!userUrn || !currentUser) return;
-
     this.myKeys.set(null);
     const newKeys = await this.keyWorker.resetIdentityKeys(
       userUrn,
@@ -237,75 +388,47 @@ export class ChatService {
     this.myKeys.set(newKeys);
   }
 
-  // --- Ingestion Pipeline ---
-
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
+      if (this.onboardingState() !== 'READY') return;
       const myKeys = this.myKeys();
       const myUrn = this.currentUserUrn();
+      if (!myKeys || !myUrn) return;
 
-      if (!myKeys || !myUrn) {
-        this.logger.debug('Skipping fetch: Keys/URN not ready.');
-        return;
-      }
-
-      // Ingestion now returns object with messages AND typing indicators
       const result = await this.ingestionService.process(
         myKeys,
         myUrn,
-        this.blockedSet()
+        this.blockedSet(),
+        50,
+        false
       );
 
-      // 1. Delegate Updates to Active View (Messages)
       if (result.messages.length > 0) {
         this.conversationService.upsertMessages(result.messages);
         this.refreshActiveConversations();
-
-        // INTERCEPT: A real message kills the typing indicator
         this.updateTypingActivity(result.typingIndicators, result.messages);
       } else if (result.typingIndicators.length > 0) {
-        // Only typing indicators arrived
         this.updateTypingActivity(result.typingIndicators, []);
       }
     });
   }
 
-  /**
-   * Updates the typing map.
-   * - Adds new indicators with current timestamp.
-   * - Removes indicators if a Real Message arrived from that user.
-   */
   private updateTypingActivity(indicators: URN[], realMessages: any[]): void {
     this.typingActivity.update((map) => {
       const newMap = new Map(map);
       const now = Date.now();
-
-      // 1. Add/Update Typing
-      indicators.forEach((urn) => {
-        newMap.set(urn.toString(), now);
-      });
-
-      // 2. Remove Typing if Real Message Arrived
-      // (This creates the "Ghost Bubble pops into Real Bubble" effect)
+      indicators.forEach((urn) => newMap.set(urn.toString(), now));
       realMessages.forEach((msg) => {
-        const sender = msg.senderId.toString();
-        if (newMap.has(sender)) {
-          newMap.delete(sender);
-        }
+        if (newMap.has(msg.senderId.toString()))
+          newMap.delete(msg.senderId.toString());
       });
-
       return newMap;
     });
   }
 
-  // --- Delegated Actions ---
-
   public async loadConversation(urn: URN | null): Promise<void> {
     await this.conversationService.loadConversation(urn);
-
-    if (urn) {
-      this.handleReadStatusUpdate(urn);
-    }
+    if (urn) this.handleReadStatusUpdate(urn);
   }
 
   public loadMoreMessages(): Promise<void> {
@@ -315,12 +438,7 @@ export class ChatService {
   public async sendMessage(recipientUrn: URN, text: string): Promise<void> {
     const keys = this.myKeys();
     const sender = this.currentUserUrn();
-
-    if (!keys || !sender) {
-      this.logger.error('Cannot send: keys or identity not ready');
-      return;
-    }
-
+    if (!keys || !sender) return;
     await this.conversationService.sendMessage(
       recipientUrn,
       text,
@@ -336,12 +454,7 @@ export class ChatService {
   ): Promise<void> {
     const keys = this.myKeys();
     const sender = this.currentUserUrn();
-
-    if (!keys || !sender) {
-      this.logger.error('Cannot send: keys or identity not ready');
-      return;
-    }
-
+    if (!keys || !sender) return;
     await this.conversationService.sendContactShare(
       recipientUrn,
       data,
@@ -351,16 +464,13 @@ export class ChatService {
     this.refreshActiveConversations();
   }
 
-  // --- Private Helpers ---
-
   private handleReadStatusUpdate(urn: URN): void {
     this.activeConversations.update((list) =>
-      list.map((c) => {
-        if (c.conversationUrn.toString() === urn.toString()) {
-          return { ...c, unreadCount: 0 };
-        }
-        return c;
-      })
+      list.map((c) =>
+        c.conversationUrn.toString() === urn.toString()
+          ? { ...c, unreadCount: 0 }
+          : c
+      )
     );
   }
 
@@ -374,9 +484,9 @@ export class ChatService {
     try {
       const links = await this.contactsService.getAllIdentityLinks();
       const newMap = new Map<string, URN>();
-      links.forEach((link) => {
-        newMap.set(link.authUrn.toString(), link.contactId);
-      });
+      links.forEach((link) =>
+        newMap.set(link.authUrn.toString(), link.contactId)
+      );
       this.identityLinkMap.set(newMap);
     } catch (e) {
       this.logger.error('Failed to load identity links', e);
@@ -390,7 +500,6 @@ export class ChatService {
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(() => this.fetchAndProcessMessages());
-
     interval(15_000)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.fetchAndProcessMessages());
@@ -416,22 +525,14 @@ export class ChatService {
     }
   }
 
-  // --- Session Management ---
-
   public async sessionLogout(): Promise<void> {
-    this.logger.info('ChatService: Performing Session Logout...');
-
     this.liveService.disconnect();
     this.resetMemoryState();
-
     await this.authService.logout();
   }
 
   public async fullDeviceWipe(): Promise<void> {
-    this.logger.warn('ChatService: Performing Full Device Wipe...');
-
     this.liveService.disconnect();
-
     try {
       await Promise.all([
         this.storageService.clearDatabase(),
@@ -442,7 +543,6 @@ export class ChatService {
     } catch (e) {
       this.logger.error('Device wipe failed', e);
     }
-
     this.resetMemoryState();
     await this.authService.logout();
   }
@@ -457,59 +557,32 @@ export class ChatService {
     this.blockedSet.set(new Set());
     this.activeConversations.set([]);
     this.conversationService.loadConversation(null);
+    this.onboardingState.set('CHECKING');
   }
 
-  //Block / Pending user logic
-  /**
-   * Pass-through to fetch quarantined messages for review.
-   */
   public async getQuarantinedMessages(urn: URN): Promise<DecryptedMessage[]> {
     return this.storageService.getQuarantinedMessages(urn);
   }
-
-  /**
-   * Pass-through to promote messages when accepting a request.
-   */
   public async promoteQuarantinedMessages(
     oldUrn: URN,
     newUrn: URN
   ): Promise<void> {
     return this.storageService.promoteQuarantinedMessages(oldUrn, newUrn);
   }
-
-  /**
-   * ORCHESTRATOR: Performs the full "Block" workflow.
-   * 1. Adds identity to Block List (Contacts).
-   * 2. Removes from Pending List (Contacts).
-   * 3. Deletes any Quarantined content (Chat).
-   */
   public async block(
     urns: URN[],
     scope: 'messenger' | 'all' = 'messenger'
   ): Promise<void> {
-    // We execute these in parallel for speed, though sequentially is safer for error recovery.
-    // Given IndexedDB is local, parallel is fine.
-
-    // 1. Add to Block List
     await Promise.all(
       urns.map((urn) => this.contactsService.blockIdentity(urn, [scope]))
     );
-
-    // 2. Remove from Pending
     await Promise.all(
       urns.map((urn) => this.contactsService.deletePending(urn))
     );
-
-    // 3. Clear Content
     await Promise.all(
       urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn))
     );
-
-    // NOTE: We do NOT need to manually refresh 'blockedSet' here.
-    // The write to contactsService.blockIdentity will trigger the live query
-    // in init(), which updates the signal automatically.
   }
-
   public async dismissPending(
     urns: URN[],
     scope: 'messenger' | 'all' = 'messenger'
@@ -517,8 +590,6 @@ export class ChatService {
     await Promise.all(
       urns.map((urn) => this.contactsService.deletePending(urn))
     );
-
-    // 2. Cleanup Content (via ChatService)
     await Promise.all(
       urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn))
     );

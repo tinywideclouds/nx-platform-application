@@ -1,0 +1,6 @@
+// Component-specific styles that Tailwind might not cover easily
+:host {
+  display: block;
+}
+
+// Override material specifics if needed, otherwise Tailwind handles layout

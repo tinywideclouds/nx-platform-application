@@ -127,6 +127,12 @@
       ],
       "@nx-platform-application/platform-web-key-storage": [
         "libs/platform/ng/web-key-storage/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-device-pairing": [
+        "libs/messenger/device-pairing/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-identity-adapter": [
+        "libs/messenger/identity-adapter/src/index.ts"
       ]
     }
   },

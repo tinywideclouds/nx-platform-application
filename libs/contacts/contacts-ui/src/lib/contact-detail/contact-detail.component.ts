@@ -1,7 +1,7 @@
 // libs/contacts/contacts-ui/src/lib/components/contact-detail/contact-detail.component.ts
 
 import { Component, inject, input, output, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { map, switchMap } from 'rxjs/operators';
 import { from, of, Observable } from 'rxjs';
@@ -23,7 +23,7 @@ import { MatChipsModule } from '@angular/material/chips';
 @Component({
   selector: 'contacts-detail',
   standalone: true,
-  imports: [CommonModule, ContactFormComponent, MatChipsModule],
+  imports: [ContactFormComponent, MatChipsModule],
   templateUrl: './contact-detail.component.html',
   styleUrl: './contact-detail.component.scss',
 })

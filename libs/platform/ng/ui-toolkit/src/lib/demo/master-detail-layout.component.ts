@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MasterDetailLayoutComponent } from '../layouts/master-detail-layout.component';
@@ -9,7 +9,7 @@ import { MasterDetailLayoutComponent } from '../layouts/master-detail-layout.com
   standalone: true,
   // Make sure MasterDetailLayoutComponent is imported here!
   // If you put them in the same file, you don't need the import.
-  imports: [CommonModule, MasterDetailLayoutComponent, RouterLink],
+  imports: [MasterDetailLayoutComponent, RouterLink],
   template: `
     <div class="shell-header">
       <h2>Demo App</h2>

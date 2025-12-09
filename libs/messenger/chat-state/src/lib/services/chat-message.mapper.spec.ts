@@ -36,7 +36,7 @@ describe('ChatMessageMapper', () => {
     const result = service.toView(mockDecryptedMsg);
 
     expect(result.id).toBe('msg-1');
-    expect(result.senderId.toString()).toBe('urn:message:user:sender');
+    expect(result.senderId.toString()).toBe('urn:contacts:user:sender');
     expect(result.textContent).toBe('Hello World');
     expect(result.sentTimestamp).toBe('2025-01-01T12:00:00Z');
     expect(result.typeId.toString()).toBe('urn:message:type:text');

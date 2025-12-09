@@ -8,7 +8,7 @@ import {
   OnDestroy,
   input,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatToolbarModule } from '@angular/material/toolbar';
 
 const COMPACT_THRESHOLD_REM = 24; // ~384px at 16px base
@@ -18,7 +18,7 @@ export type pageMode = 'full' | 'compact';
 @Component({
   selector: 'contacts-page-toolbar',
   standalone: true,
-  imports: [CommonModule, MatToolbarModule],
+  imports: [MatToolbarModule],
   templateUrl: './contacts-page-toolbar.component.html',
   styleUrl: './contacts-page-toolbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

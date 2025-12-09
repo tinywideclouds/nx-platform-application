@@ -7,7 +7,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types'
-import { CommonModule } from '@angular/common';
+
 import { ChatConversationListItemComponent } from '../chat-conversation-list-item/chat-conversation-list-item.component';
 
 /**
@@ -27,7 +27,7 @@ export type ConversationViewItem = {
 @Component({
   selector: 'chat-conversation-list',
   standalone: true,
-  imports: [CommonModule, ChatConversationListItemComponent],
+  imports: [ChatConversationListItemComponent],
   templateUrl: './chat-conversation-list.component.html',
   styleUrl: './chat-conversation-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

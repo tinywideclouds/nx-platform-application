@@ -6,7 +6,7 @@ import {
   input,
   output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -34,15 +34,14 @@ import { ContactPageComponent } from '../contact-page/contact-page.component';
   selector: 'contacts-viewer',
   standalone: true,
   imports: [
-    CommonModule,
     MatButtonModule,
     MatIconModule,
     MasterDetailLayoutComponent,
     ContactsSidebarComponent,
     ContactDetailComponent,
-    ContactPageComponent, // Added to imports
-    ContactGroupPageComponent,
-  ],
+    ContactPageComponent,
+    ContactGroupPageComponent
+],
   templateUrl: './contacts-viewer.component.html',
   styleUrl: './contacts-viewer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

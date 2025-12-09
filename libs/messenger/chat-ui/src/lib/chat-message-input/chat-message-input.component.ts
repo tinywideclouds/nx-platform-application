@@ -8,7 +8,7 @@ import {
   inject,
   effect,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   ReactiveFormsModule,
   FormBuilder,
@@ -18,7 +18,7 @@ import {
 @Component({
   selector: 'chat-message-input',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [ReactiveFormsModule],
   templateUrl: './chat-message-input.component.html',
   styleUrl: './chat-message-input.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

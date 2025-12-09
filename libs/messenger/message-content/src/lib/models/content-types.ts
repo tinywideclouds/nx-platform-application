@@ -6,11 +6,17 @@ import { URN } from '@nx-platform-application/platform-types';
  */
 export const MESSAGE_TYPE_TEXT = 'urn:message:type:text';
 export const MessageTypeText = URN.parse('urn:message:type:text');
+
 export const MESSAGE_TYPE_CONTACT_SHARE = 'urn:message:type:contact-share';
+
 export const MESSAGE_TYPE_TYPING = 'urn:message:type:typing-indicator';
 export const MessageTypingIndicastor = URN.parse(
   'urn:message:type:typing-indicator'
 );
+
+// ✅ NEW: The "Trojan Horse" Message Type
+// Used for encrypted key exchange between devices.
+export const MESSAGE_TYPE_DEVICE_SYNC = 'urn:message:type:device-sync';
 
 /**
  * The JSON schema for the 'urn:message:type:contact-share' payload.

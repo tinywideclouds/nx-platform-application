@@ -8,7 +8,7 @@ import {
   SecureEnvelopeListPbSchema,
 } from '@nx-platform-application/platform-protos/secure/v1/envelope_pb';
 
-enum Priority {
+export enum Priority {
   Low = 1,
   // You can skip numbers. 'Medium' isn't required,
   // but if you added it without a value, it would auto-increment to 2.

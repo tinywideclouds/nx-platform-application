@@ -1,5 +1,10 @@
-import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  inject,
+  ChangeDetectionStrategy,
+  computed,
+} from '@angular/core';
+
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs/operators';
@@ -11,19 +16,21 @@ import {
   SidebarView,
 } from '../messenger-toolbar/messenger-toolbar.component';
 import { LogoutDialogComponent } from '../logout-dialog/logout-dialog.component';
+import { DeviceLinkWizardComponent } from '../device-link-wizard/device-link-wizard.component';
 
 // SERVICES
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { ChatService } from '@nx-platform-application/chat-state';
 
 @Component({
   selector: 'messenger-home-page',
   standalone: true,
   imports: [
-    CommonModule,
     RouterOutlet,
     MatDialogModule,
     MessengerToolbarComponent,
-  ],
+    DeviceLinkWizardComponent
+],
   templateUrl: './messenger-home-page.component.html',
   styleUrl: './messenger-home-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,9 +39,16 @@ export class MessengerHomePageComponent {
   private router = inject(Router);
   private dialog = inject(MatDialog);
   private authService = inject(IAuthService);
+  private chatService = inject(ChatService);
 
   // --- STATE ---
   currentUser = this.authService.currentUser;
+
+  // ✅ New: Halt State Check
+  // If true, the Wizard Overlay renders and blocks interaction.
+  showDeviceLinkWizard = computed(
+    () => this.chatService.onboardingState() === 'REQUIRES_LINKING'
+  );
 
   /**
    * Derives the active sidebar state strictly from the URL.
@@ -52,8 +66,6 @@ export class MessengerHomePageComponent {
   // --- ACTIONS ---
 
   onViewConversations() {
-    // We navigate to the root conversations route.
-    // This will naturally show the list, or the last active child route.
     this.router.navigate(['/messenger', 'conversations']);
   }
 
@@ -72,8 +84,8 @@ export class MessengerHomePageComponent {
       .subscribe((confirmed) => {
         if (confirmed) {
           this.authService.logout().subscribe({
-            next: () => this.router.navigate(['/login']), // Or your public route
-            error: () => this.router.navigate(['/login']), // Fail safe
+            next: () => this.router.navigate(['/login']),
+            error: () => this.router.navigate(['/login']),
           });
         }
       });
@@ -83,7 +95,6 @@ export class MessengerHomePageComponent {
 
   private getSidebarViewFromUrl(url: string): SidebarView {
     if (url.includes('/contacts')) return 'contacts';
-    // 'compose' is no longer a top-level view, it lives inside conversations
     return 'conversations';
   }
 }

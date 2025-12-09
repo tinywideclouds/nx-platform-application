@@ -1,0 +1,89 @@
+<div class="space-y-6">
+  <header class="pb-4 border-b border-gray-200">
+    <h1 class="text-2xl font-bold text-gray-800 m-0">Data & Storage</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      Manage your local storage, cloud backup, and account data.
+    </p>
+  </header>
+
+  <lib-messenger-sync-card class="block" />
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <mat-icon class="text-gray-400">storage</mat-icon>
+      <h3 class="font-bold text-gray-900 text-sm">Local Storage</h3>
+    </div>
+
+    <div class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
+      <div class="flex justify-between items-center">
+        <div>
+          <div
+            class="text-xs text-gray-400 font-semibold uppercase tracking-wide"
+          >
+            Cached Messages
+          </div>
+          <div class="text-2xl font-mono text-gray-800">
+            {{ messageCount().length }}
+          </div>
+        </div>
+        <button
+          mat-stroked-button
+          color="warn"
+          (click)="onClearMessageHistory()"
+        >
+          Clear History
+        </button>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">
+        This only removes messages from this device. They may still exist on
+        other devices or in the cloud if synced.
+      </p>
+    </div>
+
+    <div class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
+      <div class="flex justify-between items-center">
+        <div>
+          <div
+            class="text-xs text-gray-400 font-semibold uppercase tracking-wide"
+          >
+            Cached Contacts
+          </div>
+        </div>
+        <button mat-stroked-button color="warn" (click)="onClearContacts()">
+          Clear Contacts
+        </button>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">
+        This only removes contacts from this device. They may still exist on
+        other devices or in the cloud if synced.
+      </p>
+    </div>
+  </div>
+
+  <div
+    class="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden"
+  >
+    <div
+      class="bg-red-50 px-6 py-3 border-b border-red-100 flex items-center gap-2"
+    >
+      <mat-icon class="text-red-600 text-sm h-5 w-5">warning</mat-icon>
+      <h3 class="text-red-800 font-bold text-sm">Danger Zone</h3>
+    </div>
+
+    <div
+      class="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6"
+    >
+      <div>
+        <h4 class="font-bold text-gray-900 text-sm">Secure Wipe & Logout</h4>
+        <p class="text-sm text-gray-500 mt-1 max-w-md">
+          This performs a "Scorched Earth" reset. It destroys all encryption
+          keys, deletes the local database, and removes your session.
+        </p>
+      </div>
+
+      <button mat-flat-button color="warn" (click)="onSecureLogout()">
+        Wipe Data & Log Out
+      </button>
+    </div>
+  </div>
+</div>

@@ -8,7 +8,7 @@ import {
   signal,
   computed,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Contact } from '@nx-platform-application/contacts-storage';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
@@ -17,7 +17,7 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
 @Component({
   selector: 'contacts-multi-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, ContactAvatarComponent],
+  imports: [FormsModule, ContactAvatarComponent],
   templateUrl: './contact-multi-selector.component.html',
   styleUrl: './contact-multi-selector.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

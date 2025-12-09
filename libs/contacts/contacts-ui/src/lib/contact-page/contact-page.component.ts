@@ -1,7 +1,7 @@
 // libs/contacts/contacts-ui/src/lib/components/contact-page/contact-page.component.ts
 
 import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
@@ -16,12 +16,11 @@ import { MatIconModule } from '@angular/material/icon';
   selector: 'contacts-page',
   standalone: true,
   imports: [
-    CommonModule,
     ContactDetailComponent,
     ContactsPageToolbarComponent,
     MatButtonModule,
-    MatIconModule,
-  ],
+    MatIconModule
+],
   templateUrl: './contact-page.component.html',
   styleUrl: './contact-page.component.scss',
 })

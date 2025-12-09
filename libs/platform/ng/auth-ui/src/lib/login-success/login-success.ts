@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
+
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { firstValueFrom } from 'rxjs';
@@ -9,7 +9,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 @Component({
   standalone: true,
   selector: 'aui-login-success',
-  imports: [CommonModule, MatProgressSpinnerModule],
+  imports: [MatProgressSpinnerModule],
   templateUrl: './login-success.html',
 })
 export class LoginSuccessComponent implements OnInit {

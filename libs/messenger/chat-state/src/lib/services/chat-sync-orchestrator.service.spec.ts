@@ -85,7 +85,7 @@ describe('ChatSyncOrchestratorService', () => {
 
       // Mock 6 conversations
       const mockSummaries = Array.from({ length: 6 }, (_, i) => ({
-        conversationUrn: URN.parse(`urn:user:${i}`),
+        conversationUrn: URN.parse(`urn:contacts:user:${i}`),
       }));
       mockStorage.loadConversationSummaries.mockResolvedValue(mockSummaries);
       mockRepository.getMessages.mockResolvedValue({ messages: [] });

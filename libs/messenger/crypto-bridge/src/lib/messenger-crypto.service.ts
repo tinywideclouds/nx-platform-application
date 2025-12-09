@@ -30,6 +30,26 @@ const rsaPssImportParams: RsaHashedImportParams = {
   hash: 'SHA-256',
 };
 
+// --- Handshake Types ---
+export interface ReceiverSession {
+  sessionId: string;
+  qrPayload: string;
+  privateKey: CryptoKey;
+  publicKey: CryptoKey;
+}
+
+export interface SenderSession {
+  sessionId: string;
+  qrPayload: string;
+  oneTimeKey: CryptoKey;
+}
+
+export interface ParsedQr {
+  sessionId: string;
+  key: CryptoKey; // Either RSA-Public or AES-Secret
+  mode: 'RECEIVER_HOSTED' | 'SENDER_HOSTED';
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -38,6 +58,142 @@ export class MessengerCryptoService {
   private cryptoEngine = inject(CryptoEngine);
   private storage: WebKeyStorageProvider = inject(WebKeyDbStore);
   private keyService = inject(SecureKeyService);
+
+  // --- 1. Handshake Mechanics (Key Gen & QR Formatting) ---
+
+  /**
+   * Mode A (Receiver-Hosted): Generates RSA Keypair for the Target.
+   */
+  public async generateReceiverSession(): Promise<ReceiverSession> {
+    const keyPair = await this.cryptoEngine.generateEncryptionKeys();
+    const sessionId = crypto.randomUUID();
+
+    const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
+    const keyString = this.arrayBufferToBase64(spki);
+
+    const qrPayload = JSON.stringify({
+      sid: sessionId,
+      key: keyString,
+      m: 'rh', // Receiver Hosted
+      v: 1,
+    });
+
+    return {
+      sessionId,
+      qrPayload,
+      privateKey: keyPair.privateKey,
+      publicKey: keyPair.publicKey,
+    };
+  }
+
+  /**
+   * Mode B (Sender-Hosted): Generates AES Key for the Source.
+   */
+  public async generateSenderSession(): Promise<SenderSession> {
+    const oneTimeKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    const sessionId = crypto.randomUUID();
+
+    const rawKey = await crypto.subtle.exportKey('raw', oneTimeKey);
+    const keyString = this.arrayBufferToBase64(rawKey);
+
+    const qrPayload = JSON.stringify({
+      sid: sessionId,
+      key: keyString,
+      m: 'sh', // Sender Hosted
+      v: 1,
+    });
+
+    return {
+      sessionId,
+      qrPayload,
+      oneTimeKey,
+    };
+  }
+
+  /**
+   * Parses a raw QR string and imports the contained key.
+   */
+  public async parseQrCode(qrString: string): Promise<ParsedQr> {
+    let data: { sid: string; key: string; m: string; v: number };
+    try {
+      data = JSON.parse(qrString);
+    } catch (e) {
+      throw new Error('Invalid QR Format: Not JSON');
+    }
+
+    const binaryKey = this.base64ToArrayBuffer(data.key);
+    let key: CryptoKey;
+    let mode: 'RECEIVER_HOSTED' | 'SENDER_HOSTED';
+
+    if (data.m === 'rh') {
+      mode = 'RECEIVER_HOSTED';
+      // Import RSA Public Key
+      key = await crypto.subtle.importKey(
+        'spki',
+        binaryKey,
+        rsaOaepImportParams,
+        true,
+        ['encrypt']
+      );
+    } else if (data.m === 'sh') {
+      mode = 'SENDER_HOSTED';
+      // Import AES Secret Key
+      key = await crypto.subtle.importKey(
+        'raw',
+        binaryKey,
+        { name: 'AES-GCM' },
+        true,
+        ['decrypt']
+      );
+    } else {
+      throw new Error(`Unknown QR Mode: ${data.m}`);
+    }
+
+    return {
+      sessionId: data.sid,
+      key,
+      mode,
+    };
+  }
+
+  // --- 2. Identity Verification ---
+
+  public async verifyKeysMatch(
+    userUrn: URN,
+    server: PublicKeys
+  ): Promise<boolean> {
+    try {
+      const localPublic = await this.loadMyPublicKeys(userUrn);
+
+      if (!localPublic) {
+        this.logger.warn('verifyKeysMatch: Could not derive local public keys');
+        return false;
+      }
+
+      const encMatch = this.compareBytes(localPublic.encKey, server.encKey);
+      const sigMatch = this.compareBytes(localPublic.sigKey, server.sigKey);
+
+      if (!encMatch || !sigMatch) {
+        this.logger.warn(
+          'Crypto mismatch detected:',
+          !encMatch ? 'Encryption Key Mismatch' : '',
+          !sigMatch ? 'Signing Key Mismatch' : ''
+        );
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      this.logger.error('Failed to verify key match', e);
+      return false;
+    }
+  }
+
+  // --- 3. Key Management (Storage/Load) ---
 
   public async generateAndStoreKeys(
     userUrn: URN
@@ -77,6 +233,20 @@ export class MessengerCryptoService {
     await this.keyService.storeKeys(userUrn, publicKeys);
 
     return { privateKeys, publicKeys };
+  }
+
+  public async storeMyKeys(userUrn: URN, keys: PrivateKeys): Promise<void> {
+    this.logger.debug(`CryptoService: Storing restored keys for ${userUrn}`);
+
+    const [encPrivKeyJwk, sigPrivKeyJwk] = await Promise.all([
+      crypto.subtle.exportKey('jwk', keys.encKey),
+      crypto.subtle.exportKey('jwk', keys.sigKey),
+    ]);
+
+    await Promise.all([
+      this.storage.saveJwk(this.getEncKeyUrn(userUrn), encPrivKeyJwk),
+      this.storage.saveJwk(this.getSigKeyUrn(userUrn), sigPrivKeyJwk),
+    ]);
   }
 
   public async loadMyKeys(userUrn: URN): Promise<PrivateKeys | null> {
@@ -153,30 +323,7 @@ export class MessengerCryptoService {
       .slice(0, 47);
   }
 
-  private async jwkToSpki(
-    privateJwk: JsonWebKey,
-    params: any,
-    usages: KeyUsage[]
-  ): Promise<ArrayBuffer> {
-    const publicJwk: JsonWebKey = {
-      kty: privateJwk.kty,
-      n: privateJwk.n,
-      e: privateJwk.e,
-      alg: privateJwk.alg,
-      ext: true,
-      key_ops: usages,
-    };
-
-    const pubKey = await crypto.subtle.importKey(
-      'jwk',
-      publicJwk,
-      params,
-      true,
-      usages
-    );
-
-    return crypto.subtle.exportKey('spki', pubKey);
-  }
+  // --- 4. Encryption / Decryption ---
 
   public async encryptAndSign(
     payload: EncryptedMessagePayload,
@@ -210,12 +357,102 @@ export class MessengerCryptoService {
     };
   }
 
+  // Used for Receiver-Hosted Flow (Encrypting for RSA Session Key)
+  public async encryptSyncMessage(
+    payload: EncryptedMessagePayload,
+    sessionPublicKey: CryptoKey,
+    myPrivateKeys: PrivateKeys
+  ): Promise<SecureEnvelope> {
+    const payloadBytes = serializePayloadToProtoBytes(payload);
+
+    const { encryptedSymmetricKey, encryptedData } =
+      await this.cryptoEngine.encrypt(sessionPublicKey, payloadBytes);
+
+    const signature = await this.cryptoEngine.sign(
+      myPrivateKeys.sigKey,
+      encryptedData
+    );
+
+    return {
+      recipientId: payload.senderId,
+      encryptedSymmetricKey,
+      encryptedData,
+      signature,
+    };
+  }
+
+  // Used for Sender-Hosted Flow (Encrypting for AES Session Key)
+  public async encryptSyncOffer(
+    payload: EncryptedMessagePayload,
+    oneTimeKey: CryptoKey
+  ): Promise<SecureEnvelope> {
+    const payloadBytes = serializePayloadToProtoBytes(payload);
+
+    // Generate IV
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    // Encrypt directly (AES-GCM)
+    const encryptedContent = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      oneTimeKey,
+      new Uint8Array(payloadBytes)
+    );
+
+    // Combine IV + Ciphertext
+    const encryptedData = new Uint8Array(
+      iv.length + encryptedContent.byteLength
+    );
+    encryptedData.set(iv, 0);
+    encryptedData.set(new Uint8Array(encryptedContent), iv.length);
+
+    return {
+      recipientId: payload.senderId,
+      encryptedSymmetricKey: new Uint8Array(0), // Empty, key is in QR
+      encryptedData,
+      signature: new Uint8Array(0), // Signature optional for drop-box
+    };
+  }
+
   public async verifyAndDecrypt(
     envelope: SecureEnvelope,
     myPrivateKeys: PrivateKeys
   ): Promise<EncryptedMessagePayload> {
+    return this.internalVerifyAndDecrypt(envelope, myPrivateKeys.encKey);
+  }
+
+  // Used for Receiver-Hosted Flow (Decrypting with RSA Session Key)
+  public async decryptSyncMessage(
+    envelope: SecureEnvelope,
+    sessionPrivateKey: CryptoKey
+  ): Promise<EncryptedMessagePayload> {
+    return this.internalVerifyAndDecrypt(envelope, sessionPrivateKey);
+  }
+
+  // Used for Sender-Hosted Flow (Decrypting with AES Session Key)
+  public async decryptSyncOffer(
+    envelope: SecureEnvelope,
+    oneTimeKey: CryptoKey
+  ): Promise<EncryptedMessagePayload> {
+    const iv = envelope.encryptedData.slice(0, 12);
+    const ciphertext = envelope.encryptedData.slice(12);
+
+    const decryptedBytes = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      oneTimeKey,
+      ciphertext
+    );
+
+    return deserializeProtoBytesToPayload(new Uint8Array(decryptedBytes));
+  }
+
+  // --- Private Helpers ---
+
+  private async internalVerifyAndDecrypt(
+    envelope: SecureEnvelope,
+    decryptionKey: CryptoKey
+  ): Promise<EncryptedMessagePayload> {
     const innerPayloadBytes = await this.cryptoEngine.decrypt(
-      myPrivateKeys.encKey,
+      decryptionKey,
       envelope.encryptedSymmetricKey,
       envelope.encryptedData
     );
@@ -258,6 +495,55 @@ export class MessengerCryptoService {
 
   private getSigKeyUrn(userId: URN): string {
     return `messenger:${userId.toString()}:key:signing`;
+  }
+
+  private async jwkToSpki(
+    privateJwk: JsonWebKey,
+    params: any,
+    usages: KeyUsage[]
+  ): Promise<ArrayBuffer> {
+    const publicJwk: JsonWebKey = {
+      kty: privateJwk.kty,
+      n: privateJwk.n,
+      e: privateJwk.e,
+      alg: privateJwk.alg,
+      ext: true,
+      key_ops: usages,
+    };
+
+    const pubKey = await crypto.subtle.importKey(
+      'jwk',
+      publicJwk,
+      params,
+      true,
+      usages
+    );
+
+    return crypto.subtle.exportKey('spki', pubKey);
+  }
+
+  private compareBytes(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((val, i) => val === b[i]);
+  }
+
+  // --- Base64 Utilities ---
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  }
+
+  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binary_string = window.atob(base64);
+    const bytes = new Uint8Array(binary_string.length);
+    for (let i = 0; i < binary_string.length; i++) {
+      bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes.buffer;
   }
 
   public async clearKeys(): Promise<void> {

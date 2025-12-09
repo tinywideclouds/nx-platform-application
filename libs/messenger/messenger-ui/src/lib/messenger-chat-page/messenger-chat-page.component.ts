@@ -5,7 +5,7 @@ import {
   ChangeDetectionStrategy,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Router, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
@@ -51,7 +51,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
   selector: 'messenger-chat-page',
   standalone: true,
   imports: [
-    CommonModule,
     RouterOutlet,
     MatIconModule,
     MatToolbarModule,
@@ -64,8 +63,8 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     FeaturePlaceholderComponent,
     ContactsSidebarComponent,
     ListFilterComponent,
-    MessageRequestReviewComponent,
-  ],
+    MessageRequestReviewComponent
+],
   templateUrl: './messenger-chat-page.component.html',
   styleUrl: './messenger-chat-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

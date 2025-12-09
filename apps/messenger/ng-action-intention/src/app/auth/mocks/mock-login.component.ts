@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { User } from '@nx-platform-application/platform-types';
@@ -9,7 +9,7 @@ import { MockAuthService, MOCK_USERS } from './mock-auth.service';
 @Component({
   selector: 'app-mock-login',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatButtonModule],
+  imports: [MatCardModule, MatButtonModule],
   template: `
     <div class="mock-login-container">
       <mat-card>

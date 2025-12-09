@@ -10,47 +10,66 @@ import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { ContactMessengerMapper } from './contact-messenger.mapper';
 import { Logger } from '@nx-platform-application/console-logger';
-import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  QueuedMessage,
+  SecureEnvelope,
+} from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 // --- Fixtures ---
 const mockMyUrn = URN.parse('urn:contacts:user:me');
-const mockSenderHandle = URN.parse('urn:lookup:email:stranger@test.com');
 const mockSenderContact = URN.parse('urn:contacts:user:friend');
 
-const mockEnvelope = { recipientId: mockMyUrn } as any;
-const mockQueuedMsg: QueuedMessage = { id: 'q-1', envelope: mockEnvelope };
-const mockDecryptedPayload = {
-  senderId: mockSenderHandle,
+const mockEnvelope = { recipientId: mockMyUrn } as SecureEnvelope;
+const mockQueuedMsg: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
+
+const mockStandardPayload = {
+  senderId: mockSenderContact,
   sentTimestamp: '2025-01-01T12:00:00Z',
   typeId: URN.parse('urn:message:type:text'),
-  payloadBytes: new TextEncoder().encode('Hello'),
+  payloadBytes: new Uint8Array([1]),
 };
+
+const mockSyncPayload = {
+  senderId: mockMyUrn, // Sent by me
+  sentTimestamp: '2025-01-01T12:00:00Z',
+  typeId: URN.parse('urn:message:type:device-sync'),
+  payloadBytes: new Uint8Array([99]), // The Key Blob
+};
+
+const mockKeys = { encKey: 'priv' } as any;
+const mockSessionKey = { algorithm: { name: 'AES-GCM' } } as any;
 
 describe('ChatIngestionService', () => {
   let service: ChatIngestionService;
 
-  // --- Mocks ---
   const mockStorageService = {
     saveMessage: vi.fn(),
-    saveQuarantinedMessage: vi.fn(), // ✅ New method
+    saveQuarantinedMessage: vi.fn(),
   };
   const mockContactsService = { addToPending: vi.fn() };
   const mockMapper = { resolveToContact: vi.fn() };
-
-  // Standard boilerplate mocks...
   const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
-  const mockCryptoService = { verifyAndDecrypt: vi.fn() };
-  const mockLogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+  const mockCryptoService = {
+    verifyAndDecrypt: vi.fn(),
+    decryptSyncMessage: vi.fn(), // ✅ New Mock
+  };
+  const mockLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
-    mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
 
-    // Default: Resolve to Friend
+    // Default behaviors
+    mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockStandardPayload);
     mockMapper.resolveToContact.mockResolvedValue(mockSenderContact);
 
     TestBed.configureTestingModule({
@@ -68,48 +87,87 @@ describe('ChatIngestionService', () => {
     service = TestBed.inject(ChatIngestionService);
   });
 
-  it('should QUARANTINE unknown senders (Strangers)', async () => {
-    // 1. Arrange: Incoming message from Stranger
-    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+  describe('Standard Mode (Ready)', () => {
+    it('should decrypt using Identity Keys and ACK on success', async () => {
+      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
 
-    // Mapper returns the HANDLE (urn:lookup:email...), not a Contact URN
-    mockMapper.resolveToContact.mockResolvedValue(mockSenderHandle);
+      await service.process(mockKeys, mockMyUrn, new Set(), 50, false);
 
-    // 2. Act
-    const result = await service.process({} as any, mockMyUrn, new Set());
+      expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalledWith(
+        mockEnvelope,
+        mockKeys
+      );
+      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+    });
 
-    // 3. Assert
-    // Should call Pending
-    expect(mockContactsService.addToPending).toHaveBeenCalledWith(
-      mockSenderHandle
-    );
+    it('should ACK even if processing fails (to prevent loops)', async () => {
+      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+      mockCryptoService.verifyAndDecrypt.mockRejectedValue(
+        new Error('Decrypt fail')
+      );
 
-    // Should save to QUARANTINE table
-    expect(mockStorageService.saveQuarantinedMessage).toHaveBeenCalled();
+      await service.process(mockKeys, mockMyUrn, new Set(), 50, false);
 
-    // Should NOT save to MAIN table
-    expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
-
-    // Should NOT return message to UI
-    expect(result.messages.length).toBe(0);
-
-    // Should still ACK the network
-    expect(mockDataService.acknowledge).toHaveBeenCalledWith(['q-1']);
+      expect(mockLogger.error).toHaveBeenCalled();
+      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']); // ✅ Critical: Ack loop prevention
+    });
   });
 
-  it('should SAVE known contacts to main storage', async () => {
-    // 1. Arrange: Incoming message from Friend
-    mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+  describe('Safe Mode (Linking)', () => {
+    it('should decrypt using SESSION KEY if keys are missing', async () => {
+      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+      mockCryptoService.decryptSyncMessage.mockResolvedValue(mockSyncPayload);
 
-    // Mapper returns local Contact URN
-    mockMapper.resolveToContact.mockResolvedValue(mockSenderContact);
+      // Act: Safe Mode = true, myKeys = null, sessionKey = provided
+      const result = await service.process(
+        null,
+        mockMyUrn,
+        new Set(),
+        50,
+        true,
+        mockSessionKey
+      );
 
-    // 2. Act
-    const result = await service.process({} as any, mockMyUrn, new Set());
+      // 1. Verify specific decrypt method used
+      expect(mockCryptoService.decryptSyncMessage).toHaveBeenCalledWith(
+        mockEnvelope,
+        mockSessionKey
+      );
 
-    // 3. Assert
-    expect(mockStorageService.saveMessage).toHaveBeenCalled();
-    expect(mockStorageService.saveQuarantinedMessage).not.toHaveBeenCalled();
-    expect(result.messages.length).toBe(1);
+      // 2. Verify Result contains sync payload
+      expect(result.syncPayload).toEqual(mockSyncPayload);
+
+      // 3. Verify Message was NOT saved to chat history
+      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
+
+      // 4. Verify Ack (Success case should Ack)
+      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+    });
+
+    it('should NOT ACK if decryption fails in Safe Mode', async () => {
+      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+
+      // Simulate: Message is NOT encrypted with our session key (e.g. old message in backlog)
+      mockCryptoService.decryptSyncMessage.mockRejectedValue(
+        new Error('Wrong Key')
+      );
+
+      await service.process(
+        null,
+        mockMyUrn,
+        new Set(),
+        50,
+        true,
+        mockSessionKey
+      );
+
+      // 1. Verify Error Log
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping unreadable')
+      );
+
+      // 2. ✅ Verify NO ACK (Prevent Data Loss)
+      expect(mockDataService.acknowledge).not.toHaveBeenCalled();
+    });
   });
 });

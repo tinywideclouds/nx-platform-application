@@ -4,14 +4,14 @@ import {
   output,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Contact } from '@nx-platform-application/contacts-storage';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
 @Component({
   selector: 'contacts-list',
   standalone: true,
-  imports: [CommonModule, ContactListItemComponent],
+  imports: [ContactListItemComponent],
   templateUrl: './contact-list.component.html',
   styleUrl: './contact-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

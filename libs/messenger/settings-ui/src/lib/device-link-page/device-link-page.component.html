@@ -1,0 +1,51 @@
+<div class="page-container">
+  <mat-card class="link-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="primary">add_to_queue</mat-icon>
+      <mat-card-title>Link a New Device</mat-card-title>
+      <mat-card-subtitle>
+        Scan the QR code displayed on the device you want to add.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (isLinking()) {
+      <div class="loading-box">
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        <p>Securely transferring keys...</p>
+      </div>
+      } @if (isScanning() && !isLinking()) {
+      <div class="scanner-wrapper">
+        <lib-qr-scanner
+          [active]="true"
+          (scanSuccess)="handleScan($event)"
+          (scanError)="handleScanError($event)"
+        ></lib-qr-scanner>
+      </div>
+      } @if (!isScanning() && !isLinking()) {
+      <div class="placeholder-box">
+        <mat-icon class="large-icon">qr_code_scanner</mat-icon>
+        <p>Camera is currently off</p>
+      </div>
+      }
+    </mat-card-content>
+
+    <mat-card-actions align="end">
+      @if (isScanning()) {
+      <button mat-button color="warn" (click)="isScanning.set(false)">
+        Cancel
+      </button>
+      } @else {
+      <button
+        mat-flat-button
+        color="primary"
+        (click)="isScanning.set(true)"
+        [disabled]="isLinking()"
+      >
+        <mat-icon>camera_alt</mat-icon>
+        Start Scanning
+      </button>
+      }
+    </mat-card-actions>
+  </mat-card>
+</div>

@@ -1,7 +1,7 @@
 // libs/messenger/messenger-ui/src/lib/messenger-network-status/messenger-network-status.component.ts
 
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -10,7 +10,7 @@ import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
 @Component({
   selector: 'messenger-network-status',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatTooltipModule],
+  imports: [MatIconModule, MatTooltipModule],
   template: `
     <div
       class="flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 cursor-pointer hover:bg-gray-100"

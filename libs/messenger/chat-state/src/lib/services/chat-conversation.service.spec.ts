@@ -176,7 +176,7 @@ describe('ChatConversationService', () => {
         mockKeys,
         mockMyUrn,
         mockConvoUrn,
-        expect.objectContaining({ entityId: 'type:indicator:typing' }), // Loose check on URN
+        expect.objectContaining({ entityId: 'type:typing-indicator' }), // Loose check on URN
         expect.any(Uint8Array), // Empty payload
         { isEphemeral: true } // ✅ Check Flag
       );

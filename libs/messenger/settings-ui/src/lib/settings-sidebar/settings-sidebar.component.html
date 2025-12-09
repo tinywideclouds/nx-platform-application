@@ -37,37 +37,37 @@
         [class.text-blue-700]="rlaIdentity.isActive"
         [class.text-gray-500]="!rlaIdentity.isActive"
         class="text-xs"
-        >Profile & Security</span
+        >Profile & Status</span
       >
     </a>
 
     <a
       mat-list-item
-      routerLink="contacts"
+      routerLink="data"
       routerLinkActive
-      #rlaContacts="routerLinkActive"
-      [class.bg-blue-50]="rlaContacts.isActive"
+      #rlaData="routerLinkActive"
+      [class.bg-blue-50]="rlaData.isActive"
       class="rounded-lg transition-colors duration-200"
     >
       <mat-icon
         matListItemIcon
-        [class.text-blue-600]="rlaContacts.isActive"
-        [class.text-gray-500]="!rlaContacts.isActive"
-        >contacts</mat-icon
+        [class.text-blue-600]="rlaData.isActive"
+        [class.text-gray-500]="!rlaData.isActive"
+        >storage</mat-icon
       >
       <span
         matListItemTitle
-        [class.text-blue-900]="rlaContacts.isActive"
-        [class.text-gray-900]="!rlaContacts.isActive"
+        [class.text-blue-900]="rlaData.isActive"
+        [class.text-gray-900]="!rlaData.isActive"
         class="font-medium"
-        >Contacts</span
+        >Data & Storage</span
       >
       <span
         matListItemLine
-        [class.text-blue-700]="rlaContacts.isActive"
-        [class.text-gray-500]="!rlaContacts.isActive"
+        [class.text-blue-700]="rlaData.isActive"
+        [class.text-gray-500]="!rlaData.isActive"
         class="text-xs"
-        >Sync & Requests</span
+        >Sync, Backup & Wipe</span
       >
     </a>
 
@@ -90,44 +90,14 @@
         [class.text-blue-900]="rlaKeys.isActive"
         [class.text-gray-900]="!rlaKeys.isActive"
         class="font-medium"
-        >Encryption Keys</span
+        >Keys & Routing</span
       >
       <span
         matListItemLine
         [class.text-blue-700]="rlaKeys.isActive"
         [class.text-gray-500]="!rlaKeys.isActive"
         class="text-xs"
-        >Reset & Verification</span
-      >
-    </a>
-
-    <a
-      mat-list-item
-      routerLink="routing"
-      routerLinkActive
-      #rlaRouting="routerLinkActive"
-      [class.bg-blue-50]="rlaRouting.isActive"
-      class="rounded-lg transition-colors duration-200"
-    >
-      <mat-icon
-        matListItemIcon
-        [class.text-blue-600]="rlaRouting.isActive"
-        [class.text-gray-500]="!rlaRouting.isActive"
-        >hub</mat-icon
-      >
-      <span
-        matListItemTitle
-        [class.text-blue-900]="rlaRouting.isActive"
-        [class.text-gray-900]="!rlaRouting.isActive"
-        class="font-medium"
-        >Routing & Storage</span
-      >
-      <span
-        matListItemLine
-        [class.text-blue-700]="rlaRouting.isActive"
-        [class.text-gray-500]="!rlaRouting.isActive"
-        class="text-xs"
-        >Connection & Debug</span
+        >Link Devices & Security</span
       >
     </a>
   </mat-nav-list>

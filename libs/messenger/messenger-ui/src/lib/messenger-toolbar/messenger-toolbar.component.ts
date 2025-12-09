@@ -4,7 +4,7 @@ import {
   input,
   output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -22,14 +22,13 @@ export type SidebarView = 'conversations' | 'contacts';
   selector: 'messenger-toolbar',
   standalone: true,
   imports: [
-    CommonModule,
     MatToolbarModule,
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
     MatTooltipModule,
-    MessengerNetworkStatusComponent, // Added to imports
-  ],
+    MessengerNetworkStatusComponent
+],
   templateUrl: './messenger-toolbar.component.html',
   styleUrl: './messenger-toolbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

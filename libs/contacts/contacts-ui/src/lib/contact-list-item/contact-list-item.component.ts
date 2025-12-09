@@ -6,14 +6,14 @@ import {
   input,
   output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Contact } from '@nx-platform-application/contacts-storage';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
   selector: 'contacts-list-item',
   standalone: true,
-  imports: [CommonModule, ContactAvatarComponent],
+  imports: [ContactAvatarComponent],
   templateUrl: './contact-list-item.component.html',
   styleUrl: './contact-list-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

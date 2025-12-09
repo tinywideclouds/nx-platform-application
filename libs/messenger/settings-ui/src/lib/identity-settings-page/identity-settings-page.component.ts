@@ -1,36 +1,33 @@
-// libs/messenger/settings-ui/src/lib/identity-settings-page/identity-settings-page.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
   inject,
   computed,
+  signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { from, of } from 'rxjs';
+import { catchError, map, startWith, switchMap } from 'rxjs/operators';
 
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { ChatService } from '@nx-platform-application/chat-state';
-import { SecureLogoutDialogComponent } from '../secure-logout-dialog/secure-logout-dialog.component';
-import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
+import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 
 @Component({
   selector: 'lib-identity-settings-page',
   standalone: true,
   imports: [
     CommonModule,
-    MatButtonModule,
     MatCardModule,
     MatIconModule,
-    MatDialogModule,
+    MatChipsModule,
     MatTooltipModule,
-    MatSnackBarModule,
-    MessengerSyncCardComponent, // ✅ NEW
   ],
   templateUrl: './identity-settings-page.component.html',
   styleUrl: './identity-settings-page.component.scss',
@@ -39,8 +36,10 @@ import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-syn
 export class IdentitySettingsPageComponent {
   private authService = inject(IAuthService);
   private chatService = inject(ChatService);
-  private dialog = inject(MatDialog);
+  private cryptoService = inject(MessengerCryptoService);
+  private liveService = inject(ChatLiveDataService);
 
+  // 1. Profile Data
   currentUser = this.authService.currentUser;
 
   initials = computed(() => {
@@ -49,12 +48,33 @@ export class IdentitySettingsPageComponent {
     return user.alias.slice(0, 2).toUpperCase();
   });
 
-  onSecureLogout(): void {
-    this.dialog
-      .open(SecureLogoutDialogComponent)
-      .afterClosed()
-      .subscribe((confirmed) => {
-        if (confirmed) this.chatService.logout();
-      });
+  // 2. Connection Status (From Routing Page)
+  // Converting Observable to Signal
+  connectionStatus = toSignal(this.liveService.status$, {
+    initialValue: 'disconnected',
+  });
+
+  // Re-implementing the robust loader from KeyPage
+  fingerprintState = toSignal(
+    from(this.loadFingerprint()).pipe(
+      startWith({ value: 'Loading...', isLoading: true })
+    ),
+    { initialValue: { value: 'Loading...', isLoading: true } }
+  );
+
+  private async loadFingerprint() {
+    const urn = this.currentUser()?.id;
+    if (!urn) return { value: 'Not Logged In', isLoading: false };
+
+    try {
+      const keys = await this.cryptoService.loadMyPublicKeys(urn);
+      if (keys?.encKey) {
+        const fp = await this.cryptoService.getFingerprint(keys.encKey);
+        return { value: fp, isLoading: false };
+      }
+      return { value: 'No Identity Keys Found', isLoading: false };
+    } catch (e) {
+      return { value: 'Error loading fingerprint', isLoading: false };
+    }
   }
 }

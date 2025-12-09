@@ -7,7 +7,7 @@ import {
   ElementRef,
   input,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,12 +17,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
   selector: 'lib-list-filter',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatButtonModule,
     MatIconModule,
-    MatTooltipModule,
-  ],
+    MatTooltipModule
+],
   templateUrl: './list-filter.component.html',
   styleUrl: './list-filter.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

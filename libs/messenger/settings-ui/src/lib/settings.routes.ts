@@ -1,5 +1,8 @@
 import { Routes } from '@angular/router';
 import { SettingsShellComponent } from './settings-shell/settings-shell.component';
+import { DeviceLinkPageComponent } from './device-link-page/device-link-page.component';
+import { KeySettingsPageComponent } from './key-settings-page/key-settings-page.component';
+import { DataSettingsPageComponent } from './data-settings-page/data-settings-page.component';
 
 export const settingsRoutes: Routes = [
   {
@@ -7,38 +10,28 @@ export const settingsRoutes: Routes = [
     component: SettingsShellComponent,
     children: [
       {
-        path: '',
-        redirectTo: 'identity',
-        pathMatch: 'full',
-      },
-      {
         path: 'identity',
         loadComponent: () =>
           import(
             './identity-settings-page/identity-settings-page.component'
           ).then((m) => m.IdentitySettingsPageComponent),
+        data: { title: 'Identity' },
       },
       {
-        path: 'keys',
-        loadComponent: () =>
-          import('./key-settings-page/key-settings-page.component').then(
-            (m) => m.KeySettingsPageComponent
-          ),
+        path: 'data',
+        component: DataSettingsPageComponent,
+        data: { title: 'Data & Storage' },
       },
       {
-        path: 'routing',
-        loadComponent: () =>
-          import(
-            './routing-settings-page/routing-settings-page.component'
-          ).then((m) => m.RoutingSettingsPageComponent),
+        path: 'keys', // "Keys & Routing"
+        component: KeySettingsPageComponent,
+        data: { title: 'Keys & Routing' },
       },
-      // NEW: Contacts & Security Page
+      // --- Functional Routes ---
       {
-        path: 'contacts',
-        loadComponent: () =>
-          import('@nx-platform-application/contacts-ui').then(
-            (m) => m.ContactsSettingsPageComponent
-          ),
+        path: 'link-device',
+        component: DeviceLinkPageComponent,
+        data: { title: 'Link New Device' },
       },
     ],
   },

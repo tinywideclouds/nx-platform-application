@@ -4,14 +4,14 @@ import {
   output,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ContactGroup } from '@nx-platform-application/contacts-storage';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
 
 @Component({
   selector: 'contacts-group-list',
   standalone: true,
-  imports: [CommonModule, ContactGroupListItemComponent],
+  imports: [ContactGroupListItemComponent],
   templateUrl: './contact-group-list.component.html',
   styleUrl: './contact-group-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

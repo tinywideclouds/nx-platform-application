@@ -1,7 +1,7 @@
 // libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.ts
 
 import { Component, inject, input, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Router, RouterLink } from '@angular/router';
 import {
   ContactsStorageService,
@@ -22,13 +22,12 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
   selector: 'contacts-group-page',
   standalone: true,
   imports: [
-    CommonModule,
     RouterLink,
     MatButtonModule,
     MatIconModule,
     ContactGroupFormComponent,
-    ContactsPageToolbarComponent,
-  ],
+    ContactsPageToolbarComponent
+],
   templateUrl: './contact-group-page.component.html',
   styleUrl: './contact-group-page.component.scss',
 })

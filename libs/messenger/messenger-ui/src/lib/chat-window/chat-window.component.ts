@@ -9,7 +9,7 @@ import {
   effect,
   untracked,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   ActivatedRoute,
   Router,
@@ -39,7 +39,7 @@ import { ChatParticipant } from '@nx-platform-application/messenger-types';
 @Component({
   selector: 'messenger-chat-window',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, ChatWindowHeaderComponent],
+  imports: [RouterOutlet, ChatWindowHeaderComponent],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

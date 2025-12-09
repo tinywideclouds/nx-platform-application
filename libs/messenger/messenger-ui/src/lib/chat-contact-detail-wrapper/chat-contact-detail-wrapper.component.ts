@@ -1,7 +1,7 @@
 // libs/messenger/messenger-ui/src/lib/chat-contact-detail-wrapper/chat-contact-detail-wrapper.component.ts
 
 import { Component, inject, input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { URN } from '@nx-platform-application/platform-types';
 import { ChatService } from '@nx-platform-application/chat-state';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -17,11 +17,10 @@ import { MatIconModule } from '@angular/material/icon';
   selector: 'messenger-chat-contact-detail-wrapper',
   standalone: true,
   imports: [
-    CommonModule,
     ContactDetailComponent,
     ChatShareContactFooterComponent,
-    MatIconModule,
-  ],
+    MatIconModule
+],
   templateUrl: './chat-contact-detail-wrapper.component.html',
   styleUrl: './chat-contact-detail-wrapper.component.scss',
 })

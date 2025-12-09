@@ -1,12 +1,12 @@
 // libs/messenger/chat-ui/src/lib/chat-typing-indicator/chat-typing-indicator.component.ts
 
 import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 
 @Component({
   selector: 'chat-typing-indicator',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div
       class="flex items-center space-x-1 bg-gray-100 rounded-2xl px-4 py-3 w-fit"

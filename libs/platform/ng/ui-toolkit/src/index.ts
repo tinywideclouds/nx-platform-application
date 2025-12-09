@@ -7,3 +7,5 @@ export * from './lib/feature-placeholder/feature-placeholder.component';
 export * from './lib/list-filter/list-filter.component';
 
 export * from './lib/directives/auto-scroll.directive';
+
+export * from './lib/qr-scanner/qr-scanner.component';

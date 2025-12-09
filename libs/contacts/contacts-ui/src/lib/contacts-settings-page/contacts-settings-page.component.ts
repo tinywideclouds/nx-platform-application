@@ -4,7 +4,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -22,13 +22,12 @@ import { ContactsSecurityComponent } from '../contacts-security/contacts-securit
   selector: 'contacts-settings-page',
   standalone: true,
   imports: [
-    CommonModule,
     MatButtonModule,
     MatIconModule,
     MatCardModule,
     MatProgressBarModule,
-    ContactsSecurityComponent, // ✅ Use the sub-component
-  ],
+    ContactsSecurityComponent
+],
   templateUrl: './contacts-settings-page.component.html',
   styleUrl: './contacts-settings-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

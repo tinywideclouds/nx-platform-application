@@ -7,7 +7,7 @@ import {
   computed,
   model,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterModule } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 
@@ -36,7 +36,6 @@ import { ContactGroupListComponent } from '../contact-group-list/contact-group-l
   selector: 'contacts-sidebar',
   standalone: true,
   imports: [
-    CommonModule,
     RouterModule,
     MatTabsModule,
     MatButtonModule,
@@ -45,8 +44,8 @@ import { ContactGroupListComponent } from '../contact-group-list/contact-group-l
     ContactsPageToolbarComponent,
     ContactListComponent,
     ContactGroupListComponent,
-    ListFilterComponent, // Added
-  ],
+    ListFilterComponent
+],
   templateUrl: './contacts-sidebar.component.html',
   styleUrl: './contacts-sidebar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

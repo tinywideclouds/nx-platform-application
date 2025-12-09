@@ -1,10 +1,10 @@
 import { Component, input, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 
 @Component({
   selector: 'contacts-avatar',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './contact-avatar.component.html',
   styleUrl: './contact-avatar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

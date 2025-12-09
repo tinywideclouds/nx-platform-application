@@ -5,9 +5,12 @@ import { vi } from 'vitest';
 import { Router } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { ChatService } from '@nx-platform-application/chat-state';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
+import { By } from '@angular/platform-browser';
 
+// Mocks
 const mockAuthService = {
   currentUser: signal({
     id: 'user-123',
@@ -15,6 +18,10 @@ const mockAuthService = {
     email: 'test@test.com',
   }),
   logout: vi.fn().mockReturnValue(of(undefined)),
+};
+
+const mockChatService = {
+  onboardingState: signal('READY'), // Default
 };
 
 describe('MessengerHomePageComponent', () => {
@@ -29,7 +36,10 @@ describe('MessengerHomePageComponent', () => {
         RouterTestingModule,
         NoopAnimationsModule,
       ],
-      providers: [{ provide: IAuthService, useValue: mockAuthService }],
+      providers: [
+        { provide: IAuthService, useValue: mockAuthService },
+        { provide: ChatService, useValue: mockChatService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MessengerHomePageComponent);
@@ -45,6 +55,26 @@ describe('MessengerHomePageComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should NOT show wizard when state is READY', () => {
+    mockChatService.onboardingState.set('READY');
+    fixture.detectChanges();
+
+    const wizard = fixture.debugElement.query(
+      By.css('messenger-device-link-wizard')
+    );
+    expect(wizard).toBeNull();
+  });
+
+  it('should SHOW wizard when state is REQUIRES_LINKING', () => {
+    mockChatService.onboardingState.set('REQUIRES_LINKING');
+    fixture.detectChanges();
+
+    const wizard = fixture.debugElement.query(
+      By.css('messenger-device-link-wizard')
+    );
+    expect(wizard).not.toBeNull();
+  });
+
   it('should navigate to conversations on viewConversations', () => {
     component.onViewConversations();
     expect(router.navigate).toHaveBeenCalledWith([
@@ -57,6 +87,4 @@ describe('MessengerHomePageComponent', () => {
     component.onViewContacts();
     expect(router.navigate).toHaveBeenCalledWith(['/messenger', 'contacts']);
   });
-
-  // Removed "compose" test as the method no longer exists
 });
