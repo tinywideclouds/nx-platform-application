@@ -45,19 +45,9 @@ describe('MessengerToolbarComponent', () => {
     expect(avatar.nativeElement.textContent).toContain('ME');
   });
 
-  it('should emit viewCompose event', () => {
-    // FIX: Access the correct output property 'viewCompose'
-    const spy = vi.spyOn(component.viewCompose, 'emit');
-    const btn = fixture.debugElement.query(
-      By.css('button[matTooltip="New Message"]')
-    );
-
-    btn.nativeElement.click();
-    expect(spy).toHaveBeenCalled();
-  });
+  // REMOVED: viewCompose test as functionality was removed
 
   it('should emit viewContacts event', () => {
-    // FIX: Access the correct output property 'viewContacts'
     const spy = vi.spyOn(component.viewContacts, 'emit');
     const btn = fixture.debugElement.query(
       By.css('button[matTooltip="Contacts"]')

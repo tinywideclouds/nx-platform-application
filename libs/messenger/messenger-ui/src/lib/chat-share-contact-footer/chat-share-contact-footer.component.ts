@@ -10,10 +10,11 @@ import {
   input,
 } from '@angular/core';
 
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import {
+  MatAutocompleteModule,
+  MatAutocompleteSelectedEvent,
+} from '@angular/material/autocomplete';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { startWith } from 'rxjs/operators';
 
 import {
   ContactsStorageService,
@@ -24,11 +25,7 @@ import { URN } from '@nx-platform-application/platform-types';
 @Component({
   selector: 'messenger-share-contact-footer',
   standalone: true,
-  imports: [
-    FormsModule,
-    ReactiveFormsModule,
-    MatAutocompleteModule
-],
+  imports: [MatAutocompleteModule],
   templateUrl: './chat-share-contact-footer.component.html',
   styleUrl: './chat-share-contact-footer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -39,38 +36,24 @@ export class ChatShareContactFooterComponent {
   contactToShare = input<URN>();
   share = output<URN>();
 
-  searchControl = new FormControl<string | Contact>('');
-
-  private searchText = toSignal(
-    this.searchControl.valueChanges.pipe(startWith('')),
-    { initialValue: '' }
-  );
+  // REFACTOR: Pure Signal State
+  searchQuery = signal('');
+  selectedRecipient = signal<Contact | null>(null);
 
   private allContacts = toSignal(this.contactsService.contacts$, {
     initialValue: [],
   });
 
   filteredContacts = computed(() => {
-    const rawValue = this.searchText();
-
-    // FIX: Handle case where value is a Contact object (after selection)
-    let term = '';
-    if (typeof rawValue === 'string') {
-      term = rawValue.toLowerCase();
-    } else if (
-      rawValue &&
-      typeof rawValue === 'object' &&
-      'alias' in rawValue
-    ) {
-      // If a contact is selected, we can either show all or filter by that contact.
-      // Let's filter by the selected name to keep the view consistent.
-      term = (rawValue as Contact).alias.toLowerCase();
-    }
-
+    const term = this.searchQuery().toLowerCase();
     const all = this.allContacts();
     const ignoreId = this.contactToShare()?.toString();
 
+    // 1. If we have a selected recipient, we might want to hide the list
+    // or just show that one. But usually, filtering continues based on text.
+
     return all.filter((c) => {
+      // Don't show the person we are currently viewing/sharing
       if (c.id.toString() === ignoreId) return false;
 
       return (
@@ -81,21 +64,40 @@ export class ChatShareContactFooterComponent {
     });
   });
 
-  selectedRecipient = signal<Contact | null>(null);
-
+  // Used by MatAutocomplete to display the object as a string
   displayFn(contact: Contact): string {
     return contact ? contact.alias : '';
   }
 
-  onOptionSelected(event: any): void {
-    this.selectedRecipient.set(event.option.value);
+  // REFACTOR: Handle Native Input
+  onSearchInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const value = input.value;
+
+    this.searchQuery.set(value);
+
+    // If user types manually, they are breaking the "Selection" link
+    this.selectedRecipient.set(null);
+  }
+
+  // REFACTOR: Handle Autocomplete Selection
+  onOptionSelected(event: MatAutocompleteSelectedEvent): void {
+    const contact = event.option.value as Contact;
+
+    // 1. Store the object
+    this.selectedRecipient.set(contact);
+
+    // 2. Update the text field to match the friendly name
+    this.searchQuery.set(contact.alias);
   }
 
   onSend(): void {
     const recipient = this.selectedRecipient();
     if (recipient) {
       this.share.emit(recipient.id);
-      this.searchControl.setValue('');
+
+      // Reset State
+      this.searchQuery.set('');
       this.selectedRecipient.set(null);
     }
   }

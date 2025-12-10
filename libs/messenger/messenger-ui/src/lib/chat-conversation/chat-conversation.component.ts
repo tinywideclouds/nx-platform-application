@@ -1,180 +1,204 @@
-// libs/messenger/messenger-ui/src/lib/chat-conversation/chat-conversation.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
-  ViewChild,
   inject,
   signal,
   effect,
   computed,
+  viewChild,
 } from '@angular/core';
-import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { interval } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ReactiveFormsModule, FormControl } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { Temporal } from '@js-temporal/polyfill';
 
+// DOMAIN STATE & LOGIC
 import { ChatService } from '@nx-platform-application/chat-state';
+import {
+  MessageContentParser,
+  ContentPayload,
+} from '@nx-platform-application/message-content';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
+
+// UI COMPONENTS
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
 import {
   ChatMessageBubbleComponent,
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
+  MessageRendererComponent, // The new Dumb Renderer
 } from '@nx-platform-application/chat-ui';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
+
+// View Model: Enhances the ChatMessage with the parsed payload
+type MessageViewModel = ChatMessage & {
+  contentPayload: ContentPayload | null;
+};
 
 @Component({
   selector: 'messenger-chat-conversation',
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
     AutoScrollDirective,
     ChatMessageBubbleComponent,
     ChatMessageDividerComponent,
     ChatTypingIndicatorComponent,
+    MessageRendererComponent,
   ],
-  providers: [DatePipe], // +Provider for manual formatting if needed, or just usage in template
+  providers: [DatePipe],
   templateUrl: './chat-conversation.component.html',
   styleUrl: './chat-conversation.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatConversationComponent {
   private chatService = inject(ChatService);
+  private parser = inject(MessageContentParser);
   private snackBar = inject(MatSnackBar);
+  private router = inject(Router);
 
-  @ViewChild('autoScroll') autoScroll!: AutoScrollDirective;
+  // --- SIGNALS ---
+  autoScroll = viewChild.required<AutoScrollDirective>('autoScroll');
 
-  messages = this.chatService.messages;
+  rawMessages = this.chatService.messages;
   currentUserUrn = this.chatService.currentUserUrn;
   selectedConversation = this.chatService.selectedConversation;
   isLoading = this.chatService.isLoadingHistory;
-
-  // Connect to the service signal we created in Step 1
   firstUnreadId = this.chatService.firstUnreadId;
-
   typingActivity = this.chatService.typingActivity;
 
-  // Timer for the "5 second timeout" logic
-  // We use a simple interval signal to force re-evaluation of the computed
-  now = toSignal(interval(1000), { initialValue: Date.now() });
-
-  // UI State for the "New Messages" TTL
+  // Signal for Input (No Reactive Forms)
+  messageText = signal('');
   showNewMessageIndicator = signal(false);
 
-  messageControl = new FormControl('', { nonNullable: true });
+  // Timer for Typing Indicators (using Temporal)
+  now = toSignal(interval(1000).pipe(map(() => Temporal.Now.instant())), {
+    initialValue: Temporal.Now.instant(),
+  });
+
+  // --- COMPUTED VIEW MODEL ---
+  // The crucial bridge between Raw Data and Dumb UI
+  messagesVM = computed<MessageViewModel[]>(() => {
+    return this.rawMessages().map((msg) => {
+      let contentPayload: ContentPayload | null = null;
+
+      // SAFETY CHECK: Ensure bytes exist
+      if (msg.payloadBytes) {
+        const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
+
+        // Filter: We only render 'content', not signals
+        if (parsed.kind === 'content') {
+          contentPayload = parsed.payload;
+        }
+      }
+      // Optional: Handle missing bytes logic (maybe return a specialized 'error' payload?)
+
+      return {
+        ...msg,
+        contentPayload,
+      };
+    });
+  });
 
   constructor() {
-    // TTL LOGIC: When a new boundary is identified, show it, then fade it out.
+    // TTL Logic for New Message Divider
     effect((onCleanup) => {
       const id = this.firstUnreadId();
       if (id) {
         this.showNewMessageIndicator.set(true);
-
         const timer = setTimeout(() => {
           this.showNewMessageIndicator.set(false);
-        }, 60_000); // 60 Seconds TTL
-
+        }, 60_000);
         onCleanup(() => clearTimeout(timer));
       }
     });
-
-    // SENDER LOGIC: Watch input changes
-    this.messageControl.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe((val) => {
-        if (val && val.length > 0) {
-          this.chatService.notifyTyping(); // Delegate to Service (which throttles)
-        }
-      });
   }
 
-  // RECEIVER LOGIC: Computed Visibility
+  // --- LOGIC ---
+
   showTypingIndicator = computed(() => {
     const urn = this.selectedConversation();
     if (!urn) return false;
 
     const activityMap = this.typingActivity();
-    const lastActive = activityMap.get(urn.toString());
+    const lastActive = activityMap.get(urn.toString()); // lastActive is Temporal.Instant
 
     if (!lastActive) return false;
 
-    // Check 1: Is it recent? (User stopped typing 5s ago)
-    const isRecent = Date.now() - lastActive < 5000;
-
-    // Check 2: We rely on `now()` signal to force this check every second
-    // (Optimization: In a real app, we might use a purely CSS animation fade-out
-    // or a specialized timer to avoid global intervals, but this is robust for V1).
-    this.now(); // Dependency
-
-    return isRecent;
+    // Temporal Calculation
+    try {
+      const duration = this.now().since(lastActive);
+      return duration.total({ unit: 'millisecond' }) < 5000;
+    } catch {
+      return false;
+    }
   });
 
-  isMyMessage = (msg: any): boolean => {
+  isMyMessage = (msg: ChatMessage): boolean => {
     const myUrn = this.currentUserUrn();
-    return !!myUrn && msg?.senderId?.toString() === myUrn.toString();
+    return !!myUrn && msg.senderId.toString() === myUrn.toString();
   };
 
-  /**
-   * Helper to determine if we should show a DATE divider.
-   * Logic: Show if it's the first message OR if the day changed from the previous message.
-   */
   shouldShowDateDivider(msg: ChatMessage, index: number): boolean {
     if (index === 0) return true;
+    const prevMsg = this.rawMessages()[index - 1];
 
-    const prevMsg = this.messages()[index - 1];
-    const currDate = msg.sentTimestamp.split('T')[0];
-    const prevDate = prevMsg.sentTimestamp.split('T')[0];
+    const currDate = Temporal.Instant.from(msg.sentTimestamp)
+      .toZonedDateTimeISO('UTC')
+      .toPlainDate();
+    const prevDate = Temporal.Instant.from(prevMsg.sentTimestamp)
+      .toZonedDateTimeISO('UTC')
+      .toPlainDate();
 
-    return currDate !== prevDate;
+    return !currDate.equals(prevDate);
   }
 
-  /**
-   * Helper to determine if we should show the NEW MESSAGES divider.
-   */
   shouldShowNewMessagesDivider(msg: ChatMessage): boolean {
     return this.showNewMessageIndicator() && msg.id === this.firstUnreadId();
   }
 
+  // --- ACTIONS ---
+
+  onContentAction(urnString: string): void {
+    // Smart component handles navigation
+    this.router.navigate(['/contacts/edit', urnString]);
+  }
+
+  onMessageInput(event: Event): void {
+    const val = (event.target as HTMLInputElement).value;
+    this.messageText.set(val);
+    if (val.length > 0) this.chatService.notifyTyping();
+  }
+
+  onSendMessage(): void {
+    const text = this.messageText().trim();
+    const recipient = this.selectedConversation();
+
+    if (text && recipient) {
+      this.chatService.sendMessage(recipient, text);
+      this.messageText.set('');
+    }
+  }
+
   onAlertVisibility(show: boolean): void {
     if (show) {
-      const msgs = this.messages();
-      const latestMessage = msgs[msgs.length - 1];
-      if (latestMessage) {
-        const messageText = latestMessage.textContent || 'New Message';
-        this.showNewMessageToast(messageText);
+      const msgs = this.rawMessages();
+      const latest = msgs[msgs.length - 1];
+      if (latest?.textContent) {
+        this.snackBar
+          .open(`New: "${latest.textContent.slice(0, 30)}..."`, 'Scroll Down', {
+            duration: 5000,
+          })
+          .onAction()
+          .subscribe(() => this.autoScroll().scrollToBottom('smooth'));
       }
     } else {
       this.snackBar.dismiss();
     }
-  }
-
-  onSendMessage(): void {
-    const text = this.messageControl.value.trim();
-    const recipientUrn = this.selectedConversation();
-
-    if (text && recipientUrn) {
-      this.chatService.sendMessage(recipientUrn, text);
-      this.messageControl.reset();
-    }
-  }
-
-  private showNewMessageToast(content: string): void {
-    const snippet =
-      content.length > 30 ? content.slice(0, 30) + '...' : content;
-
-    const snackBarRef = this.snackBar.open(`New: "${snippet}"`, 'Scroll Down', {
-      duration: 8000,
-      horizontalPosition: 'center',
-      verticalPosition: 'bottom',
-    });
-
-    snackBarRef.onAction().subscribe(() => {
-      this.autoScroll.scrollToBottom('smooth');
-    });
   }
 }

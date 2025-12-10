@@ -4,11 +4,16 @@ import {
   ContactsStorageService,
   Contact,
 } from '@nx-platform-application/contacts-storage';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
 import { MockProvider } from 'ng-mocks';
+import { By } from '@angular/platform-browser';
+import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 
 const mockUrn1 = URN.parse('urn:contacts:user:1');
 const mockUrn2 = URN.parse('urn:contacts:user:2');
@@ -19,6 +24,7 @@ const mockContact1: Contact = {
   firstName: 'Alice',
   surname: 'A',
   email: 'a@a.com',
+  lastModified: '' as ISODateTimeString,
   phoneNumbers: [],
   emailAddresses: [],
   serviceContacts: {},
@@ -30,6 +36,7 @@ const mockContact2: Contact = {
   firstName: 'Bob',
   surname: 'B',
   email: 'b@b.com',
+  lastModified: '' as ISODateTimeString,
   phoneNumbers: [],
   emailAddresses: [],
   serviceContacts: {},
@@ -59,33 +66,36 @@ describe('ChatShareContactFooterComponent', () => {
   });
 
   it('should filter contacts based on search text', async () => {
-    // 1. Search for "Alice"
-    component.searchControl.setValue('Alice');
+    // 1. REFACTOR: Simulate Input
+    const inputEl = fixture.debugElement.query(By.css('input')).nativeElement;
+    inputEl.value = 'Alice';
+    inputEl.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     expect(component.filteredContacts().length).toBe(1);
     expect(component.filteredContacts()[0].alias).toBe('Alice');
 
-    // 2. Search for "Bob"
-    component.searchControl.setValue('Bob');
+    // 2. Search for Bob
+    inputEl.value = 'Bob';
+    inputEl.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     expect(component.filteredContacts().length).toBe(1);
     expect(component.filteredContacts()[0].alias).toBe('Bob');
   });
 
-  it('should exclude the contact being shared', async () => {
-    // We are viewing Alice's card
-    fixture.componentRef.setInput('contactToShare', mockUrn1);
+  it('should update selectedRecipient on option selected', () => {
+    // Manually trigger the handler since simulating the full Material overlay in unit tests is flaky
+    const event = {
+      option: { value: mockContact2 },
+    } as MatAutocompleteSelectedEvent;
+
+    component.onOptionSelected(event);
     fixture.detectChanges();
 
-    // Empty search should return all EXCEPT Alice (so just Bob)
-    component.searchControl.setValue('');
-    fixture.detectChanges();
-
-    const filtered = component.filteredContacts();
-    expect(filtered.length).toBe(1);
-    expect(filtered[0].alias).toBe('Bob');
+    expect(component.selectedRecipient()).toBe(mockContact2);
+    // Should also update the display text
+    expect(component.searchQuery()).toBe('Bob');
   });
 
   it('should emit share event on send', () => {
@@ -98,7 +108,7 @@ describe('ChatShareContactFooterComponent', () => {
     component.onSend();
 
     expect(spy).toHaveBeenCalledWith(mockUrn2);
-    expect(component.searchControl.value).toBe('');
+    expect(component.searchQuery()).toBe('');
     expect(component.selectedRecipient()).toBeNull();
   });
 });

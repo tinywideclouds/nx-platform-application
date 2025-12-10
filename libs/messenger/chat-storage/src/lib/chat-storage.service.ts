@@ -233,6 +233,39 @@ export class ChatStorageService {
     await this.db.messages.bulkPut(records);
   }
 
+  /**
+   * Updates the status of specific messages (e.g. marking sent messages as 'read').
+   * Used when processing incoming Read Receipt signals.
+   */
+  async updateMessageStatus(
+    messageIds: string[],
+    status: 'read'
+  ): Promise<void> {
+    if (messageIds.length === 0) return;
+
+    // Use bulk update for performance
+    await this.db.transaction('rw', this.db.messages, async () => {
+      // 1. Get existing records to verify existence (optional, but safe)
+      const records = await this.db.messages.bulkGet(messageIds);
+
+      const updates: any[] = [];
+
+      records.forEach((record) => {
+        if (record) {
+          // Only update if status is different
+          if (record.status !== status) {
+            // We clone and modify to ensure we don't mutate the fetched object implicitly
+            updates.push({ ...record, status });
+          }
+        }
+      });
+
+      if (updates.length > 0) {
+        await this.db.messages.bulkPut(updates);
+      }
+    });
+  }
+
   // --- SETTINGS & CLEANUP ---
 
   async setCloudEnabled(enabled: boolean): Promise<void> {

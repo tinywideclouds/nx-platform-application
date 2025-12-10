@@ -3,7 +3,6 @@ import {
   APP_INITIALIZER,
   provideZonelessChangeDetection,
   importProvidersFrom,
-  isDevMode,
 } from '@angular/core';
 // This acts as a hint to the Nx Graph that this app explicitly depends on contacts-ui
 import '@nx-platform-application/contacts-ui';
@@ -53,6 +52,7 @@ import {
   CLOUD_PROVIDERS,
   GoogleDriveService,
 } from '@nx-platform-application/platform-cloud-access';
+import { provideMessengerIdentity } from '@nx-platform-application/messenger-identity-adapter'; // Import the helper
 
 // ---
 // 2. The app-specific user definitions are GONE from this file.
@@ -128,6 +128,7 @@ export const appConfig: ApplicationConfig = {
     // 4. The providers list is now clean
     // ---
     ...authProviders,
+    provideMessengerIdentity(),
     chatProvider,
     contactsProvider,
     ...devProviders,

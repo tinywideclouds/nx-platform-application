@@ -1,3 +1,5 @@
+// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -14,10 +16,14 @@ import {
 } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
-// Adapters & Mappers
+// Adapters & Logic
 import { ChatMessageMapper } from './chat-message.mapper';
-// [Refactor] We now inject the abstract contract, not the concrete implementation
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+// REFACTOR: Import the Parser and Types
+import {
+  MessageContentParser,
+  ReadReceiptData,
+} from '@nx-platform-application/message-content';
 
 // Types
 import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
@@ -29,7 +35,6 @@ import {
 export interface IngestionResult {
   messages: ChatMessage[];
   typingIndicators: URN[];
-  // [Removed] syncPayload - Device Pairing is now handled by the 'Ceremony' lib
 }
 
 @Injectable({ providedIn: 'root' })
@@ -39,22 +44,17 @@ export class ChatIngestionService {
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
   private contactsService = inject(ContactsStorageService);
-
-  // [Refactor] Swapped for the clean interface
   private identityResolver = inject(IdentityResolver);
   private viewMapper = inject(ChatMessageMapper);
 
-  /**
-   * Processes the inbound message queue.
-   * STRICT: Requires valid Identity Keys.
-   */
+  // REFACTOR: The Router Logic
+  private parser = inject(MessageContentParser);
+
   async process(
-    myKeys: PrivateKeys, // [Refactor] No longer nullable. Must be authenticated.
+    myKeys: PrivateKeys,
     myUrn: URN,
     blockedSet: Set<string>,
     batchLimit = 50
-    // [Removed] safeMode
-    // [Removed] sessionPrivateKey
   ): Promise<IngestionResult> {
     const queuedMessages = await firstValueFrom(
       this.dataService.getMessageBatch(batchLimit)
@@ -64,53 +64,75 @@ export class ChatIngestionService {
       return { messages: [], typingIndicators: [] };
     }
 
-    this.logger.info(
-      `Ingestion: Processing ${queuedMessages.length} messages...`
-    );
-
     const processedIds: string[] = [];
     const validViewMessages: ChatMessage[] = [];
     const typingIndicators: URN[] = [];
 
     for (const msg of queuedMessages) {
       try {
-        // 1. Decrypt (Standard Path Only)
-        // We only support Identity Keys here. Handshakes happen in DevicePairingService.
+        // 1. Decrypt
         const decrypted: EncryptedMessagePayload =
           await this.cryptoService.verifyAndDecrypt(msg.envelope, myKeys);
 
-        // [Removed] 'urn:message:type:device-sync' check.
-        // If a sync message arrives here, it's treated as an unsupported message type
-        // or filtered out by the UI, but it doesn't trigger logic.
-
-        // 2. Identity Resolution (Handle -> Contact)
-        // Uses the new Adapter
+        // 2. Identity Resolution
         const resolvedSenderUrn = await this.identityResolver.resolveToContact(
           decrypted.senderId
         );
         const resolvedSenderStr = resolvedSenderUrn.toString();
 
-        this.logger.debug(
-          `Ingestion: Resolved ${decrypted.senderId} -> ${resolvedSenderStr}`
-        );
-
         // 3. Gatekeeper: Block Check
         if (blockedSet.has(resolvedSenderStr)) {
-          this.logger.info(
-            `Dropped message from blocked identity: ${resolvedSenderStr}`
-          );
           processedIds.push(msg.id);
           continue;
         }
 
-        // 4. Ephemeral Check (Typing Indicators)
+        // 4. Ephemeral Check (Transport Layer Signal)
+        // Currently hardcoded to "Typing Indicator"
         if (msg.envelope.isEphemeral) {
           typingIndicators.push(resolvedSenderUrn);
           processedIds.push(msg.id);
           continue;
         }
 
-        // 5. Gatekeeper: Unknown User Check
+        // 5. REFACTOR: PAYLOAD ROUTING (Application Layer Signal)
+        // We look inside the box to see what it is.
+        const classification = this.parser.parse(
+          decrypted.typeId,
+          decrypted.payloadBytes
+        );
+
+        // --- PATH A: SIGNALS (Do Not Save) ---
+        if (classification.kind === 'signal') {
+          const action = classification.payload.action;
+          const data = classification.payload.data;
+
+          this.logger.info(`[Router] Received Signal: ${action}`);
+
+          if (action === 'read-receipt') {
+            const rr = data as ReadReceiptData;
+            // ACTION: Mark my sent messages as read
+            await this.storageService.updateMessageStatus(
+              rr.messageIds,
+              'read'
+            );
+          }
+
+          processedIds.push(msg.id);
+          continue;
+        }
+
+        // --- PATH B: UNKNOWN (Drop) ---
+        if (classification.kind === 'unknown') {
+          this.logger.warn(
+            `[Router] Dropping unknown type: ${classification.rawType}`
+          );
+          processedIds.push(msg.id);
+          continue;
+        }
+
+        // --- PATH C: CONTENT (Save to DB) ---
+        // classification.kind === 'content'
+
         const isStranger = resolvedSenderUrn.entityType !== 'user';
 
         const newDecryptedMsg = this.mapPayloadToDecrypted(
@@ -121,36 +143,24 @@ export class ChatIngestionService {
         );
 
         if (isStranger) {
-          // --- QUARANTINE PATH ---
-          this.logger.info(
-            `Quarantining message from stranger: ${resolvedSenderStr}`
-          );
-
           await this.storageService.saveQuarantinedMessage(newDecryptedMsg);
           await this.contactsService.addToPending(resolvedSenderUrn);
-
-          processedIds.push(msg.id);
-          continue;
+        } else {
+          await this.storageService.saveMessage(newDecryptedMsg);
+          validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
         }
 
-        // --- HAPPY PATH (Known Contact) ---
-        await this.storageService.saveMessage(newDecryptedMsg);
-
-        validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
         processedIds.push(msg.id);
       } catch (error) {
-        this.logger.error('Ingestion: Failed to process message', error, msg);
-        // We ack failed messages to prevent infinite loops (Dead Letter strategy)
+        this.logger.error('Ingestion: Failed to process message', error);
         processedIds.push(msg.id);
       }
     }
 
-    // 6. Ack Batch
     if (processedIds.length > 0) {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
     }
 
-    // 7. Recursive Pull
     if (queuedMessages.length === batchLimit) {
       const nextBatch = await this.process(
         myKeys,
@@ -170,8 +180,7 @@ export class ChatIngestionService {
     };
   }
 
-  // --- Internal Mapper ---
-
+  // ... [Helpers: mapPayloadToDecrypted, getConversationUrn remain unchanged] ...
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
     payload: EncryptedMessagePayload,
@@ -183,7 +192,6 @@ export class ChatIngestionService {
       qMsg.envelope.recipientId,
       myUrn
     );
-
     return {
       messageId: qMsg.id,
       senderId: resolvedSenderUrn,
@@ -196,14 +204,8 @@ export class ChatIngestionService {
     };
   }
 
-  private getConversationUrn(
-    senderUrn: URN,
-    recipientUrn: URN,
-    myUrn: URN
-  ): URN {
-    if (recipientUrn.entityType === 'group') {
-      return recipientUrn;
-    }
-    return senderUrn.toString() === myUrn.toString() ? recipientUrn : senderUrn;
+  private getConversationUrn(sender: URN, recipient: URN, me: URN): URN {
+    if (recipient.entityType === 'group') return recipient;
+    return sender.toString() === me.toString() ? recipient : sender;
   }
 }

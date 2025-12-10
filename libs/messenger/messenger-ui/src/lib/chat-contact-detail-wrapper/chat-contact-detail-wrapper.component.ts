@@ -10,7 +10,7 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-storag
 // UI Imports
 import { ContactDetailComponent } from '@nx-platform-application/contacts-ui';
 import { ChatShareContactFooterComponent } from '../chat-share-contact-footer/chat-share-contact-footer.component';
-import { ContactSharePayload } from '@nx-platform-application/message-content';
+import { ContactShareData } from '@nx-platform-application/message-content';
 import { MatIconModule } from '@angular/material/icon';
 
 @Component({
@@ -19,8 +19,8 @@ import { MatIconModule } from '@angular/material/icon';
   imports: [
     ContactDetailComponent,
     ChatShareContactFooterComponent,
-    MatIconModule
-],
+    MatIconModule,
+  ],
   templateUrl: './chat-contact-detail-wrapper.component.html',
   styleUrl: './chat-contact-detail-wrapper.component.scss',
 })
@@ -73,7 +73,7 @@ export class ChatContactDetailWrapperComponent {
       `Sharing ${shareUrnString} (Alias: ${contact.alias}) with ${recipientUrn}`
     );
 
-    const payload: ContactSharePayload = {
+    const payload: ContactShareData = {
       urn: shareUrnString,
       alias: contact.alias,
       avatarUrl: contact.serviceContacts['messenger']?.profilePictureUrl,

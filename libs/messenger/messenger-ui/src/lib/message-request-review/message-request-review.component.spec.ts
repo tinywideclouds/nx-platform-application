@@ -8,13 +8,13 @@ import {
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
 
-// Mock Data
+// Mock Data - Fixed URN format (4 parts)
 const req1: PendingIdentity = {
-  urn: URN.parse('urn:user:stranger1'),
+  urn: URN.parse('urn:contacts:user:stranger1'),
   firstSeenAt: '2023-01-01T10:00:00Z' as ISODateTimeString,
 };
 const req2: PendingIdentity = {
-  urn: URN.parse('urn:user:stranger2'),
+  urn: URN.parse('urn:contacts:user:stranger2'),
   firstSeenAt: '2023-01-01T11:00:00Z' as ISODateTimeString,
 };
 
@@ -39,79 +39,67 @@ describe('MessageRequestReviewComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  describe('Selection Logic', () => {
-    beforeEach(() => {
-      fixture.componentRef.setInput('requests', [req1, req2]);
-      fixture.detectChanges();
-    });
-
-    it('should toggle selection of a single item', () => {
-      // Act: Toggle first item
-      component.toggleOne(req1.urn, true);
-      fixture.detectChanges();
-
-      // Assert
-      expect(component.selectedUrns().has(req1.urn.toString())).toBe(true);
-      expect(component.selectedUrns().has(req2.urn.toString())).toBe(false);
-
-      // Computed states
-      expect(component.allSelected()).toBe(false);
-      expect(component.indeterminate()).toBe(true);
-    });
-
-    it('should toggle all items', () => {
-      // Act: Toggle All
-      component.toggleAll(true);
-      fixture.detectChanges();
-
-      // Assert
-      expect(component.selectedUrns().size).toBe(2);
-      expect(component.allSelected()).toBe(true);
-      expect(component.indeterminate()).toBe(false);
-
-      // Act: Toggle Off
-      component.toggleAll(false);
-      fixture.detectChanges();
-      expect(component.selectedUrns().size).toBe(0);
-    });
-  });
-
-  describe('Actions', () => {
+  describe('Interactions', () => {
     beforeEach(() => {
       fixture.componentRef.setInput('requests', [req1]);
       fixture.detectChanges();
-      component.toggleAll(true); // Select the item
     });
 
-    it('should emit accept event with selected URNs', () => {
-      let emitted: URN[] | undefined;
-      component.accept.subscribe((urns) => (emitted = urns));
+    it('should emit accept event', () => {
+      let emitted: URN | undefined;
+      component.accept.subscribe((urn) => (emitted = urn));
 
-      component.onAcceptSelected();
+      // Open Panel
+      const panelHeader = fixture.debugElement.query(
+        By.css('mat-expansion-panel-header')
+      );
+      panelHeader.nativeElement.click();
+      fixture.detectChanges();
 
-      expect(emitted).toHaveLength(1);
-      expect(emitted![0].toString()).toBe(req1.urn.toString());
-      // Should clear selection after action
-      expect(component.selectedUrns().size).toBe(0);
+      const btn = fixture.debugElement.query(By.css('button[color="primary"]')); // Accept is primary
+      btn.nativeElement.click();
+
+      expect(emitted?.toString()).toBe(req1.urn.toString());
     });
 
-    it('should emit block event with scope', () => {
-      let emitted: { urns: URN[]; scope: string } | undefined;
+    it('should emit block event', () => {
+      let emitted: { urn: URN; scope: string } | undefined;
       component.block.subscribe((e) => (emitted = e));
 
-      component.onBlockSelected('messenger');
+      const panelHeader = fixture.debugElement.query(
+        By.css('mat-expansion-panel-header')
+      );
+      panelHeader.nativeElement.click();
+      fixture.detectChanges();
+
+      // Block is warn stroked button (2nd warn button, 1st is header blockAll)
+      const btn = fixture.debugElement.queryAll(
+        By.css('button[color="warn"]')
+      )[1];
+      btn.nativeElement.click();
 
       expect(emitted?.scope).toBe('messenger');
-      expect(emitted?.urns[0].toString()).toBe(req1.urn.toString());
+      expect(emitted?.urn.toString()).toBe(req1.urn.toString());
     });
 
     it('should emit dismiss event', () => {
-      let emitted: URN[] | undefined;
-      component.dismiss.subscribe((urns) => (emitted = urns));
+      let emitted: URN | undefined;
+      component.dismiss.subscribe((urn) => (emitted = urn));
 
-      component.onDismissSelected();
+      const panelHeader = fixture.debugElement.query(
+        By.css('mat-expansion-panel-header')
+      );
+      panelHeader.nativeElement.click();
+      fixture.detectChanges();
 
-      expect(emitted).toHaveLength(1);
+      // Find Dismiss button by text content
+      const btns = fixture.debugElement.queryAll(By.css('button'));
+      const dismissBtn = btns.find((b) =>
+        b.nativeElement.textContent.includes('Dismiss')
+      );
+      dismissBtn?.nativeElement.click();
+
+      expect(emitted?.toString()).toBe(req1.urn.toString());
     });
   });
 
@@ -123,7 +111,7 @@ describe('MessageRequestReviewComponent', () => {
       const emptyMsg = fixture.debugElement.query(By.css('.text-gray-400'));
       expect(emptyMsg).toBeTruthy();
       expect(emptyMsg.nativeElement.textContent).toContain(
-        'No pending message requests'
+        'No pending requests'
       );
     });
   });

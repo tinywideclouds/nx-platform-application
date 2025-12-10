@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MessengerChatPageComponent } from './messenger-chat-page.component';
 import { Router, ActivatedRoute, convertToParamMap } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { By } from '@angular/platform-browser';
@@ -9,6 +9,7 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 // Dependencies
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -69,6 +70,13 @@ describe('MessengerChatPageComponent', () => {
   let router: Router;
   let contactsService: ContactsStorageService;
 
+  // Explicit mock for MatDialog
+  const mockDialog = {
+    open: vi.fn().mockReturnValue({
+      afterClosed: () => of(true), // Simulate User clicking "Confirm"
+    }),
+  };
+
   // Observables for Router State
   const queryParams$ = new BehaviorSubject(convertToParamMap({}));
 
@@ -94,6 +102,9 @@ describe('MessengerChatPageComponent', () => {
           activeConversations,
           selectedConversation,
           loadConversation: vi.fn(),
+          promoteQuarantinedMessages: vi.fn().mockResolvedValue(undefined),
+          dismissPending: vi.fn().mockResolvedValue(undefined),
+          block: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(ContactsStorageService, {
           contacts$: contacts$,
@@ -101,8 +112,11 @@ describe('MessengerChatPageComponent', () => {
           pending$: pending$,
           deletePending: vi.fn().mockResolvedValue(undefined),
           blockIdentity: vi.fn().mockResolvedValue(undefined),
+          saveContact: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(Router),
+        // Explicitly provide our mockDialog
+        { provide: MatDialog, useValue: mockDialog },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -110,12 +124,20 @@ describe('MessengerChatPageComponent', () => {
           },
         },
       ],
-    }).compileComponents();
+    })
+      // Remove the real MatDialogModule so it doesn't overwrite our provider
+      .overrideComponent(MessengerChatPageComponent, {
+        remove: { imports: [MatDialogModule] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(MessengerChatPageComponent);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
     contactsService = TestBed.inject(ContactsStorageService);
+
+    // Spy on router.navigate
+    vi.spyOn(router, 'navigate');
 
     // Seed Data
     activeConversations.set(mockSummaries);
@@ -172,34 +194,39 @@ describe('MessengerChatPageComponent', () => {
   });
 
   describe('Request Actions', () => {
-    it('should route to Create Contact on Accept', () => {
-      const spy = vi.spyOn(router, 'navigate');
-      component.onAcceptRequests([strangerUrn]);
+    it('should route to Edit Contact on Accept', async () => {
+      vi.stubGlobal('crypto', { randomUUID: () => 'new-uuid' });
 
-      expect(spy).toHaveBeenCalledWith(['/messenger/contacts/create'], {
-        queryParams: {
-          sourceUrn: strangerUrn.toString(),
-          returnUrl: '/messenger/conversations',
-        },
-      });
+      await component.onAcceptRequest(strangerUrn);
+
+      expect(router.navigate).toHaveBeenCalledWith(
+        ['/messenger/contacts/edit', 'urn:contacts:user:new-uuid'],
+        expect.objectContaining({
+          queryParams: { returnUrl: '/messenger/conversations' },
+        })
+      );
     });
 
-    it('should call blockIdentity and deletePending on Block', async () => {
-      await component.onBlockRequests({
-        urns: [strangerUrn],
+    it('should call chatService.block on Block', async () => {
+      const chatService = TestBed.inject(ChatService);
+
+      await component.onBlockRequest({
+        urn: strangerUrn,
         scope: 'messenger',
       });
 
-      expect(contactsService.blockIdentity).toHaveBeenCalledWith(strangerUrn, [
-        'messenger',
-      ]);
-      expect(contactsService.deletePending).toHaveBeenCalledWith(strangerUrn);
+      expect(chatService.block).toHaveBeenCalledWith(
+        [strangerUrn],
+        'messenger'
+      );
     });
 
-    it('should call deletePending on Dismiss', async () => {
-      await component.onDismissRequests([strangerUrn]);
+    it('should call chatService.dismissPending on Dismiss', async () => {
+      const chatService = TestBed.inject(ChatService);
 
-      expect(contactsService.deletePending).toHaveBeenCalledWith(strangerUrn);
+      await component.onDismissRequest(strangerUrn);
+
+      expect(chatService.dismissPending).toHaveBeenCalledWith([strangerUrn]);
     });
   });
 

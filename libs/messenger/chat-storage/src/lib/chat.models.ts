@@ -12,17 +12,19 @@ export interface DecryptedMessage {
   sentTimestamp: ISODateTimeString;
   typeId: URN;
   payloadBytes: Uint8Array;
-  status: 'pending' | 'sent' | 'received';
+  status: 'pending' | 'sent' | 'received' | 'read';
   conversationUrn: URN;
 }
 
-export interface ConversationSummary {
+export interface Conversation {
   conversationUrn: URN;
-  latestSnippet: string;
-  timestamp: ISODateTimeString;
-  unreadCount: number;
-  // Helpful for UI icons
   previewType: 'text' | 'image' | 'file' | 'other';
+}
+
+export interface ConversationSummary extends Conversation {
+  timestamp: ISODateTimeString;
+  latestSnippet: string;
+  unreadCount: number;
 }
 
 export interface MessageTombstone {
@@ -32,12 +34,10 @@ export interface MessageTombstone {
 }
 
 // ✅ NEW: A clean, public contract for syncing Conversation State
-export interface ConversationSyncState {
-  conversationUrn: URN;
-  lastActivityTimestamp: ISODateTimeString;
+export interface ConversationSyncState extends Conversation {
   snippet: string;
-  previewType: 'text' | 'image' | 'file' | 'other';
   unreadCount: number;
+  lastActivityTimestamp: ISODateTimeString;
   genesisTimestamp: ISODateTimeString | null;
   lastModified: ISODateTimeString;
 }

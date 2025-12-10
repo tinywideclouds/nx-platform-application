@@ -2,60 +2,93 @@
 
 import { Injectable } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { 
-  MessageContent, 
-  MESSAGE_TYPE_TEXT, 
-  MESSAGE_TYPE_CONTACT_SHARE, 
-  ContactSharePayload 
+import {
+  ParsedMessage,
+  MESSAGE_TYPE_TEXT,
+  MESSAGE_TYPE_CONTACT_SHARE,
+  MESSAGE_TYPE_READ_RECEIPT,
+  ContactShareData,
+  ReadReceiptData,
 } from '../models/content-types';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class MessageContentParser {
+  // Configured to be permissive (don't crash on bad bytes, just fail logic)
   private decoder = new TextDecoder();
 
   /**
-   * Parses raw message bytes into a structured MessageContent object based on the Type ID.
-   * * @param typeId The URN identifying the content type.
-   * @param bytes The raw decrypted payload bytes.
+   * The "Router" Function.
+   * Decides if the bytes are Content (Save) or Signal (Execute).
    */
-  parse(typeId: URN, bytes: Uint8Array): MessageContent {
+  parse(typeId: URN, bytes: Uint8Array): ParsedMessage {
     const typeStr = typeId.toString();
 
     try {
-      // 1. Text Message
+      // --- ROUTE 1: SIMPLE CONTENT (Text) ---
       if (typeStr === MESSAGE_TYPE_TEXT) {
-        const text = this.decoder.decode(bytes);
-        return { type: 'text', text };
+        return {
+          kind: 'content',
+          payload: {
+            kind: 'text',
+            text: this.decoder.decode(bytes),
+          },
+        };
       }
 
-      // 2. Contact Share
+      // --- ROUTE 2: RICH CONTENT (Contact Share) ---
       if (typeStr === MESSAGE_TYPE_CONTACT_SHARE) {
-        const jsonString = this.decoder.decode(bytes);
-        const data = JSON.parse(jsonString) as ContactSharePayload;
-        
-        // Basic validation check
-        if (!data.urn || !data.alias) {
-          throw new Error('Invalid Contact Share schema');
+        const json = this.decoder.decode(bytes);
+        let data = {};
+        try {
+          data = JSON.parse(json);
+        } catch {
+          throw new Error('Payload is not valid JSON');
+        }
+        const contactData = data as ContactShareData;
+
+        // Basic Schema Validation
+        if (!contactData.urn || !contactData.alias) {
+          throw new Error('Missing required fields for Contact Share');
         }
 
-        return { type: 'contact-share', data };
+        return {
+          kind: 'content',
+          payload: {
+            kind: 'rich',
+            subType: typeStr,
+            data,
+          },
+        };
       }
 
-      // 3. Unknown Type
-      return { 
-        type: 'unknown', 
-        rawType: typeStr, 
-        error: 'Unsupported message type' 
-      };
+      // --- ROUTE 3: SIGNALS (System Commands) ---
+      if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
+        const json = this.decoder.decode(bytes);
+        const data = JSON.parse(json) as ReadReceiptData;
 
+        if (!Array.isArray(data.messageIds)) {
+          throw new Error('Invalid Read Receipt Schema');
+        }
+
+        return {
+          kind: 'signal',
+          payload: {
+            action: 'read-receipt',
+            data,
+          },
+        };
+      }
+
+      // --- ROUTE 4: UNKNOWN ---
+      return { kind: 'unknown', rawType: typeStr };
     } catch (error) {
-      console.error('Message Content Parser Error:', error);
-      return { 
-        type: 'unknown', 
-        rawType: typeStr, 
-        error: 'Failed to parse payload' 
+      console.error(`[MessageContent] Parse Error for ${typeStr}`, error);
+      return {
+        kind: 'unknown',
+        rawType: typeStr,
+        error: error instanceof Error ? error.message : 'Parse Failed',
       };
     }
   }

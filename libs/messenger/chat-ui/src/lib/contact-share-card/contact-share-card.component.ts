@@ -1,13 +1,20 @@
-// libs/messenger/message-content/src/lib/components/contact-share-card/contact-share-card.component.ts
+// libs/messenger/chat-ui/src/lib/contact-share-card/contact-share-card.component.ts
 
-import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  input,
+  output,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { ContactSharePayload } from '../../models/content-types';
+
+// REFACTOR: Import from the logic lib
+import { ContactShareData } from '@nx-platform-application/message-content';
 
 @Component({
-  selector: 'messenger-contact-share-card',
+  selector: 'chat-contact-share-card',
   standalone: true,
   imports: [CommonModule, MatButtonModule, MatIconModule],
   templateUrl: './contact-share-card.component.html',
@@ -15,13 +22,11 @@ import { ContactSharePayload } from '../../models/content-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactShareCardComponent {
-  data = input.required<ContactSharePayload>();
-  
-  /** Emits when the user clicks "View" or "Add" */
-  action = output<string>(); // Emits the URN string
+  data = input.required<ContactShareData>();
+
+  action = output<string>();
 
   get initials(): string {
-    // Simple initial extractor from alias
     return this.data().alias.slice(0, 2).toUpperCase();
   }
 

@@ -14,7 +14,7 @@ export interface MessageRecord {
   sentTimestamp: ISODateTimeString;
   typeId: string;
   payloadBytes: Uint8Array;
-  status: 'pending' | 'sent' | 'received';
+  status: 'pending' | 'sent' | 'received' | 'read';
   conversationUrn: string;
 }
 

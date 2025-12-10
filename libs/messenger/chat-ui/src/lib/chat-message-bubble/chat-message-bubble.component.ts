@@ -2,21 +2,23 @@
 
 import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MessageStatus } from '@nx-platform-application/messenger-types';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
+import { MatIconModule } from '@angular/material/icon';
 
 export type ChatBubbleDirection = 'inbound' | 'outbound';
 
 @Component({
   selector: 'chat-message-bubble',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MatIconModule],
   templateUrl: './chat-message-bubble.component.html',
   styleUrl: './chat-message-bubble.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatMessageBubbleComponent {
-  message = input.required<string | undefined>();
+  // REFACTOR: 'message' input removed in favor of content projection
   direction = input.required<ChatBubbleDirection>();
-
   timestamp = input<ISODateTimeString | string | undefined>(undefined);
+  status = input<MessageStatus | undefined>(undefined);
 }

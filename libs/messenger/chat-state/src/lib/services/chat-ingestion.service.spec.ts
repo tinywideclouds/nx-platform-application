@@ -15,57 +15,55 @@ import {
   SecureEnvelope,
 } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
-
-// [Refactor] Import the Abstract Interface
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+
+// REFACTOR: Import Parser & Types
+import {
+  MessageContentParser,
+  ParsedMessage,
+} from '@nx-platform-application/message-content';
 
 // --- Fixtures ---
 const mockMyUrn = URN.parse('urn:contacts:user:me');
 const mockSenderContact = URN.parse('urn:contacts:user:friend');
-
 const mockEnvelope = { recipientId: mockMyUrn } as SecureEnvelope;
 const mockQueuedMsg: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
-
-const mockStandardPayload = {
+const mockDecryptedPayload = {
   senderId: mockSenderContact,
   sentTimestamp: '2025-01-01T12:00:00Z',
   typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new Uint8Array([1]),
 };
-
 const mockKeys = { encKey: 'priv' } as any;
 
 describe('ChatIngestionService', () => {
   let service: ChatIngestionService;
+  let parser: MessageContentParser;
 
   const mockStorageService = {
     saveMessage: vi.fn(),
     saveQuarantinedMessage: vi.fn(),
   };
   const mockContactsService = { addToPending: vi.fn() };
-
-  // [Refactor] Mock the Resolver, not the Mapper
   const mockResolver = { resolveToContact: vi.fn() };
-
   const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
-  const mockCryptoService = {
-    verifyAndDecrypt: vi.fn(),
-  };
+  const mockCryptoService = { verifyAndDecrypt: vi.fn() };
   const mockLogger = {
     info: vi.fn(),
     error: vi.fn(),
-    debug: vi.fn(),
     warn: vi.fn(),
+    debug: vi.fn(),
   };
+
+  // REFACTOR: Mock Parser
+  const mockParser = { parse: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
-
-    // Default behaviors
-    mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockStandardPayload);
+    mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
     mockResolver.resolveToContact.mockResolvedValue(mockSenderContact);
 
     TestBed.configureTestingModule({
@@ -76,37 +74,66 @@ describe('ChatIngestionService', () => {
         { provide: MessengerCryptoService, useValue: mockCryptoService },
         { provide: ChatStorageService, useValue: mockStorageService },
         { provide: ContactsStorageService, useValue: mockContactsService },
-        // [Refactor] Provide the Resolver Mock
         { provide: IdentityResolver, useValue: mockResolver },
         { provide: Logger, useValue: mockLogger },
+        // REFACTOR: Provide Mock Parser
+        { provide: MessageContentParser, useValue: mockParser },
       ],
     });
     service = TestBed.inject(ChatIngestionService);
+    parser = TestBed.inject(MessageContentParser);
   });
 
-  describe('Standard Mode', () => {
-    it('should decrypt using Identity Keys and ACK on success', async () => {
+  describe('Router Logic', () => {
+    beforeEach(() => {
       mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+    });
 
-      // [Refactor] Simplified Signature
+    it('should SAVE message if Router returns Content', async () => {
+      // 1. Setup Parser to return Content
+      mockParser.parse.mockReturnValue({
+        kind: 'content',
+        payload: { kind: 'text', text: 'Hi' },
+      } as ParsedMessage);
+
       await service.process(mockKeys, mockMyUrn, new Set(), 50);
 
-      expect(mockCryptoService.verifyAndDecrypt).toHaveBeenCalledWith(
-        mockEnvelope,
-        mockKeys
-      );
+      // 2. Expect Save
+      expect(mockStorageService.saveMessage).toHaveBeenCalled();
       expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
     });
 
-    it('should ACK even if processing fails (to prevent loops)', async () => {
-      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-      mockCryptoService.verifyAndDecrypt.mockRejectedValue(
-        new Error('Decrypt fail')
-      );
+    it('should NOT SAVE if Router returns Signal (e.g. Read Receipt)', async () => {
+      // 1. Setup Parser to return Signal
+      mockParser.parse.mockReturnValue({
+        kind: 'signal',
+        payload: { action: 'read-receipt', data: null },
+      } as ParsedMessage);
 
       await service.process(mockKeys, mockMyUrn, new Set(), 50);
 
-      expect(mockLogger.error).toHaveBeenCalled();
+      // 2. Expect Log but NO Save
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining('[Router] Received Signal')
+      );
+      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
+
+      // 3. But we MUST still Ack the message to remove it from the queue
+      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+    });
+
+    it('should DROP if Router returns Unknown', async () => {
+      mockParser.parse.mockReturnValue({
+        kind: 'unknown',
+        rawType: 'alien-tech',
+      } as ParsedMessage);
+
+      await service.process(mockKeys, mockMyUrn, new Set(), 50);
+
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Dropping unknown')
+      );
+      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
       expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
     });
   });

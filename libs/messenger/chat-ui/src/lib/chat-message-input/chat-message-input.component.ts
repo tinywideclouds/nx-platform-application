@@ -5,50 +5,25 @@ import {
   input,
   output,
   ChangeDetectionStrategy,
-  inject,
-  effect,
+  signal,
 } from '@angular/core';
-
-import {
-  ReactiveFormsModule,
-  FormBuilder,
-  Validators,
-} from '@angular/forms';
 
 @Component({
   selector: 'chat-message-input',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [], // REFACTOR: No ReactiveFormsModule needed
   templateUrl: './chat-message-input.component.html',
   styleUrl: './chat-message-input.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatMessageInputComponent {
-  // 1. Convert to Signals
   disabled = input(false);
   messageSent = output<string>();
 
-  private fb = inject(FormBuilder);
-  
-  form = this.fb.group({
-    messageText: ['', [Validators.required]],
-  });
+  // REFACTOR: Pure Signal State
+  messageText = signal('');
 
-  constructor() {
-    // 2. Replace ngOnChanges with an effect
-    effect(() => {
-      if (this.disabled()) {
-        this.form.disable();
-      } else {
-        this.form.enable();
-      }
-    });
-  }
-
-  /**
-   * Handles the keydown event to send on 'Enter' but
-   * allow new lines with 'Shift+Enter'.
-   */
+  // REFACTOR: Handle keydown manually (Enter vs Shift+Enter)
   onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault(); // Prevent new line
@@ -56,19 +31,23 @@ export class ChatMessageInputComponent {
     }
   }
 
-  /**
-   * Emits the message and resets the form.
-   */
-  sendMessage(): void {
-    // 3. Update 'disabled' check to function call 'disabled()'
-    if (this.form.invalid || this.disabled()) {
-      return;
-    }
+  // REFACTOR: Native Input Handler
+  onInput(event: Event): void {
+    const target = event.target as HTMLTextAreaElement;
+    this.messageText.set(target.value);
+  }
 
-    const message = this.form.value.messageText?.trim();
+  sendMessage(): void {
+    // 1. Check disabled signal
+    if (this.disabled()) return;
+
+    // 2. Read signal
+    const message = this.messageText().trim();
+
     if (message) {
       this.messageSent.emit(message);
-      this.form.reset();
+      // 3. Reset signal
+      this.messageText.set('');
     }
   }
 }

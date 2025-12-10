@@ -48,6 +48,7 @@ export class ChatMessageMapper {
       typeId: msg.typeId,
       payloadBytes: msg.payloadBytes,
       textContent: textContent,
+      status: msg.status,
     };
   }
 }

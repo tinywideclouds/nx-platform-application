@@ -10,6 +10,7 @@ import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 import { filter, firstValueFrom, interval } from 'rxjs';
+import { Temporal } from '@js-temporal/polyfill';
 
 // --- Services ---
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
@@ -38,7 +39,7 @@ import { ChatKeyService } from './services/chat-key.service';
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 // Types
-import { ContactSharePayload } from '@nx-platform-application/message-content';
+import { ContactShareData } from '@nx-platform-application/message-content';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 export type OnboardingState =
@@ -94,7 +95,9 @@ export class ChatService {
   public readonly isRecipientKeyMissing =
     this.conversationService.isRecipientKeyMissing;
   public readonly firstUnreadId = this.conversationService.firstUnreadId;
-  public readonly typingActivity = signal<Map<string, number>>(new Map());
+  public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
+    new Map()
+  );
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -463,8 +466,13 @@ export class ChatService {
   private updateTypingActivity(indicators: URN[], realMessages: any[]): void {
     this.typingActivity.update((map) => {
       const newMap = new Map(map);
-      const now = Date.now();
+
+      // Strict Temporal usage: Get the current Instant
+      const now = Temporal.Now.instant();
+
       indicators.forEach((urn) => newMap.set(urn.toString(), now));
+
+      // If a real message arrives, clear the typing indicator
       realMessages.forEach((msg) => {
         if (newMap.has(msg.senderId.toString()))
           newMap.delete(msg.senderId.toString());
@@ -497,7 +505,7 @@ export class ChatService {
 
   public async sendContactShare(
     recipientUrn: URN,
-    data: ContactSharePayload
+    data: ContactShareData
   ): Promise<void> {
     const keys = this.myKeys();
     const sender = this.currentUserUrn();

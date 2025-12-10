@@ -3,47 +3,64 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ChatMessageBubbleComponent } from './chat-message-bubble.component';
 import { By } from '@angular/platform-browser';
+import { Component } from '@angular/core';
+
+@Component({
+  standalone: true,
+  imports: [ChatMessageBubbleComponent],
+  template: `
+    <chat-message-bubble [direction]="direction">
+      <div data-testid="projected-content">Hello World</div>
+    </chat-message-bubble>
+  `,
+})
+class TestHostComponent {
+  direction: 'inbound' | 'outbound' = 'outbound';
+}
 
 describe('ChatMessageBubbleComponent', () => {
-  let fixture: ComponentFixture<ChatMessageBubbleComponent>;
-  let component: ChatMessageBubbleComponent;
+  let fixture: ComponentFixture<TestHostComponent>;
+  let hostComponent: TestHostComponent;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ChatMessageBubbleComponent],
+      imports: [TestHostComponent, ChatMessageBubbleComponent],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(ChatMessageBubbleComponent);
-    component = fixture.componentInstance;
+    fixture = TestBed.createComponent(TestHostComponent);
+    hostComponent = fixture.componentInstance;
+    // FIX: Do NOT call fixture.detectChanges() here.
+    // Let each test set the inputs first.
   });
 
-  it('should render an outbound message', () => {
-    // Refactor: Use setInput for signals
-    fixture.componentRef.setInput('message', 'Hello world');
-    fixture.componentRef.setInput('direction', 'outbound');
+  it('should project content correctly', () => {
+    // Initial render
     fixture.detectChanges();
+
+    const projected = fixture.debugElement.query(
+      By.css('[data-testid="projected-content"]')
+    );
+    expect(projected).toBeTruthy();
+    expect(projected.nativeElement.textContent).toContain('Hello World');
+  });
+
+  it('should apply outbound styles', () => {
+    hostComponent.direction = 'outbound';
+    fixture.detectChanges(); // First render with outbound
 
     const bubble = fixture.debugElement.query(
       By.css('[data-testid="chat-bubble"]')
-    ).nativeElement as HTMLElement;
-
-    expect(bubble.textContent).toContain('Hello world');
-    expect(bubble.classList).toContain('bg-blue-600');
-    expect(bubble.classList).not.toContain('bg-gray-200');
+    );
+    expect(bubble.nativeElement.classList).toContain('bg-blue-600');
   });
 
-  it('should render an inbound message', () => {
-    // Refactor: Use setInput for signals
-    fixture.componentRef.setInput('message', 'Hi back');
-    fixture.componentRef.setInput('direction', 'inbound');
-    fixture.detectChanges();
+  it('should apply inbound styles', () => {
+    hostComponent.direction = 'inbound';
+    fixture.detectChanges(); // First render with inbound
 
     const bubble = fixture.debugElement.query(
       By.css('[data-testid="chat-bubble"]')
-    ).nativeElement as HTMLElement;
-
-    expect(bubble.textContent).toContain('Hi back');
-    expect(bubble.classList).toContain('bg-gray-200');
-    expect(bubble.classList).not.toContain('bg-blue-600');
+    );
+    expect(bubble.nativeElement.classList).toContain('bg-white');
   });
 });

@@ -1,21 +1,22 @@
 <form
-  [formGroup]="form"
-  (ngSubmit)="sendMessage()"
+  (submit)="$event.preventDefault(); sendMessage()"
   class="flex items-start space-x-2 p-2 border-t"
 >
   <textarea
-    formControlName="messageText"
+    [value]="messageText()"
+    (input)="onInput($event)"
     (keydown)="onKeyDown($event)"
+    [disabled]="disabled()"
     placeholder="Type a message..."
-    class="flex-1 resize-none border rounded-md p-2"
+    class="flex-1 resize-none border rounded-md p-2 disabled:bg-gray-100 disabled:text-gray-400"
     rows="3"
     data-testid="message-textarea"
   ></textarea>
 
   <button
     type="submit"
-    [disabled]="form.invalid || disabled()"
-    class="bg-blue-600 text-white rounded-md p-2 h-full disabled:bg-gray-400"
+    [disabled]="!messageText() || disabled()"
+    class="bg-blue-600 text-white rounded-md p-2 h-full disabled:bg-gray-400 transition-colors"
     data-testid="send-button"
   >
     Send

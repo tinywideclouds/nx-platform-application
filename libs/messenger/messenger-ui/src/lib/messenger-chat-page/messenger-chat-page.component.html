@@ -5,6 +5,8 @@
     >
       <div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
         <button
+          aria-label="chat"
+          type="button"
           mat-icon-button
           [color]="sidebarMode() === 'new' ? 'warn' : 'primary'"
           [matTooltip]="
@@ -33,6 +35,8 @@
 
         @if (pendingRequests().length > 0) {
         <button
+          type="button"
+          aria-label="review"
           mat-icon-button
           (click)="toggleRequestsPane()"
           [color]="showRequestsPane() ? 'accent' : 'warn'"
@@ -52,7 +56,7 @@
       @if (sidebarMode() === 'new') {
       <contacts-sidebar
         [selectionMode]="true"
-        [showAddActions]="true"
+        [showAddActions]="false"
         [showFilter]="false"
         [filterQuery]="searchQuery()"
         (contactSelected)="onNewChatSelected($event)"

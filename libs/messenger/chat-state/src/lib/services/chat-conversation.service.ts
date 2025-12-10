@@ -23,7 +23,7 @@ import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
   MessageTypingIndicastor,
-  ContactSharePayload,
+  ContactShareData,
 } from '@nx-platform-application/message-content';
 import { PrivateKeys } from '@nx-platform-application/messenger-crypto-bridge';
 
@@ -202,7 +202,7 @@ export class ChatConversationService {
 
   async sendContactShare(
     recipientUrn: URN,
-    data: ContactSharePayload,
+    data: ContactShareData,
     myKeys: PrivateKeys,
     myUrn: URN
   ): Promise<void> {

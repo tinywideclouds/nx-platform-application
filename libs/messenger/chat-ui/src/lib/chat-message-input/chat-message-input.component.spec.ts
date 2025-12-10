@@ -1,9 +1,8 @@
 // libs/messenger/chat-ui/src/lib/chat-message-input/chat-message-input.component.spec.ts
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ReactiveFormsModule } from '@angular/forms';
 import { vi } from 'vitest';
-
+import { By } from '@angular/platform-browser';
 import { ChatMessageInputComponent } from './chat-message-input.component';
 
 describe('ChatMessageInputComponent', () => {
@@ -13,7 +12,7 @@ describe('ChatMessageInputComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ChatMessageInputComponent, ReactiveFormsModule],
+      imports: [ChatMessageInputComponent], // No ReactiveFormsModule
     }).compileComponents();
 
     fixture = TestBed.createComponent(ChatMessageInputComponent);
@@ -37,6 +36,8 @@ describe('ChatMessageInputComponent', () => {
     const sendButton = el.querySelector(
       '[data-testid="send-button"]'
     ) as HTMLButtonElement;
+
+    // REFACTOR: Simulate Native Input
     const textarea = el.querySelector(
       '[data-testid="message-textarea"]'
     ) as HTMLTextAreaElement;
@@ -46,13 +47,14 @@ describe('ChatMessageInputComponent', () => {
     fixture.detectChanges();
 
     expect(sendButton.disabled).toBe(false);
+    expect(component.messageText()).toBe('Hello');
   });
 
-  it('should emit (messageSent) and reset the form on send', () => {
-    // 1. Spy on the output signal's emit method
+  it('should emit (messageSent) and reset on send', () => {
     const emitSpy = vi.spyOn(component.messageSent, 'emit');
 
-    component.form.patchValue({ messageText: 'Test message' });
+    // Set state via signal
+    component.messageText.set('Test message');
     fixture.detectChanges();
 
     const sendButton = el.querySelector(
@@ -62,7 +64,7 @@ describe('ChatMessageInputComponent', () => {
     fixture.detectChanges();
 
     expect(emitSpy).toHaveBeenCalledWith('Test message');
-    expect(component.form.value.messageText).toBeNull();
+    expect(component.messageText()).toBe('');
   });
 
   it('should send on "Enter" but not "Shift+Enter"', () => {
@@ -71,24 +73,25 @@ describe('ChatMessageInputComponent', () => {
       '[data-testid="message-textarea"]'
     ) as HTMLTextAreaElement;
 
-    component.form.patchValue({ messageText: 'Test message' });
+    component.messageText.set('Test message');
     fixture.detectChanges();
 
+    // Shift+Enter
     textarea.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true })
     );
     fixture.detectChanges();
     expect(emitSpy).not.toHaveBeenCalled();
 
+    // Enter
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     fixture.detectChanges();
     expect(emitSpy).toHaveBeenCalledWith('Test message');
   });
 
-  it('should disable the form when the disabled input is true', () => {
-    // 2. Refactored Test: Use setInput to trigger the Effect
+  it('should disable the textarea when the disabled input is true', () => {
     fixture.componentRef.setInput('disabled', true);
-    fixture.detectChanges(); // Triggers the effect
+    fixture.detectChanges();
 
     const textarea = el.querySelector(
       '[data-testid="message-textarea"]'
@@ -97,7 +100,6 @@ describe('ChatMessageInputComponent', () => {
       '[data-testid="send-button"]'
     ) as HTMLButtonElement;
 
-    expect(component.form.disabled).toBe(true);
     expect(textarea.disabled).toBe(true);
     expect(sendButton.disabled).toBe(true);
   });

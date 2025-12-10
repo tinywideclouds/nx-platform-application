@@ -23,17 +23,14 @@ describe('ChatConversationListItemComponent', () => {
   });
 
   it('should render all inputs correctly', () => {
-    // 1. Set Inputs via Signal API
     fixture.componentRef.setInput('name', 'Test User');
     fixture.componentRef.setInput('latestMessage', 'Hello there');
     fixture.componentRef.setInput('unreadCount', 2);
     fixture.componentRef.setInput('initials', 'TU');
     fixture.componentRef.setInput('timestamp', '2025-01-01T12:00:00Z');
-    
-    // 2. Detect Changes
+
     fixture.detectChanges();
 
-    // 3. Assert
     const nameEl = el.querySelector('[data-testid="contact-name"]');
     const msgEl = el.querySelector('[data-testid="last-message"]');
     const countEl = el.querySelector('[data-testid="unread-count"]');
@@ -44,48 +41,45 @@ describe('ChatConversationListItemComponent', () => {
   });
 
   it('should hide the unread count when 0', () => {
-    // Set required inputs to avoid errors, then set unreadCount to 0
     fixture.componentRef.setInput('name', 'Test User');
     fixture.componentRef.setInput('latestMessage', 'Hello there');
     fixture.componentRef.setInput('timestamp', '2025-01-01T12:00:00Z');
     fixture.componentRef.setInput('initials', 'TU');
     fixture.componentRef.setInput('unreadCount', 0);
-    
+
     fixture.detectChanges();
-    
+
     const countEl = el.querySelector('[data-testid="unread-count"]');
     expect(countEl).toBeFalsy();
   });
-  
+
   it('should apply active styles when isActive is true', () => {
-    // Set required inputs
     fixture.componentRef.setInput('name', 'Test User');
     fixture.componentRef.setInput('latestMessage', 'Hello there');
     fixture.componentRef.setInput('timestamp', '2025-01-01T12:00:00Z');
     fixture.componentRef.setInput('initials', 'TU');
-    
-    // Set Active
+
     fixture.componentRef.setInput('isActive', true);
     fixture.detectChanges();
-    
+
     const div = fixture.debugElement.query(By.css('div')).nativeElement;
     expect(div.classList).toContain('bg-blue-100');
   });
 
   it('should emit (select) on click', () => {
-    // Spy on the output signal
     const selectSpy = vi.spyOn(component.select, 'emit');
-    
-    // Set required inputs
+
     fixture.componentRef.setInput('name', 'Test');
     fixture.componentRef.setInput('latestMessage', 'Msg');
-    fixture.componentRef.setInput('timestamp', 'Date');
+    // FIX: Use a valid ISO date string so DatePipe doesn't throw
+    fixture.componentRef.setInput('timestamp', '2025-01-01T12:00:00Z');
     fixture.componentRef.setInput('initials', 'T');
+
     fixture.detectChanges();
-    
-    el.click(); // Click the host element
+
+    el.click();
     fixture.detectChanges();
-    
+
     expect(selectSpy).toHaveBeenCalled();
   });
 });

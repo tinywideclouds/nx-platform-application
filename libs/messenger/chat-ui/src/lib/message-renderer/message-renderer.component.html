@@ -1,0 +1,19 @@
+@if (!payload()) {
+<div class="p-2 text-xs text-gray-400 italic">Message content unavailable</div>
+} @else { @switch (payload()!.kind) { @case ('text') {
+<p class="text-sm whitespace-pre-wrap leading-relaxed">
+  {{ $any(payload()).text }}
+</p>
+} @case ('rich') { @switch ($any(payload()).subType) { @case
+('urn:message:type:contact-share') {
+<chat-contact-share-card
+  [data]="$any(payload()).data"
+  (action)="action.emit($event)"
+/>
+} } } @default {
+<div
+  class="p-2 bg-gray-100 rounded border border-gray-200 text-xs text-gray-500 italic"
+>
+  Unsupported message type
+</div>
+} } }
