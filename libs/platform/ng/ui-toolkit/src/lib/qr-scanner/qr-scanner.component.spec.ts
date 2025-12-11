@@ -79,12 +79,10 @@ describe('QrScannerComponent', () => {
     fixture.componentRef.setInput('active', true);
     fixture.detectChanges();
 
-    component.ngOnDestroy();
+    // Trigger Angular's destroy lifecycle
+    fixture.destroy();
 
-    // Should verify cleanup logic
-    // (Since we mocked the instance internal state to null in the component,
-    // strictly testing the mock call sequence here might require spy injection,
-    // but verifying clear() is called is a good enough proxy).
+    // Verify cleanup
     expect(mockClear).toHaveBeenCalled();
   });
 });

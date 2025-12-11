@@ -39,7 +39,11 @@ import { ChatKeyService } from './services/chat-key.service';
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 // Types
-import { ContactShareData } from '@nx-platform-application/message-content';
+import {
+  ContactShareData,
+  MESSAGE_TYPE_READ_RECEIPT,
+  ReadReceiptData,
+} from '@nx-platform-application/message-content';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 export type OnboardingState =
@@ -255,6 +259,7 @@ export class ChatService {
 
     // [Refactor] Use new lib
     const keys = await this.pairingService.redeemSenderSession(qrCode, urn);
+    this.logger.debug('got redeem keys', keys != undefined);
 
     if (keys) {
       await this.finalizeLinking(keys);
@@ -276,12 +281,10 @@ export class ChatService {
     }
 
     try {
-      // [Refactor] Enter Ceremony (Pause Ingestion)
       this.isCeremonyActive.set(true);
-
+      this.logger.debug('Linking target device...');
       await this.pairingService.linkTargetDevice(qrCode, keys, urn);
     } finally {
-      // [Refactor] Exit Ceremony (Resume Ingestion)
       this.isCeremonyActive.set(false);
     }
   }
@@ -295,12 +298,11 @@ export class ChatService {
     const keys = this.myKeys();
     if (!urn || !keys) throw new Error('Not authenticated');
 
-    // [Refactor] Enter Ceremony (Pause Ingestion)
     // Note: The UI must call cancelLinking() to exit this state!
     this.isCeremonyActive.set(true);
 
     const session = await this.pairingService.startSenderSession(keys, urn);
-
+    this.logger.info('Started source link session', session);
     return {
       sessionId: session.sessionId,
       qrPayload: session.qrPayload,
@@ -357,6 +359,7 @@ export class ChatService {
 
     this.initLiveSubscriptions();
     this.initTypingOrchestration();
+    this.initReadReceiptOrchestration();
     this.fetchAndProcessMessages();
   }
 
@@ -409,6 +412,21 @@ export class ChatService {
       });
   }
 
+  // ✅ NEW: Read Receipt Orchestration
+  private initReadReceiptOrchestration(): void {
+    this.conversationService.readReceiptTrigger$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((messageIds) => {
+        const keys = this.myKeys();
+        const sender = this.currentUserUrn();
+        if (keys && sender && messageIds.length > 0) {
+          this.sendReadReceipt(messageIds, keys, sender).catch((err) =>
+            this.logger.warn('Failed to send read receipt', err)
+          );
+        }
+      });
+  }
+
   public async sync(options: SyncOptions): Promise<void> {
     if (this.onboardingState() !== 'READY') return;
     const success = await this.syncOrchestrator.performSync(options);
@@ -454,7 +472,8 @@ export class ChatService {
       );
 
       if (result.messages.length > 0) {
-        this.conversationService.upsertMessages(result.messages);
+        // ✅ NEW: Pass myUrn to upsert for live read receipt handling
+        this.conversationService.upsertMessages(result.messages, myUrn);
         this.refreshActiveConversations();
         this.updateTypingActivity(result.typingIndicators, result.messages);
       } else if (result.typingIndicators.length > 0) {
@@ -482,7 +501,9 @@ export class ChatService {
   }
 
   public async loadConversation(urn: URN | null): Promise<void> {
-    await this.conversationService.loadConversation(urn);
+    const myUrn = this.currentUserUrn();
+    // ✅ NEW: Pass myUrn
+    await this.conversationService.loadConversation(urn, myUrn);
     if (urn) this.handleReadStatusUpdate(urn);
   }
 
@@ -517,6 +538,32 @@ export class ChatService {
       sender
     );
     this.refreshActiveConversations();
+  }
+
+  // ✅ NEW: Internal Helper for Read Receipts
+  private async sendReadReceipt(
+    messageIds: string[],
+    keys: PrivateKeys,
+    sender: URN
+  ): Promise<void> {
+    const recipient = this.selectedConversation();
+    if (!recipient) return;
+
+    const data: ReadReceiptData = {
+      messageIds,
+      readAt: Temporal.Now.instant().toString(),
+    };
+
+    const json = JSON.stringify(data);
+    const bytes = new TextEncoder().encode(json);
+    const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
+
+    await this.conversationService.sendReadReceiptSignal(
+      recipient,
+      data,
+      keys,
+      sender
+    );
   }
 
   private handleReadStatusUpdate(urn: URN): void {
@@ -611,7 +658,7 @@ export class ChatService {
     this.identityLinkMap.set(new Map());
     this.blockedSet.set(new Set());
     this.activeConversations.set([]);
-    this.conversationService.loadConversation(null);
+    this.conversationService.loadConversation(null, null);
     this.onboardingState.set('CHECKING');
   }
 

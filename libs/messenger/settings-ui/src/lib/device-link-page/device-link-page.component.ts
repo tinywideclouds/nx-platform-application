@@ -6,14 +6,16 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-// Domain Imports
 import { ChatService } from '@nx-platform-application/chat-state';
-import { QrScannerComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { DevicePairingSession } from '@nx-platform-application/messenger-types';
+
+// ✅ Import Shared UI
+import { DeviceLinkQrDisplayComponent } from '../device-link-ui/device-link-qr-display/device-link-qr-display.component';
+import { DeviceLinkScannerUiComponent } from '../device-link-ui/device-link-scanner-ui/device-link-scanner-ui.component';
 
 @Component({
   selector: 'lib-device-link-page',
@@ -21,11 +23,11 @@ import { QrScannerComponent } from '@nx-platform-application/platform-ui-toolkit
   imports: [
     CommonModule,
     MatCardModule,
-    MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
     MatSnackBarModule,
-    QrScannerComponent,
+    DeviceLinkQrDisplayComponent,
+    DeviceLinkScannerUiComponent,
   ],
   templateUrl: './device-link-page.component.html',
   styleUrl: './device-link-page.component.scss',
@@ -35,22 +37,19 @@ export class DeviceLinkPageComponent {
   private chatService = inject(ChatService);
   private snackBar = inject(MatSnackBar);
 
-  // UI State
-  isScanning = signal(false);
+  // State
   isLinking = signal(false);
+  isShowingCode = signal(false); // Toggle between Scan vs Show
+  session = signal<DevicePairingSession | null>(null);
+
+  // --- ACTIONS ---
 
   async handleScan(qrCode: string): Promise<void> {
-    // 1. Stop Scanning immediately
-    this.isScanning.set(false);
     this.isLinking.set(true);
-
     try {
-      // 2. Perform the Handshake
       await this.chatService.linkTargetDevice(qrCode);
-
       this.snackBar.open('Device successfully linked!', 'Close', {
         duration: 5000,
-        panelClass: 'success-snackbar',
       });
     } catch (error) {
       console.error('Linking failed', error);
@@ -62,9 +61,19 @@ export class DeviceLinkPageComponent {
     }
   }
 
-  handleScanError(error: string): void {
-    // Non-critical camera errors (e.g., glare) just log
-    // We only show snackbar if it's persistent or fatal
-    console.warn('Scanner error:', error);
+  async enableShowMode(): Promise<void> {
+    this.isShowingCode.set(true);
+    try {
+      const session = await this.chatService.startSourceLinkSession();
+      this.session.set(session);
+    } catch (e) {
+      this.snackBar.open('Could not generate secure code.', 'Close');
+      this.isShowingCode.set(false);
+    }
+  }
+
+  switchToScanMode(): void {
+    this.isShowingCode.set(false);
+    this.session.set(null);
   }
 }

@@ -7,7 +7,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
 import { URN } from '@nx-platform-application/platform-types';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 
 vi.stubGlobal('crypto', webcrypto);

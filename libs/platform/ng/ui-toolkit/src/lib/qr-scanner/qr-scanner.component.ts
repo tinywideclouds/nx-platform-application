@@ -5,23 +5,27 @@ import {
   viewChild,
   effect,
   output,
-  OnDestroy,
   input,
+  inject,
+  DestroyRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Logger } from '@nx-platform-application/console-logger';
 
 @Component({
   selector: 'lib-qr-scanner',
   standalone: true,
   imports: [CommonModule],
-  template: ` <div #scannerContainer id="reader" class="scanner-box"></div> `,
+  templateUrl: './qr-scanner.component.html',
   styleUrl: './qr-scanner.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class QrScannerComponent implements OnDestroy {
+export class QrScannerComponent {
   // Inputs
   active = input.required<boolean>();
+  logger = inject(Logger);
+  private destroyRef = inject(DestroyRef);
 
   // Outputs
   scanSuccess = output<string>();
@@ -32,10 +36,19 @@ export class QrScannerComponent implements OnDestroy {
 
   private html5Qrcode: Html5Qrcode | null = null;
 
+  statusMessage = 'Initializing...';
+
   constructor() {
+    // Register cleanup logic
+    this.destroyRef.onDestroy(() => {
+      this.stopScanning();
+    });
+
     // Reactively start/stop scanner based on 'active' signal
     effect(() => {
       const isActive = this.active();
+      this.logger.debug(`QR Scanner active state changed: ${isActive}`);
+
       if (isActive) {
         this.startScanning();
       } else {
@@ -46,34 +59,53 @@ export class QrScannerComponent implements OnDestroy {
 
   private async startScanning(): Promise<void> {
     if (this.html5Qrcode) {
+      this.logger.debug('QR Scanner already running');
       return; // Already running
     }
 
-    const elementId = this.scannerContainer().nativeElement.id;
+    const element = this.scannerContainer().nativeElement;
+    // Ensure the element has an ID, html5-qrcode requires it
+    if (!element.id) element.id = 'reader-generated-' + Math.random();
+
+    this.logger.info(`[QrScanner] Starting scanner on element: ${element.id}`);
+    this.statusMessage = 'Requesting Camera...';
 
     try {
-      this.html5Qrcode = new Html5Qrcode(elementId);
+      this.html5Qrcode = new Html5Qrcode(element.id);
 
       const config = {
         fps: 10,
-        qrbox: { width: 250, height: 250 },
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
+        },
       };
 
       await this.html5Qrcode.start(
         { facingMode: 'environment' }, // Prefer back camera
         config,
-        (decodedText) => {
+        (decodedText, decodedResult) => {
+          // --- SUCCESS CALLBACK ---
+          this.logger.info(
+            '[QrScanner] SCAN SUCCESS:',
+            decodedText,
+            decodedResult
+          );
+          this.statusMessage = 'Code Found!';
           this.scanSuccess.emit(decodedText);
-          // Optional: Stop automatically on success?
-          // For now, we let the parent decide to toggle 'active' to false.
+          this.stopScanning();
         },
         (errorMessage) => {
           // Ignored for noise, or emit if critical
           // this.scanError.emit(errorMessage);
         }
       );
+
+      this.logger.info('[QrScanner] Camera started successfully.');
+      this.statusMessage = 'Scanning...';
     } catch (err) {
+      this.logger.error('[QrScanner] Failed to start camera', err);
+      this.statusMessage = 'Failed to start camera.';
       this.scanError.emit('Failed to start camera: ' + err);
       this.stopScanning();
     }
@@ -81,21 +113,18 @@ export class QrScannerComponent implements OnDestroy {
 
   private async stopScanning(): Promise<void> {
     if (this.html5Qrcode) {
+      this.logger.info('[QrScanner] Stopping scanner...');
       try {
         if (this.html5Qrcode.isScanning) {
           await this.html5Qrcode.stop();
         }
         this.html5Qrcode.clear();
+        this.logger.info('[QrScanner] Scanner stopped.');
       } catch (e) {
-        console.warn('Error stopping scanner', e);
+        this.logger.warn('Error stopping scanner', e);
       } finally {
         this.html5Qrcode = null;
       }
     }
-  }
-
-  ngOnDestroy(): void {
-    // Cleanup ensures camera light goes off if component is destroyed
-    this.stopScanning();
   }
 }

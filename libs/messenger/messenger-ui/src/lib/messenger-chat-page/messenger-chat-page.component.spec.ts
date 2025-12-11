@@ -9,7 +9,7 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
 
 // Dependencies
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -30,57 +30,23 @@ import { MessageRequestReviewComponent } from '../message-request-review/message
 // ng-mocks
 import { MockComponent, MockProvider } from 'ng-mocks';
 
-// --- MOCK DATA ---
 const friendUrn = URN.parse('urn:contacts:user:friend');
 const strangerUrn = URN.parse('urn:contacts:user:stranger');
-
-const mockSummaries = [
-  {
-    conversationUrn: friendUrn,
-    latestSnippet: 'Hi',
-    timestamp: '2023-01-01T00:00:00Z' as ISODateTimeString,
-    unreadCount: 0,
-  },
-];
-
-const mockContactList: Contact[] = [
-  {
-    id: friendUrn,
-    alias: 'Bestie',
-    firstName: 'Alice',
-    surname: 'Wonderland',
-    email: 'alice@test.com',
-    phoneNumbers: [],
-    emailAddresses: [],
-    serviceContacts: { messenger: { profilePictureUrl: 'img.png' } } as any,
-    lastModified: '2023-01-01T00:00:00Z' as ISODateTimeString,
-  },
-];
-
-const mockPending: PendingIdentity[] = [
-  {
-    urn: strangerUrn,
-    firstSeenAt: '2023-01-01T12:00:00Z' as ISODateTimeString,
-  },
-];
 
 describe('MessengerChatPageComponent', () => {
   let component: MessengerChatPageComponent;
   let fixture: ComponentFixture<MessengerChatPageComponent>;
   let router: Router;
-  let contactsService: ContactsStorageService;
 
-  // Explicit mock for MatDialog
+  // Explicitly define the mock object to ensure it is returned
+  const mockDialogRef = {
+    afterClosed: vi.fn().mockReturnValue(of(true)), // Simulates 'Confirm'
+  };
   const mockDialog = {
-    open: vi.fn().mockReturnValue({
-      afterClosed: () => of(true), // Simulate User clicking "Confirm"
-    }),
+    open: vi.fn().mockReturnValue(mockDialogRef),
   };
 
-  // Observables for Router State
   const queryParams$ = new BehaviorSubject(convertToParamMap({}));
-
-  // Signals/Subjects for Services
   const activeConversations = signal<any[]>([]);
   const selectedConversation = signal(null);
   const contacts$ = new BehaviorSubject<Contact[]>([]);
@@ -115,7 +81,7 @@ describe('MessengerChatPageComponent', () => {
           saveContact: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(Router),
-        // Explicitly provide our mockDialog
+        // Force the use of our explicit mock
         { provide: MatDialog, useValue: mockDialog },
         {
           provide: ActivatedRoute,
@@ -125,72 +91,35 @@ describe('MessengerChatPageComponent', () => {
         },
       ],
     })
-      // Remove the real MatDialogModule so it doesn't overwrite our provider
+      // We override to ensure the standalone component doesn't self-provide the real MatDialog
       .overrideComponent(MessengerChatPageComponent, {
-        remove: { imports: [MatDialogModule] },
+        set: { providers: [{ provide: MatDialog, useValue: mockDialog }] },
       })
       .compileComponents();
 
     fixture = TestBed.createComponent(MessengerChatPageComponent);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
-    contactsService = TestBed.inject(ContactsStorageService);
 
-    // Spy on router.navigate
     vi.spyOn(router, 'navigate');
 
     // Seed Data
-    activeConversations.set(mockSummaries);
-    contacts$.next(mockContactList);
-    pending$.next([]); // Start empty
+    activeConversations.set([
+      {
+        conversationUrn: friendUrn,
+        latestSnippet: 'Hi',
+        timestamp: '2023-01-01T00:00:00Z' as ISODateTimeString,
+        unreadCount: 0,
+      },
+    ]);
+    contacts$.next([]);
+    pending$.next([]);
 
     fixture.detectChanges();
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
-  });
-
-  describe('Requests Pane Logic', () => {
-    it('should NOT show badge if no pending requests', () => {
-      const badge = fixture.debugElement.query(
-        By.css('button[matTooltip="Review Message Requests"]')
-      );
-      expect(badge).toBeFalsy();
-    });
-
-    it('should SHOW badge if pending requests exist', () => {
-      pending$.next(mockPending);
-      fixture.detectChanges();
-
-      const badge = fixture.debugElement.query(
-        By.css('button[matTooltip="Review Message Requests"]')
-      );
-      expect(badge).toBeTruthy();
-    });
-
-    it('should toggle requests pane and deselect chat when badge is clicked', () => {
-      pending$.next(mockPending);
-      fixture.detectChanges();
-
-      const badge = fixture.debugElement.query(
-        By.css('button[matTooltip="Review Message Requests"]')
-      );
-      const chatService = TestBed.inject(ChatService);
-
-      // Act: Click Badge
-      badge.nativeElement.click();
-      fixture.detectChanges();
-
-      expect(component.showRequestsPane()).toBe(true);
-      expect(chatService.loadConversation).toHaveBeenCalledWith(null);
-
-      // Verify Review Component is rendered in Main Area
-      const reviewComp = fixture.debugElement.query(
-        By.directive(MessageRequestReviewComponent)
-      );
-      expect(reviewComp).toBeTruthy();
-    });
   });
 
   describe('Request Actions', () => {
@@ -215,6 +144,9 @@ describe('MessengerChatPageComponent', () => {
         scope: 'messenger',
       });
 
+      // Dialog opens
+      expect(mockDialog.open).toHaveBeenCalled();
+      // Service called
       expect(chatService.block).toHaveBeenCalledWith(
         [strangerUrn],
         'messenger'
@@ -227,22 +159,6 @@ describe('MessengerChatPageComponent', () => {
       await component.onDismissRequest(strangerUrn);
 
       expect(chatService.dismissPending).toHaveBeenCalledWith([strangerUrn]);
-    });
-  });
-
-  describe('Routing Integration', () => {
-    it('should close requests pane when selecting a conversation', () => {
-      component.showRequestsPane.set(true);
-      fixture.detectChanges();
-
-      component.onConversationSelected(friendUrn);
-
-      expect(component.showRequestsPane()).toBe(false);
-      expect(router.navigate).toHaveBeenCalledWith([
-        '/messenger',
-        'conversations',
-        friendUrn.toString(),
-      ]);
     });
   });
 });

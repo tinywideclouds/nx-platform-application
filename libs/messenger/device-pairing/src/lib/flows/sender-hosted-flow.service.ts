@@ -36,8 +36,7 @@ export class SenderHostedFlowService {
   ): Promise<DevicePairingSession> {
     this.logger.info('[SenderFlow] Starting session (AES)...');
 
-    // 1. Generate AES Session Key (Symmetric)
-    // This key will be embedded in the QR code.
+    // 1. Generate AES Session Key
     const session = await this.crypto.generateSenderSession();
 
     // 2. Serialize Identity Keys
@@ -51,22 +50,34 @@ export class SenderHostedFlowService {
       payloadBytes: payloadBytes,
     };
 
-    // 4. Encrypt with Session Key (Symmetric)
-    // We encrypt this FOR the session key holder (the person who scans the QR)
+    // 4. Encrypt with Session Key
     const envelope = await this.crypto.encryptSyncOffer(
       messagePayload,
       session.oneTimeKey!
     );
 
     // 5. Dead Drop Strategy
-    // We send this message to *ourselves* (recipientId = myUrn).
-    // The Target device will login as us (or connect to our queue) and find it.
     envelope.recipientId = myUrn;
     envelope.isEphemeral = true;
     (envelope as any).priority = Priority.High;
 
-    this.logger.info('[SenderFlow] Dropping keys in Hot Queue...');
-    await firstValueFrom(this.sendService.sendMessage(envelope));
+    // ✅ ADDED LOGGING HERE
+    this.logger.info(
+      `[SenderFlow] 📤 Sending Dead Drop to SELF: ${myUrn.toString()}`
+    );
+    this.logger.debug('[SenderFlow] Envelope Details:', {
+      type: messagePayload.typeId.toString(),
+      priority: (envelope as any).priority,
+      isEphemeral: envelope.isEphemeral,
+    });
+
+    try {
+      await firstValueFrom(this.sendService.sendMessage(envelope));
+      this.logger.info('[SenderFlow] ✅ Server accepted Dead Drop message.');
+    } catch (e) {
+      this.logger.error('[SenderFlow] ❌ Failed to send Dead Drop', e);
+      throw e; // Re-throw to stop the UI from showing the QR code
+    }
 
     return {
       sessionId: session.sessionId,
@@ -94,19 +105,31 @@ export class SenderHostedFlowService {
       );
     }
 
-    // 2. Poll the Spy
-    // The Spy uses the AES key from the QR code to try and decrypt messages in the queue.
-    const decryptedPayload = await this.spy.checkQueueForInvite(
-      parsed.key, // The AES Key from QR
-      myUrn
-    );
+    // 2. Poll the Spy (Retry for 10 seconds)
+    // The message might take a moment to propagate to the Hot Queue.
+    const maxRetries = 10;
+    const delayMs = 1000;
 
-    if (decryptedPayload) {
-      this.logger.info('[SenderFlow] Payload retrieved and decrypted!');
-      return this.deserializeKeys(decryptedPayload.payloadBytes);
+    for (let i = 0; i < maxRetries; i++) {
+      const decryptedPayload = await this.spy.checkQueueForInvite(
+        parsed.key,
+        myUrn
+      );
+
+      if (decryptedPayload) {
+        this.logger.info('[SenderFlow] Payload retrieved and decrypted!');
+        return this.deserializeKeys(decryptedPayload.payloadBytes);
+      }
+
+      this.logger.debug(
+        `[SenderFlow] Attempt ${
+          i + 1
+        }/${maxRetries}: No invite found yet. Retrying...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
-    this.logger.debug('[SenderFlow] No invite found yet.');
+    this.logger.warn('[SenderFlow] Timed out waiting for sync offer.');
     return null;
   }
 

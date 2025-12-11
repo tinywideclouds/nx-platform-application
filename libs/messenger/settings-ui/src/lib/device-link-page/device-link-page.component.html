@@ -1,51 +1,46 @@
-<div class="page-container">
-  <mat-card class="link-card">
+<div class="flex justify-center p-8">
+  <mat-card class="w-full max-w-lg">
     <mat-card-header>
-      <mat-icon mat-card-avatar color="primary">add_to_queue</mat-icon>
-      <mat-card-title>Link a New Device</mat-card-title>
+      <mat-icon mat-card-avatar color="primary" class="scale-125">
+        {{ isShowingCode() ? 'qr_code_2' : 'camera_alt' }}
+      </mat-icon>
+      <mat-card-title>
+        {{ isShowingCode() ? 'Scan on New Device' : 'Scan New Device' }}
+      </mat-card-title>
       <mat-card-subtitle>
-        Scan the QR code displayed on the device you want to add.
+        {{
+          isShowingCode()
+            ? 'Displaying keys for your new device to scan.'
+            : 'Scan the code displayed on your new device.'
+        }}
       </mat-card-subtitle>
     </mat-card-header>
 
-    <mat-card-content>
+    <mat-card-content class="pt-4">
       @if (isLinking()) {
-      <div class="loading-box">
-        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        <p>Securely transferring keys...</p>
+      <div class="py-12 text-center">
+        <mat-progress-bar mode="indeterminate" class="mb-4"></mat-progress-bar>
+        <p class="font-medium text-gray-700">Securely transferring keys...</p>
       </div>
-      } @if (isScanning() && !isLinking()) {
-      <div class="scanner-wrapper">
-        <lib-qr-scanner
-          [active]="true"
-          (scanSuccess)="handleScan($event)"
-          (scanError)="handleScanError($event)"
-        ></lib-qr-scanner>
-      </div>
-      } @if (!isScanning() && !isLinking()) {
-      <div class="placeholder-box">
-        <mat-icon class="large-icon">qr_code_scanner</mat-icon>
-        <p>Camera is currently off</p>
-      </div>
-      }
-    </mat-card-content>
-
-    <mat-card-actions align="end">
-      @if (isScanning()) {
-      <button mat-button color="warn" (click)="isScanning.set(false)">
-        Cancel
-      </button>
-      } @else {
-      <button
-        mat-flat-button
-        color="primary"
-        (click)="isScanning.set(true)"
-        [disabled]="isLinking()"
+      } @else { @if (isShowingCode()) {
+      <lib-device-link-qr-display
+        [session]="session()"
+        [showWarning]="true"
+        (switchToScan)="switchToScanMode()"
+        switchButtonText="Back to Camera"
       >
-        <mat-icon>camera_alt</mat-icon>
-        Start Scanning
-      </button>
-      }
-    </mat-card-actions>
+        <p instructions class="text-gray-600 text-sm">
+          On your <strong>new device</strong>, select "Scan a code instead" and
+          point it here.
+        </p>
+      </lib-device-link-qr-display>
+      } @else {
+      <lib-device-link-scanner-ui
+        (scanSuccess)="handleScan($event)"
+        (switchToDisplay)="enableShowMode()"
+        switchButtonText="Show code instead"
+      />
+      } }
+    </mat-card-content>
   </mat-card>
 </div>

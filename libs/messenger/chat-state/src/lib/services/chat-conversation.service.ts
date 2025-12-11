@@ -22,6 +22,8 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
+  MESSAGE_TYPE_READ_RECEIPT,
+  ReadReceiptData,
   MessageTypingIndicastor,
   ContactShareData,
 } from '@nx-platform-application/message-content';
@@ -44,12 +46,13 @@ export class ChatConversationService {
   public readonly genesisReached = signal<boolean>(false);
   public readonly isLoadingHistory = signal<boolean>(false);
   public readonly isRecipientKeyMissing = signal<boolean>(false);
-
-  // Holds the ID of the first unread message to drive the "New Messages" divider
   public readonly firstUnreadId = signal<string | null>(null);
 
-  // Subject to trigger typing events (consumed by ChatService for throttling)
+  // Trigger for Typing
   public readonly typingTrigger$ = new Subject<void>();
+
+  // ✅ NEW: Trigger for Read Receipts (Consumed by ChatService)
+  public readonly readReceiptTrigger$ = new Subject<string[]>();
 
   private operationLock = Promise.resolve();
 
@@ -57,9 +60,9 @@ export class ChatConversationService {
     return this.repository.getConversationSummaries();
   }
 
-  async loadConversation(urn: URN | null): Promise<void> {
+  // ✅ UPDATE: Accept myUrn to filter incoming messages
+  async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
-      // Optimization: If already selected, just re-mark as read (don't reload)
       if (
         this.selectedConversation()?.toString() === urn?.toString() &&
         urn !== null
@@ -70,10 +73,7 @@ export class ChatConversationService {
 
       this.selectedConversation.set(urn);
       this.genesisReached.set(false);
-      this.firstUnreadId.set(null); // Reset boundary
-
-      // Clear the stage immediately!
-      // This forces the UI into "Loading" state (spinner) instead of showing stale data.
+      this.firstUnreadId.set(null);
       this.messages.set([]);
 
       if (!urn) {
@@ -81,22 +81,16 @@ export class ChatConversationService {
         return;
       }
 
-      // 1. SNAPSHOT: Get Unread Count *Before* wiping it
-      // We need this to calculate the fetch limit and the divider position
       const index = await this.storage.getConversationIndex(urn);
       const unreadCount = index?.unreadCount || 0;
 
-      // 2. Mark as Read (Local UI Fix)
       await this.storage.markConversationAsRead(urn);
 
-      // 3. Check Keys
       const hasKeys = await this.keyWorker.checkRecipientKeys(urn);
       this.isRecipientKeyMissing.set(!hasKeys);
 
-      // 4. Load Data (The "Catch-Up" Fetch)
       this.isLoadingHistory.set(true);
       try {
-        // Expand limit to ensure we see all unread messages + context
         const limit = Math.max(DEFAULT_PAGE_SIZE, unreadCount + 5);
 
         const result = await this.repository.getMessages({
@@ -104,20 +98,21 @@ export class ChatConversationService {
           limit: limit,
         });
 
-        // Map & Reverse (Oldest -> Newest for UI)
         const viewMessages = result.messages
           .reverse()
           .map((m) => this.mapper.toView(m));
 
-        // 5. Calculate "New Messages" Boundary
         if (unreadCount > 0 && viewMessages.length > 0) {
-          // If we have 10 unread, the *last* 10 are new.
-          // The first unread is at index: Length - Unread
           const boundaryIndex = Math.max(0, viewMessages.length - unreadCount);
           const boundaryMsg = viewMessages[boundaryIndex];
           if (boundaryMsg) {
             this.firstUnreadId.set(boundaryMsg.id);
           }
+        }
+
+        // ✅ CHECK READ RECEIPTS
+        if (myUrn) {
+          await this.processReadReceipts(viewMessages, myUrn);
         }
 
         this.messages.set(viewMessages);
@@ -139,7 +134,6 @@ export class ChatConversationService {
 
       this.isLoadingHistory.set(true);
       try {
-        // Oldest is at index 0
         const oldestMsg = currentMsgs[0];
 
         const result = await this.repository.getMessages({
@@ -150,6 +144,7 @@ export class ChatConversationService {
 
         if (result.messages.length > 0) {
           const newHistory = result.messages.map((m) => this.mapper.toView(m));
+          // Note: We don't usually send read receipts for old history loads
           this.messages.update((current) => [...newHistory, ...current]);
         }
 
@@ -162,8 +157,6 @@ export class ChatConversationService {
     });
   }
 
-  // --- Typing Logic ---
-
   notifyTyping(): void {
     if (this.selectedConversation()) {
       this.typingTrigger$.next();
@@ -173,21 +166,16 @@ export class ChatConversationService {
   async sendTypingIndicator(myKeys: PrivateKeys, myUrn: URN): Promise<void> {
     const recipient = this.selectedConversation();
     if (!recipient) return;
-
-    // Empty payload for typing indicator
     const bytes = new Uint8Array([]);
-
     await this.outbound.send(
       myKeys,
       myUrn,
       recipient,
       MessageTypingIndicastor,
       bytes,
-      { isEphemeral: true } // Skip Storage
+      { isEphemeral: true }
     );
   }
-
-  // --- Sending Logic ---
 
   async sendMessage(
     recipientUrn: URN,
@@ -212,7 +200,8 @@ export class ChatConversationService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  upsertMessages(messages: ChatMessage[]): void {
+  // ✅ UPDATE: Accept myUrn for filtering
+  upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
@@ -221,13 +210,50 @@ export class ChatConversationService {
     );
 
     if (relevant.length > 0) {
+      // ✅ CHECK READ RECEIPTS (Live)
+      // Since user is looking at this chat (it is selected), mark new messages as read immediately
+      if (myUrn) {
+        // We use catch here to ensure we don't block the UI update if DB fails
+        this.processReadReceipts(relevant, myUrn).catch((err) =>
+          this.logger.warn('Failed to process live receipts', err)
+        );
+      }
+
       this.messages.update((current) => [...current, ...relevant]);
-      // Mark read if active (Live Chat)
       this.storage.markConversationAsRead(activeConvo);
     }
   }
 
   // --- Internal ---
+
+  // ✅ NEW: Detects unread messages, updates them locally, and queues receipts
+  private async processReadReceipts(
+    messages: ChatMessage[],
+    myUrn: URN
+  ): Promise<void> {
+    // Filter: Incoming messages that are NOT yet read
+    const myUrnStr = myUrn.toString();
+    const unreadMessages = messages.filter(
+      (m) => m.senderId.toString() !== myUrnStr && m.status !== 'read'
+    );
+
+    if (unreadMessages.length === 0) return;
+
+    const ids = unreadMessages.map((m) => m.id);
+
+    // 1. Update In-Memory View Models (Optimistic)
+    // We mutate the objects in the array reference if we are in load phase,
+    // or we might need to update the signal if this is post-load.
+    // For safety, let's assume objects are mutable before being passed to signal or update signal?
+    // Since `loadConversation` hasn't set the signal yet, mutation is fine.
+    unreadMessages.forEach((m) => (m.status = 'read'));
+
+    // 2. Update Storage (Async)
+    await this.storage.updateMessageStatus(ids, 'read');
+
+    // 3. Emit Trigger (ChatService will handle network)
+    this.readReceiptTrigger$.next(ids);
+  }
 
   private async sendGeneric(
     recipientUrn: URN,
@@ -246,7 +272,8 @@ export class ChatConversationService {
       );
 
       if (optimisticMsg) {
-        this.upsertMessages([this.mapper.toView(optimisticMsg)]);
+        // Pass myUrn to upsert (though for outbound it's ignored by receipt logic)
+        this.upsertMessages([this.mapper.toView(optimisticMsg)], myUrn);
       }
     });
   }
@@ -263,5 +290,21 @@ export class ChatConversationService {
     } finally {
       releaseLock!();
     }
+  }
+
+  async sendReadReceiptSignal(
+    recipientUrn: URN,
+    data: ReadReceiptData,
+    myKeys: PrivateKeys,
+    myUrn: URN
+  ): Promise<void> {
+    const json = JSON.stringify(data);
+    const bytes = new TextEncoder().encode(json);
+    const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
+
+    // We send this ephemerally (don't store receipts in history)
+    await this.outbound.send(myKeys, myUrn, recipientUrn, typeId, bytes, {
+      isEphemeral: true,
+    });
   }
 }
