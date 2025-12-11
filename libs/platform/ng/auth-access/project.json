@@ -10,8 +10,8 @@
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "dependsOn": [
-        "^build", 
-        { "projects": "platform-protos", "target": "generate" } 
+        "^build",
+        { "projects": "platform-protos", "target": "generate" }
       ],
       "options": {
         "outputPath": "dist/libs/platform/ng/auth-access",
@@ -21,7 +21,7 @@
       }
     },
     "test": {
-      "executor": "@nx/vite:test",
+      "executor": "@nx/vitest:test",
       "outputs": [
         "{options.reportsDirectory}",
         "{options.htmlReportDirectory}"

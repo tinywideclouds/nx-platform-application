@@ -7,7 +7,7 @@
   "tags": ["scope:messenger"],
   "targets": {
     "test": {
-      "executor": "@nx/vite:test",
+      "executor": "@nx/vitest:test",
       "dependsOn": [
         "^build",
         { "projects": "console-logger", "target": "build" }

@@ -16,7 +16,7 @@
       }
     },
     "test": {
-      "executor": "@nx/vite:test",
+      "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "configFile": "libs/messenger/settings-ui/vitest.config.mts",

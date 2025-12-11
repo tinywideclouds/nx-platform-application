@@ -17,11 +17,17 @@ import {
 } from '@nx-platform-application/messenger-types';
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/message-content';
 
+// ✅ NEW: Import Adapter
+import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+
 @Injectable({ providedIn: 'root' })
 export class ReceiverHostedFlowService {
   private logger = inject(Logger);
   private crypto = inject(MessengerCryptoService);
   private sendService = inject(ChatSendService);
+
+  // ✅ NEW: Inject Resolver
+  private identityResolver = inject(IdentityResolver);
 
   /**
    * ROLE: TARGET (The New Device)
@@ -61,10 +67,26 @@ export class ReceiverHostedFlowService {
       );
     }
 
-    // 2. Serialize Identity Keys (The payload to be transferred)
+    // 2. Serialize Identity Keys
     const payloadBytes = await this.serializeKeys(myKeys);
 
+    // ✅ FIX: Resolve Identity -> Handle
+    // Ensure we address the message to the mailbox the Target is actually polling.
+    let targetUrn = myUrn;
+    try {
+      targetUrn = await this.identityResolver.resolveToHandle(myUrn);
+      this.logger.info(
+        `[ReceiverFlow] Resolved Target: ${myUrn} -> ${targetUrn}`
+      );
+    } catch (e) {
+      this.logger.warn(
+        '[ReceiverFlow] Failed to resolve handle, defaulting to Auth ID',
+        e
+      );
+    }
+
     // 3. Construct Payload
+    // Sender ID remains the canonical Auth ID so the Target knows it's trustworthy.
     const messagePayload: EncryptedMessagePayload = {
       senderId: myUrn,
       sentTimestamp: new Date().toISOString() as ISODateTimeString,
@@ -73,28 +95,27 @@ export class ReceiverHostedFlowService {
     };
 
     // 4. Encrypt with Target's Public Key (from QR)
-    // parsed.key is the RSA Public Key extracted from the QR string
     const envelope = await this.crypto.encryptSyncMessage(
       messagePayload,
       parsed.key,
-      myKeys // We sign it with our Identity Key so the Target knows it's really us
+      myKeys
     );
 
-    // 5. Set Priority Flags
-    // 'isEphemeral' tells the Router not to persist this in the DB for long
-    // 'Priority.High' puts it in the Hot Queue
+    // 5. Set Routing & Priority Flags
+    envelope.recipientId = targetUrn; // ✅ Send to the Handle
     envelope.isEphemeral = true;
     (envelope as any).priority = Priority.High;
 
     // 6. Send
-    this.logger.info('[ReceiverFlow] Sending encrypted keys to Hot Queue...');
+    this.logger.info(
+      `[ReceiverFlow] 📤 Sending encrypted keys to: ${targetUrn.toString()}`
+    );
     await firstValueFrom(this.sendService.sendMessage(envelope));
   }
 
   // --- Internal Helper ---
 
   private async serializeKeys(keys: PrivateKeys): Promise<Uint8Array> {
-    // Export Identity Keys to JWK format
     const encJwk = await crypto.subtle.exportKey('jwk', keys.encKey);
     const sigJwk = await crypto.subtle.exportKey('jwk', keys.sigKey);
 

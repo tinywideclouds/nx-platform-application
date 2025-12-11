@@ -17,6 +17,8 @@ import {
 } from '@nx-platform-application/messenger-types';
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/message-content';
 
+// ✅ NEW: Import Adapter
+import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
 
 @Injectable({ providedIn: 'root' })
@@ -25,6 +27,9 @@ export class SenderHostedFlowService {
   private crypto = inject(MessengerCryptoService);
   private sendService = inject(ChatSendService);
   private spy = inject(HotQueueMonitor);
+
+  // ✅ NEW: Inject Resolver
+  private identityResolver = inject(IdentityResolver);
 
   /**
    * ROLE: SOURCE (The Logged-in Device)
@@ -42,7 +47,24 @@ export class SenderHostedFlowService {
     // 2. Serialize Identity Keys
     const payloadBytes = await this.serializeKeys(myKeys);
 
-    // 3. Construct Payload
+    // 3. Resolve Identity -> Handle
+    // We must drop the package in the "Handle" mailbox because that is what
+    // the target device will be polling.
+    let targetUrn = myUrn;
+    try {
+      targetUrn = await this.identityResolver.resolveToHandle(myUrn);
+      this.logger.info(
+        `[SenderFlow] Resolving Dead Drop: ${myUrn} -> ${targetUrn}`
+      );
+    } catch (e) {
+      this.logger.warn(
+        '[SenderFlow] Failed to resolve handle, defaulting to Auth ID',
+        e
+      );
+    }
+
+    // 4. Construct Payload
+    // The "Sender" inside the envelope remains the canonical Auth ID.
     const messagePayload: EncryptedMessagePayload = {
       senderId: myUrn,
       sentTimestamp: new Date().toISOString() as ISODateTimeString,
@@ -50,34 +72,22 @@ export class SenderHostedFlowService {
       payloadBytes: payloadBytes,
     };
 
-    // 4. Encrypt with Session Key
+    // 5. Encrypt with Session Key
     const envelope = await this.crypto.encryptSyncOffer(
       messagePayload,
       session.oneTimeKey!
     );
 
-    // 5. Dead Drop Strategy
-    envelope.recipientId = myUrn;
+    // 6. Address & Prioritize
+    envelope.recipientId = targetUrn; // ✅ Send to the Handle
     envelope.isEphemeral = true;
     (envelope as any).priority = Priority.High;
 
-    // ✅ ADDED LOGGING HERE
     this.logger.info(
-      `[SenderFlow] 📤 Sending Dead Drop to SELF: ${myUrn.toString()}`
+      `[SenderFlow] 📤 Sending Dead Drop to: ${targetUrn.toString()}`
     );
-    this.logger.debug('[SenderFlow] Envelope Details:', {
-      type: messagePayload.typeId.toString(),
-      priority: (envelope as any).priority,
-      isEphemeral: envelope.isEphemeral,
-    });
 
-    try {
-      await firstValueFrom(this.sendService.sendMessage(envelope));
-      this.logger.info('[SenderFlow] ✅ Server accepted Dead Drop message.');
-    } catch (e) {
-      this.logger.error('[SenderFlow] ❌ Failed to send Dead Drop', e);
-      throw e; // Re-throw to stop the UI from showing the QR code
-    }
+    await firstValueFrom(this.sendService.sendMessage(envelope));
 
     return {
       sessionId: session.sessionId,
@@ -97,7 +107,6 @@ export class SenderHostedFlowService {
   ): Promise<PrivateKeys | null> {
     this.logger.info('[SenderFlow] Redeeming scanned QR...');
 
-    // 1. Parse & Validate
     const parsed = await this.crypto.parseQrCode(qrCode);
     if (parsed.mode !== 'SENDER_HOSTED') {
       throw new Error(
@@ -105,10 +114,9 @@ export class SenderHostedFlowService {
       );
     }
 
-    // 2. Poll the Spy (Retry for 10 seconds)
-    // The message might take a moment to propagate to the Hot Queue.
+    // Polling Loop (Retry logic)
     const maxRetries = 10;
-    const delayMs = 1000;
+    const delayMs = 1500; // Increased slightly to allow propagation
 
     for (let i = 0; i < maxRetries; i++) {
       const decryptedPayload = await this.spy.checkQueueForInvite(
@@ -122,9 +130,7 @@ export class SenderHostedFlowService {
       }
 
       this.logger.debug(
-        `[SenderFlow] Attempt ${
-          i + 1
-        }/${maxRetries}: No invite found yet. Retrying...`
+        `[SenderFlow] Attempt ${i + 1}/${maxRetries}: No invite found yet.`
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -146,7 +152,6 @@ export class SenderHostedFlowService {
     const json = new TextDecoder().decode(bytes);
     const jwks = JSON.parse(json);
 
-    // Import settings match the Platform Specs for Identity Keys
     const rsaOaep = { name: 'RSA-OAEP', hash: 'SHA-256' };
     const rsaPss = { name: 'RSA-PSS', hash: 'SHA-256' };
 
