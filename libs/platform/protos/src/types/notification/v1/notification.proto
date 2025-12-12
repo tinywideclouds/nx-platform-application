@@ -18,7 +18,7 @@ message DeviceTokenPb {
 // to send a push notification.
 message NotificationRequestPb {
   // The URN of the end-user this notification is for.
-  // e.g., "urn:sm:user:user-bob"
+  // e.g., "urn:contacts:user:user-bob"
   string recipient_id = 1;
 
   // A list of all device tokens associated with the recipient.
