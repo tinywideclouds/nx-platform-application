@@ -1,0 +1,30 @@
+{
+  "name": "messenger-device-notifications",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/device-notifications/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/device-notifications",
+        "configFile": "libs/messenger/device-notifications/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../coverage/libs/messenger/device-notifications",
+        "configFile": "libs/messenger/device-notifications/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

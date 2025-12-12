@@ -3,12 +3,14 @@ import {
   APP_INITIALIZER,
   provideZonelessChangeDetection,
   importProvidersFrom,
+  isDevMode,
 } from '@angular/core';
 // This acts as a hint to the Nx Graph that this app explicitly depends on contacts-ui
 import '@nx-platform-application/contacts-ui';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideServiceWorker } from '@angular/service-worker';
 import { firstValueFrom } from 'rxjs';
 
 import { appRoutes } from './app.routes';
@@ -31,13 +33,18 @@ import { ChatService } from '@nx-platform-application/chat-state';
 import { MockChatService } from './mocks/mock-chat.service';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
-// 1. Import the new mock user list
 import { MESSENGER_MOCK_USERS } from './mocks/users';
 
 // --- Service Tokens ---
 import { ROUTING_SERVICE_URL } from '@nx-platform-application/chat-access';
 import { WSS_URL_TOKEN } from '@nx-platform-application/chat-live-data';
 import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-key-access';
+
+// ✅ NEW: Notification Tokens
+import {
+  NOTIFICATION_SERVICE_URL,
+  VAPID_PUBLIC_KEY,
+} from '@nx-platform-application/messenger-device-notifications';
 
 import { CryptoEngine } from '@nx-platform-application/messenger-crypto-bridge';
 import {
@@ -52,18 +59,11 @@ import {
   CLOUD_PROVIDERS,
   GoogleDriveService,
 } from '@nx-platform-application/platform-cloud-access';
-import { provideMessengerIdentity } from '@nx-platform-application/messenger-identity-adapter'; // Import the helper
-
-// ---
-// 2. The app-specific user definitions are GONE from this file.
-// ---
+import { provideMessengerIdentity } from '@nx-platform-application/messenger-identity-adapter';
 
 // --- Conditional Mock Providers ---
 const authProviders = environment.useMocks
-  ? [
-      MockAuthService, // Provide the class itself
-      { provide: IAuthService, useExisting: MockAuthService }, // Provide it for the interface
-    ]
+  ? [MockAuthService, { provide: IAuthService, useExisting: MockAuthService }]
   : [{ provide: IAuthService, useExisting: AuthService }];
 
 const chatProvider = environment.useMocks
@@ -74,14 +74,11 @@ const contactsProvider = environment.useMocks
   ? { provide: ContactsStorageService, useClass: MockContactsStorageService }
   : [];
 
-// ---
-// 3. The provider now references the imported MESSENGER_MOCK_USERS
-// ---
 const mockUserProvider = environment.useMocks
   ? { provide: MOCK_USERS_TOKEN, useValue: MESSENGER_MOCK_USERS }
   : [];
 
-// --- Dev Providers (unchanged) ---
+// --- Dev Providers ---
 const devProviders = environment.useMocks
   ? []
   : [
@@ -101,16 +98,23 @@ const devProviders = environment.useMocks
         provide: WSS_URL_TOKEN,
         useValue: environment.wssUrl,
       },
+      // ✅ NEW: Production-only Notification Configuration
+      {
+        provide: NOTIFICATION_SERVICE_URL,
+        useValue: environment.notificationServiceUrl,
+      },
+      {
+        provide: VAPID_PUBLIC_KEY,
+        useValue: environment.vapidPublicKey,
+      },
     ];
 
-// Choose Cloud Provider based on environment
 const cloudProviders = environment.useMocks
   ? [{ provide: CLOUD_PROVIDERS, useClass: MockCloudProvider, multi: true }]
   : [{ provide: CLOUD_PROVIDERS, useClass: GoogleDriveService, multi: true }];
 
-// Factory for the APP_INITIALIZER (unchanged)
 export function initializeAuthFactory(
-  authService: IAuthService
+  authService: IAuthService,
 ): () => Promise<unknown> {
   return () => firstValueFrom(authService.sessionLoaded$);
 }
@@ -124,9 +128,13 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideHttpClient(withInterceptors([authInterceptor])),
 
-    // ---
-    // 4. The providers list is now clean
-    // ---
+    // ✅ NEW: Register Service Worker
+    // Only enable in production or when explicitly testing PWA behavior
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode() && !environment.useMocks,
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
+
     ...authProviders,
     provideMessengerIdentity(),
     chatProvider,

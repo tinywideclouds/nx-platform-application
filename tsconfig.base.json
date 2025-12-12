@@ -133,6 +133,9 @@
       ],
       "@nx-platform-application/messenger-identity-adapter": [
         "libs/messenger/identity-adapter/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-device-notifications": [
+        "libs/messenger/device-notifications/src/index.ts"
       ]
     }
   },
