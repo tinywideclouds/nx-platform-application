@@ -16,6 +16,7 @@ gcloud builds submit .  --config apps/messenger/messenger-app/cloudbuild.yaml   
 #   --set-env-vars="IDENTITY_SERVICE_URL=http://localhost" \
 #   --set-env-vars="KEY_SERVICE_URL=http://localhost" \
 #   --set-env-vars="ROUTING_SERVICE_URL=http://localhost" \
+#   --set-env-vars="NOTIFICATION_SERVICE_URL=http://localhost" \
 #   --set-env-vars="WSS_URL=http://localhost"
 
 # if env vars already set

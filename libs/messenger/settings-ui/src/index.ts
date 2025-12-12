@@ -7,4 +7,6 @@ export * from './lib/routing-settings-page/routing-settings-page.component';
 export * from './lib/settings-shell/settings-shell.component';
 export * from './lib/device-link-ui/device-link-qr-display/device-link-qr-display.component';
 export * from './lib/device-link-ui//device-link-scanner-ui/device-link-scanner-ui.component';
+export * from './lib/secure-logout-dialog/secure-logout-dialog.component';
+export * from './lib/notification-permission-button/notification-permission-button';
 export * from './lib/settings.routes';

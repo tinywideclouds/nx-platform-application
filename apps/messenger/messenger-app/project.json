@@ -38,6 +38,8 @@
       },
       "configurations": {
         "production": {
+          "serviceWorker": true,
+          "ngswConfigPath": "apps/messenger/messenger-app/ngsw-config.json",
           "budgets": [
             {
               "type": "initial",

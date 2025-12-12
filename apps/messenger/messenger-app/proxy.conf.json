@@ -11,15 +11,6 @@
     "logLevel": "debug",
     "changeOrigin": true
   },
-  "/api/messenger": {
-    "target": "http://localhost:8082",
-    "secure": false,
-    "logLevel": "debug",
-    "changeOrigin": true,
-    "pathRewrite": {
-      "^/api/messenger": "/api"
-    }
-  },
   "/api/routing": {
     "target": "http://localhost:8082",
     "secure": false,
@@ -36,6 +27,15 @@
     "changeOrigin": true,
     "pathRewrite": {
       "^/api/keys": "/keys"
+    }
+  },
+  "/api/notifications": {
+    "target": "http://localhost:8083",
+    "secure": false,
+    "logLevel": "debug",
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api/notifications": "/notifications"
     }
   },
   "/connect": {

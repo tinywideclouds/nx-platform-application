@@ -98,7 +98,6 @@ const devProviders = environment.useMocks
         provide: WSS_URL_TOKEN,
         useValue: environment.wssUrl,
       },
-      // ✅ NEW: Production-only Notification Configuration
       {
         provide: NOTIFICATION_SERVICE_URL,
         useValue: environment.notificationServiceUrl,
