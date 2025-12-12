@@ -100,7 +100,7 @@ export class ChatService {
     this.conversationService.isRecipientKeyMissing;
   public readonly firstUnreadId = this.conversationService.firstUnreadId;
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
-    new Map()
+    new Map(),
   );
 
   public readonly currentUserUrn = computed(() => {
@@ -153,7 +153,7 @@ export class ChatService {
       const isConsistent = await this.checkIntegrity(
         senderUrn,
         localKeys,
-        serverKeys
+        serverKeys,
       );
 
       if (!isConsistent) {
@@ -174,7 +174,7 @@ export class ChatService {
   private async checkIntegrity(
     urn: URN,
     local: PrivateKeys | null,
-    server: PublicKeys | null
+    server: PublicKeys | null,
   ): Promise<boolean> {
     if (!local && server) return false;
     if (local && server) {
@@ -201,7 +201,7 @@ export class ChatService {
   public async startTargetLinkSession(): Promise<DevicePairingSession> {
     if (this.onboardingState() !== 'REQUIRES_LINKING') {
       throw new Error(
-        'Device Linking is only available during onboarding halt.'
+        'Device Linking is only available during onboarding halt.',
       );
     }
 
@@ -227,7 +227,7 @@ export class ChatService {
    * TARGET ROLE (New Device): Polling Loop (Spy)
    */
   public async checkForSyncMessage(
-    sessionPrivateKey: CryptoKey
+    sessionPrivateKey: CryptoKey,
   ): Promise<boolean> {
     const urn = this.currentUserUrn();
     if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') return false;
@@ -235,7 +235,7 @@ export class ChatService {
     // [Refactor] Use new lib's dedicated poller
     const keys = await this.pairingService.pollForReceiverSync(
       sessionPrivateKey,
-      urn
+      urn,
     );
 
     if (keys) {
@@ -250,7 +250,13 @@ export class ChatService {
    */
   public async redeemSourceSession(qrCode: string): Promise<void> {
     const urn = this.currentUserUrn();
-    if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') {
+    const currentState = this.onboardingState(); // Snapshot state
+
+    // ✅ DEBUG LOG: State Guard
+    if (!urn || currentState !== 'REQUIRES_LINKING') {
+      this.logger.error(
+        `[ChatService] Redeem Blocked. URN=${urn}, State=${currentState}`,
+      );
       throw new Error('Invalid State for redeeming session');
     }
 
@@ -366,7 +372,7 @@ export class ChatService {
   public async finalizeLinking(restoredKeys: PrivateKeys): Promise<void> {
     if (this.onboardingState() !== 'REQUIRES_LINKING') {
       this.logger.warn(
-        'finalizeLinking called but state is not REQUIRES_LINKING'
+        'finalizeLinking called but state is not REQUIRES_LINKING',
       );
       return;
     }
@@ -406,7 +412,7 @@ export class ChatService {
           this.conversationService
             .sendTypingIndicator(keys, sender)
             .catch((err) =>
-              this.logger.warn('Failed to send typing indicator', err)
+              this.logger.warn('Failed to send typing indicator', err),
             );
         }
       });
@@ -421,7 +427,7 @@ export class ChatService {
         const sender = this.currentUserUrn();
         if (keys && sender && messageIds.length > 0) {
           this.sendReadReceipt(messageIds, keys, sender).catch((err) =>
-            this.logger.warn('Failed to send read receipt', err)
+            this.logger.warn('Failed to send read receipt', err),
           );
         }
       });
@@ -446,7 +452,7 @@ export class ChatService {
     this.myKeys.set(null);
     const newKeys = await this.keyWorker.resetIdentityKeys(
       userUrn,
-      currentUser.email
+      currentUser.email,
     );
     this.myKeys.set(newKeys);
   }
@@ -468,7 +474,7 @@ export class ChatService {
         myKeys,
         myUrn,
         this.blockedSet(),
-        50
+        50,
       );
 
       if (result.messages.length > 0) {
@@ -519,14 +525,14 @@ export class ChatService {
       recipientUrn,
       text,
       keys,
-      sender
+      sender,
     );
     this.refreshActiveConversations();
   }
 
   public async sendContactShare(
     recipientUrn: URN,
-    data: ContactShareData
+    data: ContactShareData,
   ): Promise<void> {
     const keys = this.myKeys();
     const sender = this.currentUserUrn();
@@ -535,7 +541,7 @@ export class ChatService {
       recipientUrn,
       data,
       keys,
-      sender
+      sender,
     );
     this.refreshActiveConversations();
   }
@@ -544,7 +550,7 @@ export class ChatService {
   private async sendReadReceipt(
     messageIds: string[],
     keys: PrivateKeys,
-    sender: URN
+    sender: URN,
   ): Promise<void> {
     const recipient = this.selectedConversation();
     if (!recipient) return;
@@ -562,7 +568,7 @@ export class ChatService {
       recipient,
       data,
       keys,
-      sender
+      sender,
     );
   }
 
@@ -571,8 +577,8 @@ export class ChatService {
       list.map((c) =>
         c.conversationUrn.toString() === urn.toString()
           ? { ...c, unreadCount: 0 }
-          : c
-      )
+          : c,
+      ),
     );
   }
 
@@ -587,7 +593,7 @@ export class ChatService {
       const links = await this.contactsService.getAllIdentityLinks();
       const newMap = new Map<string, URN>();
       links.forEach((link) =>
-        newMap.set(link.authUrn.toString(), link.contactId)
+        newMap.set(link.authUrn.toString(), link.contactId),
       );
       this.identityLinkMap.set(newMap);
     } catch (e) {
@@ -599,7 +605,7 @@ export class ChatService {
     this.liveService.status$
       .pipe(
         filter((s) => s === 'connected'),
-        takeUntilDestroyed(this.destroyRef)
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => this.fetchAndProcessMessages());
     interval(15_000)
@@ -667,33 +673,33 @@ export class ChatService {
   }
   public async promoteQuarantinedMessages(
     oldUrn: URN,
-    newUrn: URN
+    newUrn: URN,
   ): Promise<void> {
     return this.storageService.promoteQuarantinedMessages(oldUrn, newUrn);
   }
   public async block(
     urns: URN[],
-    scope: 'messenger' | 'all' = 'messenger'
+    scope: 'messenger' | 'all' = 'messenger',
   ): Promise<void> {
     await Promise.all(
-      urns.map((urn) => this.contactsService.blockIdentity(urn, [scope]))
+      urns.map((urn) => this.contactsService.blockIdentity(urn, [scope])),
     );
     await Promise.all(
-      urns.map((urn) => this.contactsService.deletePending(urn))
+      urns.map((urn) => this.contactsService.deletePending(urn)),
     );
     await Promise.all(
-      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn))
+      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn)),
     );
   }
   public async dismissPending(
     urns: URN[],
-    scope: 'messenger' | 'all' = 'messenger'
+    scope: 'messenger' | 'all' = 'messenger',
   ): Promise<void> {
     await Promise.all(
-      urns.map((urn) => this.contactsService.deletePending(urn))
+      urns.map((urn) => this.contactsService.deletePending(urn)),
     );
     await Promise.all(
-      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn))
+      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn)),
     );
   }
 }
