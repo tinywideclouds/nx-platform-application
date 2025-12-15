@@ -5,34 +5,33 @@ package src.types.notification.v1;
 
 option go_package = "github.com/tinywideclouds/gen-platform/go/types/notification/v1;notification_v1";
 
+// WebPushSubscriptionPb models the standard W3C Push Subscription structure.
+// This handles the "huge JSON" explicitly instead of stringifying it.
+message WebPushSubscriptionPb {
+  string endpoint = 1;
+  string p256dh = 2;
+  string auth = 3;
+}
+
+// 2. The Service-to-Service Request
+// No tokens here. The service looks them up.
+message NotificationRequestPb {
+  string recipient_id = 1; // e.g. "urn:user:123"
+
+  message Content {
+    string title = 1;
+    string body = 2;
+    string sound = 3;
+  }
+  Content content = 2;
+
+  map<string, string> data_payload = 3;
+}
+
 // DeviceTokenPb represents a single push notification token for a user's device.
 message DeviceTokenPb {
   // The platform-specific token string from the device.
   string token = 1;
   // The platform identifier, e.g., "ios", "android".
   string platform = 2;
-}
-
-// NotificationRequestPb is the message published by the routing-service and
-// consumed by the notification-service. It contains all information required
-// to send a push notification.
-message NotificationRequestPb {
-  // The URN of the end-user this notification is for.
-  // e.g., "urn:contacts:user:user-bob"
-  string recipient_id = 1;
-
-  // A list of all device tokens associated with the recipient.
-  repeated DeviceTokenPb tokens = 2;
-
-  // The user-facing content of the notification.
-  message Content {
-    string title = 1;
-    string body = 2;
-    string sound = 3;
-  }
-  Content content = 3;
-
-  // The non-visible, structured data payload to be delivered to the client application.
-  // This allows the client app to take action, e.g., fetching a specific message.
-  map<string, string> data_payload = 4;
 }

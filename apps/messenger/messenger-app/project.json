@@ -38,8 +38,7 @@
       },
       "configurations": {
         "production": {
-          "serviceWorker": true,
-          "ngswConfigPath": "apps/messenger/messenger-app/ngsw-config.json",
+          "serviceWorker": "apps/messenger/messenger-app/ngsw-config.json",
           "budgets": [
             {
               "type": "initial",
@@ -58,6 +57,7 @@
           "optimization": false,
           "extractLicenses": false,
           "sourceMap": true,
+          "serviceWorker": "apps/messenger/messenger-app/ngsw-config.json",
           "fileReplacements": [
             {
               "replace": "apps/messenger/messenger-app/src/app/environments/environment.ts",
@@ -113,7 +113,16 @@
         "port": 4200,
         "staticFilePath": "dist/apps/messenger/messenger-app/browser",
         "spa": true
-      }
+      },
+      "configurations": {
+        "production": {
+          "buildTarget": "messenger-app:build:production"
+        },
+        "development": {
+          "buildTarget": "messenger-app:build:development"
+        }
+      },
+      "defaultConfiguration": "development"
     }
   }
 }

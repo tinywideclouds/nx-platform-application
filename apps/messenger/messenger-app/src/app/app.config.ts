@@ -130,8 +130,13 @@ export const appConfig: ApplicationConfig = {
     // ✅ NEW: Register Service Worker
     // Only enable in production or when explicitly testing PWA behavior
     provideServiceWorker('ngsw-worker.js', {
-      enabled: !isDevMode() && !environment.useMocks,
-      registrationStrategy: 'registerWhenStable:30000',
+      // enabled: !isDevMode() && !environment.useMocks,
+      // registrationStrategy: 'registerWhenStable:30000',
+      enabled: true, // (Ensure this is still true from our previous step)
+
+      // 🔴 WAS: 'registerWhenStable:30000'
+      // 🟢 CHANGE TO:
+      registrationStrategy: 'registerImmediately',
     }),
 
     ...authProviders,

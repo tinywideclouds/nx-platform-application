@@ -30,12 +30,12 @@
     }
   },
   "/api/notifications": {
-    "target": "http://localhost:8083",
+    "target": "http://localhost:8086",
     "secure": false,
     "logLevel": "debug",
     "changeOrigin": true,
     "pathRewrite": {
-      "^/api/notifications": "/notifications"
+      "^/api/notifications": ""
     }
   },
   "/connect": {

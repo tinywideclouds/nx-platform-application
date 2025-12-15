@@ -6,23 +6,26 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/device-notifications',
+  cacheDir:
+    '../../../node_modules/.vite/libs/messenger/messenger-device-notifications',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
-  test: {
-    name: 'messenger-device-notifications',
-    watch: false,
-    globals: true,
-    environment: 'jsdom',
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    setupFiles: ['src/test-setup.ts'],
-    reporters: ['default'],
-    coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/device-notifications',
-      provider: 'v8' as const,
+
+  build: {
+    emptyOutDir: true,
+    lib: {
+      entry: 'src/index.ts',
+      name: 'messenger-crypto-bridge',
+      fileName: (format: any) => `index.${format}.js`,
+      formats: ['es' as const],
+    },
+    // You also must externalize your dependencies
+    rollupOptions: {
+      external: [
+        '@angular/core',
+        '@angular/common/http',
+        'rxjs',
+        '@nx-platform-application/messenger-device-notifications',
+      ],
     },
   },
 }));

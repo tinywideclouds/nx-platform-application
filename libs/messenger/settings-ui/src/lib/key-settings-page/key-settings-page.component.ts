@@ -14,6 +14,8 @@ import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { Logger } from '@nx-platform-application/console-logger';
 
+import { NotificationPermissionButtonComponent } from '../notification-permission-button/notification-permission-button';
+
 @Component({
   selector: 'lib-keys-routing-settings-page',
   standalone: true,
@@ -25,6 +27,7 @@ import { Logger } from '@nx-platform-application/console-logger';
     MatListModule,
     MatDialogModule,
     MatSnackBarModule,
+    NotificationPermissionButtonComponent,
   ],
   templateUrl: './key-settings-page.component.html',
   styleUrl: './key-settings-page.component.scss',

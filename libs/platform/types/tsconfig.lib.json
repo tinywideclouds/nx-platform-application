@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM"],
     "outDir": "../../../dist/out-tsc",
     "composite": false,
     "declaration": true,

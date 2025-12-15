@@ -50,4 +50,22 @@
       </a>
     </mat-nav-list>
   </div>
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <mat-icon class="text-gray-400">notifications</mat-icon>
+      <h3 class="font-bold text-gray-900 text-sm">Push Notifications</h3>
+    </div>
+
+    <div
+      class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+    >
+      <p class="text-sm text-gray-500 max-w-xl">
+        Enable push notifications to verify you can receive messages even when
+        the app is running in the background.
+      </p>
+
+      <messenger-notification-permission-button />
+    </div>
+  </div>
 </div>

@@ -29,4 +29,14 @@ export class DeviceRegistrationService {
       this.http.put<void>(`${this.baseUrl}/tokens`, payload),
     );
   }
+
+  async unregister(token: string): Promise<void> {
+    // We use the generic 'request' method because Angular's http.delete()
+    // shortcut doesn't strictly type the body property.
+    await firstValueFrom(
+      this.http.request<void>('DELETE', `${this.baseUrl}/tokens`, {
+        body: { token, platform: 'web' },
+      }),
+    );
+  }
 }
