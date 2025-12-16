@@ -9,8 +9,8 @@ option go_package = "github.com/tinywideclouds/gen-platform/go/types/notificatio
 // This handles the "huge JSON" explicitly instead of stringifying it.
 message WebPushSubscriptionPb {
   string endpoint = 1;
-  string p256dh = 2;
-  string auth = 3;
+  bytes p256dh = 2;
+  bytes auth = 3;
 }
 
 // 2. The Service-to-Service Request

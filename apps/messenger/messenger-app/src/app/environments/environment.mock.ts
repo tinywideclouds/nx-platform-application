@@ -8,5 +8,5 @@ export const environment = {
   notificationServiceUrl: '/api/notifications',
   googleClientId: 'not-a-real.apps.googleusercontent.com',
   vapidPublicKey:
-    'BAGjVFOsTc9jCizI60rOc3Dn6LG5wyDzPHRPDGrPA0EM38b8kPxEFIqwRHghwCRuTwxphfbKIJOwxSZz9n0nMxk',
+    'BAE-OyH4wq6oJIulBi6d_DCA8djt9gbKR3az6zxkEQJJN5NA5zaCwiPjliGtrzgXfx70JC8_4NrQ-aUlqnpW0gY',
 };

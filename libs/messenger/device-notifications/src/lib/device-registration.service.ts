@@ -3,39 +3,29 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { NOTIFICATION_SERVICE_URL } from './tokens';
 
-export interface DeviceToken {
-  token: string;
-  platform: 'web' | 'android' | 'ios';
-}
-
 @Injectable({ providedIn: 'root' })
 export class DeviceRegistrationService {
   private http = inject(HttpClient);
   private baseUrl = inject(NOTIFICATION_SERVICE_URL);
 
   /**
-   * Registers the device token with the backend.
-   * Uses firstValueFrom to convert the Observable to a Promise,
-   * aligning with the "Stability First" preference for clean async/await flows.
+   * Registers a Web Push Subscription (VAPID)
+   * Payload matches WebPushSubscriptionPb (JSON)
    */
-  async register(token: string): Promise<void> {
-    const payload: DeviceToken = {
-      token,
-      platform: 'web',
-    };
-
-    // Calls PUT /tokens on the go-notification-service
+  async registerWeb(payload: any): Promise<void> {
     await firstValueFrom(
-      this.http.put<void>(`${this.baseUrl}/tokens`, payload),
+      this.http.post<void>(`${this.baseUrl}/api/v1/register/web`, payload),
     );
   }
 
-  async unregister(token: string): Promise<void> {
-    // We use the generic 'request' method because Angular's http.delete()
-    // shortcut doesn't strictly type the body property.
+  /**
+   * Unregisters a Web Push Subscription.
+   * We only need the endpoint URL to identify the record.
+   */
+  async unregisterWeb(endpoint: string): Promise<void> {
     await firstValueFrom(
-      this.http.request<void>('DELETE', `${this.baseUrl}/tokens`, {
-        body: { token, platform: 'web' },
+      this.http.post<void>(`${this.baseUrl}/api/v1/unregister/web`, {
+        endpoint,
       }),
     );
   }

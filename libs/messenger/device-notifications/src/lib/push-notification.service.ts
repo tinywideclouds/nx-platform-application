@@ -6,6 +6,11 @@ import { VAPID_PUBLIC_KEY } from './tokens';
 import { firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 
+// Import the Facade from your platform-types library
+import { serializeWebPushSubscription } from '@nx-platform-application/platform-types';
+
+import { createWebPushSubscriptionFromBrowser } from './notification.adapter';
+
 @Injectable({ providedIn: 'root' })
 export class PushNotificationService {
   private swPush = inject(SwPush);
@@ -20,38 +25,36 @@ export class PushNotificationService {
     if ('Notification' in window) {
       this.permissionStatus.set(Notification.permission);
     }
-    // Keep listening as a backup, but we will also manually update
     this.swPush.subscription.subscribe((sub) => {
       this.isSubscribed.set(!!sub);
     });
   }
 
   async requestSubscription(): Promise<void> {
-    if (!this.swPush.isEnabled) return;
+    if (!this.swPush.isEnabled) {
+      this.logger.warn('[PushService] Service Worker not enabled.');
+      return;
+    }
 
     try {
-      const subscription = await this.swPush.requestSubscription({
+      // 1. Get Raw Subscription from Browser
+      const rawSub = await this.swPush.requestSubscription({
         serverPublicKey: this.vapidKey,
       });
 
-      // 2. Extract the ID using the URL API (Safe & Standard)
-      // The W3C spec guarantees 'endpoint' is a valid URL.
-      // FCM guarantees the last segment of that path is the Registration ID.
-      const url = new URL(subscription.endpoint);
-      const tokenID = url.pathname.split('/').pop(); // Gets the last segment safely
+      // 2. Convert to Clean Domain Object (Validation + Key Extraction)
+      // This will throw if keys are missing (safe guard).
+      const domainSub = createWebPushSubscriptionFromBrowser(rawSub);
 
-      if (!tokenID) {
-        throw new Error('Could not extract FCM Token ID from endpoint');
-      }
+      // 3. Serialize to Proto-Compliant JSON
+      const payload = serializeWebPushSubscription(domainSub);
 
-      // 3. Send ONLY the clean ID string to the backend
-      await this.registrationService.register(tokenID);
+      // 4. Send to Backend
+      await this.registrationService.registerWeb(payload);
 
-      // ✅ FORCE UPDATE: Don't wait for the observable
       this.permissionStatus.set('granted');
       this.isSubscribed.set(true);
-
-      this.logger.info('[PushService] Device registered.');
+      this.logger.info('[PushService] Web device registered successfully.');
     } catch (err) {
       this.logger.error('[PushService] Subscription failed', err);
       this.permissionStatus.set('denied');
@@ -64,19 +67,16 @@ export class PushNotificationService {
 
     if (sub) {
       try {
-        const token = JSON.stringify(sub);
-
-        // 1. Unregister Backend
+        // 1. Unregister from Backend first
+        // We only need the endpoint to identify it in the DB
         await this.registrationService
-          .unregister(token)
+          .unregisterWeb(sub.endpoint)
           .catch((err) => this.logger.warn('Backend unregister failed', err));
 
-        // 2. Unsubscribe Browser
+        // 2. Unsubscribe locally in Browser
         await sub.unsubscribe();
 
-        // ✅ FORCE UPDATE: Guarantee UI toggle immediately
         this.isSubscribed.set(false);
-
         this.logger.info('[PushService] Notifications disabled.');
       } catch (err) {
         this.logger.error('Error disabling notifications', err);
