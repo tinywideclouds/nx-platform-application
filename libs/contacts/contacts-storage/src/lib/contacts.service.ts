@@ -13,8 +13,8 @@ import {
   IdentityLink,
   StorablePendingIdentity,
   PendingIdentity,
-  StorableBlockedIdentity, // New
-  BlockedIdentity, // New
+  StorableBlockedIdentity,
+  BlockedIdentity,
   ContactTombstone,
 } from './models/contacts';
 import {
@@ -84,7 +84,6 @@ export class ContactsStorageService {
     };
   }
 
-  // ✅ New Mapper
   private mapStorableToBlocked(b: StorableBlockedIdentity): BlockedIdentity {
     return {
       ...b,
@@ -95,9 +94,9 @@ export class ContactsStorageService {
   // --- LiveQuery Streams ---
 
   readonly contacts$: Observable<Contact[]> = from(
-    liveQuery(() => this.db.contacts.orderBy('alias').toArray())
+    liveQuery(() => this.db.contacts.orderBy('alias').toArray()),
   ).pipe(
-    map((storables) => storables.map((c) => this.mapStorableToContact(c)))
+    map((storables) => storables.map((c) => this.mapStorableToContact(c))),
   );
 
   readonly favorites$: Observable<Contact[]> = from(
@@ -105,27 +104,27 @@ export class ContactsStorageService {
       this.db.contacts
         .where('isFavorite')
         .equals(true as any)
-        .toArray()
-    )
+        .toArray(),
+    ),
   ).pipe(
-    map((storables) => storables.map((c) => this.mapStorableToContact(c)))
+    map((storables) => storables.map((c) => this.mapStorableToContact(c))),
   );
 
   readonly groups$: Observable<ContactGroup[]> = from(
-    liveQuery(() => this.db.groups.orderBy('name').toArray())
+    liveQuery(() => this.db.groups.orderBy('name').toArray()),
   ).pipe(map((storables) => storables.map((g) => this.mapStorableToGroup(g))));
 
   readonly pending$: Observable<PendingIdentity[]> = from(
-    liveQuery(() => this.db.pending.orderBy('firstSeenAt').toArray())
+    liveQuery(() => this.db.pending.orderBy('firstSeenAt').toArray()),
   ).pipe(
-    map((storables) => storables.map((p) => this.mapStorableToPending(p)))
+    map((storables) => storables.map((p) => this.mapStorableToPending(p))),
   );
 
   // ✅ NEW: Blocked Stream
   readonly blocked$: Observable<BlockedIdentity[]> = from(
-    liveQuery(() => this.db.blocked.orderBy('blockedAt').toArray())
+    liveQuery(() => this.db.blocked.orderBy('blockedAt').toArray()),
   ).pipe(
-    map((storables) => storables.map((b) => this.mapStorableToBlocked(b)))
+    map((storables) => storables.map((b) => this.mapStorableToBlocked(b))),
   );
 
   // --- CRUD Methods ---
@@ -142,7 +141,7 @@ export class ContactsStorageService {
       async () => {
         await this.db.tombstones.delete(storable.id);
         await this.db.contacts.put(storable);
-      }
+      },
     );
   }
 
@@ -184,7 +183,7 @@ export class ContactsStorageService {
       async () => {
         await this.db.contacts.delete(urnStr);
         await this.db.tombstones.put({ urn: urnStr, deletedAt: now });
-      }
+      },
     );
   }
 
@@ -326,7 +325,7 @@ export class ContactsStorageService {
   async blockIdentity(
     urn: URN,
     scopes: string[] = ['all'],
-    reason?: string
+    reason?: string,
   ): Promise<void> {
     const existing = await this.db.blocked
       .where('urn')
@@ -397,7 +396,7 @@ export class ContactsStorageService {
           this.db.blocked.clear(), // New
           this.db.tombstones.clear(),
         ]);
-      }
+      },
     );
   }
 }

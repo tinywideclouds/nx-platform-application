@@ -9,7 +9,7 @@ import {
 import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { URN, PublicKeys } from '@nx-platform-application/platform-types';
-import { filter, firstValueFrom, interval } from 'rxjs';
+import { filter, firstValueFrom, interval, switchMap, EMPTY, tap } from 'rxjs'; // ✅ Added switchMap, EMPTY, tap
 import { Temporal } from '@js-temporal/polyfill';
 
 // --- Services ---
@@ -604,13 +604,25 @@ export class ChatService {
   private handleConnectionStatus(): void {
     this.liveService.status$
       .pipe(
-        filter((s) => s === 'connected'),
         takeUntilDestroyed(this.destroyRef),
+        switchMap((status) => {
+          if (status === 'connected') {
+            // ✅ Connected: Trust the WebSocket (incomingMessage$ handles pokes).
+            // Trigger ONE immediate fetch to ensure we're sync'd.
+            void this.fetchAndProcessMessages();
+            return EMPTY; // Stop polling
+          }
+          // ⚠️ Disconnected/Error: Activate Safety Net (Poll every 15s)
+          this.logger.warn(
+            `ChatService: Connection ${status}. Activating fallback polling.`,
+          );
+          return interval(15_000);
+        }),
       )
-      .subscribe(() => this.fetchAndProcessMessages());
-    interval(15_000)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.fetchAndProcessMessages());
+      .subscribe(() => {
+        this.logger.debug('ChatService: Fallback poll triggered');
+        void this.fetchAndProcessMessages();
+      });
   }
 
   private initLiveSubscriptions(): void {

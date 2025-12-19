@@ -1,20 +1,27 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { Logger } from '@nx-platform-application/console-logger';
 import { NOTIFICATION_SERVICE_URL } from './tokens';
 
 @Injectable({ providedIn: 'root' })
 export class DeviceRegistrationService {
   private http = inject(HttpClient);
-  private baseUrl = inject(NOTIFICATION_SERVICE_URL);
+  private logger = inject(Logger);
+
+  private readonly baseApiUrl =
+    inject(NOTIFICATION_SERVICE_URL, { optional: true }) ?? '/api';
 
   /**
    * Registers a Web Push Subscription (VAPID)
    * Payload matches WebPushSubscriptionPb (JSON)
    */
   async registerWeb(payload: any): Promise<void> {
+    this.logger.debug(
+      `Registering web push subscription ${this.baseApiUrl}/v1/register/web`,
+    );
     await firstValueFrom(
-      this.http.post<void>(`${this.baseUrl}/api/v1/register/web`, payload),
+      this.http.post<void>(`${this.baseApiUrl}/v1/register/web`, payload),
     );
   }
 
@@ -24,7 +31,7 @@ export class DeviceRegistrationService {
    */
   async unregisterWeb(endpoint: string): Promise<void> {
     await firstValueFrom(
-      this.http.post<void>(`${this.baseUrl}/api/v1/unregister/web`, {
+      this.http.post<void>(`${this.baseApiUrl}/v1/unregister/web`, {
         endpoint,
       }),
     );

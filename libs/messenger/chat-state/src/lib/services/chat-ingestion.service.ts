@@ -19,7 +19,6 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-storag
 // Adapters & Logic
 import { ChatMessageMapper } from './chat-message.mapper';
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
-// REFACTOR: Import the Parser and Types
 import {
   MessageContentParser,
   ReadReceiptData,
@@ -46,18 +45,16 @@ export class ChatIngestionService {
   private contactsService = inject(ContactsStorageService);
   private identityResolver = inject(IdentityResolver);
   private viewMapper = inject(ChatMessageMapper);
-
-  // REFACTOR: The Router Logic
   private parser = inject(MessageContentParser);
 
   async process(
     myKeys: PrivateKeys,
     myUrn: URN,
     blockedSet: Set<string>,
-    batchLimit = 50
+    batchLimit = 50,
   ): Promise<IngestionResult> {
     const queuedMessages = await firstValueFrom(
-      this.dataService.getMessageBatch(batchLimit)
+      this.dataService.getMessageBatch(batchLimit),
     );
 
     if (queuedMessages.length === 0) {
@@ -76,7 +73,7 @@ export class ChatIngestionService {
 
         // 2. Identity Resolution
         const resolvedSenderUrn = await this.identityResolver.resolveToContact(
-          decrypted.senderId
+          decrypted.senderId,
         );
         const resolvedSenderStr = resolvedSenderUrn.toString();
 
@@ -86,37 +83,36 @@ export class ChatIngestionService {
           continue;
         }
 
-        // 4. Ephemeral Check (Transport Layer Signal)
-        // Currently hardcoded to "Typing Indicator"
-        if (msg.envelope.isEphemeral) {
-          typingIndicators.push(resolvedSenderUrn);
-          processedIds.push(msg.id);
-          continue;
-        }
-
-        // 5. REFACTOR: PAYLOAD ROUTING (Application Layer Signal)
-        // We look inside the box to see what it is.
+        // 4. Parse Payload (MOVED UP)
+        // We must parse *before* deciding if it's ephemeral, because
+        // Read Receipts are ALSO ephemeral but must be handled differently.
         const classification = this.parser.parse(
           decrypted.typeId,
-          decrypted.payloadBytes
+          decrypted.payloadBytes,
         );
 
-        // --- PATH A: SIGNALS (Do Not Save) ---
+        // --- PATH A: SIGNALS (Read Receipts, Typing, etc.) ---
         if (classification.kind === 'signal') {
           const action = classification.payload.action;
           const data = classification.payload.data;
 
-          this.logger.info(`[Router] Received Signal: ${action}`);
-
           if (action === 'read-receipt') {
             const rr = data as ReadReceiptData;
-            // ACTION: Mark my sent messages as read
+            this.logger.info(
+              `[Ingestion] Processing Read Receipt for ${rr.messageIds.length} msgs`,
+            );
+
+            // ✅ FIX: Actually update the DB status
             await this.storageService.updateMessageStatus(
               rr.messageIds,
-              'read'
+              'read',
             );
+          } else if (action === 'typing') {
+            // ✅ FIX: Explicitly handle typing here
+            typingIndicators.push(resolvedSenderUrn);
           }
 
+          // Signals are always ephemeral/processed immediately
           processedIds.push(msg.id);
           continue;
         }
@@ -124,30 +120,38 @@ export class ChatIngestionService {
         // --- PATH B: UNKNOWN (Drop) ---
         if (classification.kind === 'unknown') {
           this.logger.warn(
-            `[Router] Dropping unknown type: ${classification.rawType}`
+            `[Ingestion] Dropping unknown type: ${classification.rawType}`,
           );
           processedIds.push(msg.id);
           continue;
         }
 
         // --- PATH C: CONTENT (Save to DB) ---
-        // classification.kind === 'content'
+        // If we got here, it's real content (text, image, etc.)
 
         const isStranger = resolvedSenderUrn.entityType !== 'user';
-
         const newDecryptedMsg = this.mapPayloadToDecrypted(
           msg,
           decrypted,
           resolvedSenderUrn,
-          myUrn
+          myUrn,
         );
 
         if (isStranger) {
           await this.storageService.saveQuarantinedMessage(newDecryptedMsg);
           await this.contactsService.addToPending(resolvedSenderUrn);
         } else {
-          await this.storageService.saveMessage(newDecryptedMsg);
-          validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
+          // Idempotency Check
+          const wasSaved =
+            await this.storageService.saveMessage(newDecryptedMsg);
+
+          if (wasSaved) {
+            validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
+          } else {
+            this.logger.warn(
+              `[Ingestion] Duplicate message detected: ${msg.id}. Acking.`,
+            );
+          }
         }
 
         processedIds.push(msg.id);
@@ -161,12 +165,13 @@ export class ChatIngestionService {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
     }
 
+    // Recursion for batching
     if (queuedMessages.length === batchLimit) {
       const nextBatch = await this.process(
         myKeys,
         myUrn,
         blockedSet,
-        batchLimit
+        batchLimit,
       );
       return {
         messages: [...validViewMessages, ...nextBatch.messages],
@@ -180,17 +185,16 @@ export class ChatIngestionService {
     };
   }
 
-  // ... [Helpers: mapPayloadToDecrypted, getConversationUrn remain unchanged] ...
   private mapPayloadToDecrypted(
     qMsg: QueuedMessage,
     payload: EncryptedMessagePayload,
     resolvedSenderUrn: URN,
-    myUrn: URN
+    myUrn: URN,
   ): DecryptedMessage {
     const conversationUrn = this.getConversationUrn(
       resolvedSenderUrn,
       qMsg.envelope.recipientId,
-      myUrn
+      myUrn,
     );
     return {
       messageId: qMsg.id,

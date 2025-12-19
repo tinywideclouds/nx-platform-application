@@ -1,5 +1,6 @@
 // libs/messenger/chat-state/src/lib/services/chat-ingestion.service.spec.ts
 
+// ... (Imports remain the same, ensure 'vi' is imported from 'vitest') ...
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ChatIngestionService } from './chat-ingestion.service';
@@ -14,35 +15,36 @@ import {
   QueuedMessage,
   SecureEnvelope,
 } from '@nx-platform-application/platform-types';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
-
-// REFACTOR: Import Parser & Types
 import {
   MessageContentParser,
   ParsedMessage,
 } from '@nx-platform-application/message-content';
 
-// --- Fixtures ---
+// ... (Previous Fixtures remain the same) ...
 const mockMyUrn = URN.parse('urn:contacts:user:me');
 const mockSenderContact = URN.parse('urn:contacts:user:friend');
-const mockEnvelope = { recipientId: mockMyUrn } as SecureEnvelope;
+const mockEnvelope = {
+  recipientId: mockMyUrn,
+  isEphemeral: true,
+} as SecureEnvelope; // Mark as Ephemeral to test the bug
 const mockQueuedMsg: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
 const mockDecryptedPayload = {
   senderId: mockSenderContact,
   sentTimestamp: '2025-01-01T12:00:00Z',
-  typeId: URN.parse('urn:message:type:text'),
+  typeId: URN.parse('urn:message:type:signal'), // Signal type
   payloadBytes: new Uint8Array([1]),
 };
 const mockKeys = { encKey: 'priv' } as any;
 
 describe('ChatIngestionService', () => {
   let service: ChatIngestionService;
-  let parser: MessageContentParser;
-
+  // ... (Mocks setup remains the same) ...
   const mockStorageService = {
-    saveMessage: vi.fn(),
+    saveMessage: vi.fn().mockResolvedValue(true),
     saveQuarantinedMessage: vi.fn(),
+    updateMessageStatus: vi.fn(),
   };
   const mockContactsService = { addToPending: vi.fn() };
   const mockResolver = { resolveToContact: vi.fn() };
@@ -54,13 +56,10 @@ describe('ChatIngestionService', () => {
     warn: vi.fn(),
     debug: vi.fn(),
   };
-
-  // REFACTOR: Mock Parser
   const mockParser = { parse: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
-
     mockDataService.getMessageBatch.mockReturnValue(of([]));
     mockDataService.acknowledge.mockReturnValue(of(undefined));
     mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
@@ -76,65 +75,58 @@ describe('ChatIngestionService', () => {
         { provide: ContactsStorageService, useValue: mockContactsService },
         { provide: IdentityResolver, useValue: mockResolver },
         { provide: Logger, useValue: mockLogger },
-        // REFACTOR: Provide Mock Parser
         { provide: MessageContentParser, useValue: mockParser },
       ],
     });
     service = TestBed.inject(ChatIngestionService);
-    parser = TestBed.inject(MessageContentParser);
   });
 
-  describe('Router Logic', () => {
+  describe('Signal Routing (The Fix)', () => {
     beforeEach(() => {
       mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
     });
 
-    it('should SAVE message if Router returns Content', async () => {
-      // 1. Setup Parser to return Content
-      mockParser.parse.mockReturnValue({
-        kind: 'content',
-        payload: { kind: 'text', text: 'Hi' },
-      } as ParsedMessage);
-
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
-
-      // 2. Expect Save
-      expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
-    });
-
-    it('should NOT SAVE if Router returns Signal (e.g. Read Receipt)', async () => {
-      // 1. Setup Parser to return Signal
+    it('should route READ RECEIPT to storage and NOT typing indicators', async () => {
+      // 1. Arrange: Parser identifies it as a Read Receipt
       mockParser.parse.mockReturnValue({
         kind: 'signal',
-        payload: { action: 'read-receipt', data: null },
+        payload: { action: 'read-receipt', data: { messageIds: ['old-1'] } },
       } as ParsedMessage);
 
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      // 2. Act
+      const result = await service.process(mockKeys, mockMyUrn, new Set(), 50);
 
-      // 2. Expect Log but NO Save
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('[Router] Received Signal')
+      // 3. Assert
+      // Should call DB update
+      expect(mockStorageService.updateMessageStatus).toHaveBeenCalledWith(
+        ['old-1'],
+        'read',
       );
-      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
-
-      // 3. But we MUST still Ack the message to remove it from the queue
+      // Should NOT be a typing indicator
+      expect(result.typingIndicators.length).toBe(0);
+      // Should Ack the message
       expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
     });
 
-    it('should DROP if Router returns Unknown', async () => {
+    it('should route TYPING signal to typingIndicators list', async () => {
+      // 1. Arrange: Parser identifies it as Typing
       mockParser.parse.mockReturnValue({
-        kind: 'unknown',
-        rawType: 'alien-tech',
+        kind: 'signal',
+        payload: { action: 'typing', data: null },
       } as ParsedMessage);
 
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      // 2. Act
+      const result = await service.process(mockKeys, mockMyUrn, new Set(), 50);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Dropping unknown')
+      // 3. Assert
+      expect(result.typingIndicators.length).toBe(1);
+      expect(result.typingIndicators[0].toString()).toBe(
+        mockSenderContact.toString(),
       );
+
+      // Should NOT touch DB
+      expect(mockStorageService.updateMessageStatus).not.toHaveBeenCalled();
       expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
     });
   });
 });

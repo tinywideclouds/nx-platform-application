@@ -29,7 +29,7 @@ const createMsg = (
   id: string,
   text: string,
   timestamp: string,
-  status: 'received' | 'sent' = 'received'
+  status: 'received' | 'sent' = 'received',
 ): DecryptedMessage => ({
   messageId: id,
   senderId: status === 'sent' ? mockMyUrn : mockPartnerUrn,
@@ -46,17 +46,26 @@ describe('ChatStorageService', () => {
   let db: MessengerDatabase;
   let mergeStrategy: ChatMergeStrategy;
   let deletionStrategy: ChatDeletionStrategy;
+  let mockLogger: Logger;
 
   beforeEach(async () => {
     // ⚠️ IMPORTANT: Reset DB for Zero-Day state
     await Dexie.delete('messenger');
+
+    // Create Spy Object for Logger
+    mockLogger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    } as any;
 
     TestBed.configureTestingModule({
       providers: [
         ChatStorageService,
         MessengerDatabase,
         ChatStorageMapper, // Use Real Mapper for integration testing
-        MockProvider(Logger),
+        { provide: Logger, useValue: mockLogger },
         MockProvider(ChatMergeStrategy, {
           merge: vi.fn().mockResolvedValue(undefined),
         }),
@@ -110,7 +119,47 @@ describe('ChatStorageService', () => {
     });
   });
 
-  // ✅ NEW TEST SUITE FOR READ STATUS
+  // ✅ NEW: Write Path Idempotency Logic
+  describe('Write Path (Idempotency)', () => {
+    it('should return TRUE for new message and update index', async () => {
+      const msg = createMsg('m1', 'Hello', '2024-01-01T10:00:00Z');
+      const saved = await service.saveMessage(msg);
+
+      expect(saved).toBe(true);
+      const index = await db.conversations.get(mockPartnerUrn.toString());
+      expect(index?.snippet).toBe('Hello');
+    });
+
+    it('should return FALSE for duplicate message and log warning', async () => {
+      const msg = createMsg('m1', 'Hello', '2024-01-01T10:00:00Z');
+      await service.saveMessage(msg);
+
+      // Attempt to save again
+      const savedAgain = await service.saveMessage(msg);
+
+      expect(savedAgain).toBe(false);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Duplicate message ignored'),
+      );
+    });
+
+    it('should NOT update conversation index on duplicate', async () => {
+      // 1. Save original
+      const msg1 = createMsg('m1', 'Original', '2024-01-01T10:00:00Z');
+      await service.saveMessage(msg1);
+
+      // 2. Try to save "Duplicate" with changed text (simulating weird race/error)
+      // The ID is the same, so it should be rejected.
+      const msg1Dup = createMsg('m1', 'Changed', '2024-01-01T10:05:00Z');
+      await service.saveMessage(msg1Dup);
+
+      // 3. Assert Index is still Original
+      const index = await db.conversations.get(mockPartnerUrn.toString());
+      expect(index?.snippet).toBe('Original');
+      expect(index?.lastActivityTimestamp).toBe('2024-01-01T10:00:00Z');
+    });
+  });
+
   describe('Read Status (Unread Count)', () => {
     it('markConversationAsRead should reset unreadCount to 0', async () => {
       // 1. Arrange: Conversation with 5 unread messages
@@ -162,7 +211,7 @@ describe('ChatStorageService', () => {
       // ✅ Key Check: It should be a URN object, not a string
       expect(result?.conversationUrn).toBeInstanceOf(URN);
       expect(result?.conversationUrn.toString()).toBe(
-        mockPartnerUrn.toString()
+        mockPartnerUrn.toString(),
       );
     });
 
@@ -195,7 +244,7 @@ describe('ChatStorageService', () => {
       // 2. Act
       const results = await service.getTombstonesInRange(
         '2023-12-31T00:00:00Z' as ISODateTimeString,
-        '2024-01-02T00:00:00Z' as ISODateTimeString
+        '2024-01-02T00:00:00Z' as ISODateTimeString,
       );
 
       // 3. Assert
@@ -238,8 +287,8 @@ describe('ChatStorageService', () => {
     it('clearDatabase should wipe all tables including tombstones', async () => {
       await db.messages.put(
         service['mapper'].mapSmartToRecord(
-          createMsg('m1', 'hi', '2024-01-01T10:00:00Z')
-        )
+          createMsg('m1', 'hi', '2024-01-01T10:00:00Z'),
+        ),
       );
       await db.tombstones.put({
         messageId: 't1',
@@ -266,7 +315,7 @@ describe('ChatStorageService', () => {
 
       await service.setGenesisTimestamp(
         mockPartnerUrn,
-        '2023-01-01T00:00:00Z' as ISODateTimeString
+        '2023-01-01T00:00:00Z' as ISODateTimeString,
       );
 
       const updated = await db.conversations.get(mockPartnerUrn.toString());
@@ -289,14 +338,23 @@ describe('ChatStorageService', () => {
     });
 
     it('should promote messages to main table and update index', async () => {
-      // 1. Arrange: Quarantine messages
-      const msg1 = createMsg('q1', 'Hello', '2024-01-01T10:00:00Z');
-      const msg2 = createMsg('q2', 'World', '2024-01-01T10:05:00Z'); // Newer
+      const pendingUrn = URN.parse('urn:lookup:email:pending@test.com');
+
+      // 1. Arrange: Quarantine messages under PENDING URN
+      const msg1 = {
+        ...createMsg('q1', 'Hello', '2024-01-01T10:00:00Z'),
+        conversationUrn: pendingUrn,
+      };
+      const msg2 = {
+        ...createMsg('q2', 'World', '2024-01-01T10:05:00Z'),
+        conversationUrn: pendingUrn,
+      };
+
       await service.saveQuarantinedMessage(msg1);
       await service.saveQuarantinedMessage(msg2);
 
-      // 2. Act
-      await service.promoteQuarantinedMessages(mockPartnerUrn);
+      // 2. Act: Promote Pending -> Partner (Fix: Pass both args)
+      await service.promoteQuarantinedMessages(pendingUrn, mockPartnerUrn);
 
       // 3. Assert
       // Quarantine Empty?
@@ -306,6 +364,8 @@ describe('ChatStorageService', () => {
       // Main Table Populated?
       const mainMsgs = await db.messages.toArray();
       expect(mainMsgs.length).toBe(2);
+      // Verify rewrite happened
+      expect(mainMsgs[0].conversationUrn).toBe(mockPartnerUrn.toString());
 
       // Index Updated?
       const index = await db.conversations.get(mockPartnerUrn.toString());

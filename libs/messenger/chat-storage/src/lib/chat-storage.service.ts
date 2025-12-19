@@ -1,3 +1,5 @@
+// libs/messenger/chat-storage/src/lib/chat-storage.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import {
   URN,
@@ -35,17 +37,36 @@ export class ChatStorageService {
 
   // --- WRITE PATHS ---
 
-  async saveMessage(message: DecryptedMessage): Promise<void> {
+  /**
+   * Idempotently saves a decrypted message.
+   * @returns Promise<boolean> - true if saved, false if duplicate (ignored).
+   */
+  async saveMessage(message: DecryptedMessage): Promise<boolean> {
     const msgRecord = this.mapper.mapSmartToRecord(message);
     const conversationUrnStr = message.conversationUrn.toString();
     const now = new Date().toISOString();
 
-    await this.db.transaction(
+    return this.db.transaction(
       'rw',
       [this.db.messages, this.db.conversations],
       async () => {
+        // 1. Idempotency Check
+        // We use the Primary Key (messageId) for a fast lookup.
+        const duplicate = await this.db.messages.get(message.messageId);
+
+        if (duplicate) {
+          this.logger.warn(
+            `[ChatStorage] Duplicate message ignored: ${message.messageId}`,
+          );
+          // Return false to indicate NO write happened.
+          // The caller (IngestionService) MUST still Ack this message to stop redelivery.
+          return false;
+        }
+
+        // 2. Save Content
         await this.db.messages.put(msgRecord);
 
+        // 3. Update Conversation Index (Only needed for new messages)
         const existing = await this.db.conversations.get(conversationUrnStr);
         const isNewer =
           !existing || message.sentTimestamp >= existing.lastActivityTimestamp;
@@ -79,20 +100,14 @@ export class ChatStorageService {
         }
 
         await this.db.conversations.put(update);
-      }
+        return true;
+      },
     );
   }
 
-  /**
-   * Resets the unread count for a conversation to 0.
-   * * PREP WORK: This is where we will hook in the "Send Read Receipt" logic later.
-   */
+  // ... Rest of the file remains unchanged ...
   async markConversationAsRead(urn: URN): Promise<void> {
     const strUrn = urn.toString();
-
-    // We use update() instead of put() to ensure we don't accidentally create
-    // a record if one doesn't exist (though it should).
-    // This is also atomic within Dexie.
     await this.db.conversations.update(strUrn, {
       unreadCount: 0,
     });
@@ -101,8 +116,6 @@ export class ChatStorageService {
   async deleteMessage(messageId: string): Promise<void> {
     return this.deletionStrategy.deleteMessage(this, messageId);
   }
-
-  // --- READ PATHS (UI) ---
 
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     const records = await this.db.conversations
@@ -122,7 +135,7 @@ export class ChatStorageService {
   async loadHistorySegment(
     conversationUrn: URN,
     limit: number,
-    beforeTimestamp?: ISODateTimeString
+    beforeTimestamp?: ISODateTimeString,
   ): Promise<DecryptedMessage[]> {
     const urnStr = conversationUrn.toString();
     const upperBound = beforeTimestamp || Dexie.maxKey;
@@ -137,9 +150,8 @@ export class ChatStorageService {
     return records.map((r) => this.mapper.mapRecordToSmart(r));
   }
 
-  // Returns Domain Object (SyncState) instead of DB Record
   async getConversationIndex(
-    urn: URN
+    urn: URN,
   ): Promise<ConversationSyncState | undefined> {
     const record = await this.db.conversations.get(urn.toString());
     return record ? this.mapIndexRecordToSmart(record) : undefined;
@@ -147,7 +159,7 @@ export class ChatStorageService {
 
   async setGenesisTimestamp(
     urn: URN,
-    timestamp: ISODateTimeString
+    timestamp: ISODateTimeString,
   ): Promise<void> {
     const strUrn = urn.toString();
     const existing = await this.db.conversations.get(strUrn);
@@ -158,11 +170,9 @@ export class ChatStorageService {
     }
   }
 
-  // --- SYNC HELPERS (Cloud Support) ---
-
   async getMessagesInRange(
     start: ISODateTimeString,
-    end: ISODateTimeString
+    end: ISODateTimeString,
   ): Promise<DecryptedMessage[]> {
     const records = await this.db.messages
       .where('sentTimestamp')
@@ -171,10 +181,9 @@ export class ChatStorageService {
     return records.map((r) => this.mapper.mapRecordToSmart(r));
   }
 
-  // Returns Domain Objects (MessageTombstone)
   async getTombstonesInRange(
     start: ISODateTimeString,
-    end: ISODateTimeString
+    end: ISODateTimeString,
   ): Promise<MessageTombstone[]> {
     const records = await this.db.tombstones
       .where('deletedAt')
@@ -200,22 +209,17 @@ export class ChatStorageService {
     };
   }
 
-  //  Returns Domain Objects
   async getAllConversations(): Promise<ConversationSyncState[]> {
     const records = await this.db.conversations.toArray();
     return records.map((r) => this.mapIndexRecordToSmart(r));
   }
 
-  // --- CLOUD MERGE OPERATIONS ---
-
-  // Accepts Domain Objects, maps to DB, then calls Strategy
   async smartMergeConversations(
-    cloudIndex: ConversationSyncState[]
+    cloudIndex: ConversationSyncState[],
   ): Promise<void> {
     const records: ConversationIndexRecord[] = cloudIndex.map((s) => ({
       ...s,
       conversationUrn: s.conversationUrn.toString(),
-      // Ensure ISO string types align with DB expectation
       lastActivityTimestamp: s.lastActivityTimestamp,
       lastModified: s.lastModified,
       genesisTimestamp: s.genesisTimestamp,
@@ -233,40 +237,24 @@ export class ChatStorageService {
     await this.db.messages.bulkPut(records);
   }
 
-  /**
-   * Updates the status of specific messages (e.g. marking sent messages as 'read').
-   * Used when processing incoming Read Receipt signals.
-   */
   async updateMessageStatus(
     messageIds: string[],
-    status: 'read'
+    status: 'read',
   ): Promise<void> {
     if (messageIds.length === 0) return;
-
-    // Use bulk update for performance
     await this.db.transaction('rw', this.db.messages, async () => {
-      // 1. Get existing records to verify existence (optional, but safe)
       const records = await this.db.messages.bulkGet(messageIds);
-
       const updates: any[] = [];
-
       records.forEach((record) => {
-        if (record) {
-          // Only update if status is different
-          if (record.status !== status) {
-            // We clone and modify to ensure we don't mutate the fetched object implicitly
-            updates.push({ ...record, status });
-          }
+        if (record && record.status !== status) {
+          updates.push({ ...record, status });
         }
       });
-
       if (updates.length > 0) {
         await this.db.messages.bulkPut(updates);
       }
     });
   }
-
-  // --- SETTINGS & CLEANUP ---
 
   async setCloudEnabled(enabled: boolean): Promise<void> {
     await this.db.settings.put({ key: 'chat_cloud_enabled', value: enabled });
@@ -291,11 +279,9 @@ export class ChatStorageService {
         await this.db.settings.clear();
         await this.db.conversations.clear();
         await this.db.tombstones.clear();
-      }
+      },
     );
   }
-
-  // --- HELPERS (Internal & Public Delegation) ---
 
   public mapRecordToSmart(record: MessageRecord): DecryptedMessage {
     return this.mapper.mapRecordToSmart(record);
@@ -306,14 +292,13 @@ export class ChatStorageService {
   }
 
   public getPreviewType(
-    typeIdStr: string
+    typeIdStr: string,
   ): 'text' | 'image' | 'file' | 'other' {
     return getPreviewType(typeIdStr);
   }
 
-  // Private Mapper for the Index
   private mapIndexRecordToSmart(
-    record: ConversationIndexRecord
+    record: ConversationIndexRecord,
   ): ConversationSyncState {
     return {
       ...record,
@@ -326,7 +311,6 @@ export class ChatStorageService {
 
   async saveQuarantinedMessage(message: DecryptedMessage): Promise<void> {
     const msgRecord = this.mapper.mapSmartToRecord(message);
-    // Simple direct write. No conversation index update (invisible).
     await this.db.quarantined_messages.put(msgRecord);
   }
 
@@ -349,11 +333,6 @@ export class ChatStorageService {
     await this.db.quarantined_messages.bulkDelete(ids);
   }
 
-  /**
-   * Moves messages from Quarantine to Main storage and rewrites their Conversation ID.
-   * @param oldUrn The Handle/Pending URN (e.g. urn:lookup:email:stranger@test.com)
-   * @param newUrn THE NEW CONTACT URN (e.g. urn:contacts:user:uuid-123)
-   */
   async promoteQuarantinedMessages(oldUrn: URN, newUrn: URN): Promise<void> {
     const oldUrnStr = oldUrn.toString();
     const newUrnStr = newUrn.toString();
@@ -362,7 +341,6 @@ export class ChatStorageService {
       'rw',
       [this.db.quarantined_messages, this.db.messages, this.db.conversations],
       async () => {
-        // 1. Fetch
         const quarantined = await this.db.quarantined_messages
           .where('conversationUrn')
           .equals(oldUrnStr)
@@ -370,7 +348,6 @@ export class ChatStorageService {
 
         if (quarantined.length === 0) return;
 
-        // 2. Rewrite Conversation ID (Mandatory)
         const toSave = quarantined.map((record) => ({
           ...record,
           conversationUrn: newUrnStr,
@@ -378,8 +355,6 @@ export class ChatStorageService {
 
         await this.db.messages.bulkPut(toSave);
 
-        // 3. Update/Create Conversation Index for the NEW Contact
-        // Sort to find latest
         toSave.sort((a, b) => (b.sentTimestamp > a.sentTimestamp ? 1 : -1));
         const latest = toSave[0];
         const latestSmart = this.mapper.mapRecordToSmart(latest);
@@ -405,10 +380,9 @@ export class ChatStorageService {
 
         await this.db.conversations.put(update);
 
-        // 4. Cleanup Quarantine (using OLD key)
         const idsToDelete = quarantined.map((m) => m.messageId);
         await this.db.quarantined_messages.bulkDelete(idsToDelete);
-      }
+      },
     );
   }
 }

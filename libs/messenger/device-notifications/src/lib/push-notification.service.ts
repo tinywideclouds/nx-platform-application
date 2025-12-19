@@ -36,16 +36,18 @@ export class PushNotificationService {
       return;
     }
 
+    this.logger.info('[PushService] Requesting subscription...');
     try {
       // 1. Get Raw Subscription from Browser
       const rawSub = await this.swPush.requestSubscription({
         serverPublicKey: this.vapidKey,
       });
-
+      this.logger.debug('[PushService] Raw Subscription:', rawSub);
       // 2. Convert to Clean Domain Object (Validation + Key Extraction)
       // This will throw if keys are missing (safe guard).
       const domainSub = createWebPushSubscriptionFromBrowser(rawSub);
 
+      this.logger.debug('[PushService] Domain Subscription:', domainSub);
       // 3. Serialize to Proto-Compliant JSON
       const payload = serializeWebPushSubscription(domainSub);
 
