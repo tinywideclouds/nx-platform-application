@@ -29,6 +29,9 @@ export interface SendOptions {
   isEphemeral?: boolean;
 }
 
+// 30 Seconds Timeout for "Stalled" state
+const SEND_TIMEOUT_MS = 30_000;
+
 @Injectable({ providedIn: 'root' })
 export class ChatOutboundService {
   private logger = inject(Logger);
@@ -81,7 +84,6 @@ export class ChatOutboundService {
       };
 
       // 4. Construct Payload (Network Identity)
-      // ✅ NEW: Embed the localId into the encrypted payload
       const payload: EncryptedMessagePayload = {
         senderId: payloadSenderUrn,
         sentTimestamp: timestamp,
@@ -108,27 +110,49 @@ export class ChatOutboundService {
         envelope.isEphemeral = true;
       }
 
-      // 7. Send to Network
-      await firstValueFrom(this.sendService.sendMessage(envelope));
+      // 7. Send to Network (With Race Condition)
+      await this.raceNetworkRequest(this.sendService.sendMessage(envelope));
 
       // 8. Update Status (Skip if Ephemeral)
-      if (!isEphemeral) {
-        const sentMsg: DecryptedMessage = {
-          ...optimisticMsg,
-          status: 'sent',
-        };
-        await this.storageService.saveMessage(sentMsg);
-        return sentMsg;
+      if (!isEphemeral && optimisticMsg) {
+        // 'failed' is a valid MessageDeliveryStatus
+        await this.storageService.updateMessageStatus(
+          [optimisticMsg.messageId],
+          'failed',
+        );
+        return { ...optimisticMsg, status: 'failed' };
       }
 
       return optimisticMsg;
     } catch (error) {
       this.logger.error('[Outbound] Failed to send message', error);
 
+      // ✅ FAILURE HANDLING
       if (!isEphemeral && optimisticMsg) {
-        return optimisticMsg;
+        // Mark as failed in storage so UI can show "Retry"
+        await this.storageService.updateMessageStatus(
+          [optimisticMsg.messageId],
+          'failed',
+        );
+        return { ...optimisticMsg, status: 'failed' };
       }
       return null;
     }
+  }
+
+  // Helper to race the request against a timeout
+  private raceNetworkRequest(observable$: any): Promise<void> {
+    // We explicitly tell TS that this Observable yields 'void' (or we don't care about the value)
+    const request = firstValueFrom<void>(observable$);
+
+    const timer = new Promise<void>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Send Timeout (30s)')),
+        SEND_TIMEOUT_MS,
+      ),
+    );
+
+    // Now both inputs are Promise<void>, so the output is Promise<void>
+    return Promise.race([request, timer]);
   }
 }

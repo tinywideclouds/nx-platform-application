@@ -5,6 +5,13 @@ import {
 
 // --- DOMAIN MODELS (Application) ---
 
+export type MessageDeliveryStatus =
+  | 'pending' // Local optimistic
+  | 'sent' // Ack'd by Router
+  | 'received' // Inbound from Router
+  | 'read' // Read Receipt confirmed
+  | 'failed'; // Timed out / Error
+
 export interface DecryptedMessage {
   messageId: string;
   senderId: URN;
@@ -12,7 +19,7 @@ export interface DecryptedMessage {
   sentTimestamp: ISODateTimeString;
   typeId: URN;
   payloadBytes: Uint8Array;
-  status: 'pending' | 'sent' | 'received' | 'read';
+  status: MessageDeliveryStatus;
   conversationUrn: URN;
 }
 

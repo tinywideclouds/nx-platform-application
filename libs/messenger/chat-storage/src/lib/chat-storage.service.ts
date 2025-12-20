@@ -16,6 +16,7 @@ import {
   ConversationSummary,
   MessageTombstone,
   ConversationSyncState,
+  MessageDeliveryStatus,
 } from './chat.models';
 import { MessengerDatabase } from './db/messenger.database';
 import { ChatMergeStrategy } from './strategies/chat-merge.strategy';
@@ -245,7 +246,7 @@ export class ChatStorageService {
 
   async updateMessageStatus(
     messageIds: string[],
-    status: 'read',
+    status: MessageDeliveryStatus,
   ): Promise<void> {
     if (messageIds.length === 0) return;
     await this.db.transaction('rw', this.db.messages, async () => {

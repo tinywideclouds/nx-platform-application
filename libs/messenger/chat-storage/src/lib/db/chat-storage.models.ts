@@ -1,9 +1,7 @@
 // libs/messenger/chat-storage/src/lib/chat-storage.models.ts
 
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
+import { MessageDeliveryStatus } from '../chat.models';
 
 // --- STORAGE MODELS (Dexie) ---
 
@@ -14,7 +12,7 @@ export interface MessageRecord {
   sentTimestamp: ISODateTimeString;
   typeId: string;
   payloadBytes: Uint8Array;
-  status: 'pending' | 'sent' | 'received' | 'read';
+  status: MessageDeliveryStatus;
   conversationUrn: string;
 }
 
