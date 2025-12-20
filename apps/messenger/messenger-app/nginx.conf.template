@@ -51,20 +51,6 @@ server {
         proxy_redirect off;
     }
 
-    # SERVICE 2: CONTACTS
-    # Fix: NO Rewrite (Matches local proxy.conf.json)
-    location /api/contacts {
-        proxy_pass ${CONTACTS_SERVICE_URL};
-        
-        # --- CLOUD RUN REQUIRED HEADERS ---
-        proxy_ssl_server_name on;
-        proxy_set_header Host $proxy_host;
-        # ----------------------------------
-
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_redirect off;
-    }
-
     # SERVICE 3: KEYS
     # Fix: KEEP Rewrite (Matches local proxy.conf.json)
     location /api/keys {
@@ -95,22 +81,7 @@ server {
         proxy_redirect off;
     }
 
-    # SERVICE 5: MESSENGER
-    # Fix: KEEP Rewrite (Matches local proxy.conf.json)
-    location /api/messenger {
-        rewrite ^/api/messenger/(.*) /api/$1 break;
-        proxy_pass ${ROUTING_SERVICE_URL};
-        
-        # --- CLOUD RUN REQUIRED HEADERS ---
-        proxy_ssl_server_name on;
-        proxy_set_header Host $proxy_host;
-        # ----------------------------------
-
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_redirect off;
-    }
-
-    # SERVICE 6: WEBSOCKETS
+    # SERVICE 5: WEBSOCKETS
     # Fix: Added SNI + Upgrade Headers
     location /connect {
         proxy_pass ${WSS_URL};
@@ -123,5 +94,23 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
+    }
+
+    # SERVICE 6: NOTIFICATIONS
+    # Matches local proxy.conf.json logic
+    location /api/notifications {
+        # Rewrite /api/notifications/v1/... to /api/v1/...
+        rewrite ^/api/notifications/(.*) /api/$1 break;
+        
+        proxy_pass ${NOTIFICATION_SERVICE_URL};
+        
+        # --- CLOUD RUN REQUIRED HEADERS ---
+        # Required for Cloud Run to route the request to the correct container
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        # ----------------------------------
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
     }
 }

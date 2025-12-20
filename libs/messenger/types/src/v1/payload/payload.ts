@@ -17,6 +17,7 @@ import { Message } from '../../lib/chat.model';
 // This is the "smart" object our services will use. It overlaps the lib chat.model.ts
 export interface EncryptedMessagePayload extends Message {
   payloadBytes: Uint8Array;
+  clientRecordId?: string;
 }
 
 // --- Mappers (Smart <-> Proto) ---
@@ -25,62 +26,50 @@ export interface EncryptedMessagePayload extends Message {
  * INTERNAL MAPPER: Smart -> Proto
  * Maps the "smart" interface to the "dumb" Protobuf message.
  */
+// --- Mappers ---
+
 export function encryptedMessagePayloadToProto(
-  payload: EncryptedMessagePayload
+  payload: EncryptedMessagePayload,
 ): EncryptedMessagePayloadPb {
   return create(EncryptedMessagePayloadPbSchema, {
     senderId: payload.senderId.toString(),
     sentTimestamp: payload.sentTimestamp,
     typeId: payload.typeId.toString(),
     payloadBytes: payload.payloadBytes,
+    clientRecordId: payload.clientRecordId || '', // Proto3 defaults empty string
   });
 }
 
-/**
- * INTERNAL MAPPER: Proto -> Smart
- * Maps the "dumb" Protobuf message back to the "smart" interface.
- */
 export function encryptedMessagePayloadFromProto(
-  pb: EncryptedMessagePayloadPb
+  pb: EncryptedMessagePayloadPb,
 ): EncryptedMessagePayload {
-  return {
+  const smart: EncryptedMessagePayload = {
     senderId: URN.parse(pb.senderId),
     sentTimestamp: pb.sentTimestamp as ISODateTimeString,
     typeId: URN.parse(pb.typeId),
     payloadBytes: pb.payloadBytes,
   };
+
+  // Only map if present (non-empty)
+  if (pb.clientRecordId) {
+    smart.clientRecordId = pb.clientRecordId;
+  }
+
+  return smart;
 }
 
-// --- Public Serializers / Deserializers ---
+// --- Serializers ---
 
-/**
- * PUBLIC API: (Write)
- * Serializes a "smart" EncryptedMessagePayload object into a
- * compact Uint8Array (binary Protobuf).
- *
- * This is what messenger-crypto-bridge will encrypt.
- */
 export function serializePayloadToProtoBytes(
-  payload: EncryptedMessagePayload
+  payload: EncryptedMessagePayload,
 ): Uint8Array {
-  // 1. Smart -> Proto
   const protoPayload = encryptedMessagePayloadToProto(payload);
-  // 2. Proto -> Binary (Uint8Array)
   return toBinary(EncryptedMessagePayloadPbSchema, protoPayload);
 }
 
-/**
- * PUBLIC API: (Read)
- * Deserializes a Uint8Array (binary Protobuf) back into a
- * "smart" EncryptedMessagePayload object.
- *
- * This is what messenger-crypto-bridge will call after decrypting.
- */
 export function deserializeProtoBytesToPayload(
-  bytes: Uint8Array
+  bytes: Uint8Array,
 ): EncryptedMessagePayload {
-  // 1. Binary (Uint8Array) -> Proto
   const protoPayload = fromBinary(EncryptedMessagePayloadPbSchema, bytes);
-  // 2. Proto -> Smart
   return encryptedMessagePayloadFromProto(protoPayload);
 }

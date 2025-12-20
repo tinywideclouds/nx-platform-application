@@ -51,7 +51,7 @@ export class ChatConversationService {
   // Trigger for Typing
   public readonly typingTrigger$ = new Subject<void>();
 
-  // ✅ NEW: Trigger for Read Receipts (Consumed by ChatService)
+  // Trigger for Sending Read Receipts (Consumed by ChatService)
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
   private operationLock = Promise.resolve();
@@ -60,7 +60,6 @@ export class ChatConversationService {
     return this.repository.getConversationSummaries();
   }
 
-  // ✅ UPDATE: Accept myUrn to filter incoming messages
   async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
       if (
@@ -110,7 +109,6 @@ export class ChatConversationService {
           }
         }
 
-        // ✅ CHECK READ RECEIPTS
         if (myUrn) {
           await this.processReadReceipts(viewMessages, myUrn);
         }
@@ -144,7 +142,6 @@ export class ChatConversationService {
 
         if (result.messages.length > 0) {
           const newHistory = result.messages.map((m) => this.mapper.toView(m));
-          // Note: We don't usually send read receipts for old history loads
           this.messages.update((current) => [...newHistory, ...current]);
         }
 
@@ -163,6 +160,22 @@ export class ChatConversationService {
     }
   }
 
+  // ✅ NEW: Apply incoming read receipts to the UI state
+  applyIncomingReadReceipts(ids: string[]): void {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+
+    this.messages.update((current) =>
+      current.map((msg) => {
+        // If this message ID was in the receipt and isn't already 'read'
+        if (idSet.has(msg.id) && msg.status !== 'read') {
+          return { ...msg, status: 'read' };
+        }
+        return msg;
+      }),
+    );
+  }
+
   async sendTypingIndicator(myKeys: PrivateKeys, myUrn: URN): Promise<void> {
     const recipient = this.selectedConversation();
     if (!recipient) return;
@@ -173,7 +186,7 @@ export class ChatConversationService {
       recipient,
       MessageTypingIndicastor,
       bytes,
-      { isEphemeral: true }
+      { isEphemeral: true },
     );
   }
 
@@ -181,7 +194,7 @@ export class ChatConversationService {
     recipientUrn: URN,
     text: string,
     myKeys: PrivateKeys,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<void> {
     const bytes = new TextEncoder().encode(text);
     const typeId = URN.parse(MESSAGE_TYPE_TEXT);
@@ -192,7 +205,7 @@ export class ChatConversationService {
     recipientUrn: URN,
     data: ContactShareData,
     myKeys: PrivateKeys,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<void> {
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
@@ -200,22 +213,18 @@ export class ChatConversationService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  // ✅ UPDATE: Accept myUrn for filtering
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
     const relevant = messages.filter(
-      (msg) => msg.conversationUrn.toString() === activeConvo.toString()
+      (msg) => msg.conversationUrn.toString() === activeConvo.toString(),
     );
 
     if (relevant.length > 0) {
-      // ✅ CHECK READ RECEIPTS (Live)
-      // Since user is looking at this chat (it is selected), mark new messages as read immediately
       if (myUrn) {
-        // We use catch here to ensure we don't block the UI update if DB fails
         this.processReadReceipts(relevant, myUrn).catch((err) =>
-          this.logger.warn('Failed to process live receipts', err)
+          this.logger.warn('Failed to process live receipts', err),
         );
       }
 
@@ -226,32 +235,23 @@ export class ChatConversationService {
 
   // --- Internal ---
 
-  // ✅ NEW: Detects unread messages, updates them locally, and queues receipts
   private async processReadReceipts(
     messages: ChatMessage[],
-    myUrn: URN
+    myUrn: URN,
   ): Promise<void> {
-    // Filter: Incoming messages that are NOT yet read
     const myUrnStr = myUrn.toString();
     const unreadMessages = messages.filter(
-      (m) => m.senderId.toString() !== myUrnStr && m.status !== 'read'
+      (m) => m.senderId.toString() !== myUrnStr && m.status !== 'read',
     );
 
     if (unreadMessages.length === 0) return;
 
     const ids = unreadMessages.map((m) => m.id);
 
-    // 1. Update In-Memory View Models (Optimistic)
-    // We mutate the objects in the array reference if we are in load phase,
-    // or we might need to update the signal if this is post-load.
-    // For safety, let's assume objects are mutable before being passed to signal or update signal?
-    // Since `loadConversation` hasn't set the signal yet, mutation is fine.
+    // Optimistic Update
     unreadMessages.forEach((m) => (m.status = 'read'));
 
-    // 2. Update Storage (Async)
     await this.storage.updateMessageStatus(ids, 'read');
-
-    // 3. Emit Trigger (ChatService will handle network)
     this.readReceiptTrigger$.next(ids);
   }
 
@@ -260,7 +260,7 @@ export class ChatConversationService {
     typeId: URN,
     bytes: Uint8Array,
     myKeys: PrivateKeys,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<void> {
     return this.runExclusive(async () => {
       const optimisticMsg = await this.outbound.send(
@@ -268,11 +268,10 @@ export class ChatConversationService {
         myUrn,
         recipientUrn,
         typeId,
-        bytes
+        bytes,
       );
 
       if (optimisticMsg) {
-        // Pass myUrn to upsert (though for outbound it's ignored by receipt logic)
         this.upsertMessages([this.mapper.toView(optimisticMsg)], myUrn);
       }
     });
@@ -296,13 +295,12 @@ export class ChatConversationService {
     recipientUrn: URN,
     data: ReadReceiptData,
     myKeys: PrivateKeys,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<void> {
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
     const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
 
-    // We send this ephemerally (don't store receipts in history)
     await this.outbound.send(myKeys, myUrn, recipientUrn, typeId, bytes, {
       isEphemeral: true,
     });

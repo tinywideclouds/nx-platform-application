@@ -27,4 +27,8 @@ message EncryptedMessagePayloadPb {
   // The raw, type-specific payload.
   // (e.g., for a text message, this would be the UTF-8 bytes of the string).
   bytes payload_bytes = 4;
+
+  // The Sender's Local UUID (Client Record ID).
+  // Used for Idempotency and ID Promotion (Local -> Server) on Echo.
+  string client_record_id = 5;
 }

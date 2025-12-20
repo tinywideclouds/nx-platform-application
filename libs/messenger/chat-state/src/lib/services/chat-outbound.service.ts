@@ -16,8 +16,6 @@ import {
   DecryptedMessage,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-
-// [Refactor] Use the new Adapter Interface
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 
 // Types
@@ -38,8 +36,6 @@ export class ChatOutboundService {
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
   private keyCache = inject(KeyCacheService);
-
-  // [Refactor] Inject the interface, not the concrete class
   private identityResolver = inject(IdentityResolver);
 
   async send(
@@ -48,80 +44,74 @@ export class ChatOutboundService {
     recipientUrn: URN,
     typeId: URN,
     payloadBytes: Uint8Array,
-    options?: SendOptions
+    options?: SendOptions,
   ): Promise<DecryptedMessage | null> {
     let optimisticMsg: DecryptedMessage | null = null;
     const isEphemeral = options?.isEphemeral || false;
 
     try {
-      // 1. Resolve Identities via Adapter
-      // We resolve the Recipient to their Routable Handle (e.g. email)
-      const targetRoutingUrn = await this.identityResolver.resolveToHandle(
-        recipientUrn
-      );
-
-      // We resolve the Contact URN to store it against (e.g. local contact ID)
-      const storageUrn = await this.identityResolver.getStorageUrn(
-        recipientUrn
-      );
-
-      // We resolve "Me" to my Public Handle so the recipient knows who I am
-      const payloadSenderUrn = await this.identityResolver.resolveToHandle(
-        myUrn
-      );
+      // 1. Resolve Identities
+      const targetRoutingUrn =
+        await this.identityResolver.resolveToHandle(recipientUrn);
+      const storageUrn =
+        await this.identityResolver.getStorageUrn(recipientUrn);
+      const payloadSenderUrn =
+        await this.identityResolver.resolveToHandle(myUrn);
 
       if (!isEphemeral) {
         this.logger.debug(
-          `[Outbound] Routing To: ${targetRoutingUrn.toString()}`
-        );
-        this.logger.debug(
-          `[Outbound] Sending As: ${payloadSenderUrn.toString()}`
+          `[Outbound] Routing To: ${targetRoutingUrn.toString()}`,
         );
       }
 
-      // 2. Construct Payload (Network Identity)
+      // 2. Prepare Timestamps & IDs
       const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
+      const localId = `local-${crypto.randomUUID()}`;
+
+      // 3. Create Optimistic Message (Local Identity)
+      optimisticMsg = {
+        messageId: localId,
+        senderId: myUrn,
+        recipientId: recipientUrn,
+        sentTimestamp: timestamp,
+        typeId: typeId,
+        payloadBytes: payloadBytes,
+        status: 'pending',
+        conversationUrn: storageUrn,
+      };
+
+      // 4. Construct Payload (Network Identity)
+      // ✅ NEW: Embed the localId into the encrypted payload
       const payload: EncryptedMessagePayload = {
         senderId: payloadSenderUrn,
         sentTimestamp: timestamp,
         typeId: typeId,
         payloadBytes: payloadBytes,
+        clientRecordId: isEphemeral ? undefined : localId,
       };
 
-      // 3. Create Optimistic Message (Local Identity)
-      optimisticMsg = {
-        messageId: `local-${crypto.randomUUID()}`,
-        senderId: myUrn,
-        recipientId: recipientUrn,
-        sentTimestamp: payload.sentTimestamp,
-        typeId: payload.typeId,
-        payloadBytes: payload.payloadBytes,
-        status: 'pending',
-        conversationUrn: storageUrn,
-      };
-
-      // 4. SAVE IMMEDIATELY (Skip if Ephemeral)
+      // 5. SAVE IMMEDIATELY (Skip if Ephemeral)
       if (!isEphemeral) {
         await this.storageService.saveMessage(optimisticMsg);
       }
 
-      // 5. Encrypt & Sign
+      // 6. Encrypt & Sign
       const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
       const envelope = await this.cryptoService.encryptAndSign(
         payload,
         targetRoutingUrn,
         myKeys,
-        recipientKeys
+        recipientKeys,
       );
 
       if (isEphemeral) {
         envelope.isEphemeral = true;
       }
 
-      // 6. Send to Network
+      // 7. Send to Network
       await firstValueFrom(this.sendService.sendMessage(envelope));
 
-      // 7. Update Status (Skip if Ephemeral)
+      // 8. Update Status (Skip if Ephemeral)
       if (!isEphemeral) {
         const sentMsg: DecryptedMessage = {
           ...optimisticMsg,

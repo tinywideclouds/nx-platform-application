@@ -7,6 +7,7 @@ import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
   MESSAGE_TYPE_READ_RECEIPT,
+  MESSAGE_TYPE_TYPING,
   ContactShareData,
   ReadReceiptData,
 } from '../models/content-types';
@@ -108,6 +109,19 @@ describe('MessageContentParser', () => {
       const result = service.parse(typeId, bytes);
 
       expect(result.kind).toBe('unknown');
+    });
+
+    it('should route Typing Indicators to Signal', () => {
+      const typeId = URN.parse(MESSAGE_TYPE_TYPING);
+      const bytes = new Uint8Array([]); // Empty payload
+
+      const result = service.parse(typeId, bytes);
+
+      expect(result.kind).toBe('signal');
+      if (result.kind === 'signal') {
+        expect(result.payload.action).toBe('typing');
+        expect(result.payload.data).toBeNull();
+      }
     });
   });
 

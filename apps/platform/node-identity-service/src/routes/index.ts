@@ -2,7 +2,6 @@ import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { googleAuthRoutes } from './auth/google.js';
 import { createUserApiRoutes } from './api/users.js';
-import { jwksRouter } from './jwt/jwks.js';
 import { healthCheckRouter } from './heath-check.js';
 
 export const createMainRouter = (db: Firestore) => {

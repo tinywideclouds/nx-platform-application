@@ -29,18 +29,12 @@ import { generateSnippet, getPreviewType } from './chat-message.utils';
 export class ChatStorageService {
   private readonly db = inject(MessengerDatabase);
   private readonly logger = inject(Logger);
-
-  // Strategies and Mapper
   private readonly mergeStrategy = inject(ChatMergeStrategy);
   private readonly deletionStrategy = inject(ChatDeletionStrategy);
   private readonly mapper = inject(ChatStorageMapper);
 
   // --- WRITE PATHS ---
 
-  /**
-   * Idempotently saves a decrypted message.
-   * @returns Promise<boolean> - true if saved, false if duplicate (ignored).
-   */
   async saveMessage(message: DecryptedMessage): Promise<boolean> {
     const msgRecord = this.mapper.mapSmartToRecord(message);
     const conversationUrnStr = message.conversationUrn.toString();
@@ -50,31 +44,39 @@ export class ChatStorageService {
       'rw',
       [this.db.messages, this.db.conversations],
       async () => {
-        // 1. Idempotency Check
-        // We use the Primary Key (messageId) for a fast lookup.
-        const duplicate = await this.db.messages.get(message.messageId);
+        // 1. Idempotency & Transition Check
+        const existingRecord = await this.db.messages.get(message.messageId);
 
-        if (duplicate) {
-          this.logger.warn(
-            `[ChatStorage] Duplicate message ignored: ${message.messageId}`,
-          );
-          // Return false to indicate NO write happened.
-          // The caller (IngestionService) MUST still Ack this message to stop redelivery.
-          return false;
+        if (existingRecord) {
+          // Status Update (e.g. Pending -> Sent) is allowed
+          if (existingRecord.status !== message.status) {
+            this.logger.debug(
+              `[ChatStorage] Updating status for ${message.messageId}: ${existingRecord.status} -> ${message.status}`,
+            );
+          }
+          // True Duplicate is blocked
+          else {
+            this.logger.warn(
+              `[ChatStorage] Duplicate message ignored: ${message.messageId}`,
+            );
+            return false;
+          }
         }
 
         // 2. Save Content
         await this.db.messages.put(msgRecord);
 
-        // 3. Update Conversation Index (Only needed for new messages)
-        const existing = await this.db.conversations.get(conversationUrnStr);
+        // 3. Update Conversation Index
+        const existingConv =
+          await this.db.conversations.get(conversationUrnStr);
         const isNewer =
-          !existing || message.sentTimestamp >= existing.lastActivityTimestamp;
+          !existingConv ||
+          message.sentTimestamp >= existingConv.lastActivityTimestamp;
         const isOlder =
-          existing?.genesisTimestamp &&
-          message.sentTimestamp < existing.genesisTimestamp;
+          existingConv?.genesisTimestamp &&
+          message.sentTimestamp < existingConv.genesisTimestamp;
 
-        const update: ConversationIndexRecord = existing || {
+        const update: ConversationIndexRecord = existingConv || {
           conversationUrn: conversationUrnStr,
           lastActivityTimestamp: message.sentTimestamp,
           snippet: '',
@@ -90,8 +92,8 @@ export class ChatStorageService {
           update.lastActivityTimestamp = message.sentTimestamp;
           update.snippet = generateSnippet(message);
           update.previewType = getPreviewType(message.typeId.toString());
-          if (message.status === 'received') {
-            update.unreadCount = (existing?.unreadCount || 0) + 1;
+          if (message.status === 'received' && !existingRecord) {
+            update.unreadCount = (existingConv?.unreadCount || 0) + 1;
           }
         }
 
@@ -105,7 +107,11 @@ export class ChatStorageService {
     );
   }
 
-  // ... Rest of the file remains unchanged ...
+  // (Removed promoteMessage / findMessageById - No longer needed)
+
+  // ... (Rest of existing read/write/delete methods remain unchanged) ...
+  // [Full file content preserved below logic changes]
+
   async markConversationAsRead(urn: URN): Promise<void> {
     const strUrn = urn.toString();
     await this.db.conversations.update(strUrn, {
@@ -250,6 +256,10 @@ export class ChatStorageService {
           updates.push({ ...record, status });
         }
       });
+      this.logger.debug(
+        `[ChatStorage] updating status to ${status}`,
+        messageIds,
+      );
       if (updates.length > 0) {
         await this.db.messages.bulkPut(updates);
       }

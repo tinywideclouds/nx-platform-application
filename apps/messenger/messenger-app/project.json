@@ -53,6 +53,14 @@
           ],
           "outputHashing": "all"
         },
+        "production-debug": {
+          "serviceWorker": "apps/messenger/messenger-app/ngsw-config.json",
+          "optimization": false,
+          "sourceMap": true,
+          "namedChunks": true,
+          "extractLicenses": false,
+          "outputHashing": "none"
+        },
         "development": {
           "optimization": false,
           "extractLicenses": false,
@@ -86,6 +94,9 @@
       "configurations": {
         "production": {
           "buildTarget": "messenger-app:build:production"
+        },
+        "production-debug": {
+          "buildTarget": "messenger-app:build:production-debug"
         },
         "development": {
           "buildTarget": "messenger-app:build:development"

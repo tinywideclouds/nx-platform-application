@@ -14,7 +14,7 @@ EXPOSE 8080
 
 # 4. Startup Command
 # Injects env vars into the template and writes the final config
-# CMD ["/bin/sh", "-c", "envsubst '${IDENTITY_SERVICE_URL} ${KEY_SERVICE_URL} ${ROUTING_SERVICE_URL} ${WSS_URL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+# CMD ["/bin/sh", "-c", "envsubst '${IDENTITY_SERVICE_URL} ${KEY_SERVICE_URL} ${ROUTING_SERVICE_URL} ${WSS_URL} ${NOTIFICATION_SERVICE_URL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
 # 4. Startup Command
-# Added: ${CONTACTS_SERVICE_URL} and ${NGINX_LOG_LEVEL}
-CMD ["/bin/sh", "-c", "envsubst '${IDENTITY_SERVICE_URL} ${KEY_SERVICE_URL} ${ROUTING_SERVICE_URL} ${CONTACTS_SERVICE_URL} ${WSS_URL} ${NGINX_LOG_LEVEL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+# Added: ${NGINX_LOG_LEVEL}
+CMD ["/bin/sh", "-c", "envsubst '${IDENTITY_SERVICE_URL} ${KEY_SERVICE_URL} ${ROUTING_SERVICE_URL} ${WSS_URL} ${NOTIFICATION_SERVICE_URL} ${NGINX_LOG_LEVEL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]

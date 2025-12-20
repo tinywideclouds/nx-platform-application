@@ -78,8 +78,8 @@ const mockUserProvider = environment.useMocks
   ? { provide: MOCK_USERS_TOKEN, useValue: MESSENGER_MOCK_USERS }
   : [];
 
-// --- Dev Providers ---
-const devProviders = environment.useMocks
+// --- Token Providers ---
+const tokenProviders = environment.useMocks
   ? []
   : [
       {
@@ -106,6 +106,12 @@ const devProviders = environment.useMocks
         provide: VAPID_PUBLIC_KEY,
         useValue: environment.vapidPublicKey,
       },
+      {
+        provide: PLATFORM_CLOUD_CONFIG,
+        useValue: {
+          googleClientId: environment.googleClientId,
+        },
+      },
     ];
 
 const cloudProviders = environment.useMocks
@@ -127,35 +133,26 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideHttpClient(withInterceptors([authInterceptor])),
 
-    // ✅ NEW: Register Service Worker
-    // Only enable in production or when explicitly testing PWA behavior
     provideServiceWorker('ngsw-worker.js', {
-      // enabled: !isDevMode() && !environment.useMocks,
-      // registrationStrategy: 'registerWhenStable:30000',
-      enabled: true, // (Ensure this is still true from our previous step)
-
-      // 🔴 WAS: 'registerWhenStable:30000'
-      // 🟢 CHANGE TO:
-      registrationStrategy: 'registerImmediately',
+      enabled: environment.enableServiceWorker,
+      registrationStrategy: 'registerWhenStable:30000',
+      // enabled: true, // (Ensure this is still true from our previous step)
+      // // 🔴 WAS: 'registerWhenStable:10000'
+      // // 🟢 CHANGE TO:
+      // registrationStrategy: 'registerImmediately',
     }),
 
     ...authProviders,
     provideMessengerIdentity(),
     chatProvider,
     contactsProvider,
-    ...devProviders,
+    ...tokenProviders,
     mockUserProvider,
     ...cloudProviders,
     {
       provide: LOGGER_CONFIG,
       useValue: {
         level: LogLevel.DEBUG,
-      },
-    },
-    {
-      provide: PLATFORM_CLOUD_CONFIG,
-      useValue: {
-        googleClientId: environment.googleClientId,
       },
     },
     {

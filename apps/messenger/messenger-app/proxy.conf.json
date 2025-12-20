@@ -5,11 +5,14 @@
     "logLevel": "debug",
     "changeOrigin": true
   },
-  "/api/contacts": {
-    "target": "http://localhost:3001",
+  "/api/keys": {
+    "target": "http://localhost:8081",
     "secure": false,
     "logLevel": "debug",
-    "changeOrigin": true
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api/keys": "/keys"
+    }
   },
   "/api/routing": {
     "target": "http://localhost:8082",
@@ -20,14 +23,12 @@
       "^/api/routing": "/api"
     }
   },
-  "/api/keys": {
-    "target": "http://localhost:8081",
+  "/connect": {
+    "target": "ws://localhost:8083",
     "secure": false,
+    "ws": true,
     "logLevel": "debug",
-    "changeOrigin": true,
-    "pathRewrite": {
-      "^/api/keys": "/keys"
-    }
+    "changeOrigin": true
   },
   "/api/notifications": {
     "target": "http://localhost:8086",
@@ -35,14 +36,7 @@
     "logLevel": "debug",
     "changeOrigin": true,
     "pathRewrite": {
-      "^/api/notifications": ""
+      "^/api/notifications": "/api"
     }
-  },
-  "/connect": {
-    "target": "ws://localhost:8083",
-    "secure": false,
-    "ws": true,
-    "logLevel": "debug",
-    "changeOrigin": true
   }
 }

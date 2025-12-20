@@ -7,6 +7,7 @@ import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
   MESSAGE_TYPE_READ_RECEIPT,
+  MESSAGE_TYPE_TYPING,
   ContactShareData,
   ReadReceiptData,
 } from '../models/content-types';
@@ -77,6 +78,17 @@ export class MessageContentParser {
           payload: {
             action: 'read-receipt',
             data,
+          },
+        };
+      }
+
+      if (typeStr === MESSAGE_TYPE_TYPING) {
+        // Typing indicators are empty payloads, no JSON parsing needed
+        return {
+          kind: 'signal',
+          payload: {
+            action: 'typing',
+            data: null,
           },
         };
       }

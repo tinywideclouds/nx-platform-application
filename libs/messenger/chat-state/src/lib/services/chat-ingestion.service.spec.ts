@@ -1,6 +1,5 @@
 // libs/messenger/chat-state/src/lib/services/chat-ingestion.service.spec.ts
 
-// ... (Imports remain the same, ensure 'vi' is imported from 'vitest') ...
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ChatIngestionService } from './chat-ingestion.service';
@@ -22,25 +21,29 @@ import {
   ParsedMessage,
 } from '@nx-platform-application/message-content';
 
-// ... (Previous Fixtures remain the same) ...
 const mockMyUrn = URN.parse('urn:contacts:user:me');
 const mockSenderContact = URN.parse('urn:contacts:user:friend');
 const mockEnvelope = {
   recipientId: mockMyUrn,
-  isEphemeral: true,
-} as SecureEnvelope; // Mark as Ephemeral to test the bug
-const mockQueuedMsg: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
+  isEphemeral: false,
+} as SecureEnvelope;
+const mockQueuedMsg: QueuedMessage = {
+  id: 'router-id-999',
+  envelope: mockEnvelope,
+};
+
 const mockDecryptedPayload = {
   senderId: mockSenderContact,
   sentTimestamp: '2025-01-01T12:00:00Z',
-  typeId: URN.parse('urn:message:type:signal'), // Signal type
+  typeId: URN.parse('urn:message:type:text'),
   payloadBytes: new Uint8Array([1]),
+  clientRecordId: undefined as string | undefined,
 };
 const mockKeys = { encKey: 'priv' } as any;
 
 describe('ChatIngestionService', () => {
   let service: ChatIngestionService;
-  // ... (Mocks setup remains the same) ...
+
   const mockStorageService = {
     saveMessage: vi.fn().mockResolvedValue(true),
     saveQuarantinedMessage: vi.fn(),
@@ -64,6 +67,10 @@ describe('ChatIngestionService', () => {
     mockDataService.acknowledge.mockReturnValue(of(undefined));
     mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
     mockResolver.resolveToContact.mockResolvedValue(mockSenderContact);
+    mockParser.parse.mockReturnValue({
+      kind: 'content',
+      payload: { kind: 'text', text: 'test' },
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -81,52 +88,44 @@ describe('ChatIngestionService', () => {
     service = TestBed.inject(ChatIngestionService);
   });
 
-  describe('Signal Routing (The Fix)', () => {
+  describe('ID Resolution (Sender Authority)', () => {
     beforeEach(() => {
       mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
     });
 
-    it('should route READ RECEIPT to storage and NOT typing indicators', async () => {
-      // 1. Arrange: Parser identifies it as a Read Receipt
-      mockParser.parse.mockReturnValue({
-        kind: 'signal',
-        payload: { action: 'read-receipt', data: { messageIds: ['old-1'] } },
-      } as ParsedMessage);
+    it('should use clientRecordId as messageId if present', async () => {
+      // 1. Arrange: Payload has Twin-ID
+      const localId = 'local-uuid-123';
+      mockCryptoService.verifyAndDecrypt.mockResolvedValue({
+        ...mockDecryptedPayload,
+        clientRecordId: localId,
+      });
 
       // 2. Act
-      const result = await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      await service.process(mockKeys, mockMyUrn, new Set(), 50);
 
       // 3. Assert
-      // Should call DB update
-      expect(mockStorageService.updateMessageStatus).toHaveBeenCalledWith(
-        ['old-1'],
-        'read',
+      // ✅ Key Check: saveMessage called with 'local-uuid-123', NOT 'router-id-999'
+      expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: localId }),
       );
-      // Should NOT be a typing indicator
-      expect(result.typingIndicators.length).toBe(0);
-      // Should Ack the message
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
     });
 
-    it('should route TYPING signal to typingIndicators list', async () => {
-      // 1. Arrange: Parser identifies it as Typing
-      mockParser.parse.mockReturnValue({
-        kind: 'signal',
-        payload: { action: 'typing', data: null },
-      } as ParsedMessage);
+    it('should fallback to Router ID if clientRecordId is missing', async () => {
+      // 1. Arrange: Payload has NO Twin-ID
+      mockCryptoService.verifyAndDecrypt.mockResolvedValue({
+        ...mockDecryptedPayload,
+        clientRecordId: undefined,
+      });
 
       // 2. Act
-      const result = await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      await service.process(mockKeys, mockMyUrn, new Set(), 50);
 
       // 3. Assert
-      expect(result.typingIndicators.length).toBe(1);
-      expect(result.typingIndicators[0].toString()).toBe(
-        mockSenderContact.toString(),
+      // ✅ Key Check: saveMessage called with 'router-id-999'
+      expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: 'router-id-999' }),
       );
-
-      // Should NOT touch DB
-      expect(mockStorageService.updateMessageStatus).not.toHaveBeenCalled();
-      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
     });
   });
 });

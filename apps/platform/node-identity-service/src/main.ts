@@ -15,7 +15,7 @@ import { config } from './config.js';
 import { configurePassport } from './internal/auth/passport.config.js';
 import { createMainRouter } from './routes/index.js';
 import { generateJwks, jwksRouter } from './routes/jwt/jwks.js';
-// [CHANGED] Import the new e2e test-only routes
+
 import { e2eRoutes } from './routes/e2e/e2e.routes.js';
 import { validateJwtConfiguration } from './internal/services/jwt-validator.service.js';
 import { centralErrorHandler } from './internal/middleware/error.middleware.js';
@@ -31,7 +31,7 @@ async function startServer() {
   try {
     logger.info(
       { service: 'node-identity-service', state: 'initializing' },
-      'Initializing service...'
+      'Initializing service...',
     );
 
     if (!config.gcpProjectId) {
@@ -48,13 +48,13 @@ async function startServer() {
           status: 'connected',
           projectId: config.gcpProjectId,
         },
-        'Firestore connection verified.'
+        'Firestore connection verified.',
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.message.includes('invalid_grant')) {
         logger.fatal(
           { err: error },
-          "Firestore authentication failed. Your local gcloud credentials may have expired. Please run 'gcloud auth application-default login' and try again."
+          "Firestore authentication failed. Your local gcloud credentials may have expired. Please run 'gcloud auth application-default login' and try again.",
         );
       }
       throw error;
@@ -69,14 +69,14 @@ async function startServer() {
         authPolicy = new MembershipPolicy(db);
         logger.info(
           { component: 'AuthPolicy', policy: 'MEMBERSHIP' },
-          'Using MEMBERSHIP authorization policy.'
+          'Using MEMBERSHIP authorization policy.',
         );
         break;
       case 'BLOCK':
         authPolicy = new BlockPolicy(db);
         logger.info(
           { component: 'AuthPolicy', policy: 'BLOCK' },
-          'Using BLOCK authorization policy.'
+          'Using BLOCK authorization policy.',
         );
         break;
       case 'ALLOW_ALL':
@@ -84,7 +84,7 @@ async function startServer() {
         authPolicy = new AllowAllPolicy();
         logger.info(
           { component: 'AuthPolicy', policy: 'ALLOW_ALL' },
-          'Using ALLOW_ALL authorization policy.'
+          'Using ALLOW_ALL authorization policy.',
         );
     }
     // ---
@@ -95,7 +95,7 @@ async function startServer() {
     await generateJwks();
     logger.info(
       { component: 'JWKS', status: 'generated' },
-      'JWKS cryptographic keys generated and cached.'
+      'JWKS cryptographic keys generated and cached.',
     );
 
     const app = express();
@@ -111,7 +111,7 @@ async function startServer() {
       cors({
         origin: config.allowedOrigins,
         credentials: true,
-      })
+      }),
     );
 
     const firestoreSessionStore = new FirestoreStore({
@@ -129,7 +129,7 @@ async function startServer() {
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
         },
-      })
+      }),
     );
 
     // --- PASSPORT MIDDLEWARE & CONFIGURATION ---
@@ -145,11 +145,14 @@ async function startServer() {
         max: 100,
         standardHeaders: true,
         legacyHeaders: false,
+        validate: {
+          xForwardedForHeader: false,
+        },
       });
-      app.use('/auth', authLimiter);
+      app.use('/api/auth', authLimiter);
       logger.info(
         { component: 'RateLimiter', status: 'enabled' },
-        'In-app rate limiting is active for /auth routes'
+        'In-app rate limiting is active for /auth routes',
       );
     }
 
@@ -169,7 +172,7 @@ async function startServer() {
           status: 'active',
           path: '/api/e2e/generate-test-token',
         },
-        'Loading e2e-only test routes. This must NOT be seen in production.'
+        'Loading e2e-only test routes. This must NOT be seen in production.',
       );
       // Mount the e2e test router
       app.use('/api', e2eRoutes);
@@ -187,7 +190,7 @@ async function startServer() {
           port: config.port,
           state: 'listening',
         },
-        `Server started successfully on port ${config.port}`
+        `Server started successfully on port ${config.port}`,
       );
     });
   } catch (error: unknown) {

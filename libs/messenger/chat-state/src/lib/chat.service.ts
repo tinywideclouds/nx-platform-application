@@ -9,7 +9,7 @@ import {
 import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { URN, PublicKeys } from '@nx-platform-application/platform-types';
-import { filter, firstValueFrom, interval, switchMap, EMPTY, tap } from 'rxjs'; // ✅ Added switchMap, EMPTY, tap
+import { firstValueFrom, interval, switchMap, EMPTY } from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
 
 // --- Services ---
@@ -22,8 +22,8 @@ import {
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import {
   ChatStorageService,
-  ConversationSummary,
   DecryptedMessage,
+  ConversationSummary,
 } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
@@ -35,7 +35,6 @@ import { ChatConversationService } from './services/chat-conversation.service';
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
 
-// [Refactor] New Library Import
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 // Types
@@ -56,7 +55,6 @@ export type OnboardingState =
   providedIn: 'root',
 })
 export class ChatService {
-  // --- Dependencies ---
   private readonly logger = inject(Logger);
   private readonly authService = inject(IAuthService);
   private readonly cryptoService = inject(MessengerCryptoService);
@@ -70,27 +68,21 @@ export class ChatService {
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly keyWorker = inject(ChatKeyService);
 
-  // [Refactor] The New Ceremony Coordinator
   private readonly pairingService = inject(DevicePairingService);
 
   private readonly destroyRef = inject(DestroyRef);
 
-  // --- Internal State (Global) ---
   private myKeys = signal<PrivateKeys | null>(null);
   private identityLinkMap = signal(new Map<string, URN>());
   private blockedSet = signal(new Set<string>());
   private operationLock = Promise.resolve();
 
-  // --- Public State (App Level) ---
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
 
   public readonly onboardingState = signal<OnboardingState>('CHECKING');
-
-  // [Refactor] Ceremony Flag (Pauses Ingestion)
   public readonly isCeremonyActive = signal<boolean>(false);
 
-  // --- Delegated State (Active Chat Level) ---
   public readonly messages = this.conversationService.messages;
   public readonly selectedConversation =
     this.conversationService.selectedConversation;
@@ -121,8 +113,6 @@ export class ChatService {
     this.conversationService.notifyTyping();
   }
 
-  // --- Initialization Logic ---
-
   private async init(): Promise<void> {
     try {
       this.onboardingState.set('CHECKING');
@@ -137,13 +127,11 @@ export class ChatService {
       const senderUrn = this.currentUserUrn();
       if (!senderUrn) throw new Error('No user URN found');
 
-      // 2. Fetch KEY STATE
       const [localKeys, serverKeys] = await Promise.all([
         this.cryptoService.loadMyKeys(senderUrn),
         this.keyService.getPublicKey(senderUrn),
       ]);
 
-      // 3. Decision Matrix
       if (!localKeys && !serverKeys) {
         this.onboardingState.set('GENERATING');
         await this.performFirstTimeSetup(senderUrn, currentUser.email);
@@ -185,19 +173,10 @@ export class ChatService {
     return true;
   }
 
-  // --- Device Linking Facade (Refactored) ---
-
-  /**
-   * CANCEL LINKING
-   * Call this from UI to exit the "Ceremony" state and resume normal chat.
-   */
   public cancelLinking(): void {
     this.isCeremonyActive.set(false);
   }
 
-  /**
-   * TARGET ROLE (New Device): Receiver-Hosted Flow
-   */
   public async startTargetLinkSession(): Promise<DevicePairingSession> {
     if (this.onboardingState() !== 'REQUIRES_LINKING') {
       throw new Error(
@@ -205,15 +184,11 @@ export class ChatService {
       );
     }
 
-    // Connect socket for the Hot Queue
     const token = this.authService.getJwtToken();
     if (token) this.liveService.connect(token);
 
-    // [Refactor] Use new lib
-    // Note: sessionPrivateKey is in the result, the UI must hold it
     const session = await this.pairingService.startReceiverSession();
 
-    // Remap to LinkSession interface for UI compatibility
     return {
       sessionId: session.sessionId,
       qrPayload: session.qrPayload,
@@ -223,16 +198,12 @@ export class ChatService {
     };
   }
 
-  /**
-   * TARGET ROLE (New Device): Polling Loop (Spy)
-   */
   public async checkForSyncMessage(
     sessionPrivateKey: CryptoKey,
   ): Promise<boolean> {
     const urn = this.currentUserUrn();
     if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') return false;
 
-    // [Refactor] Use new lib's dedicated poller
     const keys = await this.pairingService.pollForReceiverSync(
       sessionPrivateKey,
       urn,
@@ -245,14 +216,10 @@ export class ChatService {
     return false;
   }
 
-  /**
-   * TARGET ROLE (New Device): Sender-Hosted Flow (Fallback)
-   */
   public async redeemSourceSession(qrCode: string): Promise<void> {
     const urn = this.currentUserUrn();
-    const currentState = this.onboardingState(); // Snapshot state
+    const currentState = this.onboardingState();
 
-    // ✅ DEBUG LOG: State Guard
     if (!urn || currentState !== 'REQUIRES_LINKING') {
       this.logger.error(
         `[ChatService] Redeem Blocked. URN=${urn}, State=${currentState}`,
@@ -263,7 +230,6 @@ export class ChatService {
     const token = this.authService.getJwtToken();
     if (token) this.liveService.connect(token);
 
-    // [Refactor] Use new lib
     const keys = await this.pairingService.redeemSenderSession(qrCode, urn);
     this.logger.debug('got redeem keys', keys != undefined);
 
@@ -274,10 +240,6 @@ export class ChatService {
     }
   }
 
-  /**
-   * SOURCE ROLE (Existing Device): Receiver-Hosted Flow
-   * Scans a target's QR code and sends the keys.
-   */
   public async linkTargetDevice(qrCode: string): Promise<void> {
     const urn = this.currentUserUrn();
     const keys = this.myKeys();
@@ -295,16 +257,11 @@ export class ChatService {
     }
   }
 
-  /**
-   * SOURCE ROLE (Existing Device): Sender-Hosted Flow
-   * Generates a "Dead Drop" QR code for the target to scan.
-   */
   public async startSourceLinkSession(): Promise<DevicePairingSession> {
     const urn = this.currentUserUrn();
     const keys = this.myKeys();
     if (!urn || !keys) throw new Error('Not authenticated');
 
-    // Note: The UI must call cancelLinking() to exit this state!
     this.isCeremonyActive.set(true);
 
     const session = await this.pairingService.startSenderSession(keys, urn);
@@ -316,8 +273,6 @@ export class ChatService {
       mode: 'SENDER_HOSTED',
     };
   }
-
-  // --- Boot & Reset Logic ---
 
   public async performIdentityReset(): Promise<void> {
     const urn = this.currentUserUrn();
@@ -386,8 +341,6 @@ export class ChatService {
     await this.completeBootSequence();
   }
 
-  // --- Standard Operations (Pass-Throughs) ---
-
   private initBlockListSubscription(): void {
     this.contactsService.blocked$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -418,7 +371,6 @@ export class ChatService {
       });
   }
 
-  // ✅ NEW: Read Receipt Orchestration
   private initReadReceiptOrchestration(): void {
     this.conversationService.readReceiptTrigger$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -459,9 +411,6 @@ export class ChatService {
 
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
-      // [Refactor] The Gatekeepers
-      // 1. Must be READY (Keys loaded)
-      // 2. Must NOT be in a Ceremony (Linking a device)
       if (this.onboardingState() !== 'READY') return;
       if (this.isCeremonyActive()) return;
 
@@ -469,7 +418,6 @@ export class ChatService {
       const myUrn = this.currentUserUrn();
       if (!myKeys || !myUrn) return;
 
-      // [Refactor] Clean call (no safe mode args)
       const result = await this.ingestionService.process(
         myKeys,
         myUrn,
@@ -477,8 +425,12 @@ export class ChatService {
         50,
       );
 
+      // ✅ LOGIC FIX: Handle Read Receipts
+      if (result.readReceipts.length > 0) {
+        this.conversationService.applyIncomingReadReceipts(result.readReceipts);
+      }
+
       if (result.messages.length > 0) {
-        // ✅ NEW: Pass myUrn to upsert for live read receipt handling
         this.conversationService.upsertMessages(result.messages, myUrn);
         this.refreshActiveConversations();
         this.updateTypingActivity(result.typingIndicators, result.messages);
@@ -491,13 +443,10 @@ export class ChatService {
   private updateTypingActivity(indicators: URN[], realMessages: any[]): void {
     this.typingActivity.update((map) => {
       const newMap = new Map(map);
-
-      // Strict Temporal usage: Get the current Instant
       const now = Temporal.Now.instant();
 
       indicators.forEach((urn) => newMap.set(urn.toString(), now));
 
-      // If a real message arrives, clear the typing indicator
       realMessages.forEach((msg) => {
         if (newMap.has(msg.senderId.toString()))
           newMap.delete(msg.senderId.toString());
@@ -508,7 +457,6 @@ export class ChatService {
 
   public async loadConversation(urn: URN | null): Promise<void> {
     const myUrn = this.currentUserUrn();
-    // ✅ NEW: Pass myUrn
     await this.conversationService.loadConversation(urn, myUrn);
     if (urn) this.handleReadStatusUpdate(urn);
   }
@@ -546,7 +494,6 @@ export class ChatService {
     this.refreshActiveConversations();
   }
 
-  // ✅ NEW: Internal Helper for Read Receipts
   private async sendReadReceipt(
     messageIds: string[],
     keys: PrivateKeys,
@@ -559,10 +506,6 @@ export class ChatService {
       messageIds,
       readAt: Temporal.Now.instant().toString(),
     };
-
-    const json = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(json);
-    const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
 
     await this.conversationService.sendReadReceiptSignal(
       recipient,
@@ -607,12 +550,9 @@ export class ChatService {
         takeUntilDestroyed(this.destroyRef),
         switchMap((status) => {
           if (status === 'connected') {
-            // ✅ Connected: Trust the WebSocket (incomingMessage$ handles pokes).
-            // Trigger ONE immediate fetch to ensure we're sync'd.
             void this.fetchAndProcessMessages();
-            return EMPTY; // Stop polling
+            return EMPTY;
           }
-          // ⚠️ Disconnected/Error: Activate Safety Net (Poll every 15s)
           this.logger.warn(
             `ChatService: Connection ${status}. Activating fallback polling.`,
           );
