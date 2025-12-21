@@ -3,7 +3,7 @@
     <div
       class="absolute -top-2 -right-2 z-0 pointer-events-none transform scale-75"
     >
-      <messenger-network-status />
+      <messenger-network-status [status]="connectionStatus()" />
     </div>
 
     <button
@@ -14,18 +14,18 @@
       aria-label="User Menu"
     >
       @if (currentUser()?.profileUrl) {
-      <img
-        alt="user profile"
-        [src]="currentUser()?.profileUrl"
-        class="w-full h-full object-cover rounded-full"
-        [alt]="currentUser()?.alias"
-      />
+        <img
+          alt="user profile"
+          [src]="currentUser()?.profileUrl"
+          class="w-full h-full object-cover rounded-full"
+          [alt]="currentUser()?.alias"
+        />
       } @else {
-      <div
-        class="w-6 h-6 rounded-full bg-gray-600 text-white flex items-center justify-center text-xs font-medium mx-auto"
-      >
-        {{ initials }}
-      </div>
+        <div
+          class="w-6 h-6 rounded-full bg-gray-600 text-white flex items-center justify-center text-xs font-medium mx-auto"
+        >
+          {{ initials }}
+        </div>
       }
     </button>
   </div>

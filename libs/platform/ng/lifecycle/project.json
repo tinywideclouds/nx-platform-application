@@ -1,0 +1,29 @@
+{
+  "name": "platform-lifecycle",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ng/lifecycle/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "dependsOn": [
+        "^build",
+        { "projects": "console-logger", "target": "build" }
+      ],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/lifecycle",
+        "htmlReportDirectory": "dist/test-reports/libs/platform/lifecycle",
+        "configFile": "libs/platform/ng/auth-ui/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

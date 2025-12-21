@@ -7,3 +7,4 @@ export * from './v1/notifications/notification';
 
 export * from './lib/resource';
 export * from './lib/time';
+export * from './lib/connections';

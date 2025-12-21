@@ -14,87 +14,106 @@ import {
 } from 'rxjs';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WSS_URL_TOKEN } from './live-data.config';
+import { ConnectionStatus } from '@nx-platform-application/platform-types';
+import { AppLifecycleService } from '@nx-platform-application/platform-lifecycle';
 
-export type ConnectionStatus =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'error';
-
-/**
- * Service responsible for managing the WebSocket connection for live chat data.
- * Handles automatic reconnection strategies, connection status tracking, and
- * incoming "poke" notifications.
- */
 @Injectable({
   providedIn: 'root',
 })
 export class ChatLiveDataService implements OnDestroy {
   private readonly logger = inject(Logger);
+  private readonly lifecycle = inject(AppLifecycleService);
   private readonly baseApiUrl =
     inject(WSS_URL_TOKEN, { optional: true }) ?? 'api/connect';
 
   private socket$?: WebSocketSubject<unknown>;
   private subscription?: Subscription;
+  private resumeSub: Subscription;
+  private lastToken?: string;
 
   private readonly statusSubject = new BehaviorSubject<ConnectionStatus>(
-    'disconnected'
+    'disconnected',
   );
   public readonly status$ = this.statusSubject.asObservable();
 
   private readonly messageSubject = new Subject<void>();
-
-  /**
-   * Emits whenever a message is received from the WebSocket.
-   * The payload is void as the message acts as a signal to refresh data.
-   */
-  public readonly incomingMessage$: Observable<void> =
-    this.messageSubject.asObservable();
+  public readonly incomingMessage$ = this.messageSubject.asObservable();
 
   constructor() {
     this.logger.info('ChatLiveDataService initialized');
+
+    this.resumeSub = this.lifecycle.resumed$.subscribe(() => {
+      this.handleAppResume();
+    });
   }
 
-  /**
-   * Establishes a WebSocket connection using the provided JWT.
-   * If a connection is already active, this method does nothing.
-   * * @param jwtToken The authentication token for the WebSocket protocol.
-   */
+  private handleAppResume(): void {
+    // Only force-cycle if we should be connected
+    if (this.statusSubject.value === 'connected' && this.lastToken) {
+      this.logger.info(
+        '[ChatLive] App resumed. Force-cycling connection to ensure health...',
+      );
+      this.disconnect();
+      this.connect(this.lastToken);
+    }
+  }
+
   public connect(jwtToken: string): void {
+    this.lastToken = jwtToken;
+
     if (this.subscription) {
       return;
     }
     this.logger.info('connecting websocket', this.baseApiUrl);
     this.statusSubject.next('connecting');
 
-    // defer() ensures the WebSocket is created only when subscribed to,
-    // and recreated fresh on retries.
     const stream$ = defer(() => {
       this.logger.info(
-        `WSS: Creating WebSocket connection to: ${this.baseApiUrl}`
+        `WSS: Creating WebSocket connection to: ${this.baseApiUrl}`,
       );
 
-      this.socket$ = webSocket({
+      // 1. Create the subject but don't assign to this.socket$ yet
+      // We need a reference to 'this' specific instance for the observers below
+      const localSocket = webSocket({
         url: this.baseApiUrl,
         protocol: [jwtToken],
         openObserver: {
           next: () => {
-            this.logger.debug('WSS: Connection OPENED.');
-            this.statusSubject.next('connected');
+            // Guard: Only update if THIS is the active socket
+            if (this.socket$ === localSocket) {
+              this.logger.debug('WSS: Connection OPENED.');
+              this.statusSubject.next('connected');
+            }
           },
         },
         closeObserver: {
           next: (closeEvent) => {
+            // Guard: Ignore close events from "Zombie" sockets (replaced instances)
+            if (this.socket$ !== localSocket) {
+              this.logger.debug(
+                'WSS: Ignoring close event from replaced socket instance.',
+              );
+              return;
+            }
+
             this.logger.debug(
-              `WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`
+              `WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`,
             );
-            if (this.statusSubject.value !== 'disconnected') {
+
+            // Only update status if we aren't already handling a retry loop
+            if (
+              this.statusSubject.value !== 'reconnection' &&
+              this.statusSubject.value !== 'disconnected'
+            ) {
               this.statusSubject.next('disconnected');
             }
           },
         },
       });
-      return this.socket$;
+
+      // 2. Now assign it as the active socket
+      this.socket$ = localSocket;
+      return localSocket;
     }).pipe(
       tap({
         error: (err) => {
@@ -104,10 +123,10 @@ export class ChatLiveDataService implements OnDestroy {
       }),
       retry({
         delay: (error, retryCount) => {
-          // Exponential backoff: 1s, 2s, 4s... capped at 30s
+          this.statusSubject.next('reconnection');
           const delay = Math.min(1000 * 2 ** retryCount, 30000);
           this.logger.warn(
-            `WebSocket retry attempt ${retryCount}, delay ${delay}ms`
+            `WebSocket retry attempt ${retryCount}, delay ${delay}ms`,
           );
           return timer(delay);
         },
@@ -115,10 +134,10 @@ export class ChatLiveDataService implements OnDestroy {
       catchError((err) => {
         this.logger.error(
           'ChatLiveDataService: Unrecoverable WebSocket error',
-          err
+          err,
         );
         return EMPTY;
-      })
+      }),
     );
 
     this.subscription = stream$.subscribe({
@@ -140,19 +159,18 @@ export class ChatLiveDataService implements OnDestroy {
     });
   }
 
-  /**
-   * Manually disconnects the WebSocket and cleans up subscriptions.
-   */
   public disconnect(): void {
-    // Call .complete() on the socket subject to imperatively close the connection
-    if (this.socket$) {
-      this.socket$.complete();
-      this.socket$ = undefined;
-    }
-
     if (this.subscription) {
       this.subscription.unsubscribe();
       this.subscription = undefined;
+    }
+
+    if (this.socket$) {
+      this.socket$.complete();
+      // We do NOT set socket$ to undefined here immediately if we want
+      // the identity check to potentially work, but usually setting it to undefined
+      // ensures the check (this.socket$ === localSocket) fails, which is what we want.
+      this.socket$ = undefined;
     }
 
     if (this.statusSubject.value !== 'disconnected') {
@@ -164,6 +182,7 @@ export class ChatLiveDataService implements OnDestroy {
     this.disconnect();
     this.statusSubject.complete();
     this.messageSubject.complete();
+    this.resumeSub.unsubscribe();
   }
 
   private resetState(): void {
