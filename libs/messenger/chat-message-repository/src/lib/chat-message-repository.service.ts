@@ -6,9 +6,11 @@ import {
   URN,
 } from '@nx-platform-application/platform-types';
 import {
-  ChatStorageService,
   DecryptedMessage,
   ConversationSummary,
+} from '@nx-platform-application/messenger-types';
+import {
+  ChatStorageService,
   ConversationSyncState,
 } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
@@ -68,7 +70,7 @@ export class ChatMessageRepository {
       let localMessages = await this.storage.loadHistorySegment(
         query.conversationUrn,
         query.limit,
-        beforeTimestamp
+        beforeTimestamp,
       );
 
       this.logger.debug(`Local Fetch: Found ${localMessages.length} messages.`);
@@ -80,25 +82,25 @@ export class ChatMessageRepository {
 
         if (knownLatest && (!newestLocal || newestLocal < knownLatest)) {
           this.logger.warn(
-            `⚠️ STALENESS DETECTED. Local Head: ${newestLocal}, Remote Index: ${knownLatest}`
+            `⚠️ STALENESS DETECTED. Local Head: ${newestLocal}, Remote Index: ${knownLatest}`,
           );
           this.logger.info(
-            `Actions: Forcing fetch of vault for ${knownLatest}...`
+            `Actions: Forcing fetch of vault for ${knownLatest}...`,
           );
 
           await this.cloud.restoreVaultForDate(
             knownLatest,
-            query.conversationUrn
+            query.conversationUrn,
           );
 
           // Reload to include the new data
           localMessages = await this.storage.loadHistorySegment(
             query.conversationUrn,
             query.limit,
-            beforeTimestamp
+            beforeTimestamp,
           );
           this.logger.info(
-            `Post-Stale-Fix Count: ${localMessages.length} (New Head: ${localMessages[0]?.sentTimestamp})`
+            `Post-Stale-Fix Count: ${localMessages.length} (New Head: ${localMessages[0]?.sentTimestamp})`,
           );
         }
       }
@@ -106,7 +108,7 @@ export class ChatMessageRepository {
       // --- 4. PAGINATION FILL (Scenario 1: Deficit / Month Boundary) ---
       if (localMessages.length < query.limit && this.cloud.isCloudEnabled()) {
         this.logger.info(
-          `📉 DEFICIT DETECTED: Needed ${query.limit}, have ${localMessages.length}. Starting Cloud Loop.`
+          `📉 DEFICIT DETECTED: Needed ${query.limit}, have ${localMessages.length}. Starting Cloud Loop.`,
         );
 
         let oldestLocal =
@@ -121,7 +123,7 @@ export class ChatMessageRepository {
         // OPTIMIZATION: If empty DB, jump to Last Activity (Fixes "First of Month" bug)
         if (!beforeTimestamp && !oldestLocal && index?.lastActivityTimestamp) {
           this.logger.debug(
-            `Empty DB detected. Jumping cursor to Last Activity: ${index.lastActivityTimestamp}`
+            `Empty DB detected. Jumping cursor to Last Activity: ${index.lastActivityTimestamp}`,
           );
           cursorDate = index.lastActivityTimestamp;
         }
@@ -132,11 +134,11 @@ export class ChatMessageRepository {
         while (localMessages.length < query.limit && loopCount < MAX_LOOPS) {
           // A. Genesis Check
           index = await this.storage.getConversationIndex(
-            query.conversationUrn
+            query.conversationUrn,
           );
           if (index?.genesisTimestamp && cursorDate < index.genesisTimestamp) {
             this.logger.info(
-              `🛑 Loop: Hit Genesis Wall (${index.genesisTimestamp}). Breaking.`
+              `🛑 Loop: Hit Genesis Wall (${index.genesisTimestamp}). Breaking.`,
             );
             break;
           }
@@ -144,13 +146,13 @@ export class ChatMessageRepository {
           this.logger.debug(
             `🔄 Loop ${
               loopCount + 1
-            }: Downloading Vault for cursor [${cursorDate}]...`
+            }: Downloading Vault for cursor [${cursorDate}]...`,
           );
 
           // B. Download
           const restoredCount = await this.cloud.restoreVaultForDate(
             cursorDate,
-            query.conversationUrn
+            query.conversationUrn,
           );
 
           this.logger.debug(`   -> Downloaded ${restoredCount} messages.`);
@@ -160,7 +162,7 @@ export class ChatMessageRepository {
             this.logger.debug('   -> Vault Empty. Marking Genesis here.');
             await this.storage.setGenesisTimestamp(
               query.conversationUrn,
-              cursorDate as ISODateTimeString
+              cursorDate as ISODateTimeString,
             );
             break;
           }
@@ -169,7 +171,7 @@ export class ChatMessageRepository {
           localMessages = await this.storage.loadHistorySegment(
             query.conversationUrn,
             query.limit,
-            beforeTimestamp
+            beforeTimestamp,
           );
           this.logger.debug(`   -> New Local Count: ${localMessages.length}`);
 
@@ -180,12 +182,12 @@ export class ChatMessageRepository {
 
           // E. Step Backwards
           const currentPlainDate = Temporal.PlainDate.from(
-            cursorDate.substring(0, 10)
+            cursorDate.substring(0, 10),
           );
           const prevMonthDate = currentPlainDate.subtract({ months: 1 });
           cursorDate = prevMonthDate.toString() + 'T23:59:59Z';
           this.logger.debug(
-            `   -> Still hungry. Moving cursor back to ${cursorDate}`
+            `   -> Still hungry. Moving cursor back to ${cursorDate}`,
           );
 
           loopCount++;
@@ -194,7 +196,7 @@ export class ChatMessageRepository {
 
       // 5. Final Calculations
       const updatedIndex = await this.storage.getConversationIndex(
-        query.conversationUrn
+        query.conversationUrn,
       );
       const finalGenesis = updatedIndex?.genesisTimestamp;
       const finalOldest =

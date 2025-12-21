@@ -7,10 +7,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 
 // Data Layer
 import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import {
-  ChatStorageService,
-  ConversationSummary,
-} from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
 
 // Helpers
 import { ChatKeyService } from './chat-key.service';
@@ -18,7 +15,10 @@ import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatOutboundService } from './chat-outbound.service';
 
 // Types
-import { ChatMessage } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  ConversationSummary,
+} from '@nx-platform-application/messenger-types';
 import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,

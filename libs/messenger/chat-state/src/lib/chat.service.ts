@@ -8,9 +8,13 @@ import {
 } from '@angular/core';
 import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 import { firstValueFrom, interval, switchMap, EMPTY } from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
+import { URN, PublicKeys } from '@nx-platform-application/platform-types';
+import {
+  DecryptedMessage,
+  ConversationSummary,
+} from '@nx-platform-application/messenger-types';
 
 // --- Services ---
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
@@ -20,11 +24,7 @@ import {
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
-import {
-  ChatStorageService,
-  DecryptedMessage,
-  ConversationSummary,
-} from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { SyncOptions } from '@nx-platform-application/messenger-cloud-sync';
@@ -40,7 +40,6 @@ import { DevicePairingService } from '@nx-platform-application/messenger-device-
 // Types
 import {
   ContactShareData,
-  MESSAGE_TYPE_READ_RECEIPT,
   ReadReceiptData,
 } from '@nx-platform-application/message-content';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';

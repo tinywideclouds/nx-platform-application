@@ -1,9 +1,7 @@
 // libs/messenger/chat-cloud-access/src/lib/models/chat-vault.interface.ts
 
-import {
-  DecryptedMessage,
-  MessageTombstone, // ✅ Updated Import (Public Domain Model)
-} from '@nx-platform-application/chat-storage';
+import { DecryptedMessage } from '@nx-platform-application/messenger-types';
+import { MessageTombstone } from '@nx-platform-application/chat-storage';
 
 export interface ChatVault {
   /** Schema version (e.g., 1) */

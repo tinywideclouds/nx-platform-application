@@ -1,4 +1,4 @@
-import { DecryptedMessage } from './chat.models';
+import { DecryptedMessage } from '@nx-platform-application/messenger-types';
 
 /**
  * Generates a text snippet preview from a message's payload.
@@ -22,7 +22,7 @@ export function generateSnippet(msg: DecryptedMessage): string {
  * Determines the preview type (text/image/file) for rendering icons in the UI.
  */
 export function getPreviewType(
-  typeIdStr: string
+  typeIdStr: string,
 ): 'text' | 'image' | 'file' | 'other' {
   if (typeIdStr === 'urn:message:type:text') return 'text';
   if (typeIdStr.includes('image')) return 'image';

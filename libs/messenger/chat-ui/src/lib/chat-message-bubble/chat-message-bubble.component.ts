@@ -4,7 +4,7 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 import { MatIconModule } from '@angular/material/icon';
-import { MessageDeliveryStatus } from '@nx-platform-application/chat-storage';
+import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
 
 export type ChatBubbleDirection = 'inbound' | 'outbound';
 

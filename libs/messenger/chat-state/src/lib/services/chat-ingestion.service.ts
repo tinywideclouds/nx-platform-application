@@ -10,10 +10,7 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
-import {
-  ChatStorageService,
-  DecryptedMessage,
-} from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
 // Adapters & Logic
@@ -29,6 +26,7 @@ import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
 import {
   EncryptedMessagePayload,
   ChatMessage,
+  DecryptedMessage,
 } from '@nx-platform-application/messenger-types';
 
 export interface IngestionResult {

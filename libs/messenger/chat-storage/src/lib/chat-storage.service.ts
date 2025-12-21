@@ -5,19 +5,18 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
+import {
+  DecryptedMessage,
+  ConversationSummary,
+  MessageDeliveryStatus,
+} from '@nx-platform-application/messenger-types';
 import { Logger } from '@nx-platform-application/console-logger';
 import { Dexie } from 'dexie';
 import {
   ConversationIndexRecord,
   MessageRecord,
 } from './db/chat-storage.models';
-import {
-  DecryptedMessage,
-  ConversationSummary,
-  MessageTombstone,
-  ConversationSyncState,
-  MessageDeliveryStatus,
-} from './chat.models';
+import { MessageTombstone, ConversationSyncState } from './chat.models';
 import { MessengerDatabase } from './db/messenger.database';
 import { ChatMergeStrategy } from './strategies/chat-merge.strategy';
 import { ChatDeletionStrategy } from './strategies/chat-deletion.strategy';

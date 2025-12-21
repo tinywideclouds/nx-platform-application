@@ -13,7 +13,6 @@ export class MessengerDatabase extends PlatformDexieService {
   settings!: Table<{ key: string; value: any }, string>;
   conversations!: Table<ConversationIndexRecord, string>;
   tombstones!: Table<DeletedMessageRecord, string>;
-  // ✅ NEW: Quarantine Table
   quarantined_messages!: Table<MessageRecord, string>;
 
   constructor() {

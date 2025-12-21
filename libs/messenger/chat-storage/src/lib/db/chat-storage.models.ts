@@ -1,7 +1,7 @@
 // libs/messenger/chat-storage/src/lib/chat-storage.models.ts
 
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
-import { MessageDeliveryStatus } from '../chat.models';
+import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
 
 // --- STORAGE MODELS (Dexie) ---
 

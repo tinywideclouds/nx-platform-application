@@ -3,11 +3,11 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';
+import { DecryptedMessage } from '@nx-platform-application/messenger-types';
 import {
   ChatStorageService,
-  DecryptedMessage,
-  ConversationSyncState, // ✅ NEW: Public Domain Model
-  MessageTombstone, // ✅ NEW: Public Domain Model
+  ConversationSyncState,
+  MessageTombstone,
 } from '@nx-platform-application/chat-storage';
 import {
   CLOUD_PROVIDERS,
@@ -134,7 +134,7 @@ export class ChatCloudService {
       const shouldDownload = await this.checkManifest(
         provider,
         manifestPath,
-        filterUrn
+        filterUrn,
       );
       if (!shouldDownload) {
         return 0; // Optimization: Skipped
@@ -164,7 +164,7 @@ export class ChatCloudService {
   private async checkManifest(
     provider: CloudStorageProvider,
     manifestPath: string,
-    filterUrn: URN
+    filterUrn: URN,
   ): Promise<boolean> {
     try {
       const manifest = await provider.downloadFile<VaultManifest>(manifestPath);
@@ -181,7 +181,7 @@ export class ChatCloudService {
   private async processVault(
     provider: CloudStorageProvider,
     vaultId: string,
-    month: Temporal.PlainYearMonth
+    month: Temporal.PlainYearMonth,
   ): Promise<void> {
     const year = String(month.year);
     const vaultPath = `${BASE_PATH}/${year}/chat_vault_${vaultId}.json`;
@@ -213,10 +213,10 @@ export class ChatCloudService {
     // A. Load Remote (Hydrating types)
     if (remoteVault) {
       remoteVault.messages.forEach((m) =>
-        combinedMessages.set(m.messageId, this.hydrateMessage(m))
+        combinedMessages.set(m.messageId, this.hydrateMessage(m)),
       );
       remoteVault.tombstones?.forEach((t) =>
-        combinedTombstones.set(t.messageId, this.hydrateTombstone(t))
+        combinedTombstones.set(t.messageId, this.hydrateTombstone(t)),
       );
     }
 
@@ -230,11 +230,11 @@ export class ChatCloudService {
     }
 
     const finalMessages = Array.from(combinedMessages.values()).sort((a, b) =>
-      a.sentTimestamp.localeCompare(b.sentTimestamp)
+      a.sentTimestamp.localeCompare(b.sentTimestamp),
     );
 
     const finalTombstones: MessageTombstone[] = Array.from(
-      combinedTombstones.values()
+      combinedTombstones.values(),
     );
 
     // 4. CHECK: Do we actually need to upload?
@@ -247,7 +247,7 @@ export class ChatCloudService {
 
     // 5. CREATE PAYLOADS
     const participants = Array.from(
-      new Set(finalMessages.map((m) => m.conversationUrn.toString()))
+      new Set(finalMessages.map((m) => m.conversationUrn.toString())),
     );
 
     const vault: ChatVault = {
@@ -276,7 +276,7 @@ export class ChatCloudService {
     ]);
 
     this.logger.info(
-      `[ChatCloud] Merged & Uploaded ${vaultPath} (${finalMessages.length} msgs, ${finalTombstones.length} tombstones)`
+      `[ChatCloud] Merged & Uploaded ${vaultPath} (${finalMessages.length} msgs, ${finalTombstones.length} tombstones)`,
     );
   }
 
@@ -303,7 +303,7 @@ export class ChatCloudService {
         while (Temporal.PlainYearMonth.compare(cursor, endMonth) <= 0) {
           const vaultId = `${cursor.year}_${String(cursor.month).padStart(
             2,
-            '0'
+            '0',
           )}`;
           // Using type assertion for private method call
           await (this as any).processVault(provider, vaultId, cursor);

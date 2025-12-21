@@ -1,6 +1,6 @@
 import { URN } from '@nx-platform-application/platform-types';
+import { DecryptedMessage } from '@nx-platform-application/messenger-types';
 import { MessageRecord } from './chat-storage.models';
-import { DecryptedMessage } from '../chat.models';
 import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })

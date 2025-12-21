@@ -11,10 +11,8 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
-import {
-  ChatStorageService,
-  DecryptedMessage,
-} from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { DecryptedMessage } from '@nx-platform-application/messenger-types';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 

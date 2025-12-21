@@ -1,7 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import { DecryptedMessage } from '@nx-platform-application/chat-storage';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  DecryptedMessage,
+} from '@nx-platform-application/messenger-types';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 /**
@@ -30,7 +32,7 @@ export class ChatMessageMapper {
       } catch (e) {
         this.logger.error(
           'ChatMessageMapper: Failed to decode text payload',
-          e
+          e,
         );
         textContent = '[Error: Unreadable message]';
       }
