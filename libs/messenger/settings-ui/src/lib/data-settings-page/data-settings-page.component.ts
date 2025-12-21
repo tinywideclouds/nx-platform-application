@@ -1,9 +1,4 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  inject,
-  signal,
-} from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -38,30 +33,41 @@ export class DataSettingsPageComponent {
   private logger = inject(Logger);
   private snackBar = inject(MatSnackBar);
 
-  // Metrics for the UI (Context for clearing)
   messageCount = this.chatService.messages;
 
-  onClearMessageHistory(): void {
-    if (
-      confirm(
-        'Are you sure you want to delete all message history on this device?'
-      )
-    ) {
-      this.logger.warn('Clear History requested.');
-      this.snackBar.open('History cleared (Simulation).', 'OK', {
-        duration: 3000,
-      });
+  async onClearMessageHistory(): Promise<void> {
+    const confirmed = confirm(
+      'Are you sure? This will permanently delete all message history from this device. If you have not synced to the cloud, this data will be lost forever.',
+    );
+
+    if (confirmed) {
+      try {
+        this.logger.warn('[DataSettings] User initiated local message wipe');
+        await this.chatService.clearLocalMessages();
+        this.snackBar.open('Local message history cleared.', 'OK', {
+          duration: 3000,
+        });
+      } catch (error) {
+        this.logger.error('[DataSettings] Failed to clear messages', error);
+        this.snackBar.open('Error clearing message history.', 'Close');
+      }
     }
   }
 
-  onClearContacts(): void {
-    if (
-      confirm('Are you sure you want to delete all contacts on this device?')
-    ) {
-      this.logger.warn('Clear History requested.');
-      this.snackBar.open('History cleared (Simulation).', 'OK', {
-        duration: 3000,
-      });
+  async onClearContacts(): Promise<void> {
+    const confirmed = confirm(
+      'Are you sure? This will delete all local contacts. Blocked users and sync history will be preserved.',
+    );
+
+    if (confirmed) {
+      try {
+        this.logger.warn('[DataSettings] User initiated local contacts wipe');
+        await this.chatService.clearLocalContacts();
+        this.snackBar.open('Local contacts cleared.', 'OK', { duration: 3000 });
+      } catch (error) {
+        this.logger.error('[DataSettings] Failed to clear contacts', error);
+        this.snackBar.open('Error clearing contacts.', 'Close');
+      }
     }
   }
 
@@ -70,7 +76,10 @@ export class DataSettingsPageComponent {
       .open(SecureLogoutDialogComponent)
       .afterClosed()
       .subscribe((confirmed) => {
-        if (confirmed) this.chatService.logout();
+        if (confirmed) {
+          this.logger.info('[DataSettings] Performing secure wipe and logout');
+          this.chatService.logout();
+        }
       });
   }
 }

@@ -1,5 +1,3 @@
-// libs/messenger/chat-storage/src/lib/chat-storage.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import {
   URN,
@@ -33,8 +31,6 @@ export class ChatStorageService {
   private readonly deletionStrategy = inject(ChatDeletionStrategy);
   private readonly mapper = inject(ChatStorageMapper);
 
-  // --- WRITE PATHS ---
-
   async saveMessage(message: DecryptedMessage): Promise<boolean> {
     const msgRecord = this.mapper.mapSmartToRecord(message);
     const conversationUrnStr = message.conversationUrn.toString();
@@ -44,18 +40,14 @@ export class ChatStorageService {
       'rw',
       [this.db.messages, this.db.conversations],
       async () => {
-        // 1. Idempotency & Transition Check
         const existingRecord = await this.db.messages.get(message.messageId);
 
         if (existingRecord) {
-          // Status Update (e.g. Pending -> Sent) is allowed
           if (existingRecord.status !== message.status) {
             this.logger.debug(
               `[ChatStorage] Updating status for ${message.messageId}: ${existingRecord.status} -> ${message.status}`,
             );
-          }
-          // True Duplicate is blocked
-          else {
+          } else {
             this.logger.warn(
               `[ChatStorage] Duplicate message ignored: ${message.messageId}`,
             );
@@ -63,10 +55,8 @@ export class ChatStorageService {
           }
         }
 
-        // 2. Save Content
         await this.db.messages.put(msgRecord);
 
-        // 3. Update Conversation Index
         const existingConv =
           await this.db.conversations.get(conversationUrnStr);
         const isNewer =
@@ -106,11 +96,6 @@ export class ChatStorageService {
       },
     );
   }
-
-  // (Removed promoteMessage / findMessageById - No longer needed)
-
-  // ... (Rest of existing read/write/delete methods remain unchanged) ...
-  // [Full file content preserved below logic changes]
 
   async markConversationAsRead(urn: URN): Promise<void> {
     const strUrn = urn.toString();
@@ -273,6 +258,20 @@ export class ChatStorageService {
   async isCloudEnabled(): Promise<boolean> {
     const r = await this.db.settings.get('chat_cloud_enabled');
     return r?.value === true;
+  }
+
+  async clearMessageHistory(): Promise<void> {
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.conversations, this.db.quarantined_messages],
+      async () => {
+        await Promise.all([
+          this.db.messages.clear(),
+          this.db.conversations.clear(),
+          this.db.quarantined_messages.clear(),
+        ]);
+      },
+    );
   }
 
   async clearDatabase(): Promise<void> {

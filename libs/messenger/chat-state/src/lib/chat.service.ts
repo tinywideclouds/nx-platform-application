@@ -1,10 +1,11 @@
 import {
   Injectable,
+  WritableSignal,
+  DestroyRef,
+  effect,
   signal,
   inject,
-  WritableSignal,
   computed,
-  DestroyRef,
 } from '@angular/core';
 import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -30,7 +31,7 @@ import {
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { SyncOptions } from '@nx-platform-application/messenger-cloud-sync';
 
 // --- Orchestrators & Workers ---
@@ -65,7 +66,7 @@ export class ChatService {
   private readonly liveService = inject(ChatLiveDataService);
   private readonly storageService = inject(ChatStorageService);
   private readonly keyService = inject(KeyCacheService);
-  private readonly contactsService = inject(ContactsStorageService);
+  private readonly contactsService = inject(ContactsStateService);
 
   private readonly syncOrchestrator = inject(ChatSyncOrchestratorService);
   private readonly conversationService = inject(ChatConversationService);
@@ -99,6 +100,8 @@ export class ChatService {
     new Map(),
   );
   public readonly readCursors = this.conversationService.readCursors;
+  private readonly messengerBlockedSet =
+    this.contactsService.getFilteredBlockedSet('messenger');
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -108,6 +111,14 @@ export class ChatService {
   constructor() {
     this.logger.info('ChatService: Orchestrator initializing...');
     this.init();
+
+    effect(() => {
+      const newSet = this.messengerBlockedSet();
+      this.blockedSet.set(newSet);
+      this.logger.debug(
+        `[ChatService] Block list updated. Size: ${newSet.size}`,
+      );
+    });
 
     this.destroyRef.onDestroy(() => {
       this.liveService.disconnect();
@@ -127,7 +138,6 @@ export class ChatService {
       if (!currentUser) throw new Error('Authentication failed.');
 
       await this.refreshIdentityMap();
-      this.initBlockListSubscription();
 
       const senderUrn = this.currentUserUrn();
       if (!senderUrn) throw new Error('No user URN found');
@@ -371,20 +381,6 @@ export class ChatService {
 
     this.myKeys.set(restoredKeys);
     await this.completeBootSequence();
-  }
-
-  private initBlockListSubscription(): void {
-    this.contactsService.blocked$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((blockedList) => {
-        const newSet = new Set<string>();
-        for (const b of blockedList) {
-          if (b.scopes.includes('all') || b.scopes.includes('messenger')) {
-            newSet.add(b.urn.toString());
-          }
-        }
-        this.blockedSet.set(newSet);
-      });
   }
 
   private initTypingOrchestration(): void {
@@ -656,12 +652,14 @@ export class ChatService {
   public async getQuarantinedMessages(urn: URN): Promise<DecryptedMessage[]> {
     return this.storageService.getQuarantinedMessages(urn);
   }
+
   public async promoteQuarantinedMessages(
     oldUrn: URN,
     newUrn: URN,
   ): Promise<void> {
     return this.storageService.promoteQuarantinedMessages(oldUrn, newUrn);
   }
+
   public async block(
     urns: URN[],
     scope: 'messenger' | 'all' = 'messenger',
@@ -676,6 +674,7 @@ export class ChatService {
       urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn)),
     );
   }
+
   public async dismissPending(
     urns: URN[],
     scope: 'messenger' | 'all' = 'messenger',
@@ -686,5 +685,17 @@ export class ChatService {
     await Promise.all(
       urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn)),
     );
+  }
+
+  public async clearLocalMessages(): Promise<void> {
+    await this.conversationService.performHistoryWipe();
+    // Also refresh the summary list (which should now be empty)
+    this.activeConversations.set([]);
+  }
+
+  public async clearLocalContacts(): Promise<void> {
+    await this.contactsService.performContactsWipe();
+    // Also refresh the summary list (which should now be empty)
+    this.activeConversations.set([]);
   }
 }

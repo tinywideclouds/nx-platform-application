@@ -398,4 +398,25 @@ export class ChatConversationService {
       isEphemeral: true,
     });
   }
+
+  /**
+   * Orchestrates a full local history wipe.
+   * Clears the Disk via storage and resets all UI signals immediately.
+   */
+  async performHistoryWipe(): Promise<void> {
+    // 1. Clear Disk
+    await this.storage.clearMessageHistory();
+
+    // 2. Clear Memory (The Signals)
+    this.messages.set([]);
+    this.genesisReached.set(false);
+    this.firstUnreadId.set(null);
+    this.selectedConversation.set(null);
+    this.isRecipientKeyMissing.set(false);
+    this.isLoadingHistory.set(false);
+
+    this.logger.info(
+      '[ChatConversationService] Local history wiped from Disk and Memory.',
+    );
+  }
 }
