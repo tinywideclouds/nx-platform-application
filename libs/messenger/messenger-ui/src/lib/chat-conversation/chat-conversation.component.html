@@ -99,3 +99,136 @@
     </div>
   </footer>
 </div>
+<div class="flex flex-col h-full bg-white relative">
+  <main
+    #messageContainer
+    [appAutoScroll]="messagesVM()"
+    [shouldForceScroll]="isMyMessage"
+    (alertVisibility)="onAlertVisibility($event)"
+    #autoScroll="appAutoScroll"
+    class="flex-grow overflow-y-auto px-4 pt-4 pb-2 space-y-2 bg-gray-50 scroll-smooth"
+  >
+    <div class="mx-auto max-w-sm min-h-full flex flex-col w-full">
+      @if (messagesVM().length === 0 && isLoading()) {
+        <div
+          class="flex-grow flex flex-col items-center justify-center text-gray-400"
+        >
+          <mat-spinner diameter="32"></mat-spinner>
+          <p class="text-xs mt-3 font-medium">Loading history...</p>
+        </div>
+      } @else if (messagesVM().length === 0) {
+        <div
+          class="flex-grow flex flex-col items-center justify-center text-gray-400"
+        >
+          <p>No messages yet.</p>
+          <p class="text-sm">Say hello! 👋</p>
+        </div>
+      } @else {
+        @if (isLoading()) {
+          <div class="flex justify-center py-2">
+            <mat-spinner diameter="20" class="opacity-50"></mat-spinner>
+          </div>
+        }
+        @for (msg of messagesVM(); track msg.id; let i = $index) {
+          @if (shouldShowDateDivider(msg, i)) {
+            <chat-message-divider
+              type="date"
+              [label]="(msg.sentTimestamp | date: 'mediumDate') || ''"
+            />
+          }
+          @if (shouldShowNewMessagesDivider(msg)) {
+            <chat-message-divider type="new-messages" label="New Messages" />
+          }
+
+          <div
+            class="flex w-full mb-1 transition-all"
+            [class.justify-end]="isMyMessage(msg)"
+            [class.justify-start]="!isMyMessage(msg)"
+          >
+            <div class="relative max-w-[85%] group">
+              <chat-message-bubble
+                [direction]="isMyMessage(msg) ? 'outbound' : 'inbound'"
+                [timestamp]="msg.sentTimestamp"
+                [status]="msg.status"
+                (retry)="onRetryMessage(msg)"
+              >
+                <chat-message-renderer
+                  [payload]="msg.contentPayload"
+                  (action)="onContentAction($event)"
+                />
+              </chat-message-bubble>
+
+              @if (getReadCursorsForMessage(msg.id).length > 0) {
+                <div
+                  class="absolute top-0 z-10 cursor-container flex flex-col space-y-1"
+                  [class.right-full]="isMyMessage(msg)"
+                  [class.mr-2]="isMyMessage(msg)"
+                  [class.left-full]="!isMyMessage(msg)"
+                  [class.ml-2]="!isMyMessage(msg)"
+                >
+                  @for (
+                    urn of getReadCursorsForMessage(msg.id);
+                    track urn.toString()
+                  ) {
+                    <div
+                      class="cursor-avatar looking-right"
+                      [matTooltip]="'Read by ' + (urn | contactName)"
+                      matTooltipPosition="above"
+                    >
+                      👀
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+      }
+
+      <div
+        class="min-h-[2rem] py-2 flex flex-col justify-end transition-all duration-200"
+      >
+        @if (showTypingIndicator()) {
+          <div class="animate-fade-in">
+            <chat-typing-indicator />
+          </div>
+        }
+      </div>
+    </div>
+  </main>
+
+  <footer
+    class="flex-shrink-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t bg-white z-10"
+  >
+    <div class="flex items-center space-x-2">
+      <input
+        type="text"
+        [value]="messageText()"
+        (input)="onMessageInput($event)"
+        (keydown.enter)="onSendMessage()"
+        placeholder="Type a message..."
+        class="flex-grow p-3 border rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+      />
+      <button
+        type="button"
+        title="send"
+        (click)="onSendMessage()"
+        class="flex-shrink-0 p-3 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+      >
+        <svg
+          class="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 13l4 4L19 7"
+          ></path>
+        </svg>
+      </button>
+    </div>
+  </footer>
+</div>

@@ -93,6 +93,7 @@ export class ChatService {
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
     new Map(),
   );
+  public readonly readCursors = this.conversationService.readCursors;
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -170,6 +171,12 @@ export class ChatService {
     }
     if (local && !server) return false;
     return true;
+  }
+
+  public async recoverFailedMessage(
+    messageId: string,
+  ): Promise<string | undefined> {
+    return this.conversationService.recoverFailedMessage(messageId);
   }
 
   public cancelLinking(): void {

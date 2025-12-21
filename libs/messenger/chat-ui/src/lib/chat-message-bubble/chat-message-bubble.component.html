@@ -1,42 +1,46 @@
 <div
-  class="flex w-full py-1"
+  class="rounded-lg p-3 shadow-sm animate-pop-in origin-center block w-fit max-w-full"
   [ngClass]="{
-    'justify-end': direction() === 'outbound',
-    'justify-start': direction() === 'inbound'
+    'bg-blue-600 text-white rounded-br-sm': direction() === 'outbound',
+    'bg-white text-gray-800 border border-gray-100 rounded-bl-sm':
+      direction() === 'inbound',
   }"
+  data-testid="chat-bubble"
 >
-  <div
-    class="max-w-[85%] lg:max-w-md rounded-lg p-3 shadow-sm animate-pop-in origin-center"
-    [ngClass]="{
-      'bg-blue-600 text-white': direction() === 'outbound',
-      'bg-white text-gray-800 border border-gray-100': direction() === 'inbound'
-    }"
-    data-testid="chat-bubble"
-  >
-    <ng-content></ng-content>
+  <ng-content></ng-content>
 
-    @if (timestamp(); as ts) {
+  @if (timestamp(); as ts) {
     <div
       class="text-[10px] text-right mt-1 select-none"
       [ngClass]="{
         'text-blue-100': direction() === 'outbound',
-        'text-gray-400': direction() === 'inbound'
+        'text-gray-400': direction() === 'inbound',
       }"
     >
-      <span>{{ ts | date : 'shortTime' }}</span>
+      <span>{{ ts | date: 'shortTime' }}</span>
 
-      @if (direction() === 'outbound') { @switch (status()) { @case ('pending'){
-      <mat-icon class="!w-3 !h-3 text-[12px] leading-3 opacity-70"
-        >schedule</mat-icon
-      >
-      } @case ('sent') {
-      <mat-icon class="!w-3 !h-3 text-[12px] leading-3">check</mat-icon>
-      } @case ('read') {
-      <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-cyan-300"
-        >done_all</mat-icon
-      >
-      } } }
+      @if (direction() === 'outbound') {
+        @switch (status()) {
+          @case ('pending') {
+            <mat-icon class="!w-3 !h-3 text-[12px] leading-3 opacity-70"
+              >schedule</mat-icon
+            >
+          }
+          @case ('sent') {
+            <mat-icon class="!w-3 !h-3 text-[12px] leading-3">check</mat-icon>
+          }
+          @case ('read') {
+            <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-cyan-300"
+              >done_all</mat-icon
+            >
+          }
+          @case ('failed') {
+            <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-red-300"
+              >error</mat-icon
+            >
+          }
+        }
+      }
     </div>
-    }
-  </div>
+  }
 </div>

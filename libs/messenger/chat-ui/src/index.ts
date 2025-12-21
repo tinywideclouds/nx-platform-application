@@ -5,3 +5,6 @@ export * from './lib/chat-typing-indicator/chat-typing-indicator.component';
 export * from './lib/chat-message-divider/chat-message-divider.component';
 export * from './lib/chat-message-input/chat-message-input.component';
 export * from './lib/message-renderer/message-renderer.component';
+
+export * from './lib/pipes/contact-initials.pipe';
+export * from './lib/pipes/contact-name.pipe';

@@ -1,3 +1,5 @@
+// libs/messenger/chat-ui/src/lib/chat-conversation/chat-conversation.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
@@ -14,7 +16,9 @@ import { map } from 'rxjs/operators';
 import { CommonModule, DatePipe } from '@angular/common';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { Temporal } from '@js-temporal/polyfill';
+import { URN } from '@nx-platform-application/platform-types';
 
 // DOMAIN STATE & LOGIC
 import { ChatService } from '@nx-platform-application/chat-state';
@@ -22,7 +26,10 @@ import {
   MessageContentParser,
   ContentPayload,
 } from '@nx-platform-application/message-content';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  MessageDeliveryStatus,
+} from '@nx-platform-application/messenger-types';
 
 // UI COMPONENTS
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
@@ -30,10 +37,11 @@ import {
   ChatMessageBubbleComponent,
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
-  MessageRendererComponent, // The new Dumb Renderer
+  MessageRendererComponent,
+  ContactNamePipe,
 } from '@nx-platform-application/chat-ui';
 
-// View Model: Enhances the ChatMessage with the parsed payload
+// View Model
 type MessageViewModel = ChatMessage & {
   contentPayload: ContentPayload | null;
 };
@@ -45,11 +53,13 @@ type MessageViewModel = ChatMessage & {
     CommonModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
+    MatTooltipModule,
     AutoScrollDirective,
     ChatMessageBubbleComponent,
     ChatMessageDividerComponent,
     ChatTypingIndicatorComponent,
     MessageRendererComponent,
+    ContactNamePipe,
   ],
   providers: [DatePipe],
   templateUrl: './chat-conversation.component.html',
@@ -71,32 +81,28 @@ export class ChatConversationComponent {
   isLoading = this.chatService.isLoadingHistory;
   firstUnreadId = this.chatService.firstUnreadId;
   typingActivity = this.chatService.typingActivity;
+  readCursors = this.chatService.readCursors;
 
-  // Signal for Input (No Reactive Forms)
+  // Signal for Input
   messageText = signal('');
   showNewMessageIndicator = signal(false);
 
-  // Timer for Typing Indicators (using Temporal)
+  // Timer for Typing Indicators
   now = toSignal(interval(1000).pipe(map(() => Temporal.Now.instant())), {
     initialValue: Temporal.Now.instant(),
   });
 
   // --- COMPUTED VIEW MODEL ---
-  // The crucial bridge between Raw Data and Dumb UI
   messagesVM = computed<MessageViewModel[]>(() => {
     return this.rawMessages().map((msg) => {
       let contentPayload: ContentPayload | null = null;
 
-      // SAFETY CHECK: Ensure bytes exist
       if (msg.payloadBytes) {
         const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-
-        // Filter: We only render 'content', not signals
         if (parsed.kind === 'content') {
           contentPayload = parsed.payload;
         }
       }
-      // Optional: Handle missing bytes logic (maybe return a specialized 'error' payload?)
 
       return {
         ...msg,
@@ -106,7 +112,6 @@ export class ChatConversationComponent {
   });
 
   constructor() {
-    // TTL Logic for New Message Divider
     effect((onCleanup) => {
       const id = this.firstUnreadId();
       if (id) {
@@ -121,16 +126,20 @@ export class ChatConversationComponent {
 
   // --- LOGIC ---
 
+  getReadCursorsForMessage(msgId: string): URN[] {
+    const map = this.readCursors();
+    return map.get(msgId) || [];
+  }
+
   showTypingIndicator = computed(() => {
     const urn = this.selectedConversation();
     if (!urn) return false;
 
     const activityMap = this.typingActivity();
-    const lastActive = activityMap.get(urn.toString()); // lastActive is Temporal.Instant
+    const lastActive = activityMap.get(urn.toString());
 
     if (!lastActive) return false;
 
-    // Temporal Calculation
     try {
       const duration = this.now().since(lastActive);
       return duration.total({ unit: 'millisecond' }) < 5000;
@@ -164,8 +173,18 @@ export class ChatConversationComponent {
 
   // --- ACTIONS ---
 
+  async onRetryMessage(msg: MessageViewModel): Promise<void> {
+    if (msg.status !== 'failed') return;
+
+    // Delegate recovery to service
+    const restoredText = await this.chatService.recoverFailedMessage(msg.id);
+
+    if (restoredText) {
+      this.messageText.set(restoredText);
+    }
+  }
+
   onContentAction(urnString: string): void {
-    // Smart component handles navigation
     this.router.navigate(['/contacts/edit', urnString]);
   }
 

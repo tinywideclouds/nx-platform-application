@@ -30,6 +30,7 @@ import {
   ReadReceiptData,
   MessageTypingIndicastor,
   ContactShareData,
+  MessageContentParser,
 } from '@nx-platform-application/message-content';
 import { PrivateKeys } from '@nx-platform-application/messenger-crypto-bridge';
 
@@ -95,6 +96,7 @@ export class ChatConversationService {
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
   private operationLock = Promise.resolve();
+  private contentParser = inject(MessageContentParser);
 
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     return this.repository.getConversationSummaries();
@@ -274,6 +276,34 @@ export class ChatConversationService {
       this.messages.update((current) => [...current, ...relevant]);
       this.storage.markConversationAsRead(activeConvo);
     }
+  }
+
+  async recoverFailedMessage(messageId: string): Promise<string | undefined> {
+    const targetMsg = this.messages().find((m) => m.id === messageId);
+    if (!targetMsg) return undefined;
+
+    // 1. Extract Text (Source of Truth logic)
+    let textToRestore: string | undefined = targetMsg.textContent;
+
+    if (!textToRestore && targetMsg.payloadBytes) {
+      // Fallback: Re-parse the raw bytes if the summary is missing
+      const parsed = this.contentParser.parse(
+        targetMsg.typeId,
+        targetMsg.payloadBytes,
+      );
+      if (parsed.kind === 'content' && parsed.payload.kind === 'text') {
+        textToRestore = parsed.payload.text;
+      }
+    }
+
+    // 2. Delete the Failed Record
+    // We await this to ensure the "Failed" bubble disappears before we refill the input
+    await this.storage.deleteMessage(messageId);
+
+    // 3. Update Local State (Optimistic removal)
+    this.messages.update((msgs) => msgs.filter((m) => m.id !== messageId));
+
+    return textToRestore;
   }
 
   private async processReadReceipts(
