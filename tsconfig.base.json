@@ -47,8 +47,14 @@
       "@nx-platform-application/contacts-cloud-access": [
         "libs/contacts/cloud-access/src/index.ts"
       ],
+      "@nx-platform-application/contacts-state": [
+        "libs/contacts/state/src/index.ts"
+      ],
       "@nx-platform-application/contacts-storage": [
         "libs/contacts/contacts-storage/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-types": [
+        "libs/contacts/types/src/index.ts"
       ],
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
@@ -61,6 +67,15 @@
       ],
       "@nx-platform-application/messenger-crypto-bridge": [
         "libs/messenger/crypto-bridge/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-device-notifications": [
+        "libs/messenger/device-notifications/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-device-pairing": [
+        "libs/messenger/device-pairing/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-identity-adapter": [
+        "libs/messenger/identity-adapter/src/index.ts"
       ],
       "@nx-platform-application/messenger-key-access": [
         "libs/messenger/key-access/src/index.ts"
@@ -127,15 +142,6 @@
       ],
       "@nx-platform-application/platform-web-key-storage": [
         "libs/platform/ng/web-key-storage/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-device-pairing": [
-        "libs/messenger/device-pairing/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-identity-adapter": [
-        "libs/messenger/identity-adapter/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-device-notifications": [
-        "libs/messenger/device-notifications/src/index.ts"
       ]
     }
   },

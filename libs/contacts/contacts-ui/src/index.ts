@@ -12,4 +12,7 @@ export * from './lib/contact-detail/contact-detail.component';
 export * from './lib/contacts-settings-page/contacts-settings-page.component';
 export * from './lib/contacts-security/contacts-security.component';
 
+export * from './lib/pipes/contact-name.pipe';
+export * from './lib/pipes/contact-initials.pipe';
+
 export * from '@nx-platform-application/contacts-storage';

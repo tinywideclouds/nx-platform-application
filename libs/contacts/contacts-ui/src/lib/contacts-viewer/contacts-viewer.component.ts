@@ -14,10 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTabChangeEvent } from '@angular/material/tabs';
 
 // LOGIC & DATA
-import {
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 
 // LAYOUT & UI
@@ -40,8 +37,8 @@ import { ContactPageComponent } from '../contact-page/contact-page.component';
     ContactsSidebarComponent,
     ContactDetailComponent,
     ContactPageComponent,
-    ContactGroupPageComponent
-],
+    ContactGroupPageComponent,
+  ],
   templateUrl: './contacts-viewer.component.html',
   styleUrl: './contacts-viewer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

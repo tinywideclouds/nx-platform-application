@@ -7,7 +7,7 @@ import {
   output,
 } from '@angular/core';
 
-import { Contact } from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-types';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({

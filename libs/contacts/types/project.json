@@ -1,0 +1,30 @@
+{
+  "name": "contacts-types",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contacts/types/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:contacts"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/contacts/types",
+        "configFile": "libs/contacts/types/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/contacts/types/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/contacts/types"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

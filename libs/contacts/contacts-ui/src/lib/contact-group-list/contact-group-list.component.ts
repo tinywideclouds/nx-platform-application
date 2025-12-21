@@ -5,7 +5,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 
-import { ContactGroup } from '@nx-platform-application/contacts-storage';
+import { ContactGroup } from '@nx-platform-application/contacts-types';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
 
 @Component({

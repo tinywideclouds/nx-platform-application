@@ -4,10 +4,9 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 
-import {
-  ContactsStorageService,
-  PendingIdentity,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+
+import { PendingIdentity } from '@nx-platform-application/contacts-types';
 
 import { PendingListComponent } from '../pending-list/pending-list.component';
 

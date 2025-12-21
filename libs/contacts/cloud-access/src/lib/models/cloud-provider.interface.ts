@@ -1,7 +1,4 @@
-import {
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 
 export interface CloudBackupMetadata {
   /** The provider-specific unique ID (e.g., Google Drive File ID) */
@@ -54,7 +51,7 @@ export interface CloudStorageProvider {
    */
   uploadBackup(
     payload: BackupPayload,
-    filename: string
+    filename: string,
   ): Promise<CloudBackupMetadata>;
 
   /**

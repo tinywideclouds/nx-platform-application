@@ -6,10 +6,10 @@ It is designed to be the single source of truth for the user's **Social Graph** 
 
 ### **✨ Features**
 
-- **Reactive API:** Provides RxJS Observable streams (`contacts$`, `pending$`, `blocked$`) powered by `liveQuery` that update instantly across the app.
+- **Reactive API:** Provides RxJS Observable streams (`contacts$`, `pending$`, `blocked$`) powered by `liveQuery`.
 - **Offline-First:** Built on **Dexie.js**, ensuring the app works perfectly without a network connection.
 - **Gatekeeper Logic:** Manages the local "Allow/Deny" lists used by the Messenger to filter incoming traffic.
-- **Identity Resolution:** Maps mutable "Contacts" to immutable "Federated Identities" for secure encryption.
+- **Type Safety:** Implements domain interfaces from `@nx-platform-application/contacts-types`.
 
 ---
 
@@ -17,55 +17,54 @@ It is designed to be the single source of truth for the user's **Social Graph** 
 
 Beyond simple address book features, this library manages the security tables required for the "Sealed Sender" model:
 
-#### 1. Identity Linking (`identity_links`)
+#### 1. Identity Linking (`links`)
+
 Maps a local **Contact** to a verified **Federated Identity**.
-* **Purpose:** Allows the user to securely message "Bob" (Contact) while ensuring encryption targets `urn:auth:google:123` (Identity).
-* **Flow:** Created automatically during a "Handshake" or QR Code scan.
 
-#### 2. The Block List (`blocked_identities`)
+- **Purpose:** Allows the user to securely message "Bob" (Contact) while ensuring encryption targets `urn:auth:google:123` (Identity).
+- **Flow:** Created automatically during a "Handshake" or QR Code scan.
+
+#### 2. The Block List (`blocked`)
+
 A persistent deny-list of Sender URNs.
-* **Usage:** The `ChatIngestionService` checks this table for every incoming message. If a match is found, the message is silently dropped before processing.
 
-#### 3. The Waiting Room (`pending_identities`)
+- **Usage:** The `ChatIngestionService` checks this table for every incoming message. If a match is found, the message is silently dropped before processing.
+
+#### 3. The Waiting Room (`pending`)
+
 A holding area for message senders who are not yet in the Address Book.
-* **Usage:** Unknown senders are quarantined here until the user clicks "Accept" or "Block".
-* **Vouchers:** Supports "Vouched By" logic (e.g., "Alice introduced you to Bob").
 
----
-
-### **🚀 ContactsStorageService API**
-
-The `ContactsStorageService` is provided in `'root'`.
-
-#### **Reactive Streams (Live Data)**
-
-- **`contacts$: Observable<Contact[]>`**: All contacts, ordered by alias.
-- **`favorites$: Observable<Contact[]>`**: Filtered list of favorites.
-- **`pending$: Observable<PendingIdentity[]>`**: Live stream of the "Waiting Room" for UI notifications.
-- **`blocked$: Observable<BlockedIdentity[]>`**: Live stream of blocked users for Settings management.
-
-#### **Gatekeeper Actions**
-
-- **`addToPending(urn: URN, vouchedBy?: URN)`**: Quarantines an identity.
-- **`blockIdentity(urn: URN, reason?: string)`**: Bans an identity.
-- **`unblockIdentity(urn: URN)`**: Restores access.
-- **`linkIdentityToContact(contactId: URN, authUrn: URN)`**: Upgrades a connection to Trusted status.
-
-#### **Contact Management (CRUD)**
-
-- **`saveContact(contact)`**: Creates or updates a contact.
-- **`getContact(id)`**: Retrieves a contact by URN.
-- **`findByEmail(email)` / `findByPhone(phone)`**: Fast index lookups.
-- **`bulkUpsert(contacts)`**: Transaction-safe method for syncing.
+- **Usage:** Unknown senders are quarantined here until the user clicks "Accept" or "Block".
+- **Vouchers:** Supports "Vouched By" logic (e.g., "Alice introduced you to Bob").
 
 ---
 
 ### **🗄️ Database Schema**
 
-The `ContactsDatabase` class defines the Dexie schema (v4).
+The `ContactsDatabase` class defines the Dexie schema (v3).
 
-- **`contacts`**: `id, alias, isFavorite, *phoneNumbers, *emailAddresses`
-- **`contactGroups`**: `id, name, *contactIds`
-- **`identity_links`**: `++id, contactId, authUrn`
-- **`blocked_identities`**: `++id, urn, blockedAt`
-- **`pending_identities`**: `++id, urn, vouchedBy, firstSeenAt`
+| Table            | Primary Key | Indexes                                              | Description                       |
+| :--------------- | :---------- | :--------------------------------------------------- | :-------------------------------- |
+| **`contacts`**   | `id`        | `alias`, `email`, `*emailAddresses`, `*phoneNumbers` | The main address book.            |
+| **`groups`**     | `id`        | `name`, `*contactIds`                                | User-defined collections.         |
+| **`links`**      | `++id`      | `contactId`, `authUrn`                               | Maps Contact ID <-> Auth URN.     |
+| **`blocked`**    | `++id`      | `urn`, `blockedAt`                                   | The Gatekeeper deny-list.         |
+| **`pending`**    | `++id`      | `urn`, `firstSeenAt`                                 | The "Waiting Room" for strangers. |
+| **`tombstones`** | `urn`       | `deletedAt`                                          | Tracks deletions for Sync.        |
+
+---
+
+### **🚀 API**
+
+The `ContactsStorageService` exposes RxJS streams and Promise-based CRUD methods.
+
+```typescript
+// Live Data
+contacts$: Observable<Contact[]>;
+blocked$: Observable<BlockedIdentity[]>;
+
+// Actions
+blockIdentity(urn: URN): Promise<void>;
+saveContact(contact: Contact): Promise<void>;
+
+```

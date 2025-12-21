@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
 import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
+import { ContactTombstone } from '@nx-platform-application/contacts-types'; // ✅ Import from new types lib
 import {
   StorableContact,
   StorableGroup,
   StorableIdentityLink,
   StorablePendingIdentity,
   StorableBlockedIdentity,
-  ContactTombstone,
 } from '../models/contacts';
 
 @Injectable({ providedIn: 'root' })
@@ -22,9 +22,9 @@ export class ContactsDatabase extends PlatformDexieService {
   constructor() {
     super('contacts');
 
-    // VERSION 3: Fix Index Syntax for Arrays (* instead of [])
+    // VERSION 3
     this.version(3).stores({
-      // CHANGE: Use * for MultiEntry indexes (arrays of strings)
+      // Use * for MultiEntry indexes (arrays of strings)
       contacts: 'id, alias, email, *emailAddresses, *phoneNumbers, isFavorite',
 
       groups: 'id, name, *contactIds',

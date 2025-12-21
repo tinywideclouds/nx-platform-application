@@ -38,8 +38,9 @@ import {
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
   MessageRendererComponent,
-  ContactNamePipe,
 } from '@nx-platform-application/chat-ui';
+
+import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
 
 // View Model
 type MessageViewModel = ChatMessage & {

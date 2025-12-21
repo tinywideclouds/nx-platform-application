@@ -87,3 +87,7 @@ nx g @nx/angular:library --name=messenger-device-pairing --directory=libs/messen
 
 nx g @nx/angular:library --name=messenger-device-notifications --directory=libs/messenger/device-notifications --tags="scope:messenger"   
 
+nx g @nx/angular:library --name=contacts-types --directory=libs/contacts/types --tags="scope:contacts"
+
+nx g @nx/angular:library --name=contacts-state --directory=libs/contacts/state --tags="scope:contacts"
+

@@ -17,13 +17,13 @@ import {
   FormArray,
   Validators,
 } from '@angular/forms';
-import { Contact } from '@nx-platform-application/contacts-storage';
-import { URN } from '@nx-platform-application/platform-types'; // <-- Import URN
+import { Contact } from '@nx-platform-application/contacts-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips'; // <-- Import Chips for display
+import { MatChipsModule } from '@angular/material/chips';
 
 @Component({
   selector: 'contacts-form',
@@ -75,11 +75,11 @@ export class ContactFormComponent {
         this.form.patchValue(currentContact);
         this.phoneNumbers.clear();
         currentContact.phoneNumbers.forEach((phone) =>
-          this.addPhoneNumber(phone)
+          this.addPhoneNumber(phone),
         );
         this.emailAddresses.clear();
         currentContact.emailAddresses.forEach((email) =>
-          this.addEmailAddress(email)
+          this.addEmailAddress(email),
         );
       } else {
         this.form.reset({
@@ -122,7 +122,7 @@ export class ContactFormComponent {
   }
   addEmailAddress(email = ''): void {
     this.emailAddresses.push(
-      this.fb.control(email, [Validators.required, Validators.email])
+      this.fb.control(email, [Validators.required, Validators.email]),
     );
   }
   removeEmailAddress(index: number): void {

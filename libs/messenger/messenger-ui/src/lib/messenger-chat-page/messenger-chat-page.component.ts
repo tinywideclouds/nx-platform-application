@@ -26,13 +26,12 @@ import { MessageRequestReviewComponent } from '../message-request-review/message
 
 // SERVICES
 import { ChatService } from '@nx-platform-application/chat-state';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import {
-  ContactsStorageService,
   Contact,
   ContactGroup,
   PendingIdentity,
-  ServiceContact,
-} from '@nx-platform-application/contacts-storage';
+} from '@nx-platform-application/contacts-types';
 import {
   URN,
   ISODateTimeString,
@@ -63,8 +62,8 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     FeaturePlaceholderComponent,
     ContactsSidebarComponent,
     ListFilterComponent,
-    MessageRequestReviewComponent
-],
+    MessageRequestReviewComponent,
+  ],
   templateUrl: './messenger-chat-page.component.html',
   styleUrl: './messenger-chat-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -84,9 +83,9 @@ export class MessengerChatPageComponent {
    */
   sidebarMode = toSignal(
     this.route.queryParams.pipe(
-      map((params) => (params['sidebar'] === 'new' ? 'new' : 'list'))
+      map((params) => (params['sidebar'] === 'new' ? 'new' : 'list')),
     ),
-    { initialValue: 'list' }
+    { initialValue: 'list' },
   );
 
   searchQuery = signal<string>('');
@@ -289,7 +288,7 @@ export class MessengerChatPageComponent {
 
       // 1. Generate New Contact Identity
       const newContactId = URN.parse(
-        `urn:contacts:user:${crypto.randomUUID()}`
+        `urn:contacts:user:${crypto.randomUUID()}`,
       );
 
       // 2. Create Skeleton Contact from Handle
@@ -331,7 +330,7 @@ export class MessengerChatPageComponent {
         ['/messenger/contacts/edit', newContactId.toString()],
         {
           queryParams: { returnUrl: '/messenger/conversations' },
-        }
+        },
       );
     } catch (e) {
       console.error('Failed to accept request', e);

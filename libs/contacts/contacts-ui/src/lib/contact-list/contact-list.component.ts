@@ -5,7 +5,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 
-import { Contact } from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-types';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
 
 @Component({

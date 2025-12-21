@@ -1,18 +1,19 @@
 import { TestBed } from '@angular/core/testing';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ContactsStorageService } from './contacts.service';
 import { ContactsDatabase } from './db/contacts.database';
 import {
-  Contact,
-  ContactGroup,
   StorableContact,
   StorableGroup,
-  ServiceContact,
   StorableServiceContact,
-  StorableIdentityLink,
-  StorablePendingIdentity,
   StorableBlockedIdentity, // New
 } from './models/contacts';
+
+import {
+  Contact,
+  ContactGroup,
+  ServiceContact,
+} from '@nx-platform-application/contacts-types';
 import {
   ISODateTimeString,
   URN,
@@ -219,7 +220,7 @@ describe('ContactsStorageService', () => {
           scopes: ['all'],
           reason: 'spam',
           blockedAt: expect.any(String),
-        })
+        }),
       );
     });
 
@@ -235,7 +236,7 @@ describe('ContactsStorageService', () => {
           scopes: ['messenger'],
           // Should preserve previous reason if not provided
           reason: 'spam',
-        })
+        }),
       );
     });
 
@@ -260,7 +261,7 @@ describe('ContactsStorageService', () => {
 
       expect(mockDbBlockedTable.where).toHaveBeenCalledWith('urn');
       expect(mockDbBlockedTable.equals).toHaveBeenCalledWith(
-        mockBlockedUrn.toString()
+        mockBlockedUrn.toString(),
       );
       expect(mockDbBlockedTable.bulkDelete).toHaveBeenCalledWith([1, 2]);
     });

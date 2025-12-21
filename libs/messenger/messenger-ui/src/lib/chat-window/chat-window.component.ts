@@ -21,11 +21,8 @@ import { filter, map } from 'rxjs/operators';
 
 // --- Services ---
 import { ChatService } from '@nx-platform-application/chat-state';
-import {
-  ContactsStorageService,
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 
@@ -62,13 +59,13 @@ export class ChatWindowComponent {
         return url.endsWith('/details')
           ? ('details' as ChatWindowMode)
           : ('chat' as ChatWindowMode);
-      })
+      }),
     ),
     {
       initialValue: this.router.url.endsWith('/details')
         ? ('details' as ChatWindowMode)
         : ('chat' as ChatWindowMode),
-    }
+    },
   );
 
   // --- 2. Data Loading Logic ---
@@ -116,7 +113,7 @@ export class ChatWindowComponent {
 
     if (urn.entityType === 'group') {
       const group = this.groups().find(
-        (g) => g.id.toString() === urn.toString()
+        (g) => g.id.toString() === urn.toString(),
       );
       if (!group) return { urn, name: 'Unknown Group', initials: 'G' };
       return { urn, name: group.name, initials: 'G' };

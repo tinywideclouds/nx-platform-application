@@ -1,0 +1,124 @@
+Here are the README files for the new architecture.
+
+### 1. `libs/contacts/types/README.md`
+
+This library is the foundation. It contains pure interfaces with zero dependencies, ensuring circular dependencies are impossible.
+
+```markdown
+# 🧩 @nx-platform-application/contacts-types
+
+This library contains the **Pure Domain Models** for the Contacts domain.
+It has **zero dependencies** and serves as the shared language between the Storage, State, and UI layers.
+
+### **📦 Key Interfaces**
+
+- **`Contact`**: The full domain object (User profile + local metadata).
+- **`ContactGroup`**: A named collection of Contact URNs.
+- **`ServiceContact`**: Represents a linked profile from a specific service (e.g., Messenger, Email).
+- **`IdentityLink`**: Maps a local Contact to a verified Federated Identity (Auth URN).
+
+### **🛡️ Security Models**
+
+- **`BlockedIdentity`**: Represents an entity banned by the user (Gatekeeper).
+- **`PendingIdentity`**: Represents an unknown sender waiting in the "Waiting Room".
+
+### **usage**
+Import these types in other libraries to ensure consistent data structures without coupling implementation details.
+
+```typescript
+import { Contact, BlockedIdentity } from '@nx-platform-application/contacts-types';
+
+```
+
+```
+
+### 2. `libs/contacts/state/README.md`
+This is the new "Brain" of the domain.
+
+```markdown
+# 🧠 @nx-platform-application/contacts-state
+
+This library provides the **Reactive State Layer** for Contacts.
+It acts as the **Source of Truth** for the application, bridging the gap between the asynchronous database (`contacts-storage`) and the synchronous UI.
+
+### **✨ Features**
+
+- **Synchronous Signals:** Converts async Dexie streams into Angular Signals (`contacts`, `favorites`, `blocked`) for instant template rendering.
+- **O(1) Lookups:** Maintains an internal Map for high-performance identity resolution.
+- **Name Resolution:** Provides the `resolveContactName(urn)` API to fix "UUID display" issues in the UI.
+
+### **🚀 ContactsStateService API**
+
+#### **Read-Only Signals**
+
+```typescript
+// The live list of all contacts
+readonly contacts: Signal<Contact[]>;
+
+// The live list of blocked identities
+readonly blocked: Signal<BlockedIdentity[]>;
+
+```
+
+#### **Resolvers (The "Magic" Helpers)**
+
+Use these in Pipes or Components to turn a URN into a human-readable string instantly.
+
+```typescript
+// Returns a Signal that updates if the contact is renamed
+resolveContactName(urn: URN | string): Signal<string>;
+
+// Returns a Signal for the full object
+resolveContact(urn: URN | string): Signal<Contact | undefined>;
+
+```
+
+#### **Actions**
+
+Delegate write operations to the underlying storage while keeping state consistent.
+
+```typescript
+blockIdentity(urn: URN): Promise<void>;
+unblockIdentity(urn: URN): Promise<void>;
+
+```
+
+```
+
+### 3. `libs/contacts/contacts-ui/README.md`
+This explains the presentation layer and the new Smart Pipes.
+
+```markdown
+# 🎨 @nx-platform-application/contacts-ui
+
+This library contains the **Presentation Components** and **Pipes** for the Contacts domain.
+
+### **🛠️ Components**
+
+- **`contacts-viewer`**: The master-detail layout for managing the address book.
+- **`contacts-sidebar`**: The navigation list.
+- **`contact-detail`**: The editing form.
+
+### **⚡ Smart Pipes**
+
+These pipes inject `ContactsStateService` to perform instant lookups.
+
+- **`contactName`**: Resolves a URN to a Display Name (Alias -> First Name -> Fallback).
+  ```html
+  <span>{{ message.senderId | contactName }}</span>
+
+```
+
+* **`contactInitials`**: Generates avatars (e.g., "AS" for Alice Smith).
+```html
+<div class="avatar">{{ message.senderId | contactInitials }}</div>
+
+```
+
+
+
+### **⚠️ Note on Performance**
+
+The pipes are marked `pure: false` to allow them to react to Signal updates from the State layer. This ensures that if a user is renamed, all Chat headers update immediately.
+
+

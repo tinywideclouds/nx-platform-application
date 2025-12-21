@@ -21,11 +21,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ListFilterComponent } from '@nx-platform-application/platform-ui-toolkit';
 
 // DOMAIN
-import {
-  ContactsStorageService,
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 
 // UI COMPONENTS
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
@@ -44,8 +41,8 @@ import { ContactGroupListComponent } from '../contact-group-list/contact-group-l
     ContactsPageToolbarComponent,
     ContactListComponent,
     ContactGroupListComponent,
-    ListFilterComponent
-],
+    ListFilterComponent,
+  ],
   templateUrl: './contacts-sidebar.component.html',
   styleUrl: './contacts-sidebar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

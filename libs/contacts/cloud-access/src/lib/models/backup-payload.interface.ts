@@ -4,7 +4,7 @@ import {
   Contact,
   ContactGroup,
   BlockedIdentity,
-} from '@nx-platform-application/contacts-storage';
+} from '@nx-platform-application/contacts-types';
 
 export interface BackupPayload {
   version: number;

@@ -6,11 +6,8 @@ import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { map, switchMap } from 'rxjs/operators';
 import { from, of, Observable } from 'rxjs';
 
-import {
-  ContactsStorageService,
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
   ISODateTimeString,
   URN,
@@ -41,19 +38,19 @@ export class ContactDetailComponent {
   // --- Internal State ---
 
   private contactStream$: Observable<Contact | null> = toObservable(
-    this.contactId
+    this.contactId,
   ).pipe(
     switchMap((id) => {
       return from(this.contactsService.getContact(id)).pipe(
-        map((existing) => existing ?? this.createEmptyContact(id))
+        map((existing) => existing ?? this.createEmptyContact(id)),
       );
-    })
+    }),
   );
 
   contactToEdit = toSignal(this.contactStream$, { initialValue: null });
 
   private linkedIdentitiesStream$: Observable<URN[]> = toObservable(
-    this.contactId
+    this.contactId,
   ).pipe(switchMap((id) => from(this.contactsService.getLinkedIdentities(id))));
 
   linkedIdentities = toSignal(this.linkedIdentitiesStream$, {
@@ -61,7 +58,7 @@ export class ContactDetailComponent {
   });
 
   private groupsForContactStream$: Observable<ContactGroup[]> = toObservable(
-    this.contactId
+    this.contactId,
   ).pipe(switchMap((id) => from(this.contactsService.getGroupsForContact(id))));
 
   groupsForContact = toSignal(this.groupsForContactStream$, {

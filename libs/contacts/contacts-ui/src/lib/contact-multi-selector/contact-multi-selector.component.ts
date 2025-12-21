@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { Contact } from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-types';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 // --- 1. URN import is no longer needed ---
 
@@ -55,7 +55,7 @@ export class ContactMultiSelectorComponent {
         contact.alias.toLowerCase().includes(filter) ||
         contact.firstName.toLowerCase().includes(filter) ||
         contact.surname.toLowerCase().includes(filter) ||
-        contact.email.toLowerCase().includes(filter)
+        contact.email.toLowerCase().includes(filter),
     );
   });
 

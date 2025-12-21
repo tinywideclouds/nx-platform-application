@@ -6,7 +6,7 @@ import {
   ContactGroup,
   PendingIdentity,
   IdentityLink,
-} from '@nx-platform-application/contacts-storage';
+} from '@nx-platform-application/contacts-types';
 import {
   ISODateTimeString,
   URN,
@@ -113,7 +113,7 @@ export class MockContactsStorageService {
   async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
     // Simple mock logic: check if contactId string is in the group's contactIds list
     return MOCK_GROUPS.filter((g) =>
-      g.contactIds.some((id) => id.toString() === contactId.toString())
+      g.contactIds.some((id) => id.toString() === contactId.toString()),
     );
   }
 

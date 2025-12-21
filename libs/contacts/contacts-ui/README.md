@@ -18,23 +18,23 @@ The library's public API is exposed through its `index.ts` file and consists of 
 
 The library re-exports the entire public API of the data-access layer.
 
-| Export | Type | Description |
-| :--- | :--- | :--- |
-| `ContactsStorageService` | Service | The 'root' provided service for all Dexie.js database operations. |
-| `ContactsDatabase` | Service | The core Dexie.js database definition. |
-| `Contact` | Interface | The data model for a single contact. |
-| `ContactGroup` | Interface | The data model for a contact group. |
+| Export                   | Type      | Description                                                       |
+| :----------------------- | :-------- | :---------------------------------------------------------------- |
+| `ContactsStorageService` | Service   | The 'root' provided service for all Dexie.js database operations. |
+| `ContactsDatabase`       | Service   | The core Dexie.js database definition.                            |
+| `Contact`                | Interface | The data model for a single contact.                              |
+| `ContactGroup`           | Interface | The data model for a contact group.                               |
 
 ### Smart / Container Components
 
 These are "page-level" components intended to be loaded by the Angular Router or used as major orchestrators.
 
-| Component | Selector | Role & Description |
-| :--- | :--- | :--- |
-| `ContactsViewerComponent` | `contacts-viewer` | **Main List Page.** Acts as the shell for the contacts feature. Handles routing state, tab navigation, and layout. |
-| `ContactsSidebarComponent` | `contacts-sidebar` | **Navigation & List Container.** Orchestrates the "Contacts", "Groups", and "Security" tabs. It consumes live data streams and handles selection events. |
-| `ContactPageComponent` | `contacts-page` | **Add/Edit Contact Page.** Manages the "add" vs. "edit" state for a single `Contact` based on the `:id` route param. |
-| `ContactGroupPageComponent`| `contacts-group-page`| **Add/Edit Group Page.** Manages the "add" vs. "edit" state for a `ContactGroup` based on the `:id` route param. |
+| Component                   | Selector              | Role & Description                                                                                                                                       |
+| :-------------------------- | :-------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ContactsViewerComponent`   | `contacts-viewer`     | **Main List Page.** Acts as the shell for the contacts feature. Handles routing state, tab navigation, and layout.                                       |
+| `ContactsSidebarComponent`  | `contacts-sidebar`    | **Navigation & List Container.** Orchestrates the "Contacts", "Groups", and "Security" tabs. It consumes live data streams and handles selection events. |
+| `ContactPageComponent`      | `contacts-page`       | **Add/Edit Contact Page.** Manages the "add" vs. "edit" state for a single `Contact` based on the `:id` route param.                                     |
+| `ContactGroupPageComponent` | `contacts-group-page` | **Add/Edit Group Page.** Manages the "add" vs. "edit" state for a `ContactGroup` based on the `:id` route param.                                         |
 
 ### Dumb / Presentational Components
 
@@ -42,29 +42,29 @@ These components are reusable, state-less, and receive all data via `input()` an
 
 #### Form Components
 
-| Component | Selector | Role & Description |
-| :--- | :--- | :--- |
-| `ContactFormComponent` | `contacts-form` | **Contact Edit Form.** A full-featured `ReactiveForm` for `Contact` properties. Displays linked identities (federated logins). |
-| `ContactGroupFormComponent`| `contacts-group-form`| **Group Edit Form.** A `ReactiveForm` for `ContactGroup` properties. Composes the `contacts-multi-selector`. |
+| Component                   | Selector              | Role & Description                                                                                                             |
+| :-------------------------- | :-------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| `ContactFormComponent`      | `contacts-form`       | **Contact Edit Form.** A full-featured `ReactiveForm` for `Contact` properties. Displays linked identities (federated logins). |
+| `ContactGroupFormComponent` | `contacts-group-form` | **Group Edit Form.** A `ReactiveForm` for `ContactGroup` properties. Composes the `contacts-multi-selector`.                   |
 
 #### List & Gatekeeper Components
 
-| Component | Selector | Role & Description |
-| :--- | :--- | :--- |
-| `ContactListComponent` | `contacts-list` | Renders a list of contacts with selection support. |
-| `ContactGroupListComponent`| `contacts-group-list` | Renders a list of groups with selection support. |
-| `PendingListComponent` | `contacts-pending-list`| **The Waiting Room.** Displays unknown or vouched identities waiting for approval. |
-| `BlockedListComponent` | `contacts-blocked-list`| **The Block List.** Displays blocked identities with options to unblock. |
+| Component                   | Selector                | Role & Description                                                                 |
+| :-------------------------- | :---------------------- | :--------------------------------------------------------------------------------- |
+| `ContactListComponent`      | `contacts-list`         | Renders a list of contacts with selection support.                                 |
+| `ContactGroupListComponent` | `contacts-group-list`   | Renders a list of groups with selection support.                                   |
+| `PendingListComponent`      | `contacts-pending-list` | **The Waiting Room.** Displays unknown or vouched identities waiting for approval. |
+| `BlockedListComponent`      | `contacts-blocked-list` | **The Block List.** Displays blocked identities with options to unblock.           |
 
 #### Utility Components
 
-| Component | Selector | Role & Description |
-| :--- | :--- | :--- |
-| `ContactAvatarComponent` | `contacts-avatar` | Displays either an image (`profilePictureUrl`) or text (`initials`). |
-| `ContactMultiSelectorComponent`|`contacts-multi-selector`| A filterable, scrolling list of contacts with checkboxes for group management. |
-| `ContactsPageToolbarComponent`| `contacts-page-toolbar`| A responsive, resize-aware toolbar. |
+| Component                       | Selector                  | Role & Description                                                             |
+| :------------------------------ | :------------------------ | :----------------------------------------------------------------------------- |
+| `ContactAvatarComponent`        | `contacts-avatar`         | Displays either an image (`profilePictureUrl`) or text (`initials`).           |
+| `ContactMultiSelectorComponent` | `contacts-multi-selector` | A filterable, scrolling list of contacts with checkboxes for group management. |
+| `ContactsPageToolbarComponent`  | `contacts-page-toolbar`   | A responsive, resize-aware toolbar.                                            |
 
------
+---
 
 ## 🔌 Component API & Patterns
 
@@ -74,29 +74,49 @@ This section details the public API for the most significant components.
 
 This component encapsulates all logic for editing a `Contact`.
 
-  * `@Input() contact = input<Contact | null>(null)`: The `Contact` object to populate the form with.
-  * `@Input() linkedIdentities = input<URN[]>([])`: A list of federated identities (e.g., Google, Apple) linked to this contact.
-  * `@Input() startInEditMode = input(false)`: Signals the form to initialize in "edit" mode.
-  * `@Output() save = output<Contact>()`: Emits the updated `Contact` object when saved.
+- `@Input() contact = input<Contact | null>(null)`: The `Contact` object to populate the form with.
+- `@Input() linkedIdentities = input<URN[]>([])`: A list of federated identities (e.g., Google, Apple) linked to this contact.
+- `@Input() startInEditMode = input(false)`: Signals the form to initialize in "edit" mode.
+- `@Output() save = output<Contact>()`: Emits the updated `Contact` object when saved.
 
 ### `ContactsSidebarComponent`
 
 The primary navigation component used inside the Viewer.
 
-  * `@Input() selectedId = input<string | undefined>()`: Highlights the currently selected contact/group.
-  * `@Input() tabIndex = input(0)`: Controls which tab is active (0: Contacts, 1: Groups, 2: Security).
-  * `@Output() contactSelected = output<Contact>()`: Emits when a user clicks a contact row.
-  * `@Output() groupSelected = output<ContactGroup>()`: Emits when a user clicks a group row.
+- `@Input() selectedId = input<string | undefined>()`: Highlights the currently selected contact/group.
+- `@Input() tabIndex = input(0)`: Controls which tab is active (0: Contacts, 1: Groups, 2: Security).
+- `@Output() contactSelected = output<Contact>()`: Emits when a user clicks a contact row.
+- `@Output() groupSelected = output<ContactGroup>()`: Emits when a user clicks a group row.
 
 ### `PendingListComponent` (Gatekeeper)
 
 Displays identities in the "Waiting Room".
 
-  * `@Input() pending = input.required<PendingIdentity[]>()`: The list of pending requests.
-  * `@Output() approve = output<PendingIdentity>()`: Emits when the user accepts a request (clears pending status).
-  * `@Output() block = output<PendingIdentity>()`: Emits when the user blocks a request (moves to blocklist).
+- `@Input() pending = input.required<PendingIdentity[]>()`: The list of pending requests.
+- `@Output() approve = output<PendingIdentity>()`: Emits when the user accepts a request (clears pending status).
+- `@Output() block = output<PendingIdentity>()`: Emits when the user blocks a request (moves to blocklist).
 
------
+---
+
+### **⚡ Smart Pipes**
+
+These pipes inject `ContactsStateService` to perform instant lookups.
+
+**`contactName`**: Resolves a URN to a Display Name (Alias -> First Name -> Fallback).
+
+```html
+<span>{{ message.senderId | contactName }}</span>
+```
+
+**`contactInitials`**: Generates avatars (e.g., "AS" for Alice Smith).
+
+```html
+<div class="avatar">{{ message.senderId | contactInitials }}</div>
+```
+
+### **⚠️ Note on Performance**
+
+The pipes are marked `pure: false` to allow them to react to Signal updates from the State layer. This ensures that if a user is renamed, all Chat headers update immediately.
 
 ## 🎨 Styling & Theming
 
@@ -108,10 +128,10 @@ This library's components are styled using a hybrid approach:
 **External Dependencies:**
 The components are designed to work with a global stylesheet (like the app's `custom-theme.scss`) that provides:
 
-  * **A custom Angular Material theme.**
-  * **`.form-view-mode`:** A global CSS class used by `ContactFormComponent` to style `MatFormField` elements in "view" mode.
+- **A custom Angular Material theme.**
+- **`.form-view-mode`:** A global CSS class used by `ContactFormComponent` to style `MatFormField` elements in "view" mode.
 
------
+---
 
 ## 🚀 Usage Example (Routing)
 
@@ -126,25 +146,16 @@ export const CONTACTS_ROUTES: Routes = [
   {
     path: '',
     // 1. The main 'viewer' component is the base.
-    loadComponent: () =>
-      import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactsViewerComponent
-      ),
+    loadComponent: () => import('@nx-platform-application/contacts-ui').then((m) => m.ContactsViewerComponent),
   },
   {
     path: 'new',
-    loadComponent: () =>
-      import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactPageComponent
-      ),
+    loadComponent: () => import('@nx-platform-application/contacts-ui').then((m) => m.ContactPageComponent),
   },
   {
     path: 'edit/:id',
-    loadComponent: () =>
-      import('@nx-platform-application/contacts-ui').then(
-        (m) => m.ContactPageComponent
-      ),
+    loadComponent: () => import('@nx-platform-application/contacts-ui').then((m) => m.ContactPageComponent),
   },
   // ... Group routes
 ];
-````
+```

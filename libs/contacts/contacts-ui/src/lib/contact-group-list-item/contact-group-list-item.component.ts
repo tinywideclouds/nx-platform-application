@@ -8,7 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 
-import { ContactGroup } from '@nx-platform-application/contacts-storage';
+import { ContactGroup } from '@nx-platform-application/contacts-types';
 
 @Component({
   selector: 'contacts-group-list-item',

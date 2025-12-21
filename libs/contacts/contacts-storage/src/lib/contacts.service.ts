@@ -4,23 +4,25 @@ import { Observable, from } from 'rxjs';
 import { map } from 'rxjs';
 import { ContactsDatabase } from './db/contacts.database';
 import {
-  Contact,
-  ContactGroup,
   StorableContact,
   StorableGroup,
   StorableServiceContact,
-  ServiceContact,
-  IdentityLink,
   StorablePendingIdentity,
-  PendingIdentity,
   StorableBlockedIdentity,
-  BlockedIdentity,
-  ContactTombstone,
 } from './models/contacts';
 import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
+import {
+  Contact,
+  ContactGroup,
+  ServiceContact,
+  IdentityLink,
+  PendingIdentity,
+  BlockedIdentity,
+  ContactTombstone,
+} from '@nx-platform-application/contacts-types';
 
 @Injectable({
   providedIn: 'root',

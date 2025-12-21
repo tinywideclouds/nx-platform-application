@@ -7,6 +7,7 @@ describe('ContactsDatabase', () => {
   let db: ContactsDatabase;
 
   beforeEach(async () => {
+    // Ensure clean state
     await Dexie.delete('contacts');
 
     TestBed.configureTestingModule({
@@ -25,7 +26,6 @@ describe('ContactsDatabase', () => {
   });
 
   it('should be on version 3', () => {
-    // Note: Reverted to 1 based on your previous schema file upload
     expect(db.verno).toBe(3);
   });
 
@@ -51,7 +51,6 @@ describe('ContactsDatabase', () => {
     expect(db.tombstones).toBeTruthy();
   });
 
-  // ✅ NEW TEST: Verify Blocked Table
   it('should have the "blocked" table', () => {
     expect(db.blocked).toBeTruthy();
     expect(db.blocked.name).toBe('blocked');
@@ -63,14 +62,13 @@ describe('ContactsDatabase', () => {
     const schema = db.contacts.schema;
     expect(schema.primKey.name).toBe('id');
     const indexNames = schema.indexes.map((i) => i.name);
-    // Dexie formatting check
+    // Dexie formatting check for multi-entry
     expect(indexNames).toContain('[emailAddresses]');
+    expect(indexNames).toContain('[phoneNumbers]');
   });
 
-  // ✅ NEW TEST: Verify Blocked Schema
   it('should have correct indexes on blocked', () => {
     const schema = db.blocked.schema;
-    // blocked: '++id, urn, blockedAt'
     expect(schema.primKey.name).toBe('id'); // ++id
 
     const indexNames = schema.indexes.map((i) => i.name);

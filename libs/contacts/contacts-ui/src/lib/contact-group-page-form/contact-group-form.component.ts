@@ -17,10 +17,7 @@ import {
   FormGroup,
   Validators,
 } from '@angular/forms';
-import {
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 // --- 1. Import URN ---
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
@@ -38,8 +35,8 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
-    ContactAvatarComponent
-],
+    ContactAvatarComponent,
+  ],
   templateUrl: './contact-group-form.component.html',
   styleUrl: './contact-group-form.component.scss',
 })
@@ -62,7 +59,7 @@ export class ContactGroupFormComponent {
 
   private contactIdsValue = toSignal(
     this.form.get('contactIds')!.valueChanges,
-    { initialValue: this.form.get('contactIds')!.value }
+    { initialValue: this.form.get('contactIds')!.value },
   );
 
   constructor() {
@@ -118,7 +115,7 @@ export class ContactGroupFormComponent {
   groupMembers = computed(() => {
     // Create the Map using string keys
     const membersMap = new Map(
-      this.allContacts().map((c) => [c.id.toString(), c])
+      this.allContacts().map((c) => [c.id.toString(), c]),
     );
     // Get the string[] from the form
     const contactIds = this.contactIdsValue() ?? [];

@@ -3,11 +3,8 @@
 import { Component, inject, input, signal, computed } from '@angular/core';
 
 import { Router, RouterLink } from '@angular/router';
-import {
-  ContactsStorageService,
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
@@ -26,8 +23,8 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
     MatButtonModule,
     MatIconModule,
     ContactGroupFormComponent,
-    ContactsPageToolbarComponent
-],
+    ContactsPageToolbarComponent,
+  ],
   templateUrl: './contact-group-page.component.html',
   styleUrl: './contact-group-page.component.scss',
 })
@@ -51,14 +48,14 @@ export class ContactGroupPageComponent {
   });
 
   private groupStream$: Observable<ContactGroup | null> = toObservable(
-    this.groupId
+    this.groupId,
   ).pipe(
     switchMap((urn) => {
       if (urn) {
         return this.getGroup(urn);
       }
       return this.getNewGroup();
-    })
+    }),
   );
 
   groupToEdit = toSignal(this.groupStream$, {
@@ -98,7 +95,7 @@ export class ContactGroupPageComponent {
           return null;
         }
         return group;
-      })
+      }),
     );
   }
 
