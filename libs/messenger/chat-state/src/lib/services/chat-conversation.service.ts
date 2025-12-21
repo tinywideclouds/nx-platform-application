@@ -1,23 +1,27 @@
-// libs/messenger/chat-state/src/lib/services/chat-conversation.service.ts
-
-import { Injectable, inject, signal, WritableSignal } from '@angular/core';
+import {
+  Injectable,
+  inject,
+  signal,
+  WritableSignal,
+  computed,
+} from '@angular/core';
 import { Subject } from 'rxjs';
-import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
+import { Temporal } from '@js-temporal/polyfill';
 
-// Data Layer
+// Services
+import { URN } from '@nx-platform-application/platform-types';
+import { ConversationSummary } from '@nx-platform-application/messenger-types';
 import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-
-// Helpers
 import { ChatKeyService } from './chat-key.service';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatOutboundService } from './chat-outbound.service';
 
-// Types
+// Types (Centralized Domain Models)
 import {
   ChatMessage,
-  ConversationSummary,
+  MessageDeliveryStatus,
 } from '@nx-platform-application/messenger-types';
 import {
   MESSAGE_TYPE_TEXT,
@@ -41,6 +45,10 @@ export class ChatConversationService {
   private outbound = inject(ChatOutboundService);
 
   // --- State ---
+
+  // Identity: Synced manually from ChatService via loadConversation or direct set
+  public readonly myUrn = signal<URN | null>(null);
+
   public readonly selectedConversation = signal<URN | null>(null);
   public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
   public readonly genesisReached = signal<boolean>(false);
@@ -48,10 +56,42 @@ export class ChatConversationService {
   public readonly isRecipientKeyMissing = signal<boolean>(false);
   public readonly firstUnreadId = signal<string | null>(null);
 
-  // Trigger for Typing
-  public readonly typingTrigger$ = new Subject<void>();
+  // Typing Activity: Keys are URN strings, Values are timestamps
+  public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
+    new Map(),
+  );
 
-  // Trigger for Sending Read Receipts (Consumed by ChatService)
+  // The Eyes: Computed Cursor Positions
+  public readonly readCursors = computed(() => {
+    const msgs = this.messages();
+    const me = this.myUrn();
+    const partner = this.selectedConversation();
+
+    if (!me || !partner || msgs.length === 0) return new Map<string, URN[]>();
+
+    // Find the LAST message sent by ME that is READ
+    let cursorMessageId: string | null = null;
+
+    // Search backwards (Newest -> Oldest)
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      const isFromMe = msg.senderId.toString() === me.toString();
+
+      if (isFromMe && msg.status === 'read') {
+        cursorMessageId = msg.id;
+        break;
+      }
+    }
+
+    const map = new Map<string, URN[]>();
+    if (cursorMessageId) {
+      // In 1:1 chat, the cursor is the partner
+      map.set(cursorMessageId, [partner]);
+    }
+    return map;
+  });
+
+  public readonly typingTrigger$ = new Subject<void>();
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
   private operationLock = Promise.resolve();
@@ -60,8 +100,12 @@ export class ChatConversationService {
     return this.repository.getConversationSummaries();
   }
 
+  // FIXED: Restored 'myUrn' argument to prevent race conditions on load
   async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
+      // Sync the signal immediately so computed values (like readCursors) are correct
+      this.myUrn.set(myUrn);
+
       if (
         this.selectedConversation()?.toString() === urn?.toString() &&
         urn !== null
@@ -109,6 +153,7 @@ export class ChatConversationService {
           }
         }
 
+        // Send Receipts immediately if we have identity
         if (myUrn) {
           await this.processReadReceipts(viewMessages, myUrn);
         }
@@ -133,7 +178,6 @@ export class ChatConversationService {
       this.isLoadingHistory.set(true);
       try {
         const oldestMsg = currentMsgs[0];
-
         const result = await this.repository.getMessages({
           conversationUrn: urn,
           limit: DEFAULT_PAGE_SIZE,
@@ -160,14 +204,14 @@ export class ChatConversationService {
     }
   }
 
-  // ✅ NEW: Apply incoming read receipts to the UI state
   applyIncomingReadReceipts(ids: string[]): void {
     if (ids.length === 0) return;
+
+    this.logger.debug(`[ChatState] Applying receipts for ${ids.length} msgs`);
     const idSet = new Set(ids);
 
     this.messages.update((current) =>
       current.map((msg) => {
-        // If this message ID was in the receipt and isn't already 'read'
         if (idSet.has(msg.id) && msg.status !== 'read') {
           return { ...msg, status: 'read' };
         }
@@ -227,13 +271,10 @@ export class ChatConversationService {
           this.logger.warn('Failed to process live receipts', err),
         );
       }
-
       this.messages.update((current) => [...current, ...relevant]);
       this.storage.markConversationAsRead(activeConvo);
     }
   }
-
-  // --- Internal ---
 
   private async processReadReceipts(
     messages: ChatMessage[],
@@ -247,14 +288,13 @@ export class ChatConversationService {
     if (unreadMessages.length === 0) return;
 
     const ids = unreadMessages.map((m) => m.id);
-
-    // Optimistic Update
     unreadMessages.forEach((m) => (m.status = 'read'));
 
     await this.storage.updateMessageStatus(ids, 'read');
     this.readReceiptTrigger$.next(ids);
   }
 
+  // FIXED: Optimistic UI with Split Return (Message + Outcome Promise)
   private async sendGeneric(
     recipientUrn: URN,
     typeId: URN,
@@ -263,7 +303,8 @@ export class ChatConversationService {
     myUrn: URN,
   ): Promise<void> {
     return this.runExclusive(async () => {
-      const optimisticMsg = await this.outbound.send(
+      // 1. Call Outbound (Returns INSTANTLY with pending message + future promise)
+      const result = await this.outbound.send(
         myKeys,
         myUrn,
         recipientUrn,
@@ -271,10 +312,32 @@ export class ChatConversationService {
         bytes,
       );
 
-      if (optimisticMsg) {
-        this.upsertMessages([this.mapper.toView(optimisticMsg)], myUrn);
+      if (result) {
+        const { message, outcome } = result;
+
+        // 2. Render Optimistic UI (Status: Pending)
+        // Pass myUrn to ensure upsert logic (like receipts) works if needed
+        this.upsertMessages([this.mapper.toView(message)], myUrn);
+
+        // 3. Handle the Result (Async Background Task)
+        // We do NOT await this. The UI is already unblocked.
+        outcome.then((finalStatus) => {
+          if (finalStatus !== 'pending') {
+            this.updateMessageStatusInSignal(message.messageId, finalStatus);
+          }
+        });
       }
     });
+  }
+
+  // Helper: In-place update for status changes (Sent/Failed)
+  private updateMessageStatusInSignal(
+    id: string,
+    status: MessageDeliveryStatus,
+  ): void {
+    this.messages.update((current) =>
+      current.map((msg) => (msg.id === id ? { ...msg, status } : msg)),
+    );
   }
 
   private async runExclusive<T>(task: () => Promise<T>): Promise<T> {

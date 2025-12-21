@@ -5,8 +5,10 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { ConversationSummary } from '@nx-platform-application/chat-storage';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  ConversationSummary,
+} from '@nx-platform-application/messenger-types';
 import { MessageTypeText } from '@nx-platform-application/message-content';
 import { computed } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
@@ -24,7 +26,7 @@ const MOCK_CONVOS: ConversationSummary[] = [
     conversationUrn: MOCK_CONTACT_1,
     latestSnippet: 'Hey, are you free for the meeting?',
     timestamp: Temporal.Instant.from(
-      '2025-11-16T14:30:00Z'
+      '2025-11-16T14:30:00Z',
     ).toString() as ISODateTimeString,
     unreadCount: 2,
     previewType: 'text', // ✅ FIXED
@@ -33,7 +35,7 @@ const MOCK_CONVOS: ConversationSummary[] = [
     conversationUrn: MOCK_CONTACT_2,
     latestSnippet: 'You: Sounds good, see you then.',
     timestamp: Temporal.Instant.from(
-      '2025-11-15T10:15:00Z'
+      '2025-11-15T10:15:00Z',
     ).toString() as ISODateTimeString,
     unreadCount: 0,
     previewType: 'text', // ✅ FIXED
@@ -42,7 +44,7 @@ const MOCK_CONVOS: ConversationSummary[] = [
     conversationUrn: MOCK_GROUP_1,
     latestSnippet: 'Bob: Can someone review my PR?',
     timestamp: Temporal.Instant.from(
-      '2025-11-16T13:00:00Z'
+      '2025-11-16T13:00:00Z',
     ).toString() as ISODateTimeString,
     unreadCount: 1,
     previewType: 'text', // ✅ FIXED
@@ -62,7 +64,7 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         conversationUrn: MOCK_CONTACT_1,
         senderId: MOCK_CONTACT_1,
         sentTimestamp: Temporal.Instant.from(
-          '2025-11-16T14:29:00Z'
+          '2025-11-16T14:29:00Z',
         ).toString() as ISODateTimeString,
         textContent: 'Hey, are you free for the meeting?',
         typeId: textType,
@@ -72,7 +74,7 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         conversationUrn: MOCK_CONTACT_1,
         senderId: MOCK_CONTACT_1,
         sentTimestamp: Temporal.Instant.from(
-          '2025-11-16T14:30:00Z'
+          '2025-11-16T14:30:00Z',
         ).toString() as ISODateTimeString,
         textContent: "It's about the new deployment.",
         typeId: textType,
@@ -88,7 +90,7 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         conversationUrn: MOCK_CONTACT_2,
         senderId: MOCK_CONTACT_2,
         sentTimestamp: Temporal.Instant.from(
-          '2025-11-15T10:14:00Z'
+          '2025-11-15T10:14:00Z',
         ).toString() as ISODateTimeString,
         textContent: 'Project update is ready for review.',
         typeId: textType,
@@ -98,7 +100,7 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         conversationUrn: MOCK_CONTACT_2,
         senderId: MOCK_USER,
         sentTimestamp: Temporal.Instant.from(
-          '2025-11-15T10:15:00Z'
+          '2025-11-15T10:15:00Z',
         ).toString() as ISODateTimeString,
         textContent: 'Sounds good, see you then.',
         typeId: textType,
@@ -114,7 +116,7 @@ const MOCK_MESSAGES_DB = new Map<string, ChatMessage[]>([
         conversationUrn: MOCK_GROUP_1,
         senderId: MOCK_CONTACT_2, // Bob
         sentTimestamp: Temporal.Instant.from(
-          '2025-11-16T13:00:00Z'
+          '2025-11-16T13:00:00Z',
         ).toString() as ISODateTimeString,
         textContent: 'Can someone review my PR?',
         typeId: textType,
@@ -150,7 +152,7 @@ export class MockChatService {
     if (urn) {
       const urnString = urn.toString();
       const exists = this.activeConversations().some(
-        (c) => c.conversationUrn.toString() === urnString
+        (c) => c.conversationUrn.toString() === urnString,
       );
       if (!exists) {
         this.activeConversations.update((list) => [
@@ -171,7 +173,7 @@ export class MockChatService {
 
   sendMessage(recipientUrn: URN, plaintext: string): Promise<void> {
     console.log(
-      `[MockChatService] Sending message to ${recipientUrn.toString()}: ${plaintext}`
+      `[MockChatService] Sending message to ${recipientUrn.toString()}: ${plaintext}`,
     );
 
     const recipientId = recipientUrn.toString();
@@ -191,7 +193,7 @@ export class MockChatService {
     this.selectedConversation.set(recipientUrn);
 
     const convo = this.activeConversations().find(
-      (c) => c.conversationUrn.toString() === recipientId
+      (c) => c.conversationUrn.toString() === recipientId,
     );
     if (convo) {
       convo.latestSnippet = `You: ${plaintext}`;

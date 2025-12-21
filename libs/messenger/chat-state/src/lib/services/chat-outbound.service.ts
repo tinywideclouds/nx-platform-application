@@ -12,7 +12,6 @@ import {
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { DecryptedMessage } from '@nx-platform-application/messenger-types';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
 
@@ -21,13 +20,21 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
+import {
+  EncryptedMessagePayload,
+  MessageDeliveryStatus,
+  DecryptedMessage,
+} from '@nx-platform-application/messenger-types';
 
 export interface SendOptions {
   isEphemeral?: boolean;
 }
 
-// 30 Seconds Timeout for "Stalled" state
+export interface OutboundResult {
+  message: DecryptedMessage;
+  outcome: Promise<MessageDeliveryStatus>;
+}
+
 const SEND_TIMEOUT_MS = 30_000;
 
 @Injectable({ providedIn: 'root' })
@@ -39,6 +46,7 @@ export class ChatOutboundService {
   private keyCache = inject(KeyCacheService);
   private identityResolver = inject(IdentityResolver);
 
+  // ✅ CHANGED: Returns object with Message AND Promise
   async send(
     myKeys: PrivateKeys,
     myUrn: URN,
@@ -46,8 +54,7 @@ export class ChatOutboundService {
     typeId: URN,
     payloadBytes: Uint8Array,
     options?: SendOptions,
-  ): Promise<DecryptedMessage | null> {
-    let optimisticMsg: DecryptedMessage | null = null;
+  ): Promise<OutboundResult | null> {
     const isEphemeral = options?.isEphemeral || false;
 
     try {
@@ -59,18 +66,12 @@ export class ChatOutboundService {
       const payloadSenderUrn =
         await this.identityResolver.resolveToHandle(myUrn);
 
-      if (!isEphemeral) {
-        this.logger.debug(
-          `[Outbound] Routing To: ${targetRoutingUrn.toString()}`,
-        );
-      }
-
-      // 2. Prepare Timestamps & IDs
+      // 2. Prepare Data
       const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
       const localId = `local-${crypto.randomUUID()}`;
 
-      // 3. Create Optimistic Message (Local Identity)
-      optimisticMsg = {
+      // 3. Create Optimistic Message
+      const optimisticMsg: DecryptedMessage = {
         messageId: localId,
         senderId: myUrn,
         recipientId: recipientUrn,
@@ -81,76 +82,69 @@ export class ChatOutboundService {
         conversationUrn: storageUrn,
       };
 
-      // 4. Construct Payload (Network Identity)
-      const payload: EncryptedMessagePayload = {
-        senderId: payloadSenderUrn,
-        sentTimestamp: timestamp,
-        typeId: typeId,
-        payloadBytes: payloadBytes,
-        clientRecordId: isEphemeral ? undefined : localId,
-      };
-
-      // 5. SAVE IMMEDIATELY (Skip if Ephemeral)
+      // 4. Save Optimistic (Pending)
       if (!isEphemeral) {
         await this.storageService.saveMessage(optimisticMsg);
       }
 
-      // 6. Encrypt & Sign
-      const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
-      const envelope = await this.cryptoService.encryptAndSign(
-        payload,
-        targetRoutingUrn,
-        myKeys,
-        recipientKeys,
-      );
+      // 5. Define the Async Work (The "Outcome")
+      const outcomePromise = (async () => {
+        try {
+          const payload: EncryptedMessagePayload = {
+            senderId: payloadSenderUrn,
+            sentTimestamp: timestamp,
+            typeId: typeId,
+            payloadBytes: payloadBytes,
+            clientRecordId: isEphemeral ? undefined : localId,
+          };
 
-      if (isEphemeral) {
-        envelope.isEphemeral = true;
-      }
+          const recipientKeys =
+            await this.keyCache.getPublicKey(targetRoutingUrn);
+          const envelope = await this.cryptoService.encryptAndSign(
+            payload,
+            targetRoutingUrn,
+            myKeys,
+            recipientKeys,
+          );
+          if (isEphemeral) envelope.isEphemeral = true;
 
-      // 7. Send to Network (With Race Condition)
-      await this.raceNetworkRequest(this.sendService.sendMessage(envelope));
+          // RACE: Network vs Timeout
+          await this.raceNetworkRequest(this.sendService.sendMessage(envelope));
 
-      // 8. Update Status (Skip if Ephemeral)
-      if (!isEphemeral && optimisticMsg) {
-        // 'failed' is a valid MessageDeliveryStatus
-        await this.storageService.updateMessageStatus(
-          [optimisticMsg.messageId],
-          'failed',
-        );
-        return { ...optimisticMsg, status: 'failed' };
-      }
+          // SUCCESS
+          if (!isEphemeral) {
+            await this.storageService.updateMessageStatus([localId], 'sent');
+          }
+          return 'sent' as MessageDeliveryStatus;
+        } catch (err) {
+          this.logger.error('[Outbound] Transmission Failed', err);
+          // FAIL
+          if (!isEphemeral) {
+            await this.storageService.updateMessageStatus([localId], 'failed');
+          }
+          return 'failed' as MessageDeliveryStatus;
+        }
+      })();
 
-      return optimisticMsg;
+      // 6. Return Immediately (Don't await the outcome)
+      return {
+        message: optimisticMsg,
+        outcome: outcomePromise,
+      };
     } catch (error) {
-      this.logger.error('[Outbound] Failed to send message', error);
-
-      // ✅ FAILURE HANDLING
-      if (!isEphemeral && optimisticMsg) {
-        // Mark as failed in storage so UI can show "Retry"
-        await this.storageService.updateMessageStatus(
-          [optimisticMsg.messageId],
-          'failed',
-        );
-        return { ...optimisticMsg, status: 'failed' };
-      }
+      this.logger.error('[Outbound] Failed to prepare message', error);
       return null;
     }
   }
 
-  // Helper to race the request against a timeout
   private raceNetworkRequest(observable$: any): Promise<void> {
-    // We explicitly tell TS that this Observable yields 'void' (or we don't care about the value)
     const request = firstValueFrom<void>(observable$);
-
     const timer = new Promise<void>((_, reject) =>
       setTimeout(
         () => reject(new Error('Send Timeout (30s)')),
         SEND_TIMEOUT_MS,
       ),
     );
-
-    // Now both inputs are Promise<void>, so the output is Promise<void>
     return Promise.race([request, timer]);
   }
 }
