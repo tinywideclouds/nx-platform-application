@@ -10,7 +10,11 @@ import { throttleTime } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom, interval, switchMap, EMPTY } from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
-import { URN, PublicKeys } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  PublicKeys,
+  KeyNotFoundError,
+} from '@nx-platform-application/platform-types';
 import {
   DecryptedMessage,
   ConversationSummary,
@@ -47,6 +51,7 @@ import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 export type OnboardingState =
   | 'CHECKING'
   | 'READY'
+  | 'OFFLINE_READY'
   | 'REQUIRES_LINKING'
   | 'GENERATING';
 
@@ -127,12 +132,30 @@ export class ChatService {
       const senderUrn = this.currentUserUrn();
       if (!senderUrn) throw new Error('No user URN found');
 
-      const [localKeys, serverKeys] = await Promise.all([
-        this.cryptoService.loadMyKeys(senderUrn),
-        this.keyService.getPublicKey(senderUrn),
-      ]);
+      const localKeys = await this.cryptoService.loadMyKeys(senderUrn);
+      let serverKeys: PublicKeys | null = null;
+      let isServerReachable = true;
 
-      if (!localKeys && !serverKeys) {
+      try {
+        serverKeys = await this.keyService.getPublicKey(senderUrn);
+      } catch (error) {
+        if (error instanceof KeyNotFoundError) {
+          serverKeys = null;
+        } else {
+          this.logger.warn('ChatService: Key Service Unreachable', error);
+          isServerReachable = false;
+        }
+      }
+
+      if (localKeys && !isServerReachable) {
+        this.logger.warn('Booting in OFFLINE_READY mode.');
+        this.myKeys.set(localKeys);
+        this.onboardingState.set('OFFLINE_READY');
+        await this.completeBootSequence();
+        return;
+      }
+
+      if (!localKeys && !serverKeys && isServerReachable) {
         this.onboardingState.set('GENERATING');
         await this.performFirstTimeSetup(senderUrn, currentUser.email);
         return;
@@ -311,8 +334,11 @@ export class ChatService {
   }
 
   public async completeBootSequence(): Promise<void> {
-    this.logger.info('ChatService: Completing boot sequence (READY)...');
-    this.onboardingState.set('READY');
+    this.logger.info('ChatService: Completing boot sequence...');
+
+    if (this.onboardingState() !== 'OFFLINE_READY') {
+      this.onboardingState.set('READY');
+    }
 
     const authToken = this.authService.getJwtToken();
     if (authToken) {
@@ -417,7 +443,9 @@ export class ChatService {
 
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
-      if (this.onboardingState() !== 'READY') return;
+      const state = this.onboardingState();
+
+      if (state !== 'READY' && state !== 'OFFLINE_READY') return;
       if (this.isCeremonyActive()) return;
 
       const myKeys = this.myKeys();
@@ -431,7 +459,6 @@ export class ChatService {
         50,
       );
 
-      // ✅ LOGIC FIX: Handle Read Receipts
       if (result.readReceipts.length > 0) {
         this.conversationService.applyIncomingReadReceipts(result.readReceipts);
       }

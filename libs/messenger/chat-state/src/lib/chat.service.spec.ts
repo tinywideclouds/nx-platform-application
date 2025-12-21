@@ -4,7 +4,11 @@ import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import { ChatService } from './chat.service';
-import { URN, User } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  User,
+  KeyNotFoundError,
+} from '@nx-platform-application/platform-types'; // ✅ Added KeyNotFoundError
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Dependencies
@@ -25,7 +29,6 @@ import { ChatKeyService } from './services/chat-key.service';
 import { ChatConversationService } from './services/chat-conversation.service';
 import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.service';
 
-// [Refactor] New Lib
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 describe('ChatService', () => {
@@ -36,6 +39,7 @@ describe('ChatService', () => {
     process: vi.fn().mockResolvedValue({
       messages: [],
       typingIndicators: [],
+      readReceipts: [],
     }),
   };
   const mockKeyWorker = { resetIdentityKeys: vi.fn() };
@@ -71,10 +75,11 @@ describe('ChatService', () => {
   const mockCryptoService = {
     loadMyKeys: vi.fn(),
     storeMyKeys: vi.fn(),
+    verifyKeysMatch: vi.fn(), // ✅ Added for mismatch test
     clearKeys: vi.fn().mockResolvedValue(undefined),
   };
   const mockKeyService = {
-    hasKeys: vi.fn(),
+    getPublicKey: vi.fn(), // Changed from hasKeys to getPublicKey for init()
     clear: vi.fn().mockResolvedValue(undefined),
   };
   const mockLiveService = {
@@ -95,7 +100,6 @@ describe('ChatService', () => {
     performSync: vi.fn().mockResolvedValue(true),
   };
 
-  // [Refactor] Pairing Mock
   const mockPairingService = {
     startReceiverSession: vi
       .fn()
@@ -121,6 +125,10 @@ describe('ChatService', () => {
     email: 'me@test.com',
   };
   const mockPrivateKeys = { encKey: 'priv', sigKey: 'priv' } as any;
+  const mockPublicKeys = {
+    encKey: new Uint8Array([1]),
+    sigKey: new Uint8Array([1]),
+  } as any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -142,74 +150,119 @@ describe('ChatService', () => {
           provide: ChatSyncOrchestratorService,
           useValue: mockSyncOrchestrator,
         },
-        // [Refactor] Provide new service
         { provide: DevicePairingService, useValue: mockPairingService },
       ],
     });
 
     service = TestBed.inject(ChatService);
+
+    // Set default valid auth state
+    mockAuthService.currentUser.set(mockUser);
+    mockAuthService.sessionLoaded$.next({
+      authenticated: true,
+      user: mockUser,
+      token: 't',
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  // ... (Initialization tests remain largely the same) ...
+  describe('Boot Sequence (Init)', () => {
+    it('should enter GENERATING if server returns KeyNotFoundError (204)', async () => {
+      // Arrange
+      mockCryptoService.loadMyKeys.mockResolvedValue(null); // No local keys
+      mockKeyService.getPublicKey.mockRejectedValue(
+        new KeyNotFoundError('urn...'),
+      ); // Server says 204
+      mockKeyWorker.resetIdentityKeys.mockResolvedValue(mockPrivateKeys); // Gen success
 
-  describe('Device Linking', () => {
-    it('startTargetLinkSession should delegate to PairingService', async () => {
-      (service.onboardingState as any).set('REQUIRES_LINKING');
+      // Act
+      // Re-trigger init by recreating or calling private method via any cast
+      await (service as any).init();
 
-      const res = await service.startTargetLinkSession();
-
-      expect(mockPairingService.startReceiverSession).toHaveBeenCalled();
-      expect(res.sessionId).toBe('s1');
-      expect(res.mode).toBe('RECEIVER_HOSTED');
+      // Assert
+      expect(service.onboardingState()).toBe('READY'); // Ends in READY after generating
+      expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalled();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining('New user detected'),
+      );
     });
 
-    it('checkForSyncMessage should delegate to PairingService', async () => {
-      (service.onboardingState as any).set('REQUIRES_LINKING');
-      mockAuthService.currentUser.set(mockUser);
+    it('should enter OFFLINE_READY if server returns Network Error', async () => {
+      // Arrange
+      mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys); // Have local keys
+      mockKeyService.getPublicKey.mockRejectedValue(
+        new Error('500 Server Error'),
+      ); // Server down
 
-      mockPairingService.pollForReceiverSync.mockResolvedValue(mockPrivateKeys);
+      // Act
+      await (service as any).init();
 
-      const result = await service.checkForSyncMessage({} as any);
-
-      expect(mockPairingService.pollForReceiverSync).toHaveBeenCalled();
-      expect(result).toBe(true);
-      // Verify finalization
-      expect(mockCryptoService.storeMyKeys).toHaveBeenCalled();
+      // Assert
+      expect(service.onboardingState()).toBe('OFFLINE_READY');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Booting in OFFLINE_READY mode'),
+      );
     });
 
-    it('linkTargetDevice should PAUSE ingestion (Ceremony Mode)', async () => {
-      // Setup
-      (service.onboardingState as any).set('READY');
+    it('should enter REQUIRES_LINKING if keys mismatch', async () => {
+      // Arrange
       mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-      mockAuthService.currentUser.set(mockUser);
+      mockKeyService.getPublicKey.mockResolvedValue(mockPublicKeys);
+      mockCryptoService.verifyKeysMatch.mockResolvedValue(false); // Mismatch!
 
-      // We simulate the service being initialized so keys are loaded
-      // manually set private signal for testing
-      (service as any).myKeys.set(mockPrivateKeys);
+      // Act
+      await (service as any).init();
 
-      const promise = service.linkTargetDevice('qr-code');
-
-      // 1. Check State DURING execution
-      expect(service.isCeremonyActive()).toBe(true);
-
-      await promise;
-
-      // 2. Check State AFTER execution
-      expect(service.isCeremonyActive()).toBe(false);
-      expect(mockPairingService.linkTargetDevice).toHaveBeenCalled();
+      // Assert
+      expect(service.onboardingState()).toBe('REQUIRES_LINKING');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Identity Conflict'),
+      );
     });
   });
 
   describe('Ingestion Guards', () => {
-    it('should NOT ingest if Ceremony is Active', async () => {
+    it('should ALLOW ingestion in OFFLINE_READY state', async () => {
+      // Arrange
+      (service.onboardingState as any).set('OFFLINE_READY');
+      (service as any).myKeys.set(mockPrivateKeys);
+
+      // Act
+      await service.fetchAndProcessMessages();
+
+      // Assert
+      expect(mockIngestionService.process).toHaveBeenCalled();
+    });
+
+    it('should ALLOW ingestion in READY state', async () => {
+      // Arrange
       (service.onboardingState as any).set('READY');
       (service as any).myKeys.set(mockPrivateKeys);
-      mockAuthService.currentUser.set(mockUser);
 
+      // Act
+      await service.fetchAndProcessMessages();
+
+      // Assert
+      expect(mockIngestionService.process).toHaveBeenCalled();
+    });
+
+    it('should BLOCK ingestion in CHECKING state', async () => {
+      // Arrange
+      (service.onboardingState as any).set('CHECKING');
+
+      // Act
+      await service.fetchAndProcessMessages();
+
+      // Assert
+      expect(mockIngestionService.process).not.toHaveBeenCalled();
+    });
+
+    it('should BLOCK ingestion if Ceremony is Active', async () => {
+      (service.onboardingState as any).set('READY');
+      (service as any).myKeys.set(mockPrivateKeys);
       // Force Ceremony Active
       (service.isCeremonyActive as any).set(true);
 

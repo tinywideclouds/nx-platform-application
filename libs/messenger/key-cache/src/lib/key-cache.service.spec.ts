@@ -1,5 +1,3 @@
-// --- FILE: libs/messenger/key-cache-access/src/lib/key-cache.service.spec.ts ---
-
 import { TestBed } from '@angular/core/testing';
 import { Mock, vi } from 'vitest';
 import { Temporal } from '@js-temporal/polyfill';
@@ -8,9 +6,9 @@ import {
   URN,
   PublicKeys,
   ISODateTimeString,
+  KeyNotFoundError,
 } from '@nx-platform-application/platform-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
-// FIX: Import the correct storage service
 import {
   KeyStorageService,
   PublicKeyRecord,
@@ -31,8 +29,9 @@ vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
 // --- Mock Dependencies ---
 const mockSecureKeyService = {
   getKey: vi.fn(),
+  storeKeys: vi.fn(),
 };
-// FIX: Mock the correct KeyStorageService
+
 const mockKeyStorageService = {
   getKey: vi.fn(),
   storeKey: vi.fn(),
@@ -79,7 +78,6 @@ describe('KeyCacheService', () => {
       providers: [
         KeyCacheService,
         { provide: SecureKeyService, useValue: mockSecureKeyService },
-        // FIX: Provide the mock for the correct token
         { provide: KeyStorageService, useValue: mockKeyStorageService },
       ],
     });
@@ -105,64 +103,86 @@ describe('KeyCacheService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('[Cache Miss] should fetch from network if key not in cache', async () => {
-    mockKeyStorageService.getKey.mockResolvedValue(undefined);
+  describe('getPublicKey', () => {
+    it('[Cache Miss] should fetch from network if key not in cache', async () => {
+      mockKeyStorageService.getKey.mockResolvedValue(undefined);
 
-    const result = await service.getPublicKey(mockUserUrn);
+      const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
-      mockUserUrnString
-    );
-    expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
-    expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
-    expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
-      mockUserUrnString,
-      mockJsonKeys,
-      isoNow
-    );
-    expect(result).toBe(mockPublicKeys);
-  });
+      expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
+        mockUserUrnString,
+      );
+      expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
+      expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
+      expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
+        mockUserUrnString,
+        mockJsonKeys,
+        isoNow,
+      );
+      expect(result).toBe(mockPublicKeys);
+    });
 
-  it('[Cache Stale] should fetch from network if key is expired (stale)', async () => {
-    const staleRecord: PublicKeyRecord = {
-      urn: mockUserUrnString,
-      keys: mockJsonKeys,
-      timestamp: isoTwoDaysAgo, // 2 days ago, > 24h TTL
-    };
-    mockKeyStorageService.getKey.mockResolvedValue(staleRecord);
+    it('[Cache Stale] should fetch from network if key is expired (stale)', async () => {
+      const staleRecord: PublicKeyRecord = {
+        urn: mockUserUrnString,
+        keys: mockJsonKeys,
+        timestamp: isoTwoDaysAgo, // 2 days ago, > 24h TTL
+      };
+      mockKeyStorageService.getKey.mockResolvedValue(staleRecord);
 
-    const result = await service.getPublicKey(mockUserUrn);
+      const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
-      mockUserUrnString
-    );
-    expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
-    expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
-      mockUserUrnString,
-      mockJsonKeys,
-      isoNow
-    );
-    expect(mockDeserialize).not.toHaveBeenCalled();
-    expect(result).toBe(mockPublicKeys);
-  });
+      expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
+        mockUserUrnString,
+      );
+      expect(mockSecureKeyService.getKey).toHaveBeenCalledWith(mockUserUrn);
+      expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
+        mockUserUrnString,
+        mockJsonKeys,
+        isoNow,
+      );
+      expect(mockDeserialize).not.toHaveBeenCalled();
+      expect(result).toBe(mockPublicKeys);
+    });
 
-  it('[Cache Hit] should return from cache if key is fresh', async () => {
-    const freshRecord: PublicKeyRecord = {
-      urn: mockUserUrnString,
-      keys: mockJsonKeys,
-      timestamp: isoOneHourAgo, // 1 hour ago, < 24h TTL
-    };
-    mockKeyStorageService.getKey.mockResolvedValue(freshRecord);
+    it('[Cache Hit] should return from cache if key is fresh', async () => {
+      const freshRecord: PublicKeyRecord = {
+        urn: mockUserUrnString,
+        keys: mockJsonKeys,
+        timestamp: isoOneHourAgo, // 1 hour ago, < 24h TTL
+      };
+      mockKeyStorageService.getKey.mockResolvedValue(freshRecord);
 
-    const result = await service.getPublicKey(mockUserUrn);
+      const result = await service.getPublicKey(mockUserUrn);
 
-    expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
-      mockUserUrnString
-    );
-    expect(mockDeserialize).toHaveBeenCalledWith(mockJsonKeys);
-    expect(mockSecureKeyService.getKey).not.toHaveBeenCalled();
-    expect(mockKeyStorageService.storeKey).not.toHaveBeenCalled();
-    expect(result).toBe(mockPublicKeys);
+      expect(mockKeyStorageService.getKey).toHaveBeenCalledWith(
+        mockUserUrnString,
+      );
+      expect(mockDeserialize).toHaveBeenCalledWith(mockJsonKeys);
+      expect(mockSecureKeyService.getKey).not.toHaveBeenCalled();
+      expect(mockKeyStorageService.storeKey).not.toHaveBeenCalled();
+      expect(result).toBe(mockPublicKeys);
+    });
+
+    it('should bubble up KeyNotFoundError if network fetch fails with 204', async () => {
+      mockKeyStorageService.getKey.mockResolvedValue(undefined);
+      const notFoundError = new KeyNotFoundError(mockUserUrnString);
+      mockSecureKeyService.getKey.mockRejectedValue(notFoundError);
+
+      await expect(service.getPublicKey(mockUserUrn)).rejects.toThrow(
+        KeyNotFoundError,
+      );
+    });
+
+    it('should bubble up generic Error if network fetch fails with 500', async () => {
+      mockKeyStorageService.getKey.mockResolvedValue(undefined);
+      const networkError = new Error('Network Failure');
+      mockSecureKeyService.getKey.mockRejectedValue(networkError);
+
+      await expect(service.getPublicKey(mockUserUrn)).rejects.toThrow(
+        'Network Failure',
+      );
+    });
   });
 
   describe('hasKeys', () => {
@@ -175,13 +195,39 @@ describe('KeyCacheService', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false if fetch throws error', async () => {
-      // Simulate 404
+    it('should return false if fetch throws KeyNotFoundError (204)', async () => {
+      mockKeyStorageService.getKey.mockResolvedValue(undefined);
+      mockSecureKeyService.getKey.mockRejectedValue(
+        new KeyNotFoundError(mockUserUrnString),
+      );
+
+      const result = await service.hasKeys(mockUserUrn);
+      expect(result).toBe(false);
+    });
+
+    it('should return false if fetch throws generic Error', async () => {
       mockKeyStorageService.getKey.mockResolvedValue(undefined);
       mockSecureKeyService.getKey.mockRejectedValue(new Error('404 Not Found'));
 
       const result = await service.hasKeys(mockUserUrn);
       expect(result).toBe(false);
+    });
+  });
+
+  describe('storeKeys', () => {
+    it('should upload to network and cache locally', async () => {
+      await service.storeKeys(mockUserUrn, mockPublicKeys);
+
+      expect(mockSecureKeyService.storeKeys).toHaveBeenCalledWith(
+        mockUserUrn,
+        mockPublicKeys,
+      );
+      expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
+      expect(mockKeyStorageService.storeKey).toHaveBeenCalledWith(
+        mockUserUrnString,
+        mockJsonKeys,
+        isoNow,
+      );
     });
   });
 

@@ -128,6 +128,9 @@
       "@nx-platform-application/platform-dexie-storage": [
         "libs/platform/ng/dexie-storage/src/index.ts"
       ],
+      "@nx-platform-application/platform-lifecycle": [
+        "libs/platform/ng/lifecycle/src/index.ts"
+      ],
       "@nx-platform-application/platform-protos": [
         "libs/platform/protos/src/index.ts"
       ],

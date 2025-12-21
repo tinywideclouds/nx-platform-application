@@ -1,5 +1,3 @@
-// libs/messenger/messenger-key-access/src/lib/key-service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import {
   HttpClientTestingModule,
@@ -12,13 +10,14 @@ import {
   PublicKeys,
   deserializeJsonToPublicKeys,
   serializePublicKeysToJson,
+  KeyNotFoundError,
 } from '@nx-platform-application/platform-types';
 
 // --- Mock the platform-types lib ---
 vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
-    ...actual, // Keep URN and other real types
+    ...actual,
     deserializeJsonToPublicKeys: vi.fn(),
     serializePublicKeysToJson: vi.fn(),
   };
@@ -38,15 +37,11 @@ describe('SecureKeyService', () => {
   // --- Fixtures ---
   const mockUserUrn = URN.parse('urn:contacts:user:test-user');
   const mockApiUrl = 'api/keys/urn:contacts:user:test-user';
-
-  // "Read" fixtures
   const mockJsonResponse = { encKey: 'b64...', sigKey: 'b64...' };
   const mockPublicKeys = {
     encKey: new Uint8Array([1, 2, 3]),
     sigKey: new Uint8Array([4, 5, 6]),
   } as PublicKeys;
-
-  // "Write" fixtures
   const mockSerializedJson = { encKey: 'b64...', sigKey: 'b64...' };
 
   beforeEach(async () => {
@@ -58,11 +53,9 @@ describe('SecureKeyService', () => {
     service = TestBed.inject(SecureKeyService);
     httpMock = TestBed.inject(HttpTestingController);
 
-    // Assign mocks
     mockDeserialize = deserializeJsonToPublicKeys as Mock;
     mockSerialize = serializePublicKeysToJson as Mock;
 
-    // Reset and Default behavior
     vi.clearAllMocks();
     mockDeserialize.mockReturnValue(mockPublicKeys);
     mockSerialize.mockReturnValue(mockSerializedJson);
@@ -79,15 +72,15 @@ describe('SecureKeyService', () => {
 
   // --- GET KEY (Read) ---
   describe('getKey', () => {
-    it('should fetch keys from the API and use the deserializer', async () => {
+    it('should fetch keys from the API (200 OK)', async () => {
       const promise = service.getKey(mockUserUrn);
 
       const req = httpMock.expectOne(mockApiUrl);
       expect(req.request.method).toBe('GET');
-      req.flush(mockJsonResponse);
+
+      req.flush(mockJsonResponse, { status: 200, statusText: 'OK' });
 
       const keys = await promise;
-
       expect(mockDeserialize).toHaveBeenCalledWith(mockJsonResponse);
       expect(keys).toBe(mockPublicKeys);
     });
@@ -95,7 +88,9 @@ describe('SecureKeyService', () => {
     it('should return keys from cache on subsequent calls', async () => {
       // First Call
       const promise1 = service.getKey(mockUserUrn);
-      httpMock.expectOne(mockApiUrl).flush(mockJsonResponse);
+      httpMock
+        .expectOne(mockApiUrl)
+        .flush(mockJsonResponse, { status: 200, statusText: 'OK' });
       await promise1;
 
       mockDeserialize.mockClear();
@@ -108,32 +103,31 @@ describe('SecureKeyService', () => {
       expect(keys).toBe(mockPublicKeys);
     });
 
-    // NEW TEST CASE: 404 Handling
-    it('should return null (and not throw) when API returns 404 Not Found', async () => {
-      // Act
+    it('should throw KeyNotFoundError when API returns 204 No Content', async () => {
       const promise = service.getKey(mockUserUrn);
 
-      // Assert HTTP
+      const req = httpMock.expectOne(mockApiUrl);
+      // Angular HttpClient returns null body for 204
+      req.flush(null, { status: 204, statusText: 'No Content' });
+
+      await expect(promise).rejects.toThrow(KeyNotFoundError);
+    });
+
+    it('should throw HttpError when API returns 404 Not Found', async () => {
+      const promise = service.getKey(mockUserUrn);
+
       const req = httpMock.expectOne(mockApiUrl);
       req.flush('Not Found', { status: 404, statusText: 'Not Found' });
 
-      // Assert Result
-      const result = await promise;
-      expect(result).toBeNull();
-      // Ensure deserializer was NOT called on error
-      expect(mockDeserialize).not.toHaveBeenCalled();
+      await expect(promise).rejects.toThrow();
     });
 
-    // NEW TEST CASE: 500 Handling
-    it('should re-throw errors other than 404', async () => {
-      // Act
+    it('should throw HttpError when API returns 500', async () => {
       const promise = service.getKey(mockUserUrn);
 
-      // Assert HTTP
       const req = httpMock.expectOne(mockApiUrl);
       req.flush('Internal Server Error', { status: 500, statusText: 'Error' });
 
-      // Assert Exception
       await expect(promise).rejects.toThrow();
     });
   });
@@ -143,7 +137,9 @@ describe('SecureKeyService', () => {
     it('should serialize, POST to API, and clear cache on success', async () => {
       // Populate cache
       const p1 = service.getKey(mockUserUrn);
-      httpMock.expectOne(mockApiUrl).flush(mockJsonResponse);
+      httpMock
+        .expectOne(mockApiUrl)
+        .flush(mockJsonResponse, { status: 200, statusText: 'OK' });
       await p1;
 
       // Call storeKeys
@@ -158,11 +154,11 @@ describe('SecureKeyService', () => {
 
       expect(mockSerialize).toHaveBeenCalledWith(mockPublicKeys);
 
-      // Verify Cache Invalidation
+      // Verify Cache Invalidation (Should request again)
       const p2 = service.getKey(mockUserUrn);
       const req2 = httpMock.expectOne(mockApiUrl);
       expect(req2.request.method).toBe('GET');
-      req2.flush(mockJsonResponse);
+      req2.flush(mockJsonResponse, { status: 200, statusText: 'OK' });
       await p2;
     });
   });

@@ -5,16 +5,29 @@
   "projectType": "application",
   "tags": ["scope:platform"],
   "targets": {
+    "serve-identity": {
+      "executor": "nx:run-commands",
+      "options": {
+        "env": {
+          "IDENTITY_SERVICE_URL": "http://localhost:3000",
+          "JWT_SECRET": "a-secure-e2e-test-secret-that-is-not-the-default-really",
+          "GCP_PROJECT_ID": "gemini-power-test",
+          "E2E_TEST_SECRET": "super-secret-value-for-e2e-tests"
+        },
+        "commands": ["npx nx serve node-identity-service"],
+        "parallel": true
+      }
+    },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": [
         "{options.reportsDirectory}",
-        "{options.htmlReportDirectory}" 
+        "{options.htmlReportDirectory}"
       ],
       "options": {
         "reportsDirectory": "{workspaceRoot}/coverage/apps/platform/node-identity-service",
         "configFile": "apps/platform/node-identity-service/vitest.config.mts",
-        "htmlReportDirectory": "{workspaceRoot}/dist/test-reports/node-identity-service" 
+        "htmlReportDirectory": "{workspaceRoot}/dist/test-reports/node-identity-service"
       },
       "configurations": {
         "unit": {
@@ -47,8 +60,7 @@
         }
       },
       "configurations": {
-        "development": {
-        },
+        "development": {},
         "production": {
           "esbuildOptions": {
             "sourcemap": false,

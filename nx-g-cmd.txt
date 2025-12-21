@@ -91,3 +91,4 @@ nx g @nx/angular:library --name=contacts-types --directory=libs/contacts/types -
 
 nx g @nx/angular:library --name=contacts-state --directory=libs/contacts/state --tags="scope:contacts"
 
+nx g @nx/angular:library --name=platform-lifecycle --directory=libs/platform/ng/lifecycle --tags="scope:platform"
