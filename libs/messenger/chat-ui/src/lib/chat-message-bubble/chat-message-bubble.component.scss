@@ -1,5 +1,4 @@
-/* libs/messenger/chat-ui/src/lib/chat-message-bubble/chat-message-bubble.component.scss */
-
 :host {
   display: block;
+  max-width: 100%; /* Ensure it respects the parent 'max-w-[85%]' wrapper */
 }
