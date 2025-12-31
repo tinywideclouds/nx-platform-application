@@ -18,7 +18,7 @@ import {
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/message-content';
 
 // ✅ NEW: Import Adapter
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
 
 @Injectable({ providedIn: 'root' })

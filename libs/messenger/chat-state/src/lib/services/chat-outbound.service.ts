@@ -9,14 +9,14 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import {
   OutboxRepository,
   OutboxWorkerService,
   OutboundTask,
-} from '@nx-platform-application/messenger-outbox';
+} from '@nx-platform-application/messenger-domain-outbox';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import {
   MessageMetadataService,

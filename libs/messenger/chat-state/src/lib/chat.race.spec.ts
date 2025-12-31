@@ -29,7 +29,7 @@ import {
 import {
   ChatStorageService,
   DecryptedMessage,
-} from '@nx-platform-application/chat-storage';
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
   ChatLiveDataService,
@@ -44,7 +44,7 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-storag
 import { vi, Mocked } from 'vitest';
 
 // [Refactor] New Dependencies
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 vi.mock('@js-temporal/polyfill', () => ({

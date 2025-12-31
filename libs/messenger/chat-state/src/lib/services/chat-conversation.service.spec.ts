@@ -9,7 +9,7 @@ import { MockProvider } from 'ng-mocks';
 
 // Services & Dependencies
 import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { ChatKeyService } from './chat-key.service';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatOutboundService } from './chat-outbound.service';
@@ -64,12 +64,10 @@ describe('ChatConversationService', () => {
       providers: [
         ChatConversationService,
         MockProvider(ChatMessageRepository, {
-          getMessages: vi
-            .fn()
-            .mockResolvedValue({
-              messages: [mockDecryptedMsg],
-              genesisReached: true,
-            }),
+          getMessages: vi.fn().mockResolvedValue({
+            messages: [mockDecryptedMsg],
+            genesisReached: true,
+          }),
           getConversationSummaries: vi.fn().mockResolvedValue([]),
         }),
         MockProvider(ChatStorageService, {
@@ -96,12 +94,10 @@ describe('ChatConversationService', () => {
           }),
         }),
         MockProvider(MessageContentParser, {
-          parse: vi
-            .fn()
-            .mockReturnValue({
-              kind: 'content',
-              payload: { kind: 'text', text: 'Recovered Text' },
-            }),
+          parse: vi.fn().mockReturnValue({
+            kind: 'content',
+            payload: { kind: 'text', text: 'Recovered Text' },
+          }),
         }),
         MockProvider(Logger),
       ],

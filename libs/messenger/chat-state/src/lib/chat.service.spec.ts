@@ -1,5 +1,3 @@
-// libs/messenger/chat-state/src/lib/chat.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { signal } from '@angular/core';
@@ -8,33 +6,32 @@ import {
   URN,
   User,
   KeyNotFoundError,
-} from '@nx-platform-application/platform-types'; // ✅ Added KeyNotFoundError
+} from '@nx-platform-application/platform-types';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-// Dependencies
 import {
   IAuthService,
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-access';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 
-// Workers & Services
-import { ChatIngestionService } from './services/chat-ingestion.service';
-import { ChatKeyService } from './services/chat-key.service';
 import { ChatConversationService } from './services/chat-conversation.service';
 import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.service';
+import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
+
+// ✅ NEW: Import Domain Service
+import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 
 describe('ChatService', () => {
   let service: ChatService;
 
-  // --- Mocks ---
   const mockIngestionService = {
     process: vi.fn().mockResolvedValue({
       messages: [],
@@ -75,11 +72,11 @@ describe('ChatService', () => {
   const mockCryptoService = {
     loadMyKeys: vi.fn(),
     storeMyKeys: vi.fn(),
-    verifyKeysMatch: vi.fn(), // ✅ Added for mismatch test
+    verifyKeysMatch: vi.fn(),
     clearKeys: vi.fn().mockResolvedValue(undefined),
   };
   const mockKeyService = {
-    getPublicKey: vi.fn(), // Changed from hasKeys to getPublicKey for init()
+    getPublicKey: vi.fn(),
     clear: vi.fn().mockResolvedValue(undefined),
   };
   const mockLiveService = {
@@ -136,7 +133,8 @@ describe('ChatService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatService,
-        { provide: ChatIngestionService, useValue: mockIngestionService },
+        // ✅ UPDATED: Mock Domain Service
+        { provide: IngestionService, useValue: mockIngestionService },
         { provide: ChatKeyService, useValue: mockKeyWorker },
         { provide: ChatConversationService, useValue: mockConversationService },
         { provide: IAuthService, useValue: mockAuthService },
@@ -156,7 +154,6 @@ describe('ChatService', () => {
 
     service = TestBed.inject(ChatService);
 
-    // Set default valid auth state
     mockAuthService.currentUser.set(mockUser);
     mockAuthService.sessionLoaded$.next({
       authenticated: true,
@@ -171,19 +168,15 @@ describe('ChatService', () => {
 
   describe('Boot Sequence (Init)', () => {
     it('should enter GENERATING if server returns KeyNotFoundError (204)', async () => {
-      // Arrange
-      mockCryptoService.loadMyKeys.mockResolvedValue(null); // No local keys
+      mockCryptoService.loadMyKeys.mockResolvedValue(null);
       mockKeyService.getPublicKey.mockRejectedValue(
         new KeyNotFoundError('urn...'),
-      ); // Server says 204
-      mockKeyWorker.resetIdentityKeys.mockResolvedValue(mockPrivateKeys); // Gen success
+      );
+      mockKeyWorker.resetIdentityKeys.mockResolvedValue(mockPrivateKeys);
 
-      // Act
-      // Re-trigger init by recreating or calling private method via any cast
       await (service as any).init();
 
-      // Assert
-      expect(service.onboardingState()).toBe('READY'); // Ends in READY after generating
+      expect(service.onboardingState()).toBe('READY');
       expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalled();
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.stringContaining('New user detected'),
@@ -191,16 +184,13 @@ describe('ChatService', () => {
     });
 
     it('should enter OFFLINE_READY if server returns Network Error', async () => {
-      // Arrange
-      mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys); // Have local keys
+      mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
       mockKeyService.getPublicKey.mockRejectedValue(
         new Error('500 Server Error'),
-      ); // Server down
+      );
 
-      // Act
       await (service as any).init();
 
-      // Assert
       expect(service.onboardingState()).toBe('OFFLINE_READY');
       expect(mockLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Booting in OFFLINE_READY mode'),
@@ -208,15 +198,12 @@ describe('ChatService', () => {
     });
 
     it('should enter REQUIRES_LINKING if keys mismatch', async () => {
-      // Arrange
       mockCryptoService.loadMyKeys.mockResolvedValue(mockPrivateKeys);
       mockKeyService.getPublicKey.mockResolvedValue(mockPublicKeys);
-      mockCryptoService.verifyKeysMatch.mockResolvedValue(false); // Mismatch!
+      mockCryptoService.verifyKeysMatch.mockResolvedValue(false);
 
-      // Act
       await (service as any).init();
 
-      // Assert
       expect(service.onboardingState()).toBe('REQUIRES_LINKING');
       expect(mockLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Identity Conflict'),
@@ -226,44 +213,34 @@ describe('ChatService', () => {
 
   describe('Ingestion Guards', () => {
     it('should ALLOW ingestion in OFFLINE_READY state', async () => {
-      // Arrange
       (service.onboardingState as any).set('OFFLINE_READY');
       (service as any).myKeys.set(mockPrivateKeys);
 
-      // Act
       await service.fetchAndProcessMessages();
 
-      // Assert
       expect(mockIngestionService.process).toHaveBeenCalled();
     });
 
     it('should ALLOW ingestion in READY state', async () => {
-      // Arrange
       (service.onboardingState as any).set('READY');
       (service as any).myKeys.set(mockPrivateKeys);
 
-      // Act
       await service.fetchAndProcessMessages();
 
-      // Assert
       expect(mockIngestionService.process).toHaveBeenCalled();
     });
 
     it('should BLOCK ingestion in CHECKING state', async () => {
-      // Arrange
       (service.onboardingState as any).set('CHECKING');
 
-      // Act
       await service.fetchAndProcessMessages();
 
-      // Assert
       expect(mockIngestionService.process).not.toHaveBeenCalled();
     });
 
     it('should BLOCK ingestion if Ceremony is Active', async () => {
       (service.onboardingState as any).set('READY');
       (service as any).myKeys.set(mockPrivateKeys);
-      // Force Ceremony Active
       (service.isCeremonyActive as any).set(true);
 
       await service.fetchAndProcessMessages();

@@ -13,7 +13,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 import { ConversationSummary } from '@nx-platform-application/messenger-types';
 import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { ChatKeyService } from './chat-key.service';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatOutboundService } from './chat-outbound.service';

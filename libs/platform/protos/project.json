@@ -10,7 +10,7 @@
       "options": {
         "commands": [
           "rimraf dist",
-          "buf generate"
+          "buf generate --template buf.gen.ts.yaml"
         ],
         "cwd": "libs/platform/protos"
       },

@@ -6,7 +6,7 @@ import {
   ConversationSyncState,
   MessageTombstone,
 } from '@nx-platform-application/messenger-types';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   CLOUD_PROVIDERS,
   CloudStorageProvider,

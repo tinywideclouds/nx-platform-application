@@ -12,14 +12,14 @@
       "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/libs/contacts/state",
-        "configFile": "libs/contacts/types/vite.config.mts"
+        "configFile": "libs/contacts/state/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "configFile": "libs/contacts/types/vitest.config.mts",
+        "configFile": "libs/contacts/state/vitest.config.mts",
         "reportsDirectory": "coverage/libs/contacts/sttate"
       }
     },

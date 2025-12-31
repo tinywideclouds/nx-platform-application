@@ -63,8 +63,8 @@ describe('ContactsDatabase', () => {
     expect(schema.primKey.name).toBe('id');
     const indexNames = schema.indexes.map((i) => i.name);
     // Dexie formatting check for multi-entry
-    expect(indexNames).toContain('[emailAddresses]');
-    expect(indexNames).toContain('[phoneNumbers]');
+    expect(indexNames).toContain('emailAddresses');
+    expect(indexNames).toContain('phoneNumbers');
   });
 
   it('should have correct indexes on blocked', () => {

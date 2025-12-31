@@ -6,7 +6,7 @@ import {
   HistoryQuery,
 } from './chat-message-repository.service';
 import { URN } from '@nx-platform-application/platform-types';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   ChatMessage, // ✅ UPDATED
   ConversationSummary, // ✅ IMPORT FROM CORRECT SOURCE

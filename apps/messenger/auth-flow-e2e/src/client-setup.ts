@@ -30,7 +30,7 @@ import {
   WSS_URL_TOKEN,
   ConnectionStatus,
 } from '@nx-platform-application/chat-live-data';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   SecureKeyService,
   KEY_SERVICE_URL,
@@ -66,7 +66,7 @@ export async function createTestClient(
   userUrn: URN,
   authToken: string,
   /** ➡️ **Change 2:** Default `generateKeys` to `false`. */
-  options: ClientOptions = { connectToWebsocket: false, generateKeys: false }
+  options: ClientOptions = { connectToWebsocket: false, generateKeys: false },
 ): Promise<TestClient> {
   const mockUser = {
     id: userUrn.toString(),

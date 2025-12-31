@@ -35,14 +35,14 @@
       "@nx-platform-application/chat-state": [
         "libs/messenger/chat-state/src/index.ts"
       ],
-      "@nx-platform-application/chat-storage": [
-        "libs/messenger/chat-storage/src/index.ts"
-      ],
       "@nx-platform-application/chat-ui": [
         "libs/messenger/chat-ui/src/index.ts"
       ],
       "@nx-platform-application/console-logger": [
         "libs/platform/ng/console-logger/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-api": [
+        "libs/contacts/api/src/index.ts"
       ],
       "@nx-platform-application/contacts-cloud-access": [
         "libs/contacts/cloud-access/src/index.ts"
@@ -74,8 +74,29 @@
       "@nx-platform-application/messenger-device-pairing": [
         "libs/messenger/device-pairing/src/index.ts"
       ],
-      "@nx-platform-application/messenger-identity-adapter": [
-        "libs/messenger/identity-adapter/src/index.ts"
+      "@nx-platform-application/messenger-domain-chat-sync": [
+        "libs/messenger/domain/chat-sync/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-identity": [
+        "libs/messenger/domain/identity/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-identity-adapter": [
+        "libs/messenger/domain/identity-adapter/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-ingestion": [
+        "libs/messenger/domain/ingestion/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-outbox": [
+        "libs/messenger/domain/outbox/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-quarantine": [
+        "libs/messenger/domain/quarantine/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-sending": [
+        "libs/messenger/domain/sending/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-chat-storage": [
+        "libs/messenger/infrastructure/chat-storage/src/index.ts"
       ],
       "@nx-platform-application/messenger-key-access": [
         "libs/messenger/key-access/src/index.ts"
@@ -86,9 +107,6 @@
       "@nx-platform-application/messenger-key-storage": [
         "libs/messenger/key-storage/src/index.ts"
       ],
-      "@nx-platform-application/messenger-outbox": [
-        "libs/messenger/outbox/src/index.ts"
-      ],
       "@nx-platform-application/messenger-private-key-storage": [
         "libs/messenger/private-key-storage/src/index.ts"
       ],
@@ -97,9 +115,6 @@
       ],
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/messenger/*"
-      ],
-      "@nx-platform-application/messenger-quarantine": [
-        "libs/messenger/quarantine/src/index.ts"
       ],
       "@nx-platform-application/messenger-settings-ui": [
         "libs/messenger/settings-ui/src/index.ts"

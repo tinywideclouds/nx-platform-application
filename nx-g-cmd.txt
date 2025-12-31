@@ -96,3 +96,28 @@ nx g @nx/angular:library --name=platform-lifecycle --directory=libs/platform/ng/
 nx g @nx/angular:library --name=messenger-outbox --directory=libs/messenger/outbox --tags="scope:messenger" 
 
 nx g @nx/angular:library --name=messenger-quarantine --directory=libs/messenger/quarantine --tags="scope:messenger" 
+
+
+nx g @nx/angular:library --name=contacts-api --directory=libs/contacts/api --tags="scope:contacts"
+
+
+nx g @nx/workspace:remove messenger-domain-ingestion
+
+nx g @nx/angular:library --name=messenger-domain-ingestion --directory=libs/messenger/domain/ingestion --tags="scope:messenger" 
+
+nx g @nx/angular:library --name=messenger-domain-identity --directory=libs/messenger/domain/identity --tags="scope:messenger" 
+
+nx g @nx/workspace:move --project=messenger-quarantine --destination=libs/messenger/domain/quarantine --importPath=@nx-platform-application/messenger-domain-quarantine
+
+nx g @nx/workspace:move --project=messenger-identity-adapter --destination=libs/messenger/domain/identity-adapter --importPath=@nx-platform-application/messenger-domain-identity-adapter
+
+
+nx g @nx/angular:library --name=messenger-domain-chat-sync --directory=libs/messenger/domain/chat-sync --tags="scope:messenger" 
+
+nx g @nx/angular:library --name=messenger-domain-sending --directory=libs/messenger/domain/sending --tags="scope:messenger" 
+
+
+nx g @nx/workspace:move --project=messenger-outbox --destination=libs/messenger/domain/outbox --importPath=@nx-platform-application/messenger-domain-outbox
+
+
+nx g @nx/workspace:move --project=chat-storage --destination=libs/messenger/infrastructure/chat-storage --importPath=@nx-platform-application/messenger-infrastructure-chat-storage

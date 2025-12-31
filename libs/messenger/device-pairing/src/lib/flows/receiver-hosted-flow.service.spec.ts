@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ReceiverHostedFlowService } from './receiver-hosted-flow.service';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/chat-access';
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter'; // ✅ NEW
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter'; // ✅ NEW
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN, Priority } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
@@ -18,7 +18,7 @@ vi.stubGlobal(
     encode() {
       return new Uint8Array([]);
     }
-  }
+  },
 );
 
 describe('ReceiverHostedFlowService', () => {
@@ -74,7 +74,7 @@ describe('ReceiverHostedFlowService', () => {
 
       // 3. Assert
       expect(mockIdentityResolver.resolveToHandle).toHaveBeenCalledWith(
-        myAuthUrn
+        myAuthUrn,
       );
 
       // ✅ VERIFY FIX: Check Envelope Destination

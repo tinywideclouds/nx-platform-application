@@ -1,6 +1,3 @@
-// libs/messenger/chat-state/src/lib/chat.service.ts
-
-// ... [Imports remain the same]
 import {
   Injectable,
   WritableSignal,
@@ -39,15 +36,18 @@ import {
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { SyncOptions } from '@nx-platform-application/messenger-cloud-sync';
 import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.service';
 import { ChatConversationService } from './services/chat-conversation.service';
-import { ChatIngestionService } from './services/chat-ingestion.service';
-import { ChatKeyService } from './services/chat-key.service';
-import { OutboxWorkerService } from '@nx-platform-application/messenger-outbox';
+
+// ✅ NEW: Import from Domain Library
+import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
+import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
+
+import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
 import { QuarantineService } from '@nx-platform-application/messenger-quarantine';
 import { MessageContentParser } from '@nx-platform-application/message-content';
@@ -78,8 +78,11 @@ export class ChatService {
   private readonly parser = inject(MessageContentParser);
   private readonly syncOrchestrator = inject(ChatSyncOrchestratorService);
   private readonly conversationService = inject(ChatConversationService);
-  private readonly ingestionService = inject(ChatIngestionService);
+
+  // ✅ UPDATED: Inject Domain Service
+  private readonly ingestionService = inject(IngestionService);
   private readonly keyWorker = inject(ChatKeyService);
+
   private readonly outboxWorker = inject(OutboxWorkerService);
   private readonly pairingService = inject(DevicePairingService);
   private readonly destroyRef = inject(DestroyRef);
@@ -724,11 +727,6 @@ export class ChatService {
     return this.quarantineService.retrieveForInspection(urn);
   }
 
-  /**
-   * Promotes messages from Quarantine (Jail) to Main Storage (Application).
-   * ✅ NOW ACCEPTS: targetConversationUrn (e.g., the new contact UUID)
-   * to re-home messages from the handle (email) to the contact.
-   */
   public async promoteQuarantinedMessages(
     senderUrn: URN,
     targetConversationUrn?: URN,
@@ -753,7 +751,6 @@ export class ChatService {
             sentTimestamp: tm.sentTimestamp as ISODateTimeString,
             typeId: tm.typeId,
             status: 'received',
-            // ✅ FEATURE: Re-home if target provided, else use parsed default
             conversationUrn: targetConversationUrn || parsed.conversationId,
             tags: parsed.tags,
             payloadBytes:

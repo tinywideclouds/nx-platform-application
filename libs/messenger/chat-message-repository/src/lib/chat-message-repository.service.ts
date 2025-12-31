@@ -10,7 +10,7 @@ import {
   ConversationSummary,
   ConversationSyncState,
 } from '@nx-platform-application/messenger-types';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
 import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';

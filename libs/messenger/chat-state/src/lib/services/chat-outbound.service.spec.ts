@@ -9,14 +9,14 @@ import { MockProvider } from 'ng-mocks';
 // Services
 import { ChatSendService } from '@nx-platform-application/chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { Logger } from '@nx-platform-application/console-logger';
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import {
   OutboxRepository,
   OutboxWorkerService,
-} from '@nx-platform-application/messenger-outbox';
+} from '@nx-platform-application/messenger-domain-outbox';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { MessageMetadataService } from '@nx-platform-application/message-content';
 

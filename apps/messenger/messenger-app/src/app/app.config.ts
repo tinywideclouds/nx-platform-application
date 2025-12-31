@@ -59,7 +59,7 @@ import {
   CLOUD_PROVIDERS,
   GoogleDriveService,
 } from '@nx-platform-application/platform-cloud-access';
-import { provideMessengerIdentity } from '@nx-platform-application/messenger-identity-adapter';
+import { provideMessengerIdentity } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 // --- Conditional Mock Providers ---
 const authProviders = environment.useMocks

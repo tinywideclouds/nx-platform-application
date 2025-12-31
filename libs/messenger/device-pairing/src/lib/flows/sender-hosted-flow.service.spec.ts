@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { SenderHostedFlowService } from './sender-hosted-flow.service';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/chat-access';
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter'; // ✅ NEW
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter'; // ✅ NEW
 import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN } from '@nx-platform-application/platform-types';
@@ -23,7 +23,7 @@ vi.stubGlobal(
     decode() {
       return '{"enc":{},"sig":{}}';
     }
-  }
+  },
 );
 // TextEncoder is usually available in node environment, if not stub it too.
 vi.stubGlobal(
@@ -32,7 +32,7 @@ vi.stubGlobal(
     encode() {
       return new Uint8Array([]);
     }
-  }
+  },
 );
 
 describe('SenderHostedFlowService', () => {
@@ -93,7 +93,7 @@ describe('SenderHostedFlowService', () => {
 
       // 3. Assert
       expect(mockIdentityResolver.resolveToHandle).toHaveBeenCalledWith(
-        myAuthUrn
+        myAuthUrn,
       );
 
       // ✅ VERIFY FIX: The envelope must be addressed to the HANDLE
@@ -110,7 +110,7 @@ describe('SenderHostedFlowService', () => {
 
       mockCrypto.generateSenderSession.mockResolvedValue({ oneTimeKey: 'k' });
       mockIdentityResolver.resolveToHandle.mockRejectedValue(
-        new Error('Not found')
+        new Error('Not found'),
       ); // Fail
 
       const mockEnvelope = { recipientId: null };
@@ -129,7 +129,7 @@ describe('SenderHostedFlowService', () => {
     it('redeemScannedQr should throw on Mode Mismatch', async () => {
       mockCrypto.parseQrCode.mockResolvedValue({ mode: 'RECEIVER_HOSTED' });
       await expect(
-        service.redeemScannedQr('qr', URN.parse('urn:contacts:user:me'))
+        service.redeemScannedQr('qr', URN.parse('urn:contacts:user:me')),
       ).rejects.toThrow('Invalid QR Mode');
     });
   });

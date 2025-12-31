@@ -7,7 +7,7 @@ import {
   ChatSendService,
 } from '@nx-platform-application/chat-access';
 import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   SecureKeyService,
   KEY_SERVICE_URL,
@@ -30,7 +30,7 @@ export const delay = (ms: number) =>
  */
 export async function getE2EToken(
   secret: string,
-  user: { id: string; email: string; alias: string }
+  user: { id: string; email: string; alias: string },
 ): Promise<string> {
   const headers = {
     'Content-Type': 'application/json',
@@ -42,14 +42,14 @@ export async function getE2EToken(
       method: 'POST',
       headers: headers,
       body: JSON.stringify(user),
-    }
+    },
   );
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(
       'Failed to fetch E2E token. Server responded with:',
       response.status,
-      errorBody
+      errorBody,
     );
     throw new Error(`Failed to fetch E2E token. Status: ${response.status}`);
   }
@@ -62,7 +62,7 @@ export async function getE2EToken(
  */
 export const awaitClientConnection = (
   clientName: string,
-  service: ChatLiveDataService
+  service: ChatLiveDataService,
 ) => {
   return new Promise((resolve, reject) => {
     console.log(`[Test] Waiting for ${clientName} connection status...`);
@@ -74,7 +74,7 @@ export const awaitClientConnection = (
       }
       if (status === 'error' || status === 'disconnected') {
         reject(
-          new Error(`${clientName} connection failed. Status: '${status}'`)
+          new Error(`${clientName} connection failed. Status: '${status}'`),
         );
       }
     });
@@ -88,7 +88,7 @@ export const awaitClientConnection = (
 export async function clearUserQueue(
   user: string,
   routingUrl: string,
-  userToken: string
+  userToken: string,
 ): Promise<void> {
   const headers = {
     Authorization: `Bearer ${userToken}`,
@@ -102,7 +102,7 @@ export async function clearUserQueue(
     });
     if (!getResp.ok) {
       console.warn(
-        `[Test] Failed to get messages during queue clear. Status: ${getResp.status}`
+        `[Test] Failed to get messages during queue clear. Status: ${getResp.status}`,
       );
       return; // Fail gracefully, don't block test
     }
@@ -119,7 +119,7 @@ export async function clearUserQueue(
     }
 
     console.log(
-      `[Test] Clearing ${messageIds.length} stale messages from queue...`
+      `[Test] Clearing ${messageIds.length} stale messages from queue...`,
     );
 
     // 2. Acknowledge them to delete them
@@ -131,7 +131,7 @@ export async function clearUserQueue(
 
     if (!ackResp.ok) {
       console.warn(
-        `[Test] Failed to ack messages during queue clear. Status: ${ackResp.status}`
+        `[Test] Failed to ack messages during queue clear. Status: ${ackResp.status}`,
       );
     }
     console.log('[Test] Queue clear completed.');
@@ -142,7 +142,7 @@ export async function clearUserQueue(
 
 export async function getMessages(
   routingUrl: string,
-  userToken: string
+  userToken: string,
 ): Promise<any[]> {
   const headers = { Authorization: `Bearer ${userToken}` };
   try {

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { Logger } from '@nx-platform-application/console-logger';
-import { DecryptedMessage } from '@nx-platform-application/chat-storage';
+import { DecryptedMessage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   URN,
   ISODateTimeString,

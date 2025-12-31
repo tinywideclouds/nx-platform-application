@@ -7,7 +7,7 @@ import {
   DecryptedMessage,
   ConversationSyncState, // ✅ NEW
   MessageTombstone, // ✅ NEW
-} from '@nx-platform-application/chat-storage';
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   CLOUD_PROVIDERS,
   CloudStorageProvider,
@@ -60,7 +60,7 @@ vi.mock('@js-temporal/polyfill', () => {
                   toPlainDate: (opts: any) => ({
                     toString: () =>
                       `${nextY}-${String(nextM).padStart(2, '0')}-${String(
-                        opts.day
+                        opts.day,
                       ).padStart(2, '0')}`,
                   }),
                 };
@@ -68,7 +68,7 @@ vi.mock('@js-temporal/polyfill', () => {
               toPlainDate: (opts: any) => ({
                 toString: () =>
                   `${y}-${String(m).padStart(2, '0')}-${String(
-                    opts.day
+                    opts.day,
                   ).padStart(2, '0')}`,
               }),
             }),
@@ -225,7 +225,7 @@ describe('ChatCloudService', () => {
       await (service as any).processVault(
         mockProvider,
         '2023_11',
-        mockNovember2023
+        mockNovember2023,
       );
 
       // Assert
@@ -235,7 +235,7 @@ describe('ChatCloudService', () => {
           tombstones: [deletedRecord],
           messageCount: 0,
         }),
-        expect.stringContaining('chat_vault_2023_11.json')
+        expect.stringContaining('chat_vault_2023_11.json'),
       );
     });
   });

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { ContactsStorageService } from './contacts.service';
+import { ContactsStorageService } from './contacts-storage.service';
 import { ContactsDatabase } from './db/contacts.database';
 import {
   StorableContact,

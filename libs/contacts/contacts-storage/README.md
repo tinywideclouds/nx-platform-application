@@ -60,11 +60,19 @@ The `ContactsStorageService` exposes RxJS streams and Promise-based CRUD methods
 
 ```typescript
 // Live Data
-contacts$: Observable<Contact[]>;
-blocked$: Observable<BlockedIdentity[]>;
+contacts$: Observable<Contact[]>;       // All local contacts
+blocked$: Observable<BlockedIdentity[]>; // The active block list
+pending$: Observable<PendingIdentity[]>; // Strangers waiting for approval
+groups$: Observable<ContactGroup[]>;     // User-defined groups
 
-// Actions
-blockIdentity(urn: URN): Promise<void>;
+// Actions: Security
+blockIdentity(urn: URN, scopes: string[]): Promise<void>; // Updated to support Scopes
+deletePending(urn: URN): Promise<void>;
+
+// Actions: Groups
+getGroup(id: URN): Promise<ContactGroup | undefined>;
+getContactsForGroup(groupId: URN): Promise<Contact[]>;
+
+// Actions: CRUD
 saveContact(contact: Contact): Promise<void>;
-
 ```

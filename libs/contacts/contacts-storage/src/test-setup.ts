@@ -14,9 +14,7 @@ import {
 })
 export class ZonelessTestModule {}
 
-console.log('zoneless test');
-
 getTestBed().initTestEnvironment(
   [BrowserTestingModule, ZonelessTestModule],
-  platformBrowserTesting()
+  platformBrowserTesting(),
 );
