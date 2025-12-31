@@ -12,7 +12,7 @@ import {
 
 import { SecureKeyService } from '@nx-platform-application/messenger-key-access';
 import {
-  EncryptedMessagePayload,
+  TransportMessage,
   serializePayloadToProtoBytes,
   deserializeProtoBytesToPayload,
 } from '@nx-platform-application/messenger-types';
@@ -93,7 +93,7 @@ export class MessengerCryptoService {
     const oneTimeKey = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 },
       true,
-      ['encrypt', 'decrypt']
+      ['encrypt', 'decrypt'],
     );
     const sessionId = crypto.randomUUID();
 
@@ -137,7 +137,7 @@ export class MessengerCryptoService {
         binaryKey,
         rsaOaepImportParams,
         true,
-        ['encrypt']
+        ['encrypt'],
       );
     } else if (data.m === 'sh') {
       mode = 'SENDER_HOSTED';
@@ -147,7 +147,7 @@ export class MessengerCryptoService {
         binaryKey,
         { name: 'AES-GCM' },
         true,
-        ['decrypt']
+        ['decrypt'],
       );
     } else {
       throw new Error(`Unknown QR Mode: ${data.m}`);
@@ -164,7 +164,7 @@ export class MessengerCryptoService {
 
   public async verifyKeysMatch(
     userUrn: URN,
-    server: PublicKeys
+    server: PublicKeys,
   ): Promise<boolean> {
     try {
       const localPublic = await this.loadMyPublicKeys(userUrn);
@@ -181,7 +181,7 @@ export class MessengerCryptoService {
         this.logger.warn(
           'Crypto mismatch detected:',
           !encMatch ? 'Encryption Key Mismatch' : '',
-          !sigMatch ? 'Signing Key Mismatch' : ''
+          !sigMatch ? 'Signing Key Mismatch' : '',
         );
         return false;
       }
@@ -196,7 +196,7 @@ export class MessengerCryptoService {
   // --- 3. Key Management (Storage/Load) ---
 
   public async generateAndStoreKeys(
-    userUrn: URN
+    userUrn: URN,
   ): Promise<{ privateKeys: PrivateKeys; publicKeys: PublicKeys }> {
     this.logger.debug(`CryptoService: Generating NEW keys for ${userUrn}`);
 
@@ -266,14 +266,14 @@ export class MessengerCryptoService {
           encKeyJwk,
           rsaOaepImportParams,
           true,
-          encKeyJwk.key_ops as KeyUsage[]
+          encKeyJwk.key_ops as KeyUsage[],
         ),
         crypto.subtle.importKey(
           'jwk',
           sigKeyJwk,
           rsaPssImportParams,
           true,
-          sigKeyJwk.key_ops as KeyUsage[]
+          sigKeyJwk.key_ops as KeyUsage[],
         ),
       ]);
 
@@ -313,7 +313,7 @@ export class MessengerCryptoService {
   public async getFingerprint(keyBytes: Uint8Array): Promise<string> {
     const hashBuffer = await crypto.subtle.digest(
       'SHA-256',
-      new Uint8Array(keyBytes)
+      new Uint8Array(keyBytes),
     );
     const hashArray = Array.from(new Uint8Array(hashBuffer));
 
@@ -326,10 +326,10 @@ export class MessengerCryptoService {
   // --- 4. Encryption / Decryption ---
 
   public async encryptAndSign(
-    payload: EncryptedMessagePayload,
+    payload: TransportMessage,
     recipientId: URN,
     myPrivateKeys: PrivateKeys,
-    recipientPublicKeys: PublicKeys
+    recipientPublicKeys: PublicKeys,
   ): Promise<SecureEnvelope> {
     const payloadBytes = serializePayloadToProtoBytes(payload);
 
@@ -338,7 +338,7 @@ export class MessengerCryptoService {
       recipientPublicKeys.encKey as BufferSource,
       rsaOaepImportParams,
       true,
-      ['encrypt']
+      ['encrypt'],
     );
 
     const { encryptedSymmetricKey, encryptedData } =
@@ -346,7 +346,7 @@ export class MessengerCryptoService {
 
     const signature = await this.cryptoEngine.sign(
       myPrivateKeys.sigKey,
-      encryptedData
+      encryptedData,
     );
 
     return {
@@ -359,9 +359,9 @@ export class MessengerCryptoService {
 
   // Used for Receiver-Hosted Flow (Encrypting for RSA Session Key)
   public async encryptSyncMessage(
-    payload: EncryptedMessagePayload,
+    payload: TransportMessage,
     sessionPublicKey: CryptoKey,
-    myPrivateKeys: PrivateKeys
+    myPrivateKeys: PrivateKeys,
   ): Promise<SecureEnvelope> {
     const payloadBytes = serializePayloadToProtoBytes(payload);
 
@@ -370,7 +370,7 @@ export class MessengerCryptoService {
 
     const signature = await this.cryptoEngine.sign(
       myPrivateKeys.sigKey,
-      encryptedData
+      encryptedData,
     );
 
     return {
@@ -383,8 +383,8 @@ export class MessengerCryptoService {
 
   // Used for Sender-Hosted Flow (Encrypting for AES Session Key)
   public async encryptSyncOffer(
-    payload: EncryptedMessagePayload,
-    oneTimeKey: CryptoKey
+    payload: TransportMessage,
+    oneTimeKey: CryptoKey,
   ): Promise<SecureEnvelope> {
     const payloadBytes = serializePayloadToProtoBytes(payload);
 
@@ -395,12 +395,12 @@ export class MessengerCryptoService {
     const encryptedContent = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       oneTimeKey,
-      new Uint8Array(payloadBytes)
+      new Uint8Array(payloadBytes),
     );
 
     // Combine IV + Ciphertext
     const encryptedData = new Uint8Array(
-      iv.length + encryptedContent.byteLength
+      iv.length + encryptedContent.byteLength,
     );
     encryptedData.set(iv, 0);
     encryptedData.set(new Uint8Array(encryptedContent), iv.length);
@@ -415,31 +415,31 @@ export class MessengerCryptoService {
 
   public async verifyAndDecrypt(
     envelope: SecureEnvelope,
-    myPrivateKeys: PrivateKeys
-  ): Promise<EncryptedMessagePayload> {
+    myPrivateKeys: PrivateKeys,
+  ): Promise<TransportMessage> {
     return this.internalVerifyAndDecrypt(envelope, myPrivateKeys.encKey);
   }
 
   // Used for Receiver-Hosted Flow (Decrypting with RSA Session Key)
   public async decryptSyncMessage(
     envelope: SecureEnvelope,
-    sessionPrivateKey: CryptoKey
-  ): Promise<EncryptedMessagePayload> {
+    sessionPrivateKey: CryptoKey,
+  ): Promise<TransportMessage> {
     return this.internalVerifyAndDecrypt(envelope, sessionPrivateKey);
   }
 
   // Used for Sender-Hosted Flow (Decrypting with AES Session Key)
   public async decryptSyncOffer(
     envelope: SecureEnvelope,
-    oneTimeKey: CryptoKey
-  ): Promise<EncryptedMessagePayload> {
+    oneTimeKey: CryptoKey,
+  ): Promise<TransportMessage> {
     const iv = envelope.encryptedData.slice(0, 12);
     const ciphertext = envelope.encryptedData.slice(12);
 
     const decryptedBytes = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
       oneTimeKey,
-      ciphertext
+      ciphertext,
     );
 
     return deserializeProtoBytesToPayload(new Uint8Array(decryptedBytes));
@@ -449,12 +449,12 @@ export class MessengerCryptoService {
 
   private async internalVerifyAndDecrypt(
     envelope: SecureEnvelope,
-    decryptionKey: CryptoKey
-  ): Promise<EncryptedMessagePayload> {
+    decryptionKey: CryptoKey,
+  ): Promise<TransportMessage> {
     const innerPayloadBytes = await this.cryptoEngine.decrypt(
       decryptionKey,
       envelope.encryptedSymmetricKey,
-      envelope.encryptedData
+      envelope.encryptedData,
     );
 
     const innerPayload = deserializeProtoBytesToPayload(innerPayloadBytes);
@@ -464,7 +464,7 @@ export class MessengerCryptoService {
 
     if (!senderPublicKeys) {
       throw new Error(
-        `Verification Failed: Could not find public keys for sender ${claimedSenderId}`
+        `Verification Failed: Could not find public keys for sender ${claimedSenderId}`,
       );
     }
 
@@ -473,13 +473,13 @@ export class MessengerCryptoService {
       senderPublicKeys.sigKey as BufferSource,
       rsaPssImportParams,
       true,
-      ['verify']
+      ['verify'],
     );
 
     const isValid = await this.cryptoEngine.verify(
       senderSigKey,
       envelope.signature,
-      envelope.encryptedData
+      envelope.encryptedData,
     );
 
     if (!isValid) {
@@ -500,7 +500,7 @@ export class MessengerCryptoService {
   private async jwkToSpki(
     privateJwk: JsonWebKey,
     params: any,
-    usages: KeyUsage[]
+    usages: KeyUsage[],
   ): Promise<ArrayBuffer> {
     const publicJwk: JsonWebKey = {
       kty: privateJwk.kty,
@@ -516,7 +516,7 @@ export class MessengerCryptoService {
       publicJwk,
       params,
       true,
-      usages
+      usages,
     );
 
     return crypto.subtle.exportKey('spki', pubKey);

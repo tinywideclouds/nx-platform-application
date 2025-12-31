@@ -1,14 +1,12 @@
-// libs/messenger/chat-cloud-access/src/lib/chat-cloud.service.ts
-
 import { Injectable, inject, signal } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';
-import { DecryptedMessage } from '@nx-platform-application/messenger-types';
 import {
-  ChatStorageService,
+  ChatMessage,
   ConversationSyncState,
   MessageTombstone,
-} from '@nx-platform-application/chat-storage';
+} from '@nx-platform-application/messenger-types';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import {
   CLOUD_PROVIDERS,
   CloudStorageProvider,
@@ -73,7 +71,7 @@ export class ChatCloudService {
     if (!provider) return;
 
     try {
-      // ✅ RETURNS: ConversationSyncState[] (Safe Domain Objects)
+      // Returns ConversationSyncState[]
       const allConversations = await this.storage.getAllConversations();
       if (allConversations.length === 0) return;
 
@@ -99,7 +97,7 @@ export class ChatCloudService {
       const rawIndex = await provider.downloadFile<any[]>(path);
 
       if (rawIndex && Array.isArray(rawIndex) && rawIndex.length > 0) {
-        // ✅ HYDRATION: Convert JSON strings back to URN objects
+        // HYDRATION: Convert JSON strings back to URN objects
         const hydratedIndex: ConversationSyncState[] = rawIndex.map((r) => ({
           ...r,
           conversationUrn: URN.parse(r.conversationUrn),
@@ -146,9 +144,7 @@ export class ChatCloudService {
       const vault = await provider.downloadFile<ChatVault>(vaultPath);
 
       if (vault && vault.messages && vault.messages.length > 0) {
-        // ✅ HYDRATION: We must ensure JSON strings are converted to URNs
-        // Note: PayloadBytes hydration from JSON (base64/array) is handled
-        // by the StorageMapper, but URNs need to be correct before entry.
+        // HYDRATION: Ensure JSON strings are converted to URNs
         const hydratedMessages = vault.messages.map(this.hydrateMessage);
 
         await this.storage.bulkSaveMessages(hydratedMessages);
@@ -195,7 +191,6 @@ export class ChatCloudService {
       'T23:59:59Z') as ISODateTimeString;
 
     const localMessages = await this.storage.getMessagesInRange(start, end);
-    // ✅ RETURNS: MessageTombstone[] (Safe Domain Objects)
     const localTombstones = await this.storage.getTombstonesInRange(start, end);
 
     // 2. FETCH REMOTE
@@ -207,13 +202,13 @@ export class ChatCloudService {
     }
 
     // 3. MERGE LOGIC
-    const combinedMessages = new Map<string, DecryptedMessage>();
+    const combinedMessages = new Map<string, ChatMessage>();
     const combinedTombstones = new Map<string, MessageTombstone>();
 
     // A. Load Remote (Hydrating types)
     if (remoteVault) {
       remoteVault.messages.forEach((m) =>
-        combinedMessages.set(m.messageId, this.hydrateMessage(m)),
+        combinedMessages.set(m.id, this.hydrateMessage(m)),
       );
       remoteVault.tombstones?.forEach((t) =>
         combinedTombstones.set(t.messageId, this.hydrateTombstone(t)),
@@ -221,7 +216,8 @@ export class ChatCloudService {
     }
 
     // B. Overlay Local (Local is fresher)
-    localMessages.forEach((m) => combinedMessages.set(m.messageId, m));
+    // Note: Local messages are already ChatMessage objects
+    localMessages.forEach((m) => combinedMessages.set(m.id, m));
     localTombstones.forEach((t) => combinedTombstones.set(t.messageId, t));
 
     // C. Apply Tombstones (The Pruning)
@@ -294,7 +290,7 @@ export class ChatCloudService {
     try {
       const range = await this.storage.getDataRange();
 
-      if (range.min && range.max) {
+      if (range && range.min && range.max) {
         const startObj = Temporal.PlainDate.from(range.min.substring(0, 10));
         const endObj = Temporal.PlainDate.from(range.max.substring(0, 10));
         let cursor = startObj.toPlainYearMonth();
@@ -326,14 +322,24 @@ export class ChatCloudService {
   /**
    * Hydrates a JSON object (where IDs are strings) into a Domain Object (URNs)
    */
-  private hydrateMessage(raw: any): DecryptedMessage {
+  private hydrateMessage(raw: any): ChatMessage {
+    // Check if payloadBytes exists and is an array (JSON serialization)
+    let payload: Uint8Array | undefined;
+    if (raw.payloadBytes) {
+      // If it's an object/array from JSON, convert to Uint8Array
+      payload = new Uint8Array(Object.values(raw.payloadBytes));
+    }
+
     return {
       ...raw,
+      // Map 'messageId' (storage key) to 'id' (domain key) if needed,
+      // but usually the raw object has 'id' if it was serialized from ChatMessage.
+      // If serialized from DecryptedMessage (old), it might have messageId.
+      id: raw.id || raw.messageId,
       senderId: URN.parse(raw.senderId),
-      recipientId: URN.parse(raw.recipientId),
       conversationUrn: URN.parse(raw.conversationUrn),
       typeId: URN.parse(raw.typeId),
-      payloadBytes: new Uint8Array(Object.values(raw.payloadBytes || [])),
+      payloadBytes: payload,
     };
   }
 

@@ -1,162 +1,293 @@
-// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
-import { ChatIngestionService } from './chat-ingestion.service';
-import { ChatMessageMapper } from './chat-message.mapper';
-import { ChatDataService } from '@nx-platform-application/chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
-import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { ChatConversationService } from './chat-conversation.service';
 import {
+  ISODateTimeString,
   URN,
-  QueuedMessage,
-  SecureEnvelope,
 } from '@nx-platform-application/platform-types';
-import { vi } from 'vitest';
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockProvider } from 'ng-mocks';
+
+// Services & Dependencies
+import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
+import { ChatKeyService } from './chat-key.service';
+import { ChatMessageMapper } from './chat-message.mapper';
+import { ChatOutboundService } from './chat-outbound.service';
+import { Logger } from '@nx-platform-application/console-logger';
+import { MessageContentParser } from '@nx-platform-application/message-content';
+
+// Types
 import {
-  MessageContentParser,
-  ParsedMessage,
-} from '@nx-platform-application/message-content';
+  ChatMessage,
+  DecryptedMessage,
+  MessageDeliveryStatus,
+} from '@nx-platform-application/messenger-types';
 
-// --- Fixtures ---
-const mockMyUrn = URN.parse('urn:contacts:user:me');
-const mockSenderContact = URN.parse('urn:contacts:user:friend');
-const mockEnvelope = { recipientId: mockMyUrn } as SecureEnvelope;
-const mockQueuedMsg: QueuedMessage = { id: 'msg-1', envelope: mockEnvelope };
-const mockDecryptedPayload = {
-  senderId: mockSenderContact,
-  sentTimestamp: '2025-01-01T12:00:00Z',
-  typeId: URN.parse('urn:message:type:text'),
-  payloadBytes: new Uint8Array([1]),
-};
-const mockKeys = { encKey: 'priv' } as any;
+describe('ChatConversationService', () => {
+  let service: ChatConversationService;
+  let repository: ChatMessageRepository;
+  let storage: ChatStorageService;
+  let outbound: ChatOutboundService;
+  let mapper: ChatMessageMapper;
+  let keyWorker: ChatKeyService;
 
-describe('ChatIngestionService', () => {
-  let service: ChatIngestionService;
-  let parser: MessageContentParser;
+  // --- Fixtures ---
+  const myUrn = URN.parse('urn:contacts:user:me');
+  const partnerUrn = URN.parse('urn:contacts:user:bob');
+  const mockKeys = { encKey: {} as any, sigKey: {} as any };
 
-  const mockStorageService = {
-    saveMessage: vi.fn(),
-    saveQuarantinedMessage: vi.fn(),
+  const mockDecryptedMsg: DecryptedMessage = {
+    messageId: 'msg-1',
+    senderId: partnerUrn,
+    recipientId: myUrn,
+    conversationUrn: partnerUrn,
+    sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
+    typeId: URN.parse('urn:message:type:text'),
+    payloadBytes: new Uint8Array([1]),
+    status: 'read',
+    tags: [],
   };
-  const mockContactsService = { addToPending: vi.fn() };
-  const mockResolver = { resolveToContact: vi.fn() };
-  const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
-  const mockCryptoService = { verifyAndDecrypt: vi.fn() };
-  const mockLogger = {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
+
+  const mockViewMsg: ChatMessage = {
+    id: 'msg-1',
+    senderId: partnerUrn,
+    conversationUrn: partnerUrn,
+    status: 'read',
+    content: { kind: 'text', text: 'Hello' },
+    tags: [],
   };
-  const mockParser = { parse: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockDataService.getMessageBatch.mockReturnValue(of([]));
-    mockDataService.acknowledge.mockReturnValue(of(undefined));
-
-    // Default behaviors
-    mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
-    mockResolver.resolveToContact.mockResolvedValue(mockSenderContact);
-
-    // Default Parser: Return Content
-    mockParser.parse.mockReturnValue({
-      kind: 'content',
-      payload: { kind: 'text', text: 'Default' },
-    } as ParsedMessage);
-
     TestBed.configureTestingModule({
       providers: [
-        ChatIngestionService,
-        ChatMessageMapper,
-        { provide: ChatDataService, useValue: mockDataService },
-        { provide: MessengerCryptoService, useValue: mockCryptoService },
-        { provide: ChatStorageService, useValue: mockStorageService },
-        { provide: ContactsStorageService, useValue: mockContactsService },
-        { provide: IdentityResolver, useValue: mockResolver },
-        { provide: Logger, useValue: mockLogger },
-        { provide: MessageContentParser, useValue: mockParser },
+        ChatConversationService,
+        MockProvider(ChatMessageRepository, {
+          getMessages: vi
+            .fn()
+            .mockResolvedValue({
+              messages: [mockDecryptedMsg],
+              genesisReached: true,
+            }),
+          getConversationSummaries: vi.fn().mockResolvedValue([]),
+        }),
+        MockProvider(ChatStorageService, {
+          markConversationAsRead: vi.fn().mockResolvedValue(undefined),
+          getConversationIndex: vi.fn().mockResolvedValue({ unreadCount: 1 }),
+          deleteMessage: vi.fn().mockResolvedValue(undefined),
+          clearMessageHistory: vi.fn().mockResolvedValue(undefined),
+          updateMessageStatus: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(ChatKeyService, {
+          checkRecipientKeys: vi.fn().mockResolvedValue(true),
+        }),
+        MockProvider(ChatMessageMapper, {
+          toView: vi.fn().mockReturnValue(mockViewMsg),
+        }),
+        MockProvider(ChatOutboundService, {
+          sendMessage: vi.fn().mockResolvedValue({
+            message: {
+              ...mockDecryptedMsg,
+              messageId: 'pending-1',
+              status: 'pending',
+            },
+            outcome: Promise.resolve('sent'),
+          }),
+        }),
+        MockProvider(MessageContentParser, {
+          parse: vi
+            .fn()
+            .mockReturnValue({
+              kind: 'content',
+              payload: { kind: 'text', text: 'Recovered Text' },
+            }),
+        }),
+        MockProvider(Logger),
       ],
     });
-    service = TestBed.inject(ChatIngestionService);
-    parser = TestBed.inject(MessageContentParser);
+
+    service = TestBed.inject(ChatConversationService);
+    repository = TestBed.inject(ChatMessageRepository);
+    storage = TestBed.inject(ChatStorageService);
+    outbound = TestBed.inject(ChatOutboundService);
+    mapper = TestBed.inject(ChatMessageMapper);
+    keyWorker = TestBed.inject(ChatKeyService);
   });
 
-  describe('Router Logic', () => {
-    beforeEach(() => {
-      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-    });
+  describe('Loading Conversations', () => {
+    it('should load messages, map them to view, and update signals', async () => {
+      await service.loadConversation(partnerUrn, myUrn);
 
-    it('should SAVE message if Router returns Content', async () => {
-      // 1. Setup Parser to return Content
-      mockParser.parse.mockReturnValue({
-        kind: 'content',
-        payload: { kind: 'text', text: 'Hi' },
-      } as ParsedMessage);
-
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
-
-      expect(mockStorageService.saveMessage).toHaveBeenCalled();
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
-    });
-
-    it('should NOT SAVE if Router returns Signal (e.g. Read Receipt)', async () => {
-      // 1. Setup Parser to return Signal
-      mockParser.parse.mockReturnValue({
-        kind: 'signal',
-        payload: { action: 'read-receipt', data: null },
-      } as ParsedMessage);
-
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
-
-      // 2. Expect Log but NO Save
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('[Router] Received Signal')
+      expect(repository.getMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationUrn: partnerUrn }),
       );
-      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
-
-      // 3. Must still Ack to clear queue
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+      expect(mapper.toView).toHaveBeenCalledWith(mockDecryptedMsg);
+      expect(service.messages()).toHaveLength(1);
+      expect(service.messages()[0].id).toBe('msg-1');
+      expect(service.genesisReached()).toBe(true);
     });
 
-    it('should DROP if Router returns Unknown', async () => {
-      mockParser.parse.mockReturnValue({
-        kind: 'unknown',
-        rawType: 'alien-tech',
-      } as ParsedMessage);
+    it('should check for recipient keys and update missing-key signal', async () => {
+      vi.mocked(keyWorker.checkRecipientKeys).mockResolvedValue(false);
 
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      await service.loadConversation(partnerUrn, myUrn);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Dropping unknown')
-      );
-      expect(mockStorageService.saveMessage).not.toHaveBeenCalled();
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+      expect(keyWorker.checkRecipientKeys).toHaveBeenCalledWith(partnerUrn);
+      expect(service.isRecipientKeyMissing()).toBe(true);
     });
   });
 
-  describe('Safety & Error Handling', () => {
-    it('should ACK even if processing fails (Dead Letter Strategy)', async () => {
-      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
+  describe('Pagination', () => {
+    it('should load more messages and prepend them', async () => {
+      await service.loadConversation(partnerUrn, myUrn);
 
-      // Force a failure in the pipeline (e.g. Decrypt fails)
-      mockCryptoService.verifyAndDecrypt.mockRejectedValue(
-        new Error('Decrypt fail')
+      const olderMsg = {
+        ...mockDecryptedMsg,
+        messageId: 'msg-0',
+        sentTimestamp: '2024-01-01T00:00:00Z',
+      };
+      const olderView = { ...mockViewMsg, id: 'msg-0' };
+
+      // Manually reset genesis so pagination triggers
+      (service as any).genesisReached.set(false);
+
+      vi.mocked(repository.getMessages).mockResolvedValueOnce({
+        messages: [olderMsg],
+        genesisReached: true,
+      });
+      vi.mocked(mapper.toView).mockReturnValueOnce(olderView);
+
+      await service.loadMoreMessages();
+
+      const list = service.messages();
+      expect(list).toHaveLength(2);
+      expect(list[0].id).toBe('msg-0'); // Oldest first
+      expect(list[1].id).toBe('msg-1');
+    });
+  });
+
+  describe('Sending (Optimistic UI)', () => {
+    it('should update UI immediately (Pending) then update to Final Status', async () => {
+      // 1. Setup: Load conversation
+      await service.loadConversation(partnerUrn, myUrn);
+
+      // 2. Setup Manual Promise Control to simulate Network Latency
+      let completeNetworkRequest: (status: MessageDeliveryStatus) => void;
+      const delayedOutcome = new Promise<MessageDeliveryStatus>((resolve) => {
+        completeNetworkRequest = resolve;
+      });
+
+      // Mock outbound to return OUR delayed promise
+      vi.mocked(outbound.sendMessage).mockResolvedValue({
+        message: {
+          ...mockDecryptedMsg,
+          messageId: 'temp-1',
+          status: 'pending',
+        },
+        outcome: delayedOutcome,
+      });
+
+      vi.mocked(mapper.toView).mockReturnValue({
+        ...mockViewMsg,
+        id: 'temp-1',
+        status: 'pending',
+      });
+
+      // 3. Act: Send (Sync)
+      // This call is async but the optimistic update happens before the outcome resolves
+      const sendPromise = service.sendMessage(
+        partnerUrn,
+        'Hi',
+        mockKeys,
+        myUrn,
       );
 
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      // 4. Assert Optimistic State (Immediate)
+      const msgsBefore = service.messages();
+      expect(msgsBefore).toHaveLength(2);
+      expect(msgsBefore[1].status).toBe('pending');
 
-      // 1. Check Error Log
-      expect(mockLogger.error).toHaveBeenCalled();
+      // 5. Act: Simulate Network Completion
+      completeNetworkRequest!('sent');
 
-      // 2. CRITICAL: Check ACK
-      // If we don't ACK, this message will be redelivered forever, jamming the queue.
-      expect(mockDataService.acknowledge).toHaveBeenCalledWith(['msg-1']);
+      // Wait for the service to process the resolution
+      await sendPromise;
+      // Yield to event loop to allow .then() callback in service to fire
+      await new Promise(process.nextTick);
+
+      // 6. Assert Final State
+      const msgsAfter = service.messages();
+      expect(msgsAfter[1].status).toBe('sent');
+    });
+
+    it('should send Contact Shares using the correct type ID', async () => {
+      await service.loadConversation(partnerUrn, myUrn);
+
+      await service.sendContactShare(
+        partnerUrn,
+        { urn: 'urn:user:x', alias: 'X' },
+        mockKeys,
+        myUrn,
+      );
+
+      expect(outbound.sendMessage).toHaveBeenCalledWith(
+        mockKeys,
+        myUrn,
+        partnerUrn,
+        expect.objectContaining({ path: 'urn:message:type:contact-share' }),
+        expect.any(Uint8Array),
+        undefined,
+      );
+    });
+  });
+
+  describe('Recovery & Failure Handling', () => {
+    it('should recover text content and delete failed message from UI/Storage', async () => {
+      const failedMsg = {
+        ...mockViewMsg,
+        id: 'fail-1',
+        status: 'failed',
+        textContent: 'My Draft',
+        payloadBytes: new Uint8Array([]),
+      };
+      (service as any).messages.set([failedMsg]);
+
+      const text = await service.recoverFailedMessage('fail-1');
+
+      expect(text).toBe('Recovered Text');
+      expect(storage.deleteMessage).toHaveBeenCalledWith('fail-1');
+      expect(service.messages()).toHaveLength(0);
+    });
+  });
+
+  describe('Signal Handling', () => {
+    it('should send Typing Indicator as ephemeral', async () => {
+      await service.loadConversation(partnerUrn, myUrn);
+
+      await service.sendTypingIndicator(mockKeys, myUrn);
+
+      expect(outbound.sendMessage).toHaveBeenCalledWith(
+        mockKeys,
+        myUrn,
+        partnerUrn,
+        expect.any(Object),
+        expect.any(Uint8Array),
+        { isEphemeral: true },
+      );
+    });
+  });
+
+  describe('History Wipe', () => {
+    it('should clear disk storage and reset all memory signals', async () => {
+      (service as any).messages.set([mockViewMsg]);
+      (service as any).selectedConversation.set(partnerUrn);
+
+      await service.performHistoryWipe();
+
+      expect(storage.clearMessageHistory).toHaveBeenCalled();
+      expect(service.messages()).toEqual([]);
+      expect(service.selectedConversation()).toBeNull();
     });
   });
 });

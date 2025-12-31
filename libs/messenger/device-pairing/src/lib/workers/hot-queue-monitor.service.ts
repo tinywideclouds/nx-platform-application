@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatDataService } from '@nx-platform-application/chat-access';
-import { EncryptedMessagePayload } from '@nx-platform-application/messenger-types';
+import { TransportMessage } from '@nx-platform-application/messenger-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
 
@@ -17,7 +17,7 @@ export class HotQueueMonitor {
   async checkQueueForInvite(
     sessionKey: CryptoKey,
     myUrn: URN,
-  ): Promise<EncryptedMessagePayload | null> {
+  ): Promise<TransportMessage | null> {
     // 1. Fetch
     const batch = await firstValueFrom(this.dataService.getMessageBatch(50));
 
@@ -29,7 +29,7 @@ export class HotQueueMonitor {
       try {
         this.logger.debug(`[HotQueueSpy] Inspecting Msg ${msg.id}...`);
 
-        let decrypted: EncryptedMessagePayload;
+        let decrypted: TransportMessage;
 
         // 2. Decrypt
         if (sessionKey.algorithm.name === 'RSA-OAEP') {

@@ -1,33 +1,23 @@
-// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { Logger } from '@nx-platform-application/console-logger';
-
-// Services
+import {
+  URN,
+  QueuedMessage,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import {
+  ChatMessage,
+  TransportMessage,
+} from '@nx-platform-application/messenger-types';
 import { ChatDataService } from '@nx-platform-application/chat-access';
 import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-
-// Adapters & Logic
-import { ChatMessageMapper } from './chat-message.mapper';
-import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
-import {
-  MessageContentParser,
-  ReadReceiptData,
-} from '@nx-platform-application/message-content';
-
-// Types
-import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
-import {
-  EncryptedMessagePayload,
-  ChatMessage,
-  DecryptedMessage,
-} from '@nx-platform-application/messenger-types';
+import { Logger } from '@nx-platform-application/console-logger';
+import { MessageContentParser } from '@nx-platform-application/message-content';
+import { QuarantineService } from '@nx-platform-application/messenger-quarantine';
 
 export interface IngestionResult {
   messages: ChatMessage[];
@@ -37,131 +27,43 @@ export interface IngestionResult {
 
 @Injectable({ providedIn: 'root' })
 export class ChatIngestionService {
-  private logger = inject(Logger);
   private dataService = inject(ChatDataService);
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
-  private contactsService = inject(ContactsStorageService);
-  private identityResolver = inject(IdentityResolver);
-  private viewMapper = inject(ChatMessageMapper);
+  private quarantineService = inject(QuarantineService);
   private parser = inject(MessageContentParser);
+  private logger = inject(Logger);
 
   async process(
     myKeys: PrivateKeys,
     myUrn: URN,
     blockedSet: Set<string>,
-    batchLimit = 50,
+    batchSize = 50,
   ): Promise<IngestionResult> {
-    const queuedMessages = await firstValueFrom(
-      this.dataService.getMessageBatch(batchLimit),
+    const result: IngestionResult = {
+      messages: [],
+      typingIndicators: [],
+      readReceipts: [],
+    };
+
+    const queue = await firstValueFrom(
+      this.dataService.getMessageBatch(batchSize),
     );
 
-    if (queuedMessages.length === 0) {
-      return { messages: [], typingIndicators: [], readReceipts: [] };
-    }
+    if (!queue || queue.length === 0) return result;
 
     const processedIds: string[] = [];
-    const validViewMessages: ChatMessage[] = [];
-    const typingIndicators: URN[] = [];
-    const readReceipts: string[] = [];
 
-    for (const msg of queuedMessages) {
+    for (const item of queue) {
       try {
-        // 1. Decrypt
-        const decrypted: EncryptedMessagePayload =
-          await this.cryptoService.verifyAndDecrypt(msg.envelope, myKeys);
-
-        // 2. Identity Resolution
-        const resolvedSenderUrn = await this.identityResolver.resolveToContact(
-          decrypted.senderId,
-        );
-        const resolvedSenderStr = resolvedSenderUrn.toString();
-
-        // 3. Block Check
-        if (blockedSet.has(resolvedSenderStr)) {
-          processedIds.push(msg.id);
-          continue;
-        }
-
-        // 4. Parse Payload
-        const classification = this.parser.parse(
-          decrypted.typeId,
-          decrypted.payloadBytes,
-        );
-
-        // --- PATH A: SIGNALS ---
-        if (classification.kind === 'signal') {
-          const action = classification.payload.action;
-          const data = classification.payload.data;
-
-          if (action === 'read-receipt') {
-            const rr = data as ReadReceiptData;
-            this.logger.info(
-              `[Ingestion] Processing Read Receipt for ${rr.messageIds.length} msgs`,
-            );
-            await this.storageService.updateMessageStatus(
-              rr.messageIds,
-              'read',
-            );
-            readReceipts.push(...rr.messageIds);
-          } else if (action === 'typing') {
-            typingIndicators.push(resolvedSenderUrn);
-          }
-
-          processedIds.push(msg.id);
-          continue;
-        }
-
-        // --- PATH B: UNKNOWN ---
-        if (classification.kind === 'unknown') {
-          this.logger.warn(
-            `[Ingestion] Dropping unknown type: ${classification.rawType}`,
-          );
-          processedIds.push(msg.id);
-          continue;
-        }
-
-        // --- PATH C: CONTENT ---
-        const isStranger = resolvedSenderUrn.entityType !== 'user';
-        const newDecryptedMsg = this.mapPayloadToDecrypted(
-          msg,
-          decrypted,
-          resolvedSenderUrn,
-          myUrn,
-        );
-
-        if (isStranger) {
-          await this.storageService.saveQuarantinedMessage(newDecryptedMsg);
-          await this.contactsService.addToPending(resolvedSenderUrn);
-        } else {
-          // ✅ SIMPLIFIED: No "Promotion" needed.
-          // Because mapPayloadToDecrypted (below) now prefers the Sender's ID,
-          // Echos are automatically detected as "Duplicates" of the Pending Message
-          // and handled idempotently by saveMessage().
-
-          const wasSaved =
-            await this.storageService.saveMessage(newDecryptedMsg);
-
-          if (wasSaved) {
-            validViewMessages.push(this.viewMapper.toView(newDecryptedMsg));
-          } else {
-            // Idempotency Logging
-            if (resolvedSenderStr === myUrn.toString()) {
-              this.logger.debug(
-                `[Ingestion] Echo received (idempotent): ${newDecryptedMsg.messageId}`,
-              );
-            } else {
-              this.logger.warn(
-                `[Ingestion] Duplicate message detected: ${newDecryptedMsg.messageId}. Acking.`,
-              );
-            }
-          }
-        }
-
-        processedIds.push(msg.id);
+        await this.processSingleMessage(item, myKeys, blockedSet, result);
+        processedIds.push(item.id);
       } catch (error) {
-        this.logger.error('Ingestion: Failed to process message', error);
-        processedIds.push(msg.id);
+        this.logger.error(
+          `[Ingestion] Failed to process msg ${item.id}`,
+          error,
+        );
+        processedIds.push(item.id);
       }
     }
 
@@ -169,57 +71,85 @@ export class ChatIngestionService {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
     }
 
-    if (queuedMessages.length === batchLimit) {
-      const nextBatch = await this.process(
-        myKeys,
-        myUrn,
-        blockedSet,
-        batchLimit,
-      );
-      return {
-        messages: [...validViewMessages, ...nextBatch.messages],
-        typingIndicators: [...typingIndicators, ...nextBatch.typingIndicators],
-        readReceipts: [...readReceipts, ...nextBatch.readReceipts],
-      };
-    }
-
-    return {
-      messages: validViewMessages,
-      typingIndicators,
-      readReceipts,
-    };
+    return result;
   }
 
-  // ✅ CRITICAL FIX: Prefer Sender Authority (clientRecordId)
-  private mapPayloadToDecrypted(
-    qMsg: QueuedMessage,
-    payload: EncryptedMessagePayload,
-    resolvedSenderUrn: URN,
-    myUrn: URN,
-  ): DecryptedMessage {
-    const conversationUrn = this.getConversationUrn(
-      resolvedSenderUrn,
-      qMsg.envelope.recipientId,
-      myUrn,
+  private async processSingleMessage(
+    item: QueuedMessage,
+    myKeys: PrivateKeys,
+    blockedSet: Set<string>,
+    accumulator: IngestionResult,
+  ): Promise<void> {
+    const transport: TransportMessage =
+      await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
+
+    // 1. Gatekeeper & Resolution (Combined Step)
+    // Returns the Canonical URN if allowed, null if blocked.
+    const canonicalSenderUrn = await this.quarantineService.process(
+      transport,
+      blockedSet,
     );
 
-    // THE FIX: If the Sender provided an ID, use it. Otherwise, use Router ID.
-    const canonicalId = payload.clientRecordId || qMsg.id;
+    if (!canonicalSenderUrn) return;
 
-    return {
-      messageId: canonicalId,
-      senderId: resolvedSenderUrn,
-      recipientId: qMsg.envelope.recipientId,
-      sentTimestamp: payload.sentTimestamp,
-      typeId: payload.typeId,
-      payloadBytes: payload.payloadBytes,
-      status: 'received',
-      conversationUrn: conversationUrn,
-    };
+    // 2. Promote (Using the already-resolved identity)
+    await this.promoteToDomain(
+      transport,
+      item.id,
+      canonicalSenderUrn, // ✅ Passed forward
+      accumulator,
+    );
   }
 
-  private getConversationUrn(sender: URN, recipient: URN, me: URN): URN {
-    if (recipient.entityType === 'group') return recipient;
-    return sender.toString() === me.toString() ? recipient : sender;
+  private async promoteToDomain(
+    transport: TransportMessage,
+    queueId: string,
+    canonicalSenderUrn: URN, // ✅ Used for conversation ID (1:1 logic)
+    accumulator: IngestionResult,
+  ): Promise<void> {
+    const parsed = this.parser.parse(transport.typeId, transport.payloadBytes);
+    const canonicalId = transport.clientRecordId || queueId;
+
+    switch (parsed.kind) {
+      case 'content': {
+        // LOGIC: For 1:1 chats, the Conversation URN IS the Sender's Canonical URN.
+        // For Groups, it would be the Group ID (parsed.conversationId).
+        // Since we are fixing the "Contact vs Handle" issue, we prioritize the Canonical ID.
+        const conversationUrn =
+          parsed.conversationId.entityType === 'group'
+            ? parsed.conversationId
+            : canonicalSenderUrn;
+
+        const chatMessage: ChatMessage = {
+          id: canonicalId,
+          senderId: transport.senderId,
+          sentTimestamp: transport.sentTimestamp as ISODateTimeString,
+          typeId: transport.typeId,
+          status: 'received',
+          conversationUrn: conversationUrn, // ✅ Correct UUID used here
+          tags: parsed.tags,
+          payloadBytes:
+            parsed.payload.kind === 'text'
+              ? new TextEncoder().encode(parsed.payload.text)
+              : new TextEncoder().encode(JSON.stringify(parsed.payload.data)),
+          textContent:
+            parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
+        };
+
+        await this.storageService.saveMessage(chatMessage);
+        accumulator.messages.push(chatMessage);
+        break;
+      }
+
+      case 'signal': {
+        if (parsed.payload.action === 'typing') {
+          accumulator.typingIndicators.push(transport.senderId);
+        } else if (parsed.payload.action === 'read_receipt') {
+          const ids = (parsed.payload.data as any)?.messageIds || [];
+          accumulator.readReceipts.push(...ids);
+        }
+        break;
+      }
+    }
   }
 }

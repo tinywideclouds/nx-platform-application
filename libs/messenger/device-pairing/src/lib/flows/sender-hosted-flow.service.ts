@@ -12,7 +12,7 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
-  EncryptedMessagePayload,
+  TransportMessage,
   DevicePairingSession,
 } from '@nx-platform-application/messenger-types';
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/message-content';
@@ -37,7 +37,7 @@ export class SenderHostedFlowService {
    */
   async startSession(
     myKeys: PrivateKeys,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<DevicePairingSession> {
     this.logger.info('[SenderFlow] Starting session (AES)...');
 
@@ -54,18 +54,18 @@ export class SenderHostedFlowService {
     try {
       targetUrn = await this.identityResolver.resolveToHandle(myUrn);
       this.logger.info(
-        `[SenderFlow] Resolving Dead Drop: ${myUrn} -> ${targetUrn}`
+        `[SenderFlow] Resolving Dead Drop: ${myUrn} -> ${targetUrn}`,
       );
     } catch (e) {
       this.logger.warn(
         '[SenderFlow] Failed to resolve handle, defaulting to Auth ID',
-        e
+        e,
       );
     }
 
     // 4. Construct Payload
     // The "Sender" inside the envelope remains the canonical Auth ID.
-    const messagePayload: EncryptedMessagePayload = {
+    const messagePayload: TransportMessage = {
       senderId: myUrn,
       sentTimestamp: new Date().toISOString() as ISODateTimeString,
       typeId: URN.parse(MESSAGE_TYPE_DEVICE_SYNC),
@@ -75,7 +75,7 @@ export class SenderHostedFlowService {
     // 5. Encrypt with Session Key
     const envelope = await this.crypto.encryptSyncOffer(
       messagePayload,
-      session.oneTimeKey!
+      session.oneTimeKey!,
     );
 
     // 6. Address & Prioritize
@@ -84,7 +84,7 @@ export class SenderHostedFlowService {
     (envelope as any).priority = Priority.High;
 
     this.logger.info(
-      `[SenderFlow] 📤 Sending Dead Drop to: ${targetUrn.toString()}`
+      `[SenderFlow] 📤 Sending Dead Drop to: ${targetUrn.toString()}`,
     );
 
     await firstValueFrom(this.sendService.sendMessage(envelope));
@@ -103,14 +103,14 @@ export class SenderHostedFlowService {
    */
   async redeemScannedQr(
     qrCode: string,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<PrivateKeys | null> {
     this.logger.info('[SenderFlow] Redeeming scanned QR...');
 
     const parsed = await this.crypto.parseQrCode(qrCode);
     if (parsed.mode !== 'SENDER_HOSTED') {
       throw new Error(
-        `[SenderFlow] Invalid QR Mode. Expected SENDER_HOSTED, got ${parsed.mode}`
+        `[SenderFlow] Invalid QR Mode. Expected SENDER_HOSTED, got ${parsed.mode}`,
       );
     }
 
@@ -121,7 +121,7 @@ export class SenderHostedFlowService {
     for (let i = 0; i < maxRetries; i++) {
       const decryptedPayload = await this.spy.checkQueueForInvite(
         parsed.key,
-        myUrn
+        myUrn,
       );
 
       if (decryptedPayload) {
@@ -130,7 +130,7 @@ export class SenderHostedFlowService {
       }
 
       this.logger.debug(
-        `[SenderFlow] Attempt ${i + 1}/${maxRetries}: No invite found yet.`
+        `[SenderFlow] Attempt ${i + 1}/${maxRetries}: No invite found yet.`,
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -160,14 +160,14 @@ export class SenderHostedFlowService {
       jwks.enc,
       rsaOaep,
       true,
-      ['decrypt']
+      ['decrypt'],
     );
     const sigKey = await crypto.subtle.importKey(
       'jwk',
       jwks.sig,
       rsaPss,
       true,
-      ['sign']
+      ['sign'],
     );
 
     return { encKey, sigKey };

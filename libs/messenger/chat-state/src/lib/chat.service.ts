@@ -1,3 +1,6 @@
+// libs/messenger/chat-state/src/lib/chat.service.ts
+
+// ... [Imports remain the same]
 import {
   Injectable,
   WritableSignal,
@@ -7,21 +10,28 @@ import {
   inject,
   computed,
 } from '@angular/core';
-import { throttleTime } from 'rxjs/operators';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { firstValueFrom, interval, switchMap, EMPTY } from 'rxjs';
+import { throttleTime, filter, take, skip } from 'rxjs/operators';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import {
+  firstValueFrom,
+  combineLatest,
+  interval,
+  switchMap,
+  EMPTY,
+} from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
 import {
   URN,
   PublicKeys,
   KeyNotFoundError,
+  ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
-  DecryptedMessage,
+  TransportMessage,
   ConversationSummary,
+  ChatMessage,
+  DevicePairingSession,
 } from '@nx-platform-application/messenger-types';
-
-// --- Services ---
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
@@ -33,21 +43,18 @@ import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { SyncOptions } from '@nx-platform-application/messenger-cloud-sync';
-
-// --- Orchestrators & Workers ---
 import { ChatSyncOrchestratorService } from './services/chat-sync-orchestrator.service';
 import { ChatConversationService } from './services/chat-conversation.service';
 import { ChatIngestionService } from './services/chat-ingestion.service';
 import { ChatKeyService } from './services/chat-key.service';
-
+import { OutboxWorkerService } from '@nx-platform-application/messenger-outbox';
 import { DevicePairingService } from '@nx-platform-application/messenger-device-pairing';
-
-// Types
+import { QuarantineService } from '@nx-platform-application/messenger-quarantine';
+import { MessageContentParser } from '@nx-platform-application/message-content';
 import {
   ContactShareData,
   ReadReceiptData,
 } from '@nx-platform-application/message-content';
-import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 export type OnboardingState =
   | 'CHECKING'
@@ -67,14 +74,14 @@ export class ChatService {
   private readonly storageService = inject(ChatStorageService);
   private readonly keyService = inject(KeyCacheService);
   private readonly contactsService = inject(ContactsStateService);
-
+  private readonly quarantineService = inject(QuarantineService);
+  private readonly parser = inject(MessageContentParser);
   private readonly syncOrchestrator = inject(ChatSyncOrchestratorService);
   private readonly conversationService = inject(ChatConversationService);
   private readonly ingestionService = inject(ChatIngestionService);
   private readonly keyWorker = inject(ChatKeyService);
-
+  private readonly outboxWorker = inject(OutboxWorkerService);
   private readonly pairingService = inject(DevicePairingService);
-
   private readonly destroyRef = inject(DestroyRef);
 
   private myKeys = signal<PrivateKeys | null>(null);
@@ -84,7 +91,6 @@ export class ChatService {
 
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
-
   public readonly onboardingState = signal<OnboardingState>('CHECKING');
   public readonly isCeremonyActive = signal<boolean>(false);
 
@@ -100,6 +106,7 @@ export class ChatService {
     new Map(),
   );
   public readonly readCursors = this.conversationService.readCursors;
+
   private readonly messengerBlockedSet =
     this.contactsService.getFilteredBlockedSet('messenger');
 
@@ -111,6 +118,7 @@ export class ChatService {
   constructor() {
     this.logger.info('ChatService: Orchestrator initializing...');
     this.init();
+    this.initResumptionTriggers();
 
     effect(() => {
       const newSet = this.messengerBlockedSet();
@@ -190,6 +198,49 @@ export class ChatService {
     } catch (error) {
       this.logger.error('ChatService: Failed initialization', error);
     }
+  }
+
+  private initResumptionTriggers(): void {
+    this.authService.sessionLoaded$
+      .pipe(
+        filter((session) => !!session),
+        take(1),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(async (session) => {
+        const urn = this.currentUserUrn();
+        const keys = this.myKeys();
+        if (urn && keys) {
+          await this.outboxWorker.processQueue(urn, keys);
+        }
+      });
+
+    this.liveService.status$
+      .pipe(
+        filter((status) => status === 'connected'),
+        skip(1),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(async () => {
+        const urn = this.currentUserUrn();
+        const keys = this.myKeys();
+        if (urn && keys) {
+          await this.outboxWorker.processQueue(urn, keys);
+        }
+      });
+
+    combineLatest([
+      this.authService.sessionLoaded$.pipe(filter((s) => !!s)),
+      toObservable(this.myKeys).pipe(filter((k) => !!k)),
+    ])
+      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
+      .subscribe(async ([session, keys]) => {
+        const urn = this.currentUserUrn();
+        if (urn && keys) {
+          this.logger.info('[ChatService] Resuming outbound queue...');
+          await this.outboxWorker.processQueue(urn, keys);
+        }
+      });
   }
 
   private async checkIntegrity(
@@ -440,19 +491,36 @@ export class ChatService {
   public async fetchAndProcessMessages(): Promise<void> {
     return this.runExclusive(async () => {
       const state = this.onboardingState();
+      this.logger.debug('[ChatService] Processing Fetch Request...', state);
 
-      if (state !== 'READY' && state !== 'OFFLINE_READY') return;
-      if (this.isCeremonyActive()) return;
+      if (state !== 'READY' && state !== 'OFFLINE_READY') {
+        this.logger.warn(`[ChatService] Fetch Blocked: State is ${state}`);
+        return;
+      }
+      if (this.isCeremonyActive()) {
+        this.logger.warn('[ChatService] Fetch Blocked: Ceremony Active');
+        return;
+      }
 
       const myKeys = this.myKeys();
       const myUrn = this.currentUserUrn();
-      if (!myKeys || !myUrn) return;
+      if (!myKeys || !myUrn) {
+        this.logger.warn('[ChatService] Fetch Blocked: Missing Keys or URN');
+        return;
+      }
+
+      this.logger.debug('[ChatService] Guards passed. Calling Ingestion...');
 
       const result = await this.ingestionService.process(
         myKeys,
         myUrn,
         this.blockedSet(),
         50,
+      );
+
+      // DEBUG: Log result count
+      this.logger.info(
+        `[ChatService] Ingestion Complete. Messages: ${result.messages.length}`,
       );
 
       if (result.readReceipts.length > 0) {
@@ -628,6 +696,7 @@ export class ChatService {
         this.contactsService.clearDatabase(),
         this.keyService.clear(),
         this.cryptoService.clearKeys(),
+        this.outboxWorker.clearAllTasks(),
       ]);
     } catch (e) {
       this.logger.error('Device wipe failed', e);
@@ -649,15 +718,68 @@ export class ChatService {
     this.onboardingState.set('CHECKING');
   }
 
-  public async getQuarantinedMessages(urn: URN): Promise<DecryptedMessage[]> {
-    return this.storageService.getQuarantinedMessages(urn);
+  // --- Quarantine & Blocking Ops ---
+
+  public async getQuarantinedMessages(urn: URN): Promise<ChatMessage[]> {
+    return this.quarantineService.retrieveForInspection(urn);
   }
 
+  /**
+   * Promotes messages from Quarantine (Jail) to Main Storage (Application).
+   * ✅ NOW ACCEPTS: targetConversationUrn (e.g., the new contact UUID)
+   * to re-home messages from the handle (email) to the contact.
+   */
   public async promoteQuarantinedMessages(
-    oldUrn: URN,
-    newUrn: URN,
+    senderUrn: URN,
+    targetConversationUrn?: URN,
   ): Promise<void> {
-    return this.storageService.promoteQuarantinedMessages(oldUrn, newUrn);
+    const messages =
+      await this.quarantineService.retrieveForInspection(senderUrn);
+
+    if (messages.length === 0) return;
+
+    const promotedMessages: ChatMessage[] = [];
+
+    for (const tm of messages) {
+      if (!tm.payloadBytes) continue;
+
+      try {
+        const parsed = this.parser.parse(tm.typeId, tm.payloadBytes);
+
+        if (parsed.kind === 'content') {
+          promotedMessages.push({
+            id: tm.id,
+            senderId: tm.senderId,
+            sentTimestamp: tm.sentTimestamp as ISODateTimeString,
+            typeId: tm.typeId,
+            status: 'received',
+            // ✅ FEATURE: Re-home if target provided, else use parsed default
+            conversationUrn: targetConversationUrn || parsed.conversationId,
+            tags: parsed.tags,
+            payloadBytes:
+              parsed.payload.kind === 'text'
+                ? new TextEncoder().encode(parsed.payload.text)
+                : new TextEncoder().encode(JSON.stringify(parsed.payload.data)),
+            textContent:
+              parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
+          });
+        }
+      } catch (e) {
+        this.logger.error(
+          `Failed to parse quarantined message from ${senderUrn}`,
+          e,
+        );
+      }
+    }
+
+    if (promotedMessages.length > 0) {
+      await Promise.all(
+        promotedMessages.map((msg) => this.storageService.saveMessage(msg)),
+      );
+      this.refreshActiveConversations();
+    }
+
+    await this.quarantineService.reject(senderUrn);
   }
 
   public async block(
@@ -667,35 +789,27 @@ export class ChatService {
     await Promise.all(
       urns.map((urn) => this.contactsService.blockIdentity(urn, [scope])),
     );
-    await Promise.all(
-      urns.map((urn) => this.contactsService.deletePending(urn)),
-    );
-    await Promise.all(
-      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn)),
-    );
+    await Promise.all(urns.map((urn) => this.quarantineService.reject(urn)));
   }
 
   public async dismissPending(
     urns: URN[],
     scope: 'messenger' | 'all' = 'messenger',
   ): Promise<void> {
-    await Promise.all(
-      urns.map((urn) => this.contactsService.deletePending(urn)),
-    );
-    await Promise.all(
-      urns.map((urn) => this.storageService.deleteQuarantinedMessages(urn)),
-    );
+    await Promise.all(urns.map((urn) => this.quarantineService.reject(urn)));
   }
 
   public async clearLocalMessages(): Promise<void> {
     await this.conversationService.performHistoryWipe();
-    // Also refresh the summary list (which should now be empty)
     this.activeConversations.set([]);
   }
 
   public async clearLocalContacts(): Promise<void> {
     await this.contactsService.performContactsWipe();
-    // Also refresh the summary list (which should now be empty)
     this.activeConversations.set([]);
+  }
+
+  public triggerWorker(senderUrn: URN, keys: PrivateKeys): void {
+    this.outboxWorker.processQueue(senderUrn, keys);
   }
 }

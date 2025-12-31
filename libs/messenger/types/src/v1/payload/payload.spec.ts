@@ -26,7 +26,7 @@ vi.mock('@nx-platform-application/platform-types', () => ({
 }));
 
 import {
-  EncryptedMessagePayload,
+  TransportMessage,
   serializePayloadToProtoBytes,
   deserializeProtoBytesToPayload,
 } from './payload';
@@ -53,7 +53,7 @@ describe('EncryptedMessagePayload Facade Mappers', () => {
   };
 
   // Fixtures
-  const mockSmartPayload: EncryptedMessagePayload = {
+  const mockSmartPayload: TransportMessage = {
     senderId: mockSenderUrnObj as any,
     sentTimestamp: mockTimestamp,
     typeId: mockTypeUrnObj as any,

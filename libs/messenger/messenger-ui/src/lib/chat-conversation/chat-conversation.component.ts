@@ -95,21 +95,12 @@ export class ChatConversationComponent {
 
   // --- COMPUTED VIEW MODEL ---
   messagesVM = computed<MessageViewModel[]>(() => {
-    return this.rawMessages().map((msg) => {
-      let contentPayload: ContentPayload | null = null;
-
-      if (msg.payloadBytes) {
-        const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-        if (parsed.kind === 'content') {
-          contentPayload = parsed.payload;
-        }
-      }
-
-      return {
-        ...msg,
-        contentPayload,
-      };
-    });
+    return this.rawMessages().map((msg) => ({
+      ...msg,
+      // Just wrap it if you strictly need the ViewModel type,
+      // but the data should ALREADY be there from the Mapper.
+      contentPayload: { kind: 'text', text: msg.textContent || '' },
+    }));
   });
 
   constructor() {

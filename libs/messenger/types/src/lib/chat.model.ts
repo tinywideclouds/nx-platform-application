@@ -1,6 +1,3 @@
-// This is a placeholder model.
-// We should eventually use the real one from a types lib (e.g., @nx-platform-application/chat-storage)
-// But this lets us build the component.
 import {
   URN,
   ISODateTimeString,
@@ -15,9 +12,13 @@ export interface Message {
 export interface ChatMessage extends Message {
   id: string; // Unique message ID
   conversationUrn: URN;
-  // Computed/Preview fields
-  textContent?: string;
+
+  // ✅ NEW: The Domain Object holds the metadata
+  tags?: URN[];
+
+  // Storage holds bytes; View computes text.
   payloadBytes?: Uint8Array;
+  textContent?: string;
   status?: MessageDeliveryStatus;
 }
 
@@ -36,17 +37,6 @@ export interface ChatParticipant {
   profilePictureUrl?: string;
 }
 
-export interface DecryptedMessage {
-  messageId: string;
-  senderId: URN;
-  recipientId: URN;
-  sentTimestamp: ISODateTimeString;
-  typeId: URN;
-  payloadBytes: Uint8Array;
-  status: MessageDeliveryStatus;
-  conversationUrn: URN;
-}
-
 export interface Conversation {
   conversationUrn: URN;
   previewType: 'text' | 'image' | 'file' | 'other';
@@ -56,4 +46,19 @@ export interface ConversationSummary extends Conversation {
   timestamp: ISODateTimeString;
   latestSnippet: string;
   unreadCount: number;
+}
+
+export interface MessageTombstone {
+  messageId: string;
+  conversationUrn: URN;
+  deletedAt: ISODateTimeString;
+}
+
+// ✅ NEW: A clean, public contract for syncing Conversation State
+export interface ConversationSyncState extends Conversation {
+  snippet: string;
+  unreadCount: number;
+  lastActivityTimestamp: ISODateTimeString;
+  genesisTimestamp: ISODateTimeString | null;
+  lastModified: ISODateTimeString;
 }

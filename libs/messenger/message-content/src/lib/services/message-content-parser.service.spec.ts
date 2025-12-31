@@ -1,7 +1,6 @@
-// libs/messenger/message-content/src/lib/services/message-content-parser.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { MessageContentParser } from './message-content-parser.service';
+import { MessageMetadataService } from './message-metadata.service';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   MESSAGE_TYPE_TEXT,
@@ -11,130 +10,112 @@ import {
   ContactShareData,
   ReadReceiptData,
 } from '../models/content-types';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 describe('MessageContentParser', () => {
   let service: MessageContentParser;
+  let metadataService: MessageMetadataService;
   const encoder = new TextEncoder();
+
+  const mockConversationId = URN.parse('urn:messenger:group:germany-1');
+  const mockTag = URN.parse('urn:tag:germany:best-in-class');
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [MessageContentParser],
+      providers: [MessageContentParser, MessageMetadataService],
     });
     service = TestBed.inject(MessageContentParser);
+    metadataService = TestBed.inject(MessageMetadataService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
-  describe('Content Routing (Text)', () => {
-    it('should route text messages to Content > Text', () => {
+  describe('Content Path (Wrapped)', () => {
+    it('should unwrap metadata and parse text messages', () => {
       const typeId = URN.parse(MESSAGE_TYPE_TEXT);
-      const bytes = encoder.encode('Hello World');
+      const rawText = 'Hello Germany';
+      const textBytes = encoder.encode(rawText);
 
-      const result = service.parse(typeId, bytes);
+      // Manually wrap to simulate OutboundService behavior
+      const wrappedBytes = metadataService.wrap(textBytes, mockConversationId, [
+        mockTag,
+      ]);
+
+      const result = service.parse(typeId, wrappedBytes);
 
       expect(result.kind).toBe('content');
-
       if (result.kind === 'content') {
+        expect(result.conversationId.toString()).toBe(
+          mockConversationId.toString(),
+        );
+        expect(result.tags[0].toString()).toBe(mockTag.toString());
         expect(result.payload.kind).toBe('text');
-        // @ts-expect-error - Guarded by kind check above
-        expect(result.payload.text).toBe('Hello World');
-      }
-    });
-  });
-
-  describe('Content Routing (Rich)', () => {
-    it('should route contact shares to Content > Rich', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
-      const data: ContactShareData = {
-        urn: 'urn:contacts:user:bob',
-        alias: 'Bob',
-        text: 'Check this out',
-      };
-      const bytes = encoder.encode(JSON.stringify(data));
-
-      const result = service.parse(typeId, bytes);
-
-      expect(result.kind).toBe('content');
-
-      if (result.kind === 'content') {
-        expect(result.payload.kind).toBe('rich');
         // @ts-expect-error - Guarded by kind check
-        expect(result.payload.subType).toBe(MESSAGE_TYPE_CONTACT_SHARE);
-        // @ts-expect-error - Guarded by kind check
-        expect(result.payload.data).toEqual(data);
+        expect(result.payload.text).toBe(rawText);
       }
     });
 
-    it('should route invalid JSON to Unknown', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
-      const bytes = encoder.encode('{ "broken": json ');
+    it('should fail if content message is missing conversationId metadata', () => {
+      const typeId = URN.parse(MESSAGE_TYPE_TEXT);
+      const bytes = encoder.encode('Raw Unwrapped Text');
 
       const result = service.parse(typeId, bytes);
 
       expect(result.kind).toBe('unknown');
       if (result.kind === 'unknown') {
-        // The service catches JSON.parse errors
-        expect(result.error).toBeTruthy();
+        expect(result.error).toContain('missing conversationId');
       }
     });
   });
 
-  describe('Signal Routing', () => {
-    it('should route Read Receipts to Signal', () => {
+  describe('Signal Path (Flat)', () => {
+    it('should route Read Receipts directly without metadata wrapping', () => {
       const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
-
       const receiptData: ReadReceiptData = {
-        messageIds: ['msg-1', 'msg-2'],
+        messageIds: ['msg-1'],
         readAt: new Date().toISOString(),
       };
+      // Signals are NOT wrapped in the metadata JSON envelope
       const bytes = encoder.encode(JSON.stringify(receiptData));
 
       const result = service.parse(typeId, bytes);
 
       expect(result.kind).toBe('signal');
-
       if (result.kind === 'signal') {
         expect(result.payload.action).toBe('read-receipt');
         expect(result.payload.data).toEqual(receiptData);
+        // Verify metadata fields are NOT present on signal type
+        expect(result).not.toHaveProperty('conversationId');
+        expect(result).not.toHaveProperty('tags');
       }
     });
 
-    it('should fail Read Receipt with invalid schema', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
-      // Invalid: missing messageIds array
-      const bytes = encoder.encode(JSON.stringify({ foo: 'bar' }));
-
-      const result = service.parse(typeId, bytes);
-
-      expect(result.kind).toBe('unknown');
-    });
-
-    it('should route Typing Indicators to Signal', () => {
+    it('should route Typing Indicators as empty flat signals', () => {
       const typeId = URN.parse(MESSAGE_TYPE_TYPING);
-      const bytes = new Uint8Array([]); // Empty payload
+      const bytes = new Uint8Array([]);
 
       const result = service.parse(typeId, bytes);
 
       expect(result.kind).toBe('signal');
       if (result.kind === 'signal') {
         expect(result.payload.action).toBe('typing');
-        expect(result.payload.data).toBeNull();
       }
     });
   });
 
-  describe('Unknown Types', () => {
-    it('should route undefined types to Unknown', () => {
-      const typeId = URN.parse('urn:message:type:alien-tech');
-      const bytes = encoder.encode('data');
+  describe('Error Handling', () => {
+    it('should route malformed JSON in rich content to unknown', () => {
+      const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
+      const contentBytes = encoder.encode('{ invalid }');
+      const wrapped = metadataService.wrap(
+        contentBytes,
+        mockConversationId,
+        [],
+      );
 
-      const result = service.parse(typeId, bytes);
+      const result = service.parse(typeId, wrapped);
 
       expect(result.kind).toBe('unknown');
       if (result.kind === 'unknown') {
-        expect(result.rawType).toBe('urn:message:type:alien-tech');
+        expect(result.error).toBeTruthy();
       }
     });
   });

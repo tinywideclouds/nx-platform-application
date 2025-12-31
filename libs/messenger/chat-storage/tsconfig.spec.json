@@ -27,7 +27,8 @@
     "src/**/*.test.jsx",
     "src/**/*.spec.jsx",
     "src/**/*.d.ts",
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "../types/src/lib/chat.models.ts"
   ],
   "files": ["src/test-setup.ts"]
 }

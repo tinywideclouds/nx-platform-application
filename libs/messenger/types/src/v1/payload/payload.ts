@@ -15,7 +15,7 @@ import { Message } from '../../lib/chat.model';
 
 // --- Smart Interface ---
 // This is the "smart" object our services will use. It overlaps the lib chat.model.ts
-export interface EncryptedMessagePayload extends Message {
+export interface TransportMessage extends Message {
   payloadBytes: Uint8Array;
   clientRecordId?: string;
 }
@@ -28,8 +28,8 @@ export interface EncryptedMessagePayload extends Message {
  */
 // --- Mappers ---
 
-export function encryptedMessagePayloadToProto(
-  payload: EncryptedMessagePayload,
+export function transportMessageToProto(
+  payload: TransportMessage,
 ): EncryptedMessagePayloadPb {
   return create(EncryptedMessagePayloadPbSchema, {
     senderId: payload.senderId.toString(),
@@ -40,10 +40,10 @@ export function encryptedMessagePayloadToProto(
   });
 }
 
-export function encryptedMessagePayloadFromProto(
+export function transportMessageFromProto(
   pb: EncryptedMessagePayloadPb,
-): EncryptedMessagePayload {
-  const smart: EncryptedMessagePayload = {
+): TransportMessage {
+  const smart: TransportMessage = {
     senderId: URN.parse(pb.senderId),
     sentTimestamp: pb.sentTimestamp as ISODateTimeString,
     typeId: URN.parse(pb.typeId),
@@ -61,15 +61,15 @@ export function encryptedMessagePayloadFromProto(
 // --- Serializers ---
 
 export function serializePayloadToProtoBytes(
-  payload: EncryptedMessagePayload,
+  payload: TransportMessage,
 ): Uint8Array {
-  const protoPayload = encryptedMessagePayloadToProto(payload);
+  const protoPayload = transportMessageToProto(payload);
   return toBinary(EncryptedMessagePayloadPbSchema, protoPayload);
 }
 
 export function deserializeProtoBytesToPayload(
   bytes: Uint8Array,
-): EncryptedMessagePayload {
+): TransportMessage {
   const protoPayload = fromBinary(EncryptedMessagePayloadPbSchema, bytes);
-  return encryptedMessagePayloadFromProto(protoPayload);
+  return transportMessageFromProto(protoPayload);
 }

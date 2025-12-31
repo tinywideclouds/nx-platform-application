@@ -1,56 +1,60 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import {
-  ChatMessage,
-  DecryptedMessage,
-} from '@nx-platform-application/messenger-types';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
+import { MESSAGE_TYPE_TEXT } from '@nx-platform-application/message-content';
 
-/**
- * Maps storage-level decrypted messages to UI-ready view models.
- * Handles text decoding and error states for malformed payloads.
- */
 @Injectable({ providedIn: 'root' })
 export class ChatMessageMapper {
   private logger = inject(Logger);
-  // Configured with 'fatal: true' to throw exceptions on invalid UTF-8 sequences,
-  // allowing us to catch and log malformed messages.
-  private decoder = new TextDecoder('utf-8', { fatal: true });
+  private decoder = new TextDecoder('utf-8', { fatal: false });
 
-  /**
-   * Maps the storage model (DecryptedMessage) to the view model (ChatMessage).
-   * @param msg The decrypted message from storage.
-   * @returns A UI-ready ChatMessage object.
-   */
-  toView(msg: DecryptedMessage): ChatMessage {
-    let textContent = '';
-
-    // Eagerly decode text for 'urn:message:type:text'
-    if (msg.typeId.toString() === 'urn:message:type:text') {
-      try {
-        textContent = this.decoder.decode(msg.payloadBytes);
-      } catch (e) {
-        this.logger.error(
-          'ChatMessageMapper: Failed to decode text payload',
-          e,
-        );
-        textContent = '[Error: Unreadable message]';
-      }
-    } else {
-      this.logger.warn('type id', msg.typeId.toString());
-      textContent = 'Unsupported Message Type';
+  toView(msg: ChatMessage): ChatMessage {
+    if (msg.textContent !== undefined) {
+      return msg;
     }
 
-    return {
-      id: msg.messageId,
-      conversationUrn: msg.conversationUrn,
-      senderId: msg.senderId,
-      sentTimestamp: msg.sentTimestamp as ISODateTimeString,
+    let textContent: string | undefined = undefined;
 
-      typeId: msg.typeId,
-      payloadBytes: msg.payloadBytes,
-      textContent: textContent,
-      status: msg.status,
+    if (msg.typeId.toString() === MESSAGE_TYPE_TEXT) {
+      // 🔍 DEBUG INSTRUMENTATION
+      if (msg.payloadBytes) {
+        const p = msg.payloadBytes as any;
+        const isView = p instanceof Uint8Array;
+        const len = p.length;
+
+        // Only log if something looks wrong (missing length or not a view)
+        if (!isView || len === undefined) {
+          this.logger.warn(`[Mapper Debug] ⚠️ ID: ${msg.id}`, {
+            type: p.constructor.name,
+            length: len,
+            byteLength: p.byteLength,
+            isArray: Array.isArray(p),
+            isBuffer: p instanceof ArrayBuffer,
+          });
+        }
+      } else {
+        this.logger.warn(
+          `[Mapper Debug] ❌ ID: ${msg.id} | Payload is missing`,
+        );
+      }
+
+      if (msg.payloadBytes && msg.payloadBytes.length > 0) {
+        try {
+          textContent = this.decoder.decode(msg.payloadBytes);
+        } catch (e) {
+          this.logger.error('ChatMessageMapper: Failed to decode text', e);
+          textContent = '[Error: Unreadable message]';
+        }
+      } else {
+        textContent = '';
+      }
+    }
+
+    this.logger.debug('mapped message', msg, textContent);
+
+    return {
+      ...msg,
+      textContent,
     };
   }
 }

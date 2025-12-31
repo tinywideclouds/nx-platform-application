@@ -12,7 +12,7 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
-  EncryptedMessagePayload,
+  TransportMessage,
   DevicePairingSession,
 } from '@nx-platform-application/messenger-types';
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/message-content';
@@ -55,7 +55,7 @@ export class ReceiverHostedFlowService {
   async processScannedQr(
     qrCode: string,
     myKeys: PrivateKeys,
-    myUrn: URN
+    myUrn: URN,
   ): Promise<void> {
     this.logger.info('[ReceiverFlow] Processing scanned QR...');
 
@@ -63,7 +63,7 @@ export class ReceiverHostedFlowService {
     const parsed = await this.crypto.parseQrCode(qrCode);
     if (parsed.mode !== 'RECEIVER_HOSTED') {
       throw new Error(
-        `[ReceiverFlow] Invalid QR Mode. Expected RECEIVER_HOSTED, got ${parsed.mode}`
+        `[ReceiverFlow] Invalid QR Mode. Expected RECEIVER_HOSTED, got ${parsed.mode}`,
       );
     }
 
@@ -76,18 +76,18 @@ export class ReceiverHostedFlowService {
     try {
       targetUrn = await this.identityResolver.resolveToHandle(myUrn);
       this.logger.info(
-        `[ReceiverFlow] Resolved Target: ${myUrn} -> ${targetUrn}`
+        `[ReceiverFlow] Resolved Target: ${myUrn} -> ${targetUrn}`,
       );
     } catch (e) {
       this.logger.warn(
         '[ReceiverFlow] Failed to resolve handle, defaulting to Auth ID',
-        e
+        e,
       );
     }
 
     // 3. Construct Payload
     // Sender ID remains the canonical Auth ID so the Target knows it's trustworthy.
-    const messagePayload: EncryptedMessagePayload = {
+    const messagePayload: TransportMessage = {
       senderId: myUrn,
       sentTimestamp: new Date().toISOString() as ISODateTimeString,
       typeId: URN.parse(MESSAGE_TYPE_DEVICE_SYNC),
@@ -98,7 +98,7 @@ export class ReceiverHostedFlowService {
     const envelope = await this.crypto.encryptSyncMessage(
       messagePayload,
       parsed.key,
-      myKeys
+      myKeys,
     );
 
     // 5. Set Routing & Priority Flags
@@ -108,7 +108,7 @@ export class ReceiverHostedFlowService {
 
     // 6. Send
     this.logger.info(
-      `[ReceiverFlow] 📤 Sending encrypted keys to: ${targetUrn.toString()}`
+      `[ReceiverFlow] 📤 Sending encrypted keys to: ${targetUrn.toString()}`,
     );
     await firstValueFrom(this.sendService.sendMessage(envelope));
   }

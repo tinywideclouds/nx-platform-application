@@ -1,7 +1,12 @@
 import { Injectable, inject, computed, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { URN } from '@nx-platform-application/platform-types';
-import { Contact, IdentityLink } from '@nx-platform-application/contacts-types';
+import {
+  Contact,
+  IdentityLink,
+  GroupNotFoundError,
+  EmptyGroupError,
+} from '@nx-platform-application/contacts-types';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
 @Injectable({ providedIn: 'root' })
@@ -21,6 +26,40 @@ export class ContactsStateService {
     return map;
   });
 
+  // --- Trust & Security API ---
+
+  /**
+   * Determines if a URN is "Trusted" for a specific application scope.
+   * A Trusted user must be:
+   * 1. Present in the Address Book (Contact Map).
+   * 2. NOT blocked for the requested scope.
+   *
+   * @param urn The sender's URN.
+   * @param scope The application scope (e.g., 'messenger').
+   */
+  async isTrusted(urn: URN, scope: string = 'messenger'): Promise<boolean> {
+    const idStr = urn.toString();
+
+    // 1. Contact Check: Must be in our address book
+    // (Future: We might add an "Allow Unknowns" setting here)
+    const isInContacts = this.contactMap().has(idStr);
+
+    if (!isInContacts) {
+      return false;
+    }
+
+    // 2. Block Check: Must not be blocked for this specific scope
+    // We check the synchronous blocked signal for instant results.
+    const allBlocked = this.blocked();
+    const isBlockedForScope = allBlocked.some(
+      (b) =>
+        b.urn.toString() === idStr &&
+        (b.scopes.includes('all') || b.scopes.includes(scope)),
+    );
+
+    return !isBlockedForScope;
+  }
+
   /**
    * Returns a Computed Signal containing a Set of URN strings filtered by scope.
    * This allows "Apps" to register their interest in specific block categories.
@@ -32,7 +71,6 @@ export class ContactsStateService {
       const allBlocked = this.blocked();
 
       for (const b of allBlocked) {
-        // "all" is a universal scope that impacts every registered consumer
         if (b.scopes.includes('all') || b.scopes.includes(scope)) {
           filteredSet.add(b.urn.toString());
         }
@@ -63,6 +101,27 @@ export class ContactsStateService {
       if (!urn) return undefined;
       return this.contactMap().get(urn.toString());
     });
+  }
+
+  /**
+   * Resolves a Group URN into a list of individual participant contacts.
+   * Used by the OutboxWorker for group fan-out.
+   */
+  async getGroupParticipants(groupUrn: URN): Promise<Contact[]> {
+    const group = await this.storage.getGroup(groupUrn);
+
+    if (!group) {
+      throw new GroupNotFoundError(groupUrn.toString());
+    }
+
+    const participants = await this.storage.getContactsForGroup(groupUrn);
+
+    if (participants.length === 0) {
+      // This distinguishes a valid group that happens to be empty from a missing one
+      throw new EmptyGroupError(groupUrn.toString());
+    }
+
+    return participants;
   }
 
   // --- Wrapper Methods (The Facade) ---

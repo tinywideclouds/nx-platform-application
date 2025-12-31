@@ -6,13 +6,11 @@ import {
   URN,
 } from '@nx-platform-application/platform-types';
 import {
-  DecryptedMessage,
+  ChatMessage, // ✅ UPDATED
   ConversationSummary,
-} from '@nx-platform-application/messenger-types';
-import {
-  ChatStorageService,
   ConversationSyncState,
-} from '@nx-platform-application/chat-storage';
+} from '@nx-platform-application/messenger-types';
+import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
 import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -24,7 +22,7 @@ export interface HistoryQuery {
 }
 
 export interface HistoryResult {
-  messages: DecryptedMessage[];
+  messages: ChatMessage[]; // ✅ UPDATED
   genesisReached: boolean;
 }
 
@@ -90,7 +88,7 @@ export class ChatMessageRepository {
 
           await this.cloud.restoreVaultForDate(
             knownLatest,
-            query.conversationUrn,
+            query.conversationUrn, // Pass filter
           );
 
           // Reload to include the new data
@@ -213,12 +211,9 @@ export class ChatMessageRepository {
           isAtGenesis || (localMessages.length === 0 && !!finalGenesis),
       };
     } finally {
-      // 🔍 END GROUP (Always cleanup indentation)
       this.logger.groupEnd();
     }
   }
-
-  // --- Internal Helpers ---
 
   private async performInboxHydration(): Promise<void> {
     const indexRestored = await this.cloud.restoreIndex();

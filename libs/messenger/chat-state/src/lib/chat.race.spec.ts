@@ -12,7 +12,7 @@ import {
   QueuedMessage,
 } from '@nx-platform-application/platform-types';
 import {
-  EncryptedMessagePayload,
+  TransportMessage,
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
 
@@ -91,7 +91,7 @@ const mockQueuedMessage: QueuedMessage = {
 };
 
 const mockTextContent = 'Test Payload';
-const mockDecryptedPayload: EncryptedMessagePayload = {
+const mockDecryptedPayload: TransportMessage = {
   senderId: mockSenderUrn,
   sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
   typeId: URN.parse('urn:message:type:text'),
@@ -273,7 +273,7 @@ describe('ChatService (Race Condition Test)', () => {
 
     // Verify Gatekeeper was called for unknown sender
     expect(mockContactsService.addToPending).toHaveBeenCalledWith(
-      mockSenderUrn
+      mockSenderUrn,
     );
   });
 });

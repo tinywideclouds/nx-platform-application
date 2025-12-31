@@ -255,7 +255,7 @@ export class MessengerChatPageComponent {
 
       // 2. Map
       const viewMessages: ChatMessage[] = messages.map((m) => ({
-        id: m.messageId,
+        id: m.id,
         conversationUrn: m.conversationUrn,
         senderId: m.senderId,
         sentTimestamp: m.sentTimestamp,

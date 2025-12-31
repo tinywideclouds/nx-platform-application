@@ -78,7 +78,12 @@ export interface SignalPayload {
  */
 export type ParsedMessage =
   // A. SAVE IT: This is user content. Store in DB, update UI.
-  | { kind: 'content'; payload: ContentPayload }
+  | {
+      kind: 'content';
+      payload: ContentPayload;
+      conversationId: URN; // Required for storage routing
+      tags: URN[]; // For hierarchical filtering
+    }
 
   // B. EXECUTE IT: This is a system command. Route to a handler.
   | { kind: 'signal'; payload: SignalPayload }

@@ -1,7 +1,7 @@
-// libs/messenger/chat-cloud-access/src/lib/models/chat-vault.interface.ts
-
-import { DecryptedMessage } from '@nx-platform-application/messenger-types';
-import { MessageTombstone } from '@nx-platform-application/chat-storage';
+import {
+  ChatMessage,
+  MessageTombstone,
+} from '@nx-platform-application/messenger-types';
 
 export interface ChatVault {
   /** Schema version (e.g., 1) */
@@ -15,9 +15,9 @@ export interface ChatVault {
   /** Total messages */
   messageCount: number;
   /** The actual message data */
-  messages: DecryptedMessage[];
+  messages: ChatMessage[];
 
-  // ✅ Updated Type: Uses the clean domain contract
+  /** Deletions to synchronize */
   tombstones: MessageTombstone[];
 }
 

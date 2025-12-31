@@ -44,14 +44,15 @@ export class ChatConversationService {
   private keyWorker = inject(ChatKeyService);
   private mapper = inject(ChatMessageMapper);
   private outbound = inject(ChatOutboundService);
+  private contentParser = inject(MessageContentParser);
 
-  // --- State ---
-
-  // Identity: Synced manually from ChatService via loadConversation or direct set
+  // --- State Signals ---
   public readonly myUrn = signal<URN | null>(null);
-
   public readonly selectedConversation = signal<URN | null>(null);
+
+  // The primary message list for the UI
   public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
+
   public readonly genesisReached = signal<boolean>(false);
   public readonly isLoadingHistory = signal<boolean>(false);
   public readonly isRecipientKeyMissing = signal<boolean>(false);
@@ -62,7 +63,7 @@ export class ChatConversationService {
     new Map(),
   );
 
-  // The Eyes: Computed Cursor Positions
+  // Computed: Who has read what?
   public readonly readCursors = computed(() => {
     const msgs = this.messages();
     const me = this.myUrn();
@@ -70,10 +71,9 @@ export class ChatConversationService {
 
     if (!me || !partner || msgs.length === 0) return new Map<string, URN[]>();
 
-    // Find the LAST message sent by ME that is READ
     let cursorMessageId: string | null = null;
 
-    // Search backwards (Newest -> Oldest)
+    // Find the LAST message sent by ME that is READ
     for (let i = msgs.length - 1; i >= 0; i--) {
       const msg = msgs[i];
       const isFromMe = msg.senderId.toString() === me.toString();
@@ -86,7 +86,6 @@ export class ChatConversationService {
 
     const map = new Map<string, URN[]>();
     if (cursorMessageId) {
-      // In 1:1 chat, the cursor is the partner
       map.set(cursorMessageId, [partner]);
     }
     return map;
@@ -96,18 +95,16 @@ export class ChatConversationService {
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
   private operationLock = Promise.resolve();
-  private contentParser = inject(MessageContentParser);
 
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     return this.repository.getConversationSummaries();
   }
 
-  // FIXED: Restored 'myUrn' argument to prevent race conditions on load
   async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
-      // Sync the signal immediately so computed values (like readCursors) are correct
       this.myUrn.set(myUrn);
 
+      // If re-selecting the same active conversation, just mark read
       if (
         this.selectedConversation()?.toString() === urn?.toString() &&
         urn !== null
@@ -138,15 +135,20 @@ export class ChatConversationService {
       try {
         const limit = Math.max(DEFAULT_PAGE_SIZE, unreadCount + 5);
 
+        // Fetch from Repository (returns ChatMessage[])
         const result = await this.repository.getMessages({
           conversationUrn: urn,
           limit: limit,
         });
 
+        // Hydrate: Decode text for view
         const viewMessages = result.messages
           .reverse()
           .map((m) => this.mapper.toView(m));
 
+        this.logger.debug('view got messages', viewMessages.length);
+
+        // Calculate 'First Unread' bookmark
         if (unreadCount > 0 && viewMessages.length > 0) {
           const boundaryIndex = Math.max(0, viewMessages.length - unreadCount);
           const boundaryMsg = viewMessages[boundaryIndex];
@@ -155,7 +157,7 @@ export class ChatConversationService {
           }
         }
 
-        // Send Receipts immediately if we have identity
+        // Send Receipts if needed
         if (myUrn) {
           await this.processReadReceipts(viewMessages, myUrn);
         }
@@ -208,30 +210,26 @@ export class ChatConversationService {
 
   applyIncomingReadReceipts(ids: string[]): void {
     if (ids.length === 0) return;
-
-    this.logger.debug(`[ChatState] Applying receipts for ${ids.length} msgs`);
     const idSet = new Set(ids);
-
     this.messages.update((current) =>
-      current.map((msg) => {
-        if (idSet.has(msg.id) && msg.status !== 'read') {
-          return { ...msg, status: 'read' };
-        }
-        return msg;
-      }),
+      current.map((msg) =>
+        idSet.has(msg.id) && msg.status !== 'read'
+          ? { ...msg, status: 'read' }
+          : msg,
+      ),
     );
   }
 
   async sendTypingIndicator(myKeys: PrivateKeys, myUrn: URN): Promise<void> {
     const recipient = this.selectedConversation();
     if (!recipient) return;
-    const bytes = new Uint8Array([]);
-    await this.outbound.send(
+
+    await this.outbound.sendMessage(
       myKeys,
       myUrn,
       recipient,
       MessageTypingIndicastor,
-      bytes,
+      new Uint8Array([]),
       { isEphemeral: true },
     );
   }
@@ -259,21 +257,29 @@ export class ChatConversationService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
+  /**
+   * Adds new messages to the UI list, ensuring they are hydrated.
+   * Called by Ingestion (live updates) and Sending (optimistic).
+   */
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
+    // Filter messages relevant to the current conversation
     const relevant = messages.filter(
       (msg) => msg.conversationUrn.toString() === activeConvo.toString(),
     );
 
     if (relevant.length > 0) {
+      // Hydrate: Ensure text is decoded if not already present
+      const viewed = relevant.map((m) => this.mapper.toView(m));
+
       if (myUrn) {
-        this.processReadReceipts(relevant, myUrn).catch((err) =>
+        this.processReadReceipts(viewed, myUrn).catch((err) =>
           this.logger.warn('Failed to process live receipts', err),
         );
       }
-      this.messages.update((current) => [...current, ...relevant]);
+      this.messages.update((current) => [...current, ...viewed]);
       this.storage.markConversationAsRead(activeConvo);
     }
   }
@@ -282,11 +288,10 @@ export class ChatConversationService {
     const targetMsg = this.messages().find((m) => m.id === messageId);
     if (!targetMsg) return undefined;
 
-    // 1. Extract Text (Source of Truth logic)
+    // 1. Extract Text (Check cache first, then parse bytes)
     let textToRestore: string | undefined = targetMsg.textContent;
 
     if (!textToRestore && targetMsg.payloadBytes) {
-      // Fallback: Re-parse the raw bytes if the summary is missing
       const parsed = this.contentParser.parse(
         targetMsg.typeId,
         targetMsg.payloadBytes,
@@ -296,11 +301,8 @@ export class ChatConversationService {
       }
     }
 
-    // 2. Delete the Failed Record
-    // We await this to ensure the "Failed" bubble disappears before we refill the input
+    // 2. Delete and Remove from UI
     await this.storage.deleteMessage(messageId);
-
-    // 3. Update Local State (Optimistic removal)
     this.messages.update((msgs) => msgs.filter((m) => m.id !== messageId));
 
     return textToRestore;
@@ -324,7 +326,6 @@ export class ChatConversationService {
     this.readReceiptTrigger$.next(ids);
   }
 
-  // FIXED: Optimistic UI with Split Return (Message + Outcome Promise)
   private async sendGeneric(
     recipientUrn: URN,
     typeId: URN,
@@ -333,8 +334,8 @@ export class ChatConversationService {
     myUrn: URN,
   ): Promise<void> {
     return this.runExclusive(async () => {
-      // 1. Call Outbound (Returns INSTANTLY with pending message + future promise)
-      const result = await this.outbound.send(
+      // 1. Call Outbound (Returns { message, outcome })
+      const result = await this.outbound.sendMessage(
         myKeys,
         myUrn,
         recipientUrn,
@@ -345,22 +346,21 @@ export class ChatConversationService {
       if (result) {
         const { message, outcome } = result;
 
-        // 2. Render Optimistic UI (Status: Pending)
-        // Pass myUrn to ensure upsert logic (like receipts) works if needed
-        this.upsertMessages([this.mapper.toView(message)], myUrn);
+        // 2. Render Optimistic UI
+        // 'message' is a Domain Object. We upsert it directly.
+        // upsertMessages will call mapper.toView, which is safe/idempotent.
+        this.upsertMessages([message], myUrn);
 
-        // 3. Handle the Result (Async Background Task)
-        // We do NOT await this. The UI is already unblocked.
+        // 3. Handle the Async Result
         outcome.then((finalStatus) => {
           if (finalStatus !== 'pending') {
-            this.updateMessageStatusInSignal(message.messageId, finalStatus);
+            this.updateMessageStatusInSignal(message.id, finalStatus);
           }
         });
       }
     });
   }
 
-  // Helper: In-place update for status changes (Sent/Failed)
   private updateMessageStatusInSignal(
     id: string,
     status: MessageDeliveryStatus,
@@ -368,6 +368,34 @@ export class ChatConversationService {
     this.messages.update((current) =>
       current.map((msg) => (msg.id === id ? { ...msg, status } : msg)),
     );
+  }
+
+  async sendReadReceiptSignal(
+    recipientUrn: URN,
+    data: ReadReceiptData,
+    myKeys: PrivateKeys,
+    myUrn: URN,
+  ): Promise<void> {
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    await this.outbound.sendMessage(
+      myKeys,
+      myUrn,
+      recipientUrn,
+      URN.parse(MESSAGE_TYPE_READ_RECEIPT),
+      bytes,
+      { isEphemeral: true },
+    );
+  }
+
+  async performHistoryWipe(): Promise<void> {
+    await this.storage.clearMessageHistory();
+    this.messages.set([]);
+    this.genesisReached.set(false);
+    this.firstUnreadId.set(null);
+    this.selectedConversation.set(null);
+    this.isRecipientKeyMissing.set(false);
+    this.isLoadingHistory.set(false);
+    this.logger.info('[ChatConversationService] Local history wiped.');
   }
 
   private async runExclusive<T>(task: () => Promise<T>): Promise<T> {
@@ -382,41 +410,5 @@ export class ChatConversationService {
     } finally {
       releaseLock!();
     }
-  }
-
-  async sendReadReceiptSignal(
-    recipientUrn: URN,
-    data: ReadReceiptData,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
-    const json = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(json);
-    const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
-
-    await this.outbound.send(myKeys, myUrn, recipientUrn, typeId, bytes, {
-      isEphemeral: true,
-    });
-  }
-
-  /**
-   * Orchestrates a full local history wipe.
-   * Clears the Disk via storage and resets all UI signals immediately.
-   */
-  async performHistoryWipe(): Promise<void> {
-    // 1. Clear Disk
-    await this.storage.clearMessageHistory();
-
-    // 2. Clear Memory (The Signals)
-    this.messages.set([]);
-    this.genesisReached.set(false);
-    this.firstUnreadId.set(null);
-    this.selectedConversation.set(null);
-    this.isRecipientKeyMissing.set(false);
-    this.isLoadingHistory.set(false);
-
-    this.logger.info(
-      '[ChatConversationService] Local history wiped from Disk and Memory.',
-    );
   }
 }

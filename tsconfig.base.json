@@ -86,6 +86,9 @@
       "@nx-platform-application/messenger-key-storage": [
         "libs/messenger/key-storage/src/index.ts"
       ],
+      "@nx-platform-application/messenger-outbox": [
+        "libs/messenger/outbox/src/index.ts"
+      ],
       "@nx-platform-application/messenger-private-key-storage": [
         "libs/messenger/private-key-storage/src/index.ts"
       ],
@@ -94,6 +97,9 @@
       ],
       "@nx-platform-application/messenger-protos/*": [
         "libs/messenger/protos/dist/ts/src/messenger/*"
+      ],
+      "@nx-platform-application/messenger-quarantine": [
+        "libs/messenger/quarantine/src/index.ts"
       ],
       "@nx-platform-application/messenger-settings-ui": [
         "libs/messenger/settings-ui/src/index.ts"

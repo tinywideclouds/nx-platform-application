@@ -5,7 +5,8 @@ import {
   MessageRecord,
   ConversationIndexRecord,
   DeletedMessageRecord,
-} from './chat-storage.models';
+  QuarantineRecord,
+} from './chat-storage.models'; // Path might vary slightly based on your structure
 
 @Injectable({ providedIn: 'root' })
 export class MessengerDatabase extends PlatformDexieService {
@@ -13,25 +14,22 @@ export class MessengerDatabase extends PlatformDexieService {
   settings!: Table<{ key: string; value: any }, string>;
   conversations!: Table<ConversationIndexRecord, string>;
   tombstones!: Table<DeletedMessageRecord, string>;
-  quarantined_messages!: Table<MessageRecord, string>;
+  quarantined_messages!: Table<QuarantineRecord, string>; // Type defined below
 
   constructor() {
     super('messenger');
 
-    // Version 6: Add Quarantine Table
-    this.version(6).stores({
+    // Version 7: Add MultiEntry Index for Tags (*tags)
+    // We bump the version to ensure the schema upgrade triggers.
+    this.version(7).stores({
+      // ✅ UPDATE: Added '*tags' to the end
       messages:
-        'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp]',
+        'messageId, conversationUrn, sentTimestamp, [conversationUrn+sentTimestamp], *tags',
 
       settings: 'key',
-
       conversations: 'conversationUrn, lastActivityTimestamp',
-
       tombstones: 'messageId, deletedAt',
-
-      // ✅ NEW: Quarantined Messages
-      // Simple index on conversationUrn is enough for lookup
-      quarantined_messages: 'messageId, conversationUrn',
+      quarantined_messages: 'messageId, senderId, sentTimestamp',
     });
 
     this.messages = this.table('messages');

@@ -1,111 +1,59 @@
 import { Injectable, inject } from '@angular/core';
+import { Dexie } from 'dexie';
 import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
-  DecryptedMessage,
-  ConversationSummary,
+  ChatMessage,
+  TransportMessage,
   MessageDeliveryStatus,
+  ConversationSummary,
+  ConversationSyncState,
+  MessageTombstone,
 } from '@nx-platform-application/messenger-types';
-import { Logger } from '@nx-platform-application/console-logger';
-import { Dexie } from 'dexie';
-import {
-  ConversationIndexRecord,
-  MessageRecord,
-} from './db/chat-storage.models';
-import { MessageTombstone, ConversationSyncState } from './chat.models';
 import { MessengerDatabase } from './db/messenger.database';
-import { ChatMergeStrategy } from './strategies/chat-merge.strategy';
+import { ChatStorageMapper } from './chat-storage.mapper';
 import { ChatDeletionStrategy } from './strategies/chat-deletion.strategy';
-import { ChatStorageMapper } from './db/chat-storage.mapper';
+import {
+  MessageRecord,
+  ConversationIndexRecord,
+} from './db/chat-storage.models';
 import { generateSnippet, getPreviewType } from './chat-message.utils';
 
-@Injectable({
-  providedIn: 'root',
-})
+export interface ChatStorageQueryOptions {
+  conversationUrn: URN;
+  limit?: number;
+  beforeTimestamp?: ISODateTimeString;
+}
+
+@Injectable({ providedIn: 'root' })
 export class ChatStorageService {
-  private readonly db = inject(MessengerDatabase);
-  private readonly logger = inject(Logger);
-  private readonly mergeStrategy = inject(ChatMergeStrategy);
-  private readonly deletionStrategy = inject(ChatDeletionStrategy);
-  private readonly mapper = inject(ChatStorageMapper);
+  private db = inject(MessengerDatabase);
+  private mapper = inject(ChatStorageMapper);
+  private deletionStrategy = inject(ChatDeletionStrategy);
 
-  async saveMessage(message: DecryptedMessage): Promise<boolean> {
-    const msgRecord = this.mapper.mapSmartToRecord(message);
-    const conversationUrnStr = message.conversationUrn.toString();
-    const now = new Date().toISOString();
+  // --- REPOSITORY INTERFACE IMPLEMENTATION ---
 
-    return this.db.transaction(
-      'rw',
-      [this.db.messages, this.db.conversations],
-      async () => {
-        const existingRecord = await this.db.messages.get(message.messageId);
+  async loadHistorySegment(
+    conversationUrn: URN,
+    limit: number,
+    beforeTimestamp?: string,
+  ): Promise<ChatMessage[]> {
+    const convoId = conversationUrn.toString();
+    const upperBound = beforeTimestamp || Dexie.maxKey;
 
-        if (existingRecord) {
-          if (existingRecord.status !== message.status) {
-            this.logger.debug(
-              `[ChatStorage] Updating status for ${message.messageId}: ${existingRecord.status} -> ${message.status}`,
-            );
-          } else {
-            this.logger.warn(
-              `[ChatStorage] Duplicate message ignored: ${message.messageId}`,
-            );
-            return false;
-          }
-        }
+    let collection = this.db.messages
+      .where('[conversationUrn+sentTimestamp]')
+      .between([convoId, Dexie.minKey], [convoId, upperBound], false, false)
+      .reverse();
 
-        await this.db.messages.put(msgRecord);
+    if (limit > 0) {
+      collection = collection.limit(limit);
+    }
 
-        const existingConv =
-          await this.db.conversations.get(conversationUrnStr);
-        const isNewer =
-          !existingConv ||
-          message.sentTimestamp >= existingConv.lastActivityTimestamp;
-        const isOlder =
-          existingConv?.genesisTimestamp &&
-          message.sentTimestamp < existingConv.genesisTimestamp;
-
-        const update: ConversationIndexRecord = existingConv || {
-          conversationUrn: conversationUrnStr,
-          lastActivityTimestamp: message.sentTimestamp,
-          snippet: '',
-          previewType: 'text',
-          unreadCount: 0,
-          genesisTimestamp: null,
-          lastModified: now,
-        };
-
-        update.lastModified = now;
-
-        if (isNewer) {
-          update.lastActivityTimestamp = message.sentTimestamp;
-          update.snippet = generateSnippet(message);
-          update.previewType = getPreviewType(message.typeId.toString());
-          if (message.status === 'received' && !existingRecord) {
-            update.unreadCount = (existingConv?.unreadCount || 0) + 1;
-          }
-        }
-
-        if (isOlder) {
-          update.genesisTimestamp = message.sentTimestamp;
-        }
-
-        await this.db.conversations.put(update);
-        return true;
-      },
-    );
-  }
-
-  async markConversationAsRead(urn: URN): Promise<void> {
-    const strUrn = urn.toString();
-    await this.db.conversations.update(strUrn, {
-      unreadCount: 0,
-    });
-  }
-
-  async deleteMessage(messageId: string): Promise<void> {
-    return this.deletionStrategy.deleteMessage(this, messageId);
+    const records = await collection.toArray();
+    return records.map((r) => this.mapper.mapRecordToDomain(r));
   }
 
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
@@ -114,71 +62,38 @@ export class ChatStorageService {
       .reverse()
       .toArray();
 
-    return records.map((r) => ({
-      conversationUrn: URN.parse(r.conversationUrn),
-      latestSnippet: r.snippet,
-      timestamp: r.lastActivityTimestamp as ISODateTimeString,
-      unreadCount: r.unreadCount,
-      previewType: r.previewType,
-    }));
-  }
-
-  async loadHistorySegment(
-    conversationUrn: URN,
-    limit: number,
-    beforeTimestamp?: ISODateTimeString,
-  ): Promise<DecryptedMessage[]> {
-    const urnStr = conversationUrn.toString();
-    const upperBound = beforeTimestamp || Dexie.maxKey;
-
-    const records = await this.db.messages
-      .where('[conversationUrn+sentTimestamp]')
-      .between([urnStr, Dexie.minKey], [urnStr, upperBound], true, false)
-      .reverse()
-      .limit(limit)
-      .toArray();
-
-    return records.map((r) => this.mapper.mapRecordToSmart(r));
-  }
-
-  async getConversationIndex(
-    urn: URN,
-  ): Promise<ConversationSyncState | undefined> {
-    const record = await this.db.conversations.get(urn.toString());
-    return record ? this.mapIndexRecordToSmart(record) : undefined;
+    return records.map(
+      (r) =>
+        ({
+          conversationUrn: URN.parse(r.conversationUrn),
+          lastActivity: r.lastActivityTimestamp as ISODateTimeString,
+          snippet: r.snippet,
+          previewType: r.previewType,
+          unreadCount: r.unreadCount,
+          lastMessage: undefined,
+        }) as any,
+    );
   }
 
   async setGenesisTimestamp(
     urn: URN,
     timestamp: ISODateTimeString,
   ): Promise<void> {
-    const strUrn = urn.toString();
-    const existing = await this.db.conversations.get(strUrn);
-    if (existing) {
-      await this.db.conversations.update(strUrn, {
-        genesisTimestamp: timestamp,
-      });
-    }
+    await this.updateConversation(urn, { genesisTimestamp: timestamp });
   }
 
-  async getMessagesInRange(
-    start: ISODateTimeString,
-    end: ISODateTimeString,
-  ): Promise<DecryptedMessage[]> {
-    const records = await this.db.messages
-      .where('sentTimestamp')
-      .between(start, end, true, true)
-      .toArray();
-    return records.map((r) => this.mapper.mapRecordToSmart(r));
-  }
+  // --- CLOUD SYNC SUPPORT (Restored Methods) ---
 
+  /**
+   * Used by ChatCloudService to find deletions that need to be pushed to the cloud.
+   */
   async getTombstonesInRange(
-    start: ISODateTimeString,
-    end: ISODateTimeString,
+    start: string,
+    end: string,
   ): Promise<MessageTombstone[]> {
     const records = await this.db.tombstones
       .where('deletedAt')
-      .between(start, end, true, true)
+      .between(start, end)
       .toArray();
 
     return records.map((r) => ({
@@ -188,44 +103,153 @@ export class ChatStorageService {
     }));
   }
 
-  async getDataRange(): Promise<{
-    min: ISODateTimeString | null;
-    max: ISODateTimeString | null;
-  }> {
+  /**
+   * Used by ChatCloudService to determine the local time range of data.
+   */
+  async getDataRange(): Promise<{ min: string; max: string } | null> {
     const first = await this.db.messages.orderBy('sentTimestamp').first();
     const last = await this.db.messages.orderBy('sentTimestamp').last();
+
+    if (!first || !last) return null;
     return {
-      min: (first?.sentTimestamp as ISODateTimeString) || null,
-      max: (last?.sentTimestamp as ISODateTimeString) || null,
+      min: first.sentTimestamp,
+      max: last.sentTimestamp,
     };
+  }
+
+  /** Used by ChatCloudService to get all raw Messages for a time range (Backup) */
+  async getMessagesInRange(start: string, end: string): Promise<ChatMessage[]> {
+    const records = await this.db.messages
+      .where('sentTimestamp')
+      .between(start, end)
+      .toArray();
+    return records.map((r) => this.mapper.mapRecordToDomain(r));
+  }
+
+  async setCloudEnabled(enabled: boolean): Promise<void> {
+    await this.db.settings.put({ key: 'cloud_enabled', value: enabled });
+  }
+
+  async isCloudEnabled(): Promise<boolean> {
+    const setting = await this.db.settings.get('cloud_enabled');
+    return setting?.value ?? false;
+  }
+
+  async bulkSaveMessages(messages: ChatMessage[]): Promise<void> {
+    // Re-use single save logic or optimize with bulkPut if mapper allows
+    // For safety, we loop to ensure side-effects (conversation updates) run.
+    // Optimization: In V2 we can make this a true bulk transaction.
+    for (const msg of messages) {
+      await this.saveMessage(msg);
+    }
+  }
+
+  async bulkSaveConversations(
+    conversations: ConversationSyncState[],
+  ): Promise<void> {
+    const records: ConversationIndexRecord[] = conversations.map((c) => ({
+      conversationUrn: c.conversationUrn.toString(),
+      lastActivityTimestamp: c.lastActivityTimestamp,
+      snippet: c.snippet,
+      previewType: c.previewType,
+      unreadCount: c.unreadCount,
+      genesisTimestamp: c.genesisTimestamp,
+      lastModified: c.lastModified,
+    }));
+    await this.db.conversations.bulkPut(records);
   }
 
   async getAllConversations(): Promise<ConversationSyncState[]> {
     const records = await this.db.conversations.toArray();
-    return records.map((r) => this.mapIndexRecordToSmart(r));
-  }
-
-  async smartMergeConversations(
-    cloudIndex: ConversationSyncState[],
-  ): Promise<void> {
-    const records: ConversationIndexRecord[] = cloudIndex.map((s) => ({
-      ...s,
-      conversationUrn: s.conversationUrn.toString(),
-      lastActivityTimestamp: s.lastActivityTimestamp,
-      lastModified: s.lastModified,
-      genesisTimestamp: s.genesisTimestamp,
+    return records.map((r) => ({
+      conversationUrn: URN.parse(r.conversationUrn),
+      lastActivityTimestamp: r.lastActivityTimestamp as ISODateTimeString,
+      snippet: r.snippet,
+      previewType: r.previewType,
+      unreadCount: r.unreadCount,
+      genesisTimestamp: r.genesisTimestamp as ISODateTimeString | null,
+      lastModified: r.lastModified as ISODateTimeString,
     }));
-
-    return this.mergeStrategy.merge(records);
   }
 
-  async bulkSaveConversations(records: ConversationSyncState[]): Promise<void> {
-    return this.smartMergeConversations(records);
+  // --- WRITER / RESCUE ---
+
+  async saveMessage(message: ChatMessage): Promise<void> {
+    const record = this.mapper.mapDomainToRecord(message);
+    const conversationUrnStr = message.conversationUrn.toString();
+    const sentTime = message.sentTimestamp;
+
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.conversations],
+      async () => {
+        await this.db.messages.put(record);
+
+        const existing = await this.db.conversations.get(conversationUrnStr);
+        const now = new Date().toISOString();
+
+        const isNewer = !existing || sentTime >= existing.lastActivityTimestamp;
+        const isOlder =
+          existing?.genesisTimestamp && sentTime < existing.genesisTimestamp;
+
+        const update: ConversationIndexRecord = existing || {
+          conversationUrn: conversationUrnStr,
+          lastActivityTimestamp: sentTime,
+          snippet: '',
+          previewType: 'text',
+          unreadCount: 0,
+          lastModified: now,
+          genesisTimestamp: null,
+        };
+
+        update.lastModified = now;
+
+        if (isNewer) {
+          update.lastActivityTimestamp = sentTime;
+          update.snippet = generateSnippet(message);
+          update.previewType = getPreviewType(message.typeId.toString());
+          if (message.status === 'received') {
+            update.unreadCount = (existing?.unreadCount || 0) + 1;
+          }
+        }
+
+        if (isOlder) {
+          update.genesisTimestamp = sentTime;
+        }
+
+        await this.db.conversations.put(update);
+      },
+    );
   }
 
-  async bulkSaveMessages(messages: DecryptedMessage[]): Promise<void> {
-    const records = messages.map((m) => this.mapper.mapSmartToRecord(m));
-    await this.db.messages.bulkPut(records);
+  async getConversationIndex(
+    conversationUrn: URN,
+  ): Promise<ConversationSyncState | undefined> {
+    const record = await this.db.conversations.get(conversationUrn.toString());
+    if (!record) return undefined;
+
+    return {
+      conversationUrn: URN.parse(record.conversationUrn),
+      lastActivityTimestamp: record.lastActivityTimestamp as ISODateTimeString,
+      genesisTimestamp: record.genesisTimestamp
+        ? (record.genesisTimestamp as ISODateTimeString)
+        : null,
+      snippet: record.snippet,
+      unreadCount: record.unreadCount,
+      lastModified: record.lastModified as ISODateTimeString,
+      previewType: record.previewType,
+    };
+  }
+
+  async updateConversation(
+    urn: URN,
+    changes: Partial<ConversationIndexRecord>,
+  ): Promise<number> {
+    return this.db.conversations.update(urn.toString(), changes);
+  }
+
+  async markConversationAsRead(conversationUrn: URN): Promise<void> {
+    await this.updateConversation(conversationUrn, { unreadCount: 0 });
   }
 
   async updateMessageStatus(
@@ -233,70 +257,20 @@ export class ChatStorageService {
     status: MessageDeliveryStatus,
   ): Promise<void> {
     if (messageIds.length === 0) return;
-    await this.db.transaction('rw', this.db.messages, async () => {
-      const records = await this.db.messages.bulkGet(messageIds);
-      const updates: any[] = [];
-      records.forEach((record) => {
-        if (record && record.status !== status) {
-          updates.push({ ...record, status });
-        }
-      });
-      this.logger.debug(
-        `[ChatStorage] updating status to ${status}`,
-        messageIds,
-      );
-      if (updates.length > 0) {
-        await this.db.messages.bulkPut(updates);
-      }
-    });
-  }
-
-  async setCloudEnabled(enabled: boolean): Promise<void> {
-    await this.db.settings.put({ key: 'chat_cloud_enabled', value: enabled });
-  }
-
-  async isCloudEnabled(): Promise<boolean> {
-    const r = await this.db.settings.get('chat_cloud_enabled');
-    return r?.value === true;
-  }
-
-  async clearMessageHistory(): Promise<void> {
-    await this.db.transaction(
-      'rw',
-      [this.db.messages, this.db.conversations, this.db.quarantined_messages],
-      async () => {
-        await Promise.all([
-          this.db.messages.clear(),
-          this.db.conversations.clear(),
-          this.db.quarantined_messages.clear(),
-        ]);
-      },
+    await this.db.messages.bulkUpdate(
+      messageIds.map((id) => ({ key: id, changes: { status } })),
     );
   }
 
-  async clearDatabase(): Promise<void> {
-    await this.db.transaction(
-      'rw',
-      [
-        this.db.messages,
-        this.db.settings,
-        this.db.conversations,
-        this.db.tombstones,
-      ],
-      async () => {
-        await this.db.messages.clear();
-        await this.db.settings.clear();
-        await this.db.conversations.clear();
-        await this.db.tombstones.clear();
-      },
-    );
+  async deleteMessage(id: string): Promise<void> {
+    return this.deletionStrategy.deleteMessage(this, id);
   }
 
-  public mapRecordToSmart(record: MessageRecord): DecryptedMessage {
-    return this.mapper.mapRecordToSmart(record);
+  public mapRecordToSmart(record: MessageRecord): ChatMessage {
+    return this.mapper.mapRecordToDomain(record);
   }
 
-  public generateSnippet(msg: DecryptedMessage): string {
+  public generateSnippet(msg: ChatMessage): string {
     return generateSnippet(msg);
   }
 
@@ -306,92 +280,78 @@ export class ChatStorageService {
     return getPreviewType(typeIdStr);
   }
 
-  private mapIndexRecordToSmart(
-    record: ConversationIndexRecord,
-  ): ConversationSyncState {
-    return {
-      ...record,
-      conversationUrn: URN.parse(record.conversationUrn),
-      lastActivityTimestamp: record.lastActivityTimestamp as ISODateTimeString,
-      lastModified: record.lastModified as ISODateTimeString,
-      genesisTimestamp: (record.genesisTimestamp as ISODateTimeString) || null,
-    };
-  }
-
-  async saveQuarantinedMessage(message: DecryptedMessage): Promise<void> {
-    const msgRecord = this.mapper.mapSmartToRecord(message);
-    await this.db.quarantined_messages.put(msgRecord);
-  }
-
-  async getQuarantinedMessages(urn: URN): Promise<DecryptedMessage[]> {
-    const records = await this.db.quarantined_messages
-      .where('conversationUrn')
-      .equals(urn.toString())
-      .toArray();
-
-    return records.map((r) => this.mapper.mapRecordToSmart(r));
-  }
-
-  async deleteQuarantinedMessages(urn: URN): Promise<void> {
-    const urnStr = urn.toString();
-    const records = await this.db.quarantined_messages
-      .where('conversationUrn')
-      .equals(urnStr)
-      .toArray();
-    const ids = records.map((r) => r.messageId);
-    await this.db.quarantined_messages.bulkDelete(ids);
-  }
-
-  async promoteQuarantinedMessages(oldUrn: URN, newUrn: URN): Promise<void> {
-    const oldUrnStr = oldUrn.toString();
-    const newUrnStr = newUrn.toString();
-
+  async clearMessageHistory(): Promise<void> {
     await this.db.transaction(
       'rw',
-      [this.db.quarantined_messages, this.db.messages, this.db.conversations],
+      [this.db.messages, this.db.conversations, this.db.tombstones],
       async () => {
-        const quarantined = await this.db.quarantined_messages
-          .where('conversationUrn')
-          .equals(oldUrnStr)
-          .toArray();
-
-        if (quarantined.length === 0) return;
-
-        const toSave = quarantined.map((record) => ({
-          ...record,
-          conversationUrn: newUrnStr,
-        }));
-
-        await this.db.messages.bulkPut(toSave);
-
-        toSave.sort((a, b) => (b.sentTimestamp > a.sentTimestamp ? 1 : -1));
-        const latest = toSave[0];
-        const latestSmart = this.mapper.mapRecordToSmart(latest);
-
-        const existing = await this.db.conversations.get(newUrnStr);
-        const now = new Date().toISOString();
-
-        const update: any = existing || {
-          conversationUrn: newUrnStr,
-          lastActivityTimestamp: latest.sentTimestamp,
-          snippet: '',
-          previewType: 'text',
-          unreadCount: 0,
-          genesisTimestamp: null,
-          lastModified: now,
-        };
-
-        update.lastActivityTimestamp = latest.sentTimestamp;
-        update.snippet = generateSnippet(latestSmart);
-        update.previewType = getPreviewType(latest.typeId);
-        update.unreadCount = (existing?.unreadCount || 0) + toSave.length;
-        update.lastModified = now;
-
-        await this.db.conversations.put(update);
-
-        const idsToDelete = quarantined.map((m) => m.messageId);
-        await this.db.quarantined_messages.bulkDelete(idsToDelete);
+        await this.db.messages.clear();
+        await this.db.conversations.clear();
+        await this.db.tombstones.clear();
       },
     );
+  }
+
+  async clearDatabase(): Promise<void> {
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.messages,
+        this.db.conversations,
+        this.db.tombstones,
+        this.db.quarantined_messages,
+        this.db.settings,
+      ],
+      async () => {
+        await this.db.messages.clear();
+        await this.db.conversations.clear();
+        await this.db.tombstones.clear();
+        await this.db.quarantined_messages.clear();
+        await this.db.settings.clear();
+      },
+    );
+  }
+
+  async saveQuarantinedMessage(message: TransportMessage): Promise<void> {
+    await this.db.quarantined_messages.put({
+      messageId: message.clientRecordId || crypto.randomUUID(),
+      senderId: message.senderId.toString(),
+      sentTimestamp: message.sentTimestamp,
+      typeId: message.typeId.toString(),
+      payloadBytes: message.payloadBytes,
+      clientRecordId: message.clientRecordId,
+    });
+  }
+
+  async getQuarantinedMessages(senderId: URN): Promise<ChatMessage[]> {
+    const records = await this.db.quarantined_messages
+      .where('senderId')
+      .equals(senderId.toString())
+      .sortBy('sentTimestamp');
+
+    return records.map((r) => ({
+      id: r.messageId,
+      conversationUrn: URN.parse(r.senderId),
+      senderId: URN.parse(r.senderId),
+      sentTimestamp: r.sentTimestamp as ISODateTimeString,
+      typeId: URN.parse(r.typeId),
+      payloadBytes: r.payloadBytes,
+      status: 'received',
+    }));
+  }
+
+  async getQuarantinedSenders(): Promise<URN[]> {
+    const uniqueSenders = await this.db.quarantined_messages
+      .orderBy('senderId')
+      .uniqueKeys();
+
+    return uniqueSenders.map((k) => URN.parse(k as string));
+  }
+
+  async deleteQuarantinedMessages(senderId: URN): Promise<void> {
+    await this.db.quarantined_messages
+      .where('senderId')
+      .equals(senderId.toString())
+      .delete();
   }
 }

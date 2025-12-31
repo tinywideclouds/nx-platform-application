@@ -1,7 +1,8 @@
-// libs/messenger/chat-state/src/lib/services/chat-ingestion.service.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockProvider } from 'ng-mocks';
+
 import { ChatIngestionService } from './chat-ingestion.service';
 import { ChatMessageMapper } from './chat-message.mapper';
 import { ChatDataService } from '@nx-platform-application/chat-access';
@@ -9,123 +10,174 @@ import { MessengerCryptoService } from '@nx-platform-application/messenger-crypt
 import { ChatStorageService } from '@nx-platform-application/chat-storage';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Logger } from '@nx-platform-application/console-logger';
-import {
-  URN,
-  QueuedMessage,
-  SecureEnvelope,
-} from '@nx-platform-application/platform-types';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { IdentityResolver } from '@nx-platform-application/messenger-identity-adapter';
-import {
-  MessageContentParser,
-  ParsedMessage,
-} from '@nx-platform-application/message-content';
+import { MessageContentParser } from '@nx-platform-application/message-content';
 
-const mockMyUrn = URN.parse('urn:contacts:user:me');
-const mockSenderContact = URN.parse('urn:contacts:user:friend');
-const mockEnvelope = {
-  recipientId: mockMyUrn,
-  isEphemeral: false,
-} as SecureEnvelope;
-const mockQueuedMsg: QueuedMessage = {
-  id: 'router-id-999',
-  envelope: mockEnvelope,
-};
-
-const mockDecryptedPayload = {
-  senderId: mockSenderContact,
-  sentTimestamp: '2025-01-01T12:00:00Z',
-  typeId: URN.parse('urn:message:type:text'),
-  payloadBytes: new Uint8Array([1]),
-  clientRecordId: undefined as string | undefined,
-};
-const mockKeys = { encKey: 'priv' } as any;
+import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
 
 describe('ChatIngestionService', () => {
   let service: ChatIngestionService;
+  let storage: ChatStorageService;
+  let dataService: ChatDataService;
+  let cryptoService: MessengerCryptoService;
+  let parser: MessageContentParser;
 
-  const mockStorageService = {
-    saveMessage: vi.fn().mockResolvedValue(true),
-    saveQuarantinedMessage: vi.fn(),
-    updateMessageStatus: vi.fn(),
+  // --- Fixtures ---
+  const myUrn = URN.parse('urn:contacts:user:me');
+  const aliceUrn = URN.parse('urn:contacts:user:alice');
+  const groupUrn = URN.parse('urn:messenger:group:the-greatest');
+
+  const mockKeys = { encKey: {} as any, sigKey: {} as any };
+  const mockEnvelope = { recipientId: myUrn, isEphemeral: false };
+  const mockQueuedMsg: QueuedMessage = {
+    id: 'router-id-1',
+    envelope: mockEnvelope as any,
   };
-  const mockContactsService = { addToPending: vi.fn() };
-  const mockResolver = { resolveToContact: vi.fn() };
-  const mockDataService = { getMessageBatch: vi.fn(), acknowledge: vi.fn() };
-  const mockCryptoService = { verifyAndDecrypt: vi.fn() };
-  const mockLogger = {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
+
+  const mockTransportPayload = {
+    senderId: aliceUrn,
+    sentTimestamp: '2025-01-01T12:00:00Z',
+    typeId: URN.parse('urn:message:type:text'),
+    payloadBytes: new Uint8Array([1, 2, 3]),
+    clientRecordId: 'client-uuid-123',
   };
-  const mockParser = { parse: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDataService.getMessageBatch.mockReturnValue(of([]));
-    mockDataService.acknowledge.mockReturnValue(of(undefined));
-    mockCryptoService.verifyAndDecrypt.mockResolvedValue(mockDecryptedPayload);
-    mockResolver.resolveToContact.mockResolvedValue(mockSenderContact);
-    mockParser.parse.mockReturnValue({
-      kind: 'content',
-      payload: { kind: 'text', text: 'test' },
-    });
 
     TestBed.configureTestingModule({
       providers: [
         ChatIngestionService,
-        ChatMessageMapper,
-        { provide: ChatDataService, useValue: mockDataService },
-        { provide: MessengerCryptoService, useValue: mockCryptoService },
-        { provide: ChatStorageService, useValue: mockStorageService },
-        { provide: ContactsStorageService, useValue: mockContactsService },
-        { provide: IdentityResolver, useValue: mockResolver },
-        { provide: Logger, useValue: mockLogger },
-        { provide: MessageContentParser, useValue: mockParser },
+        MockProvider(ChatMessageMapper, { toView: vi.fn((m) => m as any) }),
+        MockProvider(ChatDataService, {
+          getMessageBatch: vi.fn().mockReturnValue(of([mockQueuedMsg])),
+          acknowledge: vi.fn().mockReturnValue(of(undefined)),
+        }),
+        MockProvider(MessengerCryptoService, {
+          verifyAndDecrypt: vi.fn().mockResolvedValue(mockTransportPayload),
+        }),
+        MockProvider(ChatStorageService, {
+          saveMessage: vi.fn().mockResolvedValue(true),
+          saveQuarantinedMessage: vi.fn().mockResolvedValue(undefined),
+          updateMessageStatus: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(ContactsStorageService, {
+          addToPending: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(IdentityResolver, {
+          resolveToContact: vi.fn().mockResolvedValue(aliceUrn),
+        }),
+        MockProvider(MessageContentParser, {
+          parse: vi.fn().mockReturnValue({
+            kind: 'content',
+            conversationId: groupUrn, // The Internal SOT
+            tags: [URN.parse('urn:tag:test')],
+            payload: { kind: 'text', text: 'hello' },
+          }),
+        }),
+        MockProvider(Logger),
       ],
     });
+
     service = TestBed.inject(ChatIngestionService);
+    storage = TestBed.inject(ChatStorageService);
+    dataService = TestBed.inject(ChatDataService);
+    cryptoService = TestBed.inject(MessengerCryptoService);
+    parser = TestBed.inject(MessageContentParser);
   });
 
-  describe('ID Resolution (Sender Authority)', () => {
-    beforeEach(() => {
-      mockDataService.getMessageBatch.mockReturnValue(of([mockQueuedMsg]));
-    });
+  describe('Core Routing Logic', () => {
+    it('should route based on INTERNAL conversationId (Dumb Router bypass)', async () => {
+      await service.process(mockKeys, myUrn, new Set());
 
-    it('should use clientRecordId as messageId if present', async () => {
-      // 1. Arrange: Payload has Twin-ID
-      const localId = 'local-uuid-123';
-      mockCryptoService.verifyAndDecrypt.mockResolvedValue({
-        ...mockDecryptedPayload,
-        clientRecordId: localId,
-      });
-
-      // 2. Act
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
-
-      // 3. Assert
-      // ✅ Key Check: saveMessage called with 'local-uuid-123', NOT 'router-id-999'
-      expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ messageId: localId }),
+      expect(storage.saveMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationUrn: groupUrn, // Verified internal SOT used
+          messageId: 'client-uuid-123', // Verified Sender Authority used
+        }),
       );
     });
 
-    it('should fallback to Router ID if clientRecordId is missing', async () => {
-      // 1. Arrange: Payload has NO Twin-ID
-      mockCryptoService.verifyAndDecrypt.mockResolvedValue({
-        ...mockDecryptedPayload,
-        clientRecordId: undefined,
-      });
+    it('should fallback to transport routing if internal conversationId is missing', async () => {
+      // Setup parser to return no internal metadata
+      vi.mocked(parser.parse).mockReturnValue({
+        kind: 'content',
+        payload: { kind: 'text', text: 'legacy' },
+      } as any);
 
-      // 2. Act
-      await service.process(mockKeys, mockMyUrn, new Set(), 50);
+      await service.process(mockKeys, myUrn, new Set());
 
-      // 3. Assert
-      // ✅ Key Check: saveMessage called with 'router-id-999'
-      expect(mockStorageService.saveMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ messageId: 'router-id-999' }),
+      expect(storage.saveMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationUrn: aliceUrn, // Fallback logic (Sender = Conversation)
+        }),
       );
+    });
+  });
+
+  describe('Gatekeeping (Blocks & Strangers)', () => {
+    it('should drop messages from blocked senders immediately', async () => {
+      const blocked = new Set([aliceUrn.toString()]);
+
+      const result = await service.process(mockKeys, myUrn, blocked);
+
+      expect(result.messages.length).toBe(0);
+      expect(storage.saveMessage).not.toHaveBeenCalled();
+      // Still acknowledge so the router clears it
+      expect(dataService.acknowledge).toHaveBeenCalledWith(['router-id-1']);
+    });
+
+    it('should quarantine messages from strangers (non-user entities)', async () => {
+      const strangerUrn = URN.parse('urn:auth:apple:stranger');
+      vi.mocked(
+        TestBed.inject(IdentityResolver).resolveToContact,
+      ).mockResolvedValue(strangerUrn);
+
+      await service.process(mockKeys, myUrn, new Set());
+
+      expect(storage.saveQuarantinedMessage).toHaveBeenCalled();
+      expect(storage.saveMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Signal Handling', () => {
+    it('should process read receipts and update storage status', async () => {
+      vi.mocked(parser.parse).mockReturnValue({
+        kind: 'signal',
+        payload: {
+          action: 'read-receipt',
+          data: { messageIds: ['m1'], readAt: 'now' },
+        },
+      } as any);
+
+      const result = await service.process(mockKeys, myUrn, new Set());
+
+      expect(storage.updateMessageStatus).toHaveBeenCalledWith(['m1'], 'read');
+      expect(result.readReceipts).toContain('m1');
+    });
+
+    it('should capture typing indicators', async () => {
+      vi.mocked(parser.parse).mockReturnValue({
+        kind: 'signal',
+        payload: { action: 'typing', data: null },
+      } as any);
+
+      const result = await service.process(mockKeys, myUrn, new Set());
+
+      expect(result.typingIndicators).toContain(aliceUrn);
+    });
+  });
+
+  describe('Batching & Recursion', () => {
+    it('should recursively fetch next batch if limit is reached', async () => {
+      // Force recursion by making the first batch equal to the limit
+      vi.mocked(dataService.getMessageBatch)
+        .mockReturnValueOnce(of([mockQueuedMsg])) // Batch 1
+        .mockReturnValueOnce(of([])); // Batch 2 (empty)
+
+      await service.process(mockKeys, myUrn, new Set(), 1);
+
+      expect(dataService.getMessageBatch).toHaveBeenCalledTimes(2);
     });
   });
 });
