@@ -3,7 +3,6 @@ import {
   APP_INITIALIZER,
   provideZonelessChangeDetection,
   importProvidersFrom,
-  isDevMode,
 } from '@angular/core';
 // This acts as a hint to the Nx Graph that this app explicitly depends on contacts-ui
 import '@nx-platform-application/contacts-ui';
@@ -29,24 +28,34 @@ import {
 } from '@nx-platform-application/platform-auth-ui/mocks';
 
 // --- Mock Providers ---
-import { ChatService } from '@nx-platform-application/chat-state';
+import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import { MockChatService } from './mocks/mock-chat.service';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
 import { MESSENGER_MOCK_USERS } from './mocks/users';
 
+// --- Domain Ports ---
+import {
+  HistoryReader,
+  ConversationStorage,
+  RemoteHistoryLoader,
+} from '@nx-platform-application/messenger-domain-conversation';
+import { OutboxStorage } from '@nx-platform-application/messenger-domain-outbox';
+import { QuarantineStorage } from '@nx-platform-application/messenger-domain-quarantine';
+import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
+
 // --- Service Tokens ---
-import { ROUTING_SERVICE_URL } from '@nx-platform-application/chat-access';
-import { WSS_URL_TOKEN } from '@nx-platform-application/chat-live-data';
-import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-key-access';
+import { ROUTING_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-chat-access';
+import { WSS_URL_TOKEN } from '@nx-platform-application/messenger-infrastructure-live-data';
+import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-key-access';
 
 // ✅ NEW: Notification Tokens
 import {
   NOTIFICATION_SERVICE_URL,
   VAPID_PUBLIC_KEY,
-} from '@nx-platform-application/messenger-device-notifications';
+} from '@nx-platform-application/messenger-infrastructure-device-notifications';
 
-import { CryptoEngine } from '@nx-platform-application/messenger-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import {
   LOGGER_CONFIG,
   LogLevel,
@@ -60,6 +69,11 @@ import {
   GoogleDriveService,
 } from '@nx-platform-application/platform-cloud-access';
 import { provideMessengerIdentity } from '@nx-platform-application/messenger-domain-identity-adapter';
+import {
+  ChatStorageService,
+  DexieOutboxStorage,
+  DexieQuarantineStorage,
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
 // --- Conditional Mock Providers ---
 const authProviders = environment.useMocks
@@ -144,6 +158,14 @@ export const appConfig: ApplicationConfig = {
 
     ...authProviders,
     provideMessengerIdentity(),
+    // ✅ Wiring Domain Ports to Infrastructure Implementation
+    { provide: HistoryReader, useExisting: ChatStorageService },
+    { provide: ConversationStorage, useExisting: ChatStorageService },
+    { provide: OutboxStorage, useClass: DexieOutboxStorage },
+    { provide: QuarantineStorage, useClass: DexieQuarantineStorage },
+
+    // ✅ Wiring Domain Ports to Domain Implementation (Cross-Lib)
+    { provide: RemoteHistoryLoader, useExisting: ChatSyncService },
     chatProvider,
     contactsProvider,
     ...tokenProviders,

@@ -1,7 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessengerDatabase } from '../db/messenger.database';
-import { ConversationIndexRecord } from '../db/records/conversation.record'; // ✅ Updated Import
+
+import {
+  MessengerDatabase,
+  ConversationIndexRecord,
+} from '@nx-platform-application/messenger-infrastructure-db-schema';
 
 @Injectable({ providedIn: 'root' })
 export class ChatMergeStrategy {

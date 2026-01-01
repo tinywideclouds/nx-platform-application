@@ -4,11 +4,11 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
 import { IngestionService } from './ingestion.service';
-import { ChatDataService } from '@nx-platform-application/chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
+import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessageContentParser } from '@nx-platform-application/message-content';
+import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 
 import { URN, QueuedMessage } from '@nx-platform-application/platform-types';

@@ -1,0 +1,47 @@
+<header class="flex-shrink-0 flex items-center layout-header">
+  <button
+    mat-icon-button
+    (click)="back.emit()"
+    class="mr-2 text-gray-600"
+    aria-label="Back"
+  >
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+
+  <div
+    role="img"
+    class="relative flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gray-600 text-white"
+  >
+    @if (participant().profilePictureUrl) {
+      <img
+        [src]="participant().profilePictureUrl"
+        [alt]="participant().name"
+        class="h-full w-full object-cover"
+      />
+    } @else {
+      <span data-testid="initials" class="text-base font-medium">
+        {{ participant().initials }}
+      </span>
+    }
+  </div>
+
+  <div class="ml-3 flex-grow min-w-0">
+    <div class="font-medium text-gray-900 truncate">
+      {{ participant().name }}
+    </div>
+  </div>
+
+  <button
+    mat-icon-button
+    (click)="toggleInfo.emit()"
+    [color]="mode() === 'details' ? 'primary' : ''"
+    aria-label="Contact Details"
+    data-testid="info-button"
+    [matBadge]="hasKeyIssue() ? '!' : ''"
+    matBadgeColor="warn"
+    [matBadgeHidden]="!hasKeyIssue()"
+    matBadgeSize="small"
+  >
+    <mat-icon>{{ mode() === 'details' ? 'chat' : 'info' }}</mat-icon>
+  </button>
+</header>

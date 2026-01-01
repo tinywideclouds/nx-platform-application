@@ -1,0 +1,184 @@
+<div class="fixed inset-0 bg-black/85 flex justify-center items-center z-50">
+  <mat-card class="w-full max-w-md p-4">
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="primary" class="scale-150">{{
+        getIcon()
+      }}</mat-icon>
+      <mat-card-title>{{ getTitle() }}</mat-card-title>
+      <mat-card-subtitle>{{ getSubtitle() }}</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="pt-4">
+      @if (step() === 'CHOICE') {
+        <div class="text-center py-4">
+          <p class="mb-6 text-gray-700">
+            We detected an existing identity for your account, but this device
+            doesn't have the encryption keys to read your messages.
+          </p>
+          <div class="flex flex-col gap-4">
+            <button
+              type="button"
+              mat-flat-button
+              color="primary"
+              class="py-6"
+              (click)="startLinking()"
+            >
+              <mat-icon>qr_code</mat-icon>
+              Link to Existing Device
+            </button>
+
+            <div class="relative py-2">
+              <div class="absolute inset-0 flex items-center">
+                <span class="w-full border-t border-gray-300"></span>
+              </div>
+              <div class="relative flex justify-center text-xs uppercase">
+                <span class="bg-white px-2 text-gray-500">Or</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              mat-stroked-button
+              color="warn"
+              (click)="step.set('RESET_WARNING')"
+            >
+              <mat-icon>delete_forever</mat-icon>
+              Reset Identity
+            </button>
+
+            <button
+              type="button"
+              mat-button
+              class="text-gray-500 hover:text-gray-700 mt-2"
+              (click)="onLogout()"
+            >
+              Wrong Account? Sign Out
+            </button>
+          </div>
+        </div>
+      }
+      @if (step() === 'LINKING') {
+        @if (mode() === 'SHOW') {
+          <lib-device-link-qr-display
+            [session]="session()"
+            (switchToScan)="switchToScan()"
+            switchButtonText="I can't scan this code. Use my camera instead."
+          >
+            <div
+              instructions
+              class="text-left text-sm text-gray-700 mb-6 space-y-2"
+            >
+              <p>1. Open Messenger on your <strong>other device</strong>.</p>
+              <p>2. Go to <strong>Settings > Link New Device</strong>.</p>
+              <p>3. Scan this code.</p>
+            </div>
+          </lib-device-link-qr-display>
+
+          <div class="w-full text-center text-xs text-gray-500 mb-4 -mt-4">
+            <mat-progress-bar
+              mode="indeterminate"
+              class="mb-2"
+            ></mat-progress-bar>
+            <span>Waiting for sync...</span>
+          </div>
+        }
+        @if (mode() === 'SCAN') {
+          <lib-device-link-scanner-ui
+            (scanSuccess)="onScanResult($event)"
+            (switchToDisplay)="switchToShow()"
+            switchButtonText="Back to Display Code"
+          />
+          <p class="text-sm text-gray-600 my-4 text-center">
+            On your existing device, select <strong>"Show Code"</strong> and
+            scan it here.
+          </p>
+        }
+        @if (mode() === 'REVIEW') {
+          <div
+            class="w-full text-left bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4"
+          >
+            <div class="flex items-center gap-2 mb-2">
+              <mat-icon
+                [class.text-green-600]="!scannedData()?.error"
+                [class.text-red-600]="scannedData()?.error"
+              >
+                {{ scannedData()?.error ? 'error' : 'check_circle' }}
+              </mat-icon>
+              <span class="font-bold text-sm">
+                {{ scannedData()?.error ? 'Invalid Format' : 'Valid JSON' }}
+              </span>
+            </div>
+            @if (scannedData(); as data) {
+              <div class="text-xs font-mono text-gray-600 break-all space-y-1">
+                @if (!data.error) {
+                  <div><strong>Mode (m):</strong> {{ data.m }}</div>
+                  <div><strong>Session (s):</strong> {{ data.sid }}</div>
+                  <div>{{ data | json }}</div>
+                } @else {
+                  <div class="text-red-600">Raw: {{ scannedRaw() }}</div>
+                }
+              </div>
+            }
+          </div>
+
+          @if (!scannedData()?.error) {
+            <button
+              type="button"
+              mat-flat-button
+              color="primary"
+              class="w-full mb-3"
+              (click)="confirmConnection()"
+            >
+              <mat-icon>link</mat-icon> Connect Device
+            </button>
+          }
+          <button
+            type="button"
+            mat-stroked-button
+            class="w-full"
+            (click)="switchToScan()"
+          >
+            Rescan
+          </button>
+        }
+      }
+      @if (step() === 'RESET_WARNING') {
+        <div class="py-4">
+          <div
+            class="bg-red-50 text-red-700 p-4 rounded-md flex items-center gap-3 mb-4"
+          >
+            <mat-icon>warning</mat-icon>
+            <strong>SCORCHED EARTH PROTOCOL</strong>
+          </div>
+          <ul class="list-disc pl-6 space-y-2 mb-6 text-gray-700">
+            <li>Your existing encryption keys will be revoked.</li>
+            <li>You will <strong>lose access</strong> to all past messages.</li>
+            <li>Your contacts will see a "Safety Number Changed" warning.</li>
+          </ul>
+          <p class="font-medium">Are you sure you want to proceed?</p>
+        </div>
+      }
+    </mat-card-content>
+
+    <mat-card-actions align="end" class="pt-2 border-t border-gray-100">
+      @if (step() === 'LINKING') {
+        <button type="button" mat-button (click)="step.set('CHOICE')">
+          Back
+        </button>
+      }
+      @if (step() === 'RESET_WARNING') {
+        <button type="button" mat-button (click)="step.set('CHOICE')">
+          Cancel
+        </button>
+        <button
+          type="button"
+          mat-flat-button
+          color="warn"
+          (click)="confirmReset()"
+        >
+          Confirm Reset
+        </button>
+      }
+    </mat-card-actions>
+  </mat-card>
+</div>

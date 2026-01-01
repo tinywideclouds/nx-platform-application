@@ -2,11 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { MockProvider } from 'ng-mocks';
 import { URN } from '@nx-platform-application/platform-types';
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
-import { ChatSendService } from '@nx-platform-application/chat-access';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessageMetadataService } from '@nx-platform-application/message-content';
+import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 
 import { OutboxWorkerService } from './outbox-worker.service';
 import { OutboxRepository } from './outbox.repository';

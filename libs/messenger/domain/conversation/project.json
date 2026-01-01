@@ -1,0 +1,13 @@
+{
+  "name": "messenger-domain-conversation",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/domain/conversation/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

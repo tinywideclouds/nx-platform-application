@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { QuarantineService } from './quarantine.service';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+// ✅ 1. Remove incorrect import
+// import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Logger } from '@nx-platform-application/console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
@@ -8,10 +9,12 @@ import { URN } from '@nx-platform-application/platform-types';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+// ✅ 2. Import the Port
+import { QuarantineStorage } from './quarantine.storage';
 
 describe('QuarantineService (Gatekeeper)', () => {
   let service: QuarantineService;
-  let storage: ChatStorageService;
+  let storage: QuarantineStorage; // ✅ Typed as Port
   let contacts: ContactsStateService;
   let resolver: IdentityResolver;
 
@@ -29,7 +32,8 @@ describe('QuarantineService (Gatekeeper)', () => {
     TestBed.configureTestingModule({
       providers: [
         QuarantineService,
-        MockProvider(ChatStorageService, {
+        // ✅ 3. Mock the Port, not the Infrastructure Service
+        MockProvider(QuarantineStorage, {
           saveQuarantinedMessage: vi.fn(),
           getQuarantinedSenders: vi.fn(),
           getQuarantinedMessages: vi.fn(),
@@ -46,7 +50,7 @@ describe('QuarantineService (Gatekeeper)', () => {
     });
 
     service = TestBed.inject(QuarantineService);
-    storage = TestBed.inject(ChatStorageService);
+    storage = TestBed.inject(QuarantineStorage); // ✅ Inject Port
     contacts = TestBed.inject(ContactsStateService);
     resolver = TestBed.inject(IdentityResolver);
   });
@@ -58,7 +62,6 @@ describe('QuarantineService (Gatekeeper)', () => {
       const result = await service.process(transportMsg, blockedSet);
 
       expect(result).toBeNull();
-      // Optimization Check: Should NOT resolve identity or hit storage if blocked at the door
       expect(resolver.resolveToContact).not.toHaveBeenCalled();
       expect(storage.saveQuarantinedMessage).not.toHaveBeenCalled();
     });
@@ -72,9 +75,9 @@ describe('QuarantineService (Gatekeeper)', () => {
       const result = await service.process(transportMsg, new Set());
 
       // Assert
-      expect(result).toBeNull(); // Do not pass to ingestion
+      expect(result).toBeNull();
       expect(resolver.resolveToContact).toHaveBeenCalledWith(handleUrn);
-      expect(contacts.isTrusted).toHaveBeenCalledWith(contactUrn); // Check the CANONICAL ID
+      expect(contacts.isTrusted).toHaveBeenCalledWith(contactUrn);
       expect(storage.saveQuarantinedMessage).toHaveBeenCalledWith(transportMsg);
     });
 
@@ -87,7 +90,7 @@ describe('QuarantineService (Gatekeeper)', () => {
       const result = await service.process(transportMsg, new Set());
 
       // Assert
-      expect(result).toEqual(contactUrn); // Pass Canonical ID to ingestion
+      expect(result).toEqual(contactUrn);
       expect(storage.saveQuarantinedMessage).not.toHaveBeenCalled();
     });
   });

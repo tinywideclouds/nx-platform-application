@@ -1,0 +1,34 @@
+{
+  "name": "chat-ui",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/ui/chat/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/ui/chat",
+        "configFile": "libs/messenger/ui/chat/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/messenger/ui/chat",
+        "htmlReportDirectory": "dist/test-reports/libs/messenger/ui/chat",
+        "configFile": "libs/messenger/ui/chat/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

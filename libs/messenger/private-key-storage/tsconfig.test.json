@@ -1,9 +1,0 @@
-// libs/platform/ng/auth-access/tsconfig.test.json
-{
-  "extends": "./tsconfig.spec.json",
-  "compilerOptions": {
-    "composite": false,
-    "declaration": false,
-    "declarationMap": false
-  }
-}

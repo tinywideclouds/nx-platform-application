@@ -33,7 +33,7 @@ export class ContactsStorageService {
   private mapStorableToContact(c: StorableContact): Contact {
     const serviceContacts: Record<string, ServiceContact> = {};
     for (const [key, s] of Object.entries(c.serviceContacts || {})) {
-      if (s) {
+      if (s && s.id) {
         serviceContacts[key] = { ...s, id: URN.parse(s.id) };
       }
     }
@@ -64,7 +64,7 @@ export class ContactsStorageService {
     return {
       ...g,
       id: URN.parse(g.id),
-      contactIds: g.contactIds.map((id) => URN.parse(id)),
+      contactIds: (g.contactIds || []).map((id) => URN.parse(id)),
     };
   }
 
@@ -72,7 +72,7 @@ export class ContactsStorageService {
     return {
       ...g,
       id: g.id.toString(),
-      contactIds: g.contactIds.map((id) => id.toString()),
+      contactIds: (g.contactIds || []).map((id) => id.toString()),
     };
   }
 
@@ -99,10 +99,7 @@ export class ContactsStorageService {
 
   readonly favorites$: Observable<Contact[]> = from(
     liveQuery(() =>
-      this.db.contacts
-        .where('isFavorite')
-        .equals(true as any)
-        .toArray(),
+      this.db.contacts.filter((c) => (c as any).isFavorite === true).toArray(),
     ),
   ).pipe(
     map((storables) => storables.map((c) => this.mapStorableToContact(c))),
@@ -140,6 +137,8 @@ export class ContactsStorageService {
   }
 
   async updateContact(id: URN, changes: Partial<Contact>): Promise<void> {
+    if (!id) return;
+
     const {
       id: urnId,
       serviceContacts: domainServiceContacts,
@@ -164,11 +163,13 @@ export class ContactsStorageService {
   }
 
   async getContact(id: URN): Promise<Contact | undefined> {
+    if (!id) return undefined;
     const storable = await this.db.contacts.get(id.toString());
     return storable ? this.mapStorableToContact(storable) : undefined;
   }
 
   async deleteContact(id: URN): Promise<void> {
+    if (!id) return;
     const urnStr = id.toString();
     const now = new Date().toISOString() as ISODateTimeString;
     await this.db.transaction(
@@ -182,6 +183,7 @@ export class ContactsStorageService {
   }
 
   async findByEmail(email: string): Promise<Contact | undefined> {
+    if (!email) return undefined;
     let storable = await this.db.contacts.where('email').equals(email).first();
     if (!storable) {
       storable = await this.db.contacts
@@ -193,6 +195,7 @@ export class ContactsStorageService {
   }
 
   async findByPhone(phone: string): Promise<Contact | undefined> {
+    if (!phone) return undefined;
     const storable = await this.db.contacts
       .where('phoneNumbers')
       .equals(phone)
@@ -213,15 +216,18 @@ export class ContactsStorageService {
   }
 
   async getGroup(id: URN): Promise<ContactGroup | undefined> {
+    if (!id) return undefined;
     const storable = await this.db.groups.get(id.toString());
     return storable ? this.mapStorableToGroup(storable) : undefined;
   }
 
   async deleteGroup(id: URN): Promise<void> {
+    if (!id) return;
     await this.db.groups.delete(id.toString());
   }
 
   async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
+    if (!contactId) return [];
     const storables = await this.db.groups
       .where('contactIds')
       .equals(contactId.toString())
@@ -230,6 +236,7 @@ export class ContactsStorageService {
   }
 
   async getContactsForGroup(groupId: URN): Promise<Contact[]> {
+    if (!groupId) return [];
     const groupStorable = await this.db.groups.get(groupId.toString());
     if (!groupStorable || groupStorable.contactIds.length === 0) return [];
     const contactIdStrings = groupStorable.contactIds;
@@ -240,6 +247,7 @@ export class ContactsStorageService {
   }
 
   async linkIdentityToContact(contactId: URN, authUrn: URN): Promise<void> {
+    if (!contactId || !authUrn) return;
     await this.db.links.put({
       contactId: contactId.toString(),
       authUrn: authUrn.toString(),
@@ -247,6 +255,7 @@ export class ContactsStorageService {
   }
 
   async getLinkedIdentities(contactId: URN): Promise<URN[]> {
+    if (!contactId) return [];
     const list = await this.db.links
       .where('contactId')
       .equals(contactId.toString())
@@ -264,6 +273,7 @@ export class ContactsStorageService {
   }
 
   async findContactByAuthUrn(authUrn: URN): Promise<Contact | null> {
+    if (!authUrn) return null;
     const link = await this.db.links
       .where('authUrn')
       .equals(authUrn.toString())
@@ -274,6 +284,7 @@ export class ContactsStorageService {
   }
 
   async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
+    if (!urn) return;
     const existing = await this.db.pending
       .where('urn')
       .equals(urn.toString())
@@ -291,6 +302,7 @@ export class ContactsStorageService {
   }
 
   async getPendingIdentity(urn: URN): Promise<PendingIdentity | null> {
+    if (!urn) return null;
     const storable = await this.db.pending
       .where('urn')
       .equals(urn.toString())
@@ -299,6 +311,7 @@ export class ContactsStorageService {
   }
 
   async deletePending(urn: URN): Promise<void> {
+    if (!urn) return;
     const records = await this.db.pending
       .where('urn')
       .equals(urn.toString())
@@ -316,6 +329,7 @@ export class ContactsStorageService {
     scopes: string[] = ['all'],
     reason?: string,
   ): Promise<void> {
+    if (!urn) return;
     const existing = await this.db.blocked
       .where('urn')
       .equals(urn.toString())
@@ -333,6 +347,7 @@ export class ContactsStorageService {
   }
 
   async unblockIdentity(urn: URN): Promise<void> {
+    if (!urn) return;
     const records = await this.db.blocked
       .where('urn')
       .equals(urn.toString())
@@ -364,10 +379,6 @@ export class ContactsStorageService {
     return list.map((g) => this.mapStorableToGroup(g));
   }
 
-  /**
-   * Performs a granular wipe of local contact data.
-   * EXCLUDES: Blocked identities and Tombstones to preserve safety and sync history.
-   */
   async clearAllContacts(): Promise<void> {
     await this.db.transaction(
       'rw',

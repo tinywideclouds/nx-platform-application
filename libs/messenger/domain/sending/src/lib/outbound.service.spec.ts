@@ -1,23 +1,21 @@
 import { TestBed } from '@angular/core/testing';
 import { OutboundService } from './outbound.service';
 import { URN } from '@nx-platform-application/platform-types';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-import { ChatSendService } from '@nx-platform-application/chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
+import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { Logger } from '@nx-platform-application/console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
-import { MessageMetadataService } from '@nx-platform-application/message-content';
+import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 
-// ✅ Import from Domain
 import {
-  OutboxRepository,
+  OutboxStorage,
   OutboxWorkerService,
 } from '@nx-platform-application/messenger-domain-outbox';
 
@@ -26,13 +24,13 @@ describe('OutboundService', () => {
   let storageService: ChatStorageService;
   let cryptoService: MessengerCryptoService;
   let metadataService: MessageMetadataService;
-  let outboxRepo: OutboxRepository;
+  let outboxStorage: OutboxStorage;
 
   const myUrn = URN.parse('urn:auth:user:me');
   const contactUrn = URN.parse('urn:contacts:user:bob');
-  const groupUrn = URN.parse('urn:messenger:group:trip');
   const handleUrn = URN.parse('urn:lookup:email:bob@test.com');
   const typeId = URN.parse('urn:message:type:text');
+  const signalId = URN.parse('urn:message:type:read-receipt');
   const rawPayload = new Uint8Array([72, 101, 108, 108, 111]);
   const wrappedPayload = new Uint8Array([255, 255, 255]);
 
@@ -62,7 +60,7 @@ describe('OutboundService', () => {
         MockProvider(MessageMetadataService, {
           wrap: vi.fn().mockReturnValue(wrappedPayload),
         }),
-        MockProvider(OutboxRepository, {
+        MockProvider(OutboxStorage, {
           addTask: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(OutboxWorkerService, { processQueue: vi.fn() }),
@@ -77,66 +75,61 @@ describe('OutboundService', () => {
     storageService = TestBed.inject(ChatStorageService);
     cryptoService = TestBed.inject(MessengerCryptoService);
     metadataService = TestBed.inject(MessageMetadataService);
-    outboxRepo = TestBed.inject(OutboxRepository);
+    outboxStorage = TestBed.inject(OutboxStorage);
   });
 
-  describe('1-to-1 Messaging', () => {
-    it('should save Domain Object locally but send Wrapped payload', async () => {
-      const tags = [URN.parse('urn:tag:message:test')];
-
+  describe('Signal Handling', () => {
+    it('should BYPASS metadata wrap for ephemeral signals', async () => {
       await service.sendMessage(
         {} as any,
         myUrn,
         contactUrn,
-        typeId,
+        signalId,
         rawPayload,
-        { tags },
+        { isEphemeral: true },
       );
 
-      expect(storageService.saveMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payloadBytes: rawPayload,
-          tags: tags,
-        }),
-      );
+      // Metadata wrap should NOT be called
+      expect(metadataService.wrap).not.toHaveBeenCalled();
 
-      expect(metadataService.wrap).toHaveBeenCalledWith(
-        rawPayload,
-        contactUrn,
-        tags,
-      );
-
+      // Crypto should receive the RAW payload
       expect(cryptoService.encryptAndSign).toHaveBeenCalledWith(
         expect.objectContaining({
-          payloadBytes: wrappedPayload,
+          payloadBytes: rawPayload,
         }),
         expect.any(Object),
         expect.any(Object),
         expect.any(Object),
       );
     });
-  });
 
-  describe('Group Messaging', () => {
-    it('should divert to Outbox', async () => {
-      const tags = [URN.parse('urn:tag:group:topic')];
-
+    it('should NOT save ephemeral signals to local storage', async () => {
       await service.sendMessage(
         {} as any,
         myUrn,
-        groupUrn,
-        typeId,
+        contactUrn,
+        signalId,
         rawPayload,
-        { tags },
+        { isEphemeral: true },
       );
 
-      expect(outboxRepo.addTask).toHaveBeenCalledWith(
-        expect.objectContaining({
-          conversationUrn: groupUrn,
-          payload: rawPayload,
-          tags: tags,
-        }),
+      expect(storageService.saveMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Standard Messaging', () => {
+    it('should use metadata wrap for non-ephemeral content', async () => {
+      await service.sendMessage(
+        {} as any,
+        myUrn,
+        contactUrn,
+        typeId,
+        rawPayload,
+        { isEphemeral: false },
       );
+
+      expect(metadataService.wrap).toHaveBeenCalled();
+      expect(storageService.saveMessage).toHaveBeenCalled();
     });
   });
 });

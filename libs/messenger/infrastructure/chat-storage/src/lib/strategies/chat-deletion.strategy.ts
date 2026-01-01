@@ -3,10 +3,13 @@ import { Dexie } from 'dexie';
 import { Temporal } from '@js-temporal/polyfill';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
-import { MessengerDatabase } from '../db/messenger.database';
-import { MessageRecord } from '../db/records/message.record'; // ✅ Updated Import
-import { MessageMapper } from '../db/mappers/message.mapper'; // ✅ Direct Injection
-import { generateSnippet, getPreviewType } from '../utilities'; // ✅ Direct Import
+import {
+  MessengerDatabase,
+  MessageMapper,
+  MessageRecord,
+  generateSnippet,
+  getPreviewType,
+} from '@nx-platform-application/messenger-infrastructure-db-schema';
 
 @Injectable({ providedIn: 'root' })
 export class ChatDeletionStrategy {

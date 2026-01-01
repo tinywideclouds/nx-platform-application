@@ -1,78 +1,101 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core'; // ✅ Added signal
 import { Logger } from '@nx-platform-application/console-logger';
-import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import {
-  CloudSyncService,
-  SyncOptions,
-} from '@nx-platform-application/messenger-cloud-sync';
+import { HistoryReader } from '@nx-platform-application/messenger-domain-conversation';
+import { URN } from '@nx-platform-application/platform-types';
+import { ChatVaultEngine } from './internal/chat-vault-engine.service';
+
+// ✅ DECOUPLED: Defined locally to avoid circular dependency on Orchestrator
+export interface ChatSyncRequest {
+  providerId: string;
+  syncMessages: boolean;
+  // Domain doesn't care about 'syncContacts', that's for the Orchestrator
+}
 
 @Injectable({ providedIn: 'root' })
 export class ChatSyncService {
   private logger = inject(Logger);
-  private cloudSync = inject(CloudSyncService);
-  private repository = inject(ChatMessageRepository);
-  private storage = inject(ChatStorageService);
+  private engine = inject(ChatVaultEngine);
+  private historyReader = inject(HistoryReader);
+
+  // ✅ NEW: Intrinsic State (Engine Running)
+  public readonly isSyncing = signal<boolean>(false);
 
   /**
-   * Runs the full sync pipeline:
-   * 1. Coordinator (Cloud Upload/Download) - BLOCKING
-   * 2. Critical Refresh (Sidebar) - Handled by caller based on return value
-   * 3. Background Hydration (Warm-up) - FIRE AND FORGET
-   * @returns boolean - True if sync was successful and state should be refreshed.
+   * COMPATIBILITY BRIDGE
+   * Allows ChatService to call this without knowing internal details.
+   * By accepting a compatible shape, we break the hard dependency on the Orchestrator lib.
    */
-  async performSync(config: SyncOptions): Promise<boolean> {
-    this.logger.info('ChatSyncService: Starting Cloud Sync...', config);
-
-    // 1. Coordinator (Auth + Index Restore)
-    // This gets us the "Map" (Sidebar) so we know WHO to hydrate.
-    const result = await this.cloudSync.syncNow(config);
-
-    if (!result.success) {
-      this.logger.error('ChatSyncService: Sync failed', result.errors);
-      return false;
+  async performSync(options: ChatSyncRequest): Promise<boolean> {
+    if (options.syncMessages) {
+      return this.syncMessages(options.providerId);
     }
-
-    // 2. Background Hydration (Warm-up)
-    // We intentionally do NOT await this.
-    // The UI sidebar is already visible (handled by ChatService refreshing).
-    // This runs in the background to fill the message content for the top chats.
-    if (config.syncMessages) {
-      this.hydrateRecentConversations().catch((e) =>
-        this.logger.error('ChatSyncService: Hydration failed', e),
-      );
-    }
-
     return true;
   }
 
   /**
-   * Background Task: Pre-fetches history for the top 5 most recent conversations.
-   * Runs SEQUENTIALLY to maximize the "Free Ride" effect (Shared Vaults).
+   * Main Sync Workflow (Backup + Index Restore)
    */
+  async syncMessages(providerId: string): Promise<boolean> {
+    // ✅ State Toggle: Start
+    this.isSyncing.set(true);
+    this.logger.info('[ChatSyncService] Starting sync sequence...', providerId);
+
+    try {
+      const connected = await this.engine.connect(providerId);
+      if (!connected) {
+        this.logger.warn('[ChatSyncService] Could not connect to provider.');
+        return false;
+      }
+
+      await this.engine.restoreIndex();
+      await this.engine.backup(providerId);
+
+      this.hydrateRecentConversations().catch((e) =>
+        this.logger.error('[ChatSyncService] Hydration failed', e),
+      );
+
+      return true;
+    } catch (e) {
+      this.logger.error('[ChatSyncService] Sync failed', e);
+      return false;
+    } finally {
+      // ✅ State Toggle: End (Always reset)
+      this.isSyncing.set(false);
+    }
+  }
+
+  // --- Public API for Conversation Domain ---
+
+  isCloudEnabled(): boolean {
+    return this.engine.isCloudEnabled();
+  }
+
+  async restoreVaultForDate(date: string, urn: URN): Promise<number> {
+    return this.engine.restoreVaultForDate(date, urn);
+  }
+
+  // --- Internals ---
+
   private async hydrateRecentConversations(): Promise<void> {
-    // We need the index to know who is "recent"
-    const summaries = await this.storage.loadConversationSummaries();
+    const summaries = await this.historyReader.getConversationSummaries();
     const topConversations = summaries.slice(0, 5);
 
     if (topConversations.length === 0) return;
 
     this.logger.info(
-      `ChatSyncService: Pre-fetching history for ${topConversations.length} chats...`,
+      `[ChatSyncService] Pre-fetching history for ${topConversations.length} chats...`,
     );
 
-    // ✅ SEQUENTIAL EXECUTION (CRITICAL)
     for (const c of topConversations) {
       try {
-        await this.repository.getMessages({
+        await this.historyReader.getMessages({
           conversationUrn: c.conversationUrn,
-          limit: 50, // Just prime the "Head" of the chat
+          limit: 50,
         });
       } catch (e) {
         this.logger.warn(`Failed to pre-fetch ${c.conversationUrn}`, e);
       }
     }
-
-    this.logger.info('ChatSyncService: Pre-fetch complete.');
+    this.logger.info('[ChatSyncService] Pre-fetch complete.');
   }
 }

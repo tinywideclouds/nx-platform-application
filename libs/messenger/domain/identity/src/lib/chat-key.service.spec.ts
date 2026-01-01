@@ -5,8 +5,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
 // Services
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-crypto-bridge';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 

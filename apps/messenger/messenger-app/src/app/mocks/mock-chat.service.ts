@@ -9,7 +9,7 @@ import {
   ChatMessage,
   ConversationSummary,
 } from '@nx-platform-application/messenger-types';
-import { MessageTypeText } from '@nx-platform-application/message-content';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 import { computed } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';

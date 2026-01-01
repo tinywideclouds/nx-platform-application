@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatMergeStrategy } from './chat-merge.strategy';
-import { MessengerDatabase } from '../db/messenger.database';
-import { ConversationIndexRecord } from '../db/records/conversation.record';
+import {
+  MessengerDatabase,
+  ConversationIndexRecord,
+} from '@nx-platform-application/messenger-infrastructure-db-schema';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';

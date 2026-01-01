@@ -6,10 +6,10 @@ import {
 import { URN } from '@nx-platform-application/platform-types';
 import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 
 // --- Import ALL the services we've built ---
-import { ChatService } from '@nx-platform-application/chat-state';
+import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import {
   AuthService,
   IAuthService,
@@ -19,22 +19,22 @@ import {
 import {
   MessengerCryptoService,
   CryptoEngine,
-} from '@nx-platform-application/messenger-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import {
   ChatDataService,
   ChatSendService,
   ROUTING_SERVICE_URL,
-} from '@nx-platform-application/chat-access';
+} from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   ChatLiveDataService,
   WSS_URL_TOKEN,
   ConnectionStatus,
-} from '@nx-platform-application/chat-live-data';
+} from '@nx-platform-application/messenger-infrastructure-live-data';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   SecureKeyService,
   KEY_SERVICE_URL,
-} from '@nx-platform-application/messenger-key-access';
+} from '@nx-platform-application/messenger-infrastructure-key-access';
 import { Logger } from '@nx-platform-application/console-logger';
 import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
 import { TestClient } from './test-helpers';

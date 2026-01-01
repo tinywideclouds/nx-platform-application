@@ -4,14 +4,20 @@ import {
   TransportMessage,
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+// ✅ 1. Remove incorrect import
+// import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Logger } from '@nx-platform-application/console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
+// ✅ 2. Import the Abstract Port
+import { QuarantineStorage } from './quarantine.storage';
 
 @Injectable({ providedIn: 'root' })
 export class QuarantineService {
-  private storage = inject(ChatStorageService);
+  // ✅ 3. Inject the Port (Abstract)
+  // Angular will provide DexieQuarantineStorage at runtime via CHAT_STORAGE_PROVIDERS
+  private storage = inject(QuarantineStorage);
+
   private contacts = inject(ContactsStateService);
   private logger = inject(Logger);
   private identityResolver = inject(IdentityResolver);
@@ -46,6 +52,7 @@ export class QuarantineService {
 
     if (!isTrusted) {
       this.logger.info(`[Gatekeeper] DETAINED: Unknown sender ${senderStr}`);
+      // ✅ Now valid: QuarantineStorage defines this method
       await this.storage.saveQuarantinedMessage(message);
       return null;
     }

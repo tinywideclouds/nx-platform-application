@@ -20,24 +20,6 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@nx-platform-application/chat-access": [
-        "libs/messenger/chat-access/src/index.ts"
-      ],
-      "@nx-platform-application/chat-cloud-access": [
-        "libs/messenger/chat-cloud-access/src/index.ts"
-      ],
-      "@nx-platform-application/chat-live-data": [
-        "libs/messenger/chat-live-data/src/index.ts"
-      ],
-      "@nx-platform-application/chat-message-repository": [
-        "libs/messenger/chat-message-repository/src/index.ts"
-      ],
-      "@nx-platform-application/chat-state": [
-        "libs/messenger/chat-state/src/index.ts"
-      ],
-      "@nx-platform-application/chat-ui": [
-        "libs/messenger/chat-ui/src/index.ts"
-      ],
       "@nx-platform-application/console-logger": [
         "libs/platform/ng/console-logger/src/index.ts"
       ],
@@ -59,23 +41,14 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
-      "@nx-platform-application/message-content": [
-        "libs/messenger/message-content/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-cloud-sync": [
-        "libs/messenger/cloud-sync/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-crypto-bridge": [
-        "libs/messenger/crypto-bridge/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-device-notifications": [
-        "libs/messenger/device-notifications/src/index.ts"
-      ],
-      "@nx-platform-application/messenger-device-pairing": [
-        "libs/messenger/device-pairing/src/index.ts"
-      ],
       "@nx-platform-application/messenger-domain-chat-sync": [
         "libs/messenger/domain/chat-sync/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-conversation": [
+        "libs/messenger/domain/conversation/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-device-pairing": [
+        "libs/messenger/domain/device-pairing/src/index.ts"
       ],
       "@nx-platform-application/messenger-domain-identity": [
         "libs/messenger/domain/identity/src/index.ts"
@@ -86,6 +59,9 @@
       "@nx-platform-application/messenger-domain-ingestion": [
         "libs/messenger/domain/ingestion/src/index.ts"
       ],
+      "@nx-platform-application/messenger-domain-message-content": [
+        "libs/messenger/domain/message-content/src/index.ts"
+      ],
       "@nx-platform-application/messenger-domain-outbox": [
         "libs/messenger/domain/outbox/src/index.ts"
       ],
@@ -95,20 +71,32 @@
       "@nx-platform-application/messenger-domain-sending": [
         "libs/messenger/domain/sending/src/index.ts"
       ],
+      "@nx-platform-application/messenger-infrastructure-chat-access": [
+        "libs/messenger/infrastructure/chat-access/src/index.ts"
+      ],
       "@nx-platform-application/messenger-infrastructure-chat-storage": [
         "libs/messenger/infrastructure/chat-storage/src/index.ts"
       ],
-      "@nx-platform-application/messenger-key-access": [
-        "libs/messenger/key-access/src/index.ts"
+      "@nx-platform-application/messenger-infrastructure-crypto-bridge": [
+        "libs/messenger/infrastructure/crypto-bridge/src/index.ts"
       ],
-      "@nx-platform-application/messenger-key-cache": [
-        "libs/messenger/key-cache/src/index.ts"
+      "@nx-platform-application/messenger-infrastructure-db-schema": [
+        "libs/messenger/infrastructure/db-schema/src/index.ts"
       ],
-      "@nx-platform-application/messenger-key-storage": [
-        "libs/messenger/key-storage/src/index.ts"
+      "@nx-platform-application/messenger-infrastructure-device-notifications": [
+        "libs/messenger/infrastructure/device-notifications/src/index.ts"
       ],
-      "@nx-platform-application/messenger-private-key-storage": [
-        "libs/messenger/private-key-storage/src/index.ts"
+      "@nx-platform-application/messenger-infrastructure-key-access": [
+        "libs/messenger/infrastructure/key-access/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-key-cache": [
+        "libs/messenger/infrastructure/key-cache/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-live-data": [
+        "libs/messenger/infrastructure/live-data/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-key-storage": [
+        "libs/messenger/infrastructure/key-storage/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
@@ -117,13 +105,22 @@
         "libs/messenger/protos/dist/ts/src/messenger/*"
       ],
       "@nx-platform-application/messenger-settings-ui": [
-        "libs/messenger/settings-ui/src/index.ts"
+        "libs/messenger/ui/settings/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-state-chat-session": [
+        "libs/messenger/state/chat-session/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-state-cloud-sync": [
+        "libs/messenger/state/cloud-sync/src/index.ts"
       ],
       "@nx-platform-application/messenger-types": [
         "libs/messenger/types/src/index.ts"
       ],
       "@nx-platform-application/messenger-ui": [
-        "libs/messenger/messenger-ui/src/index.ts"
+        "libs/messenger/ui/messenger/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-ui-chat": [
+        "libs/messenger/ui/chat/src/index.ts"
       ],
       "@nx-platform-application/node-auth": [
         "libs/platform/node/node-auth/src/index.ts"

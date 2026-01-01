@@ -1,1 +1,1 @@
-export * from './lib/messenger-domain-sending/messenger-domain-sending';
+export * from './lib/outbound.service';

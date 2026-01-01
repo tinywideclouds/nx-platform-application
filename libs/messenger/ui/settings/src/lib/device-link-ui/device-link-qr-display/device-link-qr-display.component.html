@@ -1,0 +1,44 @@
+<div class="text-center py-4">
+  @if (showWarning()) {
+    <div
+      class="bg-orange-50 text-orange-800 p-4 rounded-lg text-sm flex gap-3 items-start text-left mb-6"
+    >
+      <mat-icon class="text-orange-600 shrink-0">security</mat-icon>
+      <span>
+        <strong>Security Warning:</strong> This code contains your encryption
+        keys. Ensure no one else can see your screen.
+      </span>
+    </div>
+  }
+
+  <div class="mb-6">
+    @if (session(); as s) {
+      <div
+        class="bg-white p-4 border border-gray-200 rounded-lg inline-block mb-4"
+      >
+        <qrcode
+          [qrdata]="s.qrPayload"
+          [width]="256"
+          [errorCorrectionLevel]="'L'"
+          [margin]="2"
+        ></qrcode>
+      </div>
+
+      <ng-content select="[instructions]"></ng-content>
+    } @else {
+      <div class="py-8 flex flex-col items-center gap-4 text-gray-500">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>{{ loadingText() }}</p>
+      </div>
+    }
+  </div>
+
+  <button
+    type="button"
+    aria-label="switch"
+    color="accent"
+    (click)="switchToScan.emit()"
+  >
+    {{ switchButtonText() }}
+  </button>
+</div>

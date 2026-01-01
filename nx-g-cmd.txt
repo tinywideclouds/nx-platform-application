@@ -116,8 +116,44 @@ nx g @nx/angular:library --name=messenger-domain-chat-sync --directory=libs/mess
 
 nx g @nx/angular:library --name=messenger-domain-sending --directory=libs/messenger/domain/sending --tags="scope:messenger" 
 
+nx g @nx/angular:library --name=messenger-domain-sending --directory=libs/messenger/domain/sending --tags="scope:messenger" 
+
 
 nx g @nx/workspace:move --project=messenger-outbox --destination=libs/messenger/domain/outbox --importPath=@nx-platform-application/messenger-domain-outbox
 
 
 nx g @nx/workspace:move --project=chat-storage --destination=libs/messenger/infrastructure/chat-storage --importPath=@nx-platform-application/messenger-infrastructure-chat-storage
+
+
+nx g @nx/angular:library --name=messenger-domain-conversation --directory=libs/messenger/domain/conversation --tags="scope:messenger" 
+
+nx g @nx/workspace:remove chat-message-repository
+
+nx g @nx/workspace:move --project=chat-access --destination=libs/messenger/infrastructure/chat-access --importPath=@nx-platform-application/messenger-infrastructure-chat-access
+
+
+nx g @nx/angular:library --name=messenger-infrastructure-db-schema --directory=libs/messenger/infrastructure/db-schema --tags="scope:messenger" 
+
+
+nx g @nx/workspace:move --project=chat-live-data --destination=libs/messenger/infrastructure/chat-live-data --importPath=@nx-platform-application/messenger-infrastructure-live-data
+
+nx g @nx/workspace:move --project=messenger-crypto-bridge --destination=libs/messenger/infrastructure/crypto-bridge --importPath=@nx-platform-application/messenger-infrastructure-crypto-bridge
+
+nx g @nx/workspace:move --project=messenger-device-notifications --destination=libs/messenger/infrastructure/device-notifications --importPath=@nx-platform-application/messenger-infrastructure-device-notifications
+
+nx g @nx/workspace:move --project=messenger-device-pairing --destination=libs/messenger/domain/device-pairing --importPath=@nx-platform-application/messenger-domain-device-pairing
+
+nx g @nx/workspace:move --project=messenger-key-access --destination=libs/messenger/infrastructure/key-access --importPath=@nx-platform-application/messenger-infrastructure-key-access
+
+nx g @nx/workspace:move --project=messenger-key-cache --destination=libs/messenger/infrastructure/key-cache --importPath=@nx-platform-application/messenger-infrastructure-key-cache
+
+nx g @nx/workspace:move --project=messenger-key-storage --destination=libs/messenger/infrastructure/key-storage --importPath=@nx-platform-application/messenger-infrastructure-key-storage
+
+
+nx g @nx/workspace:move --project=message-content --destination=libs/messenger/domain/message-content --importPath=@nx-platform-application/messenger-domain-message-content
+
+nx g @nx/workspace:move --project=messenger-cloud-sync --destination=libs/messenger/state/cloud-sync --importPath=@nx-platform-application/messenger-state-cloud-sync
+
+nx g @nx/workspace:move --project=chat-state --destination=libs/messenger/state/chat-session --importPath=@nx-platform-application/messenger-state-chat-session
+
+nx g @nx/workspace:move --project=messenger-settings-ui --destination=libs/messenger/ui/settings --importPath=@nx-platform-application/messenger-settings-ui

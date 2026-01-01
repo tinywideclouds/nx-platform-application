@@ -2,21 +2,21 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { URN } from '@nx-platform-application/platform-types';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-bridge';
-import { ChatSendService } from '@nx-platform-application/chat-access';
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessageMetadataService } from '@nx-platform-application/message-content'; // ✅ Centralized service
+import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 
-import { OutboxRepository } from './outbox.repository';
+import { OutboxStorage } from './outbox.storage';
 import { OutboundTask, RecipientProgress } from './models/outbound-task.model';
 
 @Injectable({ providedIn: 'root' })
 export class OutboxWorkerService {
-  private readonly repo = inject(OutboxRepository);
+  private readonly repo = inject(OutboxStorage);
   private readonly keyCache = inject(KeyCacheService);
   private readonly crypto = inject(MessengerCryptoService);
   private readonly sendService = inject(ChatSendService);

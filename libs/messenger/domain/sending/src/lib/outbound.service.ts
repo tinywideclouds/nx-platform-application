@@ -4,23 +4,23 @@ import { Logger } from '@nx-platform-application/console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 
 // Services
-import { ChatSendService } from '@nx-platform-application/chat-access';
+import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { KeyCacheService } from '@nx-platform-application/messenger-key-cache';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import {
   MessageMetadataService,
   MESSAGE_TYPE_TEXT,
-} from '@nx-platform-application/message-content';
+} from '@nx-platform-application/messenger-domain-message-content';
 
-// ✅ Internal Dependencies (Facade hiding the internals)
+// Internal Dependencies
 import {
-  OutboxRepository,
+  OutboxStorage,
   OutboxWorkerService,
   OutboundTask,
 } from '@nx-platform-application/messenger-domain-outbox';
@@ -56,15 +56,11 @@ export class OutboundService {
   private storageService = inject(ChatStorageService);
   private keyCache = inject(KeyCacheService);
   private identityResolver = inject(IdentityResolver);
-  private outboxRepo = inject(OutboxRepository);
+  private outboxStorage = inject(OutboxStorage);
   private outboxWorker = inject(OutboxWorkerService);
   private contactsState = inject(ContactsStateService);
   private metadataService = inject(MessageMetadataService);
 
-  /**
-   * Facade Method: Triggers the background worker.
-   * Allows the State layer to "kick" the queue without touching the Outbox library directly.
-   */
   public triggerQueueProcessing(senderUrn: URN, myKeys: PrivateKeys): void {
     this.outboxWorker.processQueue(senderUrn, myKeys);
   }
@@ -144,12 +140,21 @@ export class OutboundService {
         const participants =
           await this.contactsState.getGroupParticipants(groupUrn);
 
+        // ✅ Signal Fix: Group signals bypass the metadata envelope
+        const finalPayload = isEphemeral
+          ? msg.payloadBytes || new Uint8Array([])
+          : this.metadataService.wrap(
+              msg.payloadBytes || new Uint8Array([]),
+              msg.conversationUrn,
+              msg.tags || [],
+            );
+
         const task: OutboundTask = {
           id: crypto.randomUUID(),
           messageId: msg.id,
           conversationUrn: groupUrn,
           typeId: msg.typeId,
-          payload: msg.payloadBytes || new Uint8Array([]),
+          payload: finalPayload,
           tags: msg.tags || [],
           status: 'queued',
           createdAt: msg.sentTimestamp,
@@ -160,9 +165,7 @@ export class OutboundService {
           })),
         };
 
-        await this.outboxRepo.addTask(task);
-
-        // Trigger worker immediately via local reference
+        await this.outboxStorage.addTask(task);
         this.outboxWorker.processQueue(myUrn, myKeys);
 
         return 'sent' as MessageDeliveryStatus;
@@ -192,17 +195,20 @@ export class OutboundService {
         const payloadSenderUrn =
           await this.identityResolver.resolveToHandle(myUrn);
 
-        const wrappedPayloadBytes = this.metadataService.wrap(
-          msg.payloadBytes || new Uint8Array([]),
-          msg.conversationUrn,
-          msg.tags || [],
-        );
+        // ✅ Signal Fix: Direct signals bypass the metadata envelope
+        const transportPayloadBytes = isEphemeral
+          ? msg.payloadBytes || new Uint8Array([])
+          : this.metadataService.wrap(
+              msg.payloadBytes || new Uint8Array([]),
+              msg.conversationUrn,
+              msg.tags || [],
+            );
 
         const payload: TransportMessage = {
           senderId: payloadSenderUrn,
           sentTimestamp: msg.sentTimestamp,
           typeId: msg.typeId,
-          payloadBytes: wrappedPayloadBytes,
+          payloadBytes: transportPayloadBytes,
           clientRecordId: isEphemeral ? undefined : msg.id,
         };
 
@@ -215,7 +221,9 @@ export class OutboundService {
           recipientKeys,
         );
 
-        if (isEphemeral) envelope.isEphemeral = true;
+        if (isEphemeral) {
+          envelope.isEphemeral = true;
+        }
 
         await this.raceNetworkRequest(this.sendService.sendMessage(envelope));
 

@@ -1,9 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { Dexie } from 'dexie';
 import { ChatDeletionStrategy } from './chat-deletion.strategy';
-import { MessengerDatabase } from '../db/messenger.database';
-import { MessageRecord } from '../db/records/message.record';
-import { MessageMapper } from '../db/mappers/message.mapper';
+import {
+  MessengerDatabase,
+  MessageRecord,
+  MessageMapper,
+} from '@nx-platform-application/messenger-infrastructure-db-schema';
 import {
   ISODateTimeString,
   URN,

@@ -8,15 +8,21 @@ import {
 import {
   ChatMessage,
   TransportMessage,
+  MessageDeliveryStatus, // ✅ Use shared union type
 } from '@nx-platform-application/messenger-types';
-import { ChatDataService } from '@nx-platform-application/chat-access';
+import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessageContentParser } from '@nx-platform-application/message-content';
+import {
+  MessageContentParser,
+  ReadReceiptData,
+  MESSAGE_TYPE_READ_RECEIPT,
+  MESSAGE_TYPE_TYPING,
+} from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 
 export interface IngestionResult {
@@ -34,10 +40,6 @@ export class IngestionService {
   private parser = inject(MessageContentParser);
   private logger = inject(Logger);
 
-  /**
-   * The "Airlock" Process.
-   * Pulls encrypted blobs, verifies them, checks admission, and only THEN parses content.
-   */
   async process(
     myKeys: PrivateKeys,
     myUrn: URN,
@@ -50,12 +52,13 @@ export class IngestionService {
       readReceipts: [],
     };
 
-    // 1. Fetch Encrypted Blobs (The "Courtyard")
     const queue = await firstValueFrom(
       this.dataService.getMessageBatch(batchSize),
     );
 
-    if (!queue || queue.length === 0) return result;
+    if (!queue || queue.length === 0) {
+      return result;
+    }
 
     const processedIds: string[] = [];
 
@@ -68,14 +71,29 @@ export class IngestionService {
           `[Ingestion] Failed to process msg ${item.id}`,
           error,
         );
-        // We still ack failed messages to prevent queue blocking (Dead Letter Logic)
         processedIds.push(item.id);
       }
     }
 
-    // Acknowledge receipt to clear queue
     if (processedIds.length > 0) {
       await firstValueFrom(this.dataService.acknowledge(processedIds));
+    }
+
+    if (queue.length === batchSize) {
+      const nextBatch = await this.process(
+        myKeys,
+        myUrn,
+        blockedSet,
+        batchSize,
+      );
+      return {
+        messages: [...result.messages, ...nextBatch.messages],
+        typingIndicators: [
+          ...result.typingIndicators,
+          ...nextBatch.typingIndicators,
+        ],
+        readReceipts: [...result.readReceipts, ...nextBatch.readReceipts],
+      };
     }
 
     return result;
@@ -87,24 +105,18 @@ export class IngestionService {
     blockedSet: Set<string>,
     accumulator: IngestionResult,
   ): Promise<void> {
-    // 2. Decrypt & Verify Signature (The "Lock")
-    // If this fails, it throws, and we skip the message.
     const transport: TransportMessage =
       await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
 
-    // 3. Quarantine Check (The "Guard")
-    // Returns Canonical URN if allowed, null if jailed/blocked.
     const canonicalSenderUrn = await this.quarantineService.process(
       transport,
       blockedSet,
     );
 
-    // If null, the guard said "No". We stop here.
-    // The message is already in the Quarantine DB (if needed) or dropped.
-    if (!canonicalSenderUrn) return;
+    if (!canonicalSenderUrn) {
+      return;
+    }
 
-    // 4. Parse Content (The "Lab")
-    // Only reachable by trusted entities.
     await this.parseAndStore(
       transport,
       item.id,
@@ -119,6 +131,7 @@ export class IngestionService {
     canonicalSenderUrn: URN,
     accumulator: IngestionResult,
   ): Promise<void> {
+    const typeStr = transport.typeId.toString();
     const parsed = this.parser.parse(transport.typeId, transport.payloadBytes);
     const canonicalId = transport.clientRecordId || queueId;
 
@@ -151,11 +164,23 @@ export class IngestionService {
       }
 
       case 'signal': {
-        if (parsed.payload.action === 'typing') {
+        if (typeStr === MESSAGE_TYPE_TYPING) {
           accumulator.typingIndicators.push(transport.senderId);
-        } else if (parsed.payload.action === 'read_receipt') {
-          const ids = (parsed.payload.data as any)?.messageIds || [];
-          accumulator.readReceipts.push(...ids);
+        } else if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
+          const rr = parsed.payload.data as ReadReceiptData;
+          const ids = rr?.messageIds || [];
+
+          if (ids.length > 0) {
+            this.logger.info(
+              `[Ingestion] Applying Read Receipt for ${ids.length} msgs`,
+            );
+
+            // ✅ Use the formal union type to guard the status
+            const newStatus: MessageDeliveryStatus = 'read';
+            await this.storageService.updateMessageStatus(ids, newStatus);
+
+            accumulator.readReceipts.push(...ids);
+          }
         }
         break;
       }

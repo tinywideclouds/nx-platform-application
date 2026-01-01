@@ -1,31 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatSyncService } from './chat-sync.service';
-import { CloudSyncService } from '@nx-platform-application/messenger-cloud-sync';
-import { ChatMessageRepository } from '@nx-platform-application/chat-message-repository';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ChatVaultEngine } from './internal/chat-vault-engine.service';
+import { HistoryReader } from '@nx-platform-application/messenger-domain-conversation';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { URN } from '@nx-platform-application/platform-types';
+import { signal } from '@angular/core';
 
-describe('ChatSyncService', () => {
+describe('ChatSyncService (Domain Facade)', () => {
   let service: ChatSyncService;
-
-  const mockCloudSync = {
-    syncNow: vi.fn(),
-  };
-  const mockStorage = {
-    loadConversationSummaries: vi.fn(),
-  };
-  const mockRepository = {
-    getMessages: vi.fn(),
-  };
-  const mockLogger = {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-  };
+  let engine: ChatVaultEngine;
+  let historyReader: HistoryReader;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,76 +19,61 @@ describe('ChatSyncService', () => {
     TestBed.configureTestingModule({
       providers: [
         ChatSyncService,
-        MockProvider(CloudSyncService, mockCloudSync),
-        MockProvider(ChatMessageRepository, mockRepository),
-        MockProvider(ChatStorageService, mockStorage),
-        MockProvider(ContactsStorageService),
-        MockProvider(Logger, mockLogger),
+        MockProvider(ChatVaultEngine, {
+          connect: vi.fn().mockResolvedValue(true),
+          restoreIndex: vi.fn().mockResolvedValue(undefined),
+          backup: vi.fn().mockResolvedValue(undefined),
+          isCloudEnabled: signal(true),
+          restoreVaultForDate: vi.fn().mockResolvedValue(10),
+        }),
+        MockProvider(HistoryReader, {
+          getConversationSummaries: vi.fn().mockResolvedValue([]),
+          getMessages: vi.fn().mockResolvedValue({ messages: [] }),
+        }),
+        MockProvider(Logger),
       ],
     });
 
     service = TestBed.inject(ChatSyncService);
+    engine = TestBed.inject(ChatVaultEngine);
+    historyReader = TestBed.inject(HistoryReader);
   });
 
-  describe('performSync', () => {
-    it('should return false if CloudSync fails', async () => {
-      mockCloudSync.syncNow.mockResolvedValue({
-        success: false,
-        errors: ['Auth failed'],
-      });
-
-      const result = await service.performSync({
-        providerId: 'google',
-        syncContacts: true,
-        syncMessages: true,
-      });
-
+  describe('syncMessages', () => {
+    it('should return false if Engine fails to connect', async () => {
+      vi.mocked(engine.connect).mockResolvedValue(false);
+      const result = await service.syncMessages('google');
       expect(result).toBe(false);
-      expect(mockLogger.error).toHaveBeenCalled();
-      // Should NOT trigger hydration on failure
-      expect(mockStorage.loadConversationSummaries).not.toHaveBeenCalled();
     });
 
-    it('should return true and trigger hydration on success', async () => {
-      mockCloudSync.syncNow.mockResolvedValue({ success: true });
-      mockStorage.loadConversationSummaries.mockResolvedValue([]); // No chats, but method called
+    it('should execute full pipeline on success', async () => {
+      vi.mocked(engine.connect).mockResolvedValue(true);
+      const result = await service.syncMessages('google');
+      expect(result).toBe(true);
+      expect(engine.connect).toHaveBeenCalledWith('google');
+      expect(engine.backup).toHaveBeenCalledWith('google');
+    });
+  });
+
+  describe('performSync (Compatibility)', () => {
+    it('should delegate to syncMessages if syncMessages=true', async () => {
+      vi.spyOn(service, 'syncMessages').mockResolvedValue(true);
+
+      await service.performSync({ providerId: 'google', syncMessages: true });
+
+      expect(service.syncMessages).toHaveBeenCalledWith('google');
+    });
+
+    it('should skip if syncMessages=false', async () => {
+      vi.spyOn(service, 'syncMessages');
 
       const result = await service.performSync({
         providerId: 'google',
-        syncContacts: true,
-        syncMessages: true,
+        syncMessages: false,
       });
 
+      expect(service.syncMessages).not.toHaveBeenCalled();
       expect(result).toBe(true);
-      // Hydration triggered
-      expect(mockStorage.loadConversationSummaries).toHaveBeenCalled();
-    });
-
-    it('should hydrate TOP 5 chats sequentially', async () => {
-      mockCloudSync.syncNow.mockResolvedValue({ success: true });
-
-      // Mock 6 conversations
-      const mockSummaries = Array.from({ length: 6 }, (_, i) => ({
-        conversationUrn: URN.parse(`urn:contacts:user:${i}`),
-      }));
-      mockStorage.loadConversationSummaries.mockResolvedValue(mockSummaries);
-      mockRepository.getMessages.mockResolvedValue({ messages: [] });
-
-      await service.performSync({
-        providerId: 'google',
-        syncContacts: false,
-        syncMessages: true,
-      });
-
-      // Wait for the background promise (since it's not awaited in the service)
-      await vi.waitFor(() => {
-        expect(mockRepository.getMessages).toHaveBeenCalledTimes(5);
-      });
-
-      // Verify limits
-      expect(mockRepository.getMessages).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 50 }),
-      );
     });
   });
 });

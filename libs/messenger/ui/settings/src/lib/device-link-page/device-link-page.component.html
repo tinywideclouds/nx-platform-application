@@ -1,0 +1,51 @@
+<div class="flex justify-center p-8">
+  <mat-card class="w-full max-w-lg">
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="primary" class="scale-125">
+        {{ isShowingCode() ? 'qr_code_2' : 'camera_alt' }}
+      </mat-icon>
+      <mat-card-title>
+        {{ isShowingCode() ? 'Scan on New Device' : 'Scan New Device' }}
+      </mat-card-title>
+      <mat-card-subtitle>
+        {{
+          isShowingCode()
+            ? 'Displaying keys for your new device to scan.'
+            : 'Scan the code displayed on your new device.'
+        }}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="pt-4">
+      @if (isLinking()) {
+        <div class="py-12 text-center">
+          <mat-progress-bar
+            mode="indeterminate"
+            class="mb-4"
+          ></mat-progress-bar>
+          <p class="font-medium text-gray-700">Securely transferring keys...</p>
+        </div>
+      } @else {
+        @if (isShowingCode()) {
+          <lib-device-link-qr-display
+            [session]="session()"
+            [showWarning]="true"
+            (switchToScan)="switchToScanMode()"
+            switchButtonText="Back to Camera"
+          >
+            <p instructions class="text-gray-600 text-sm">
+              On your <strong>new device</strong>, select "Scan a code instead"
+              and point it here.
+            </p>
+          </lib-device-link-qr-display>
+        } @else {
+          <lib-device-link-scanner-ui
+            (scanSuccess)="handleScan($event)"
+            (switchToDisplay)="enableShowMode()"
+            switchButtonText="Show code instead"
+          />
+        }
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

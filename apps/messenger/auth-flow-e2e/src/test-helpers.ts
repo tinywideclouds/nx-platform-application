@@ -1,17 +1,17 @@
 import { URN } from '@nx-platform-application/platform-types';
 
 // --- Import ALL the services we've built ---
-import { ChatService } from '@nx-platform-application/chat-state';
+import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import {
   ChatDataService,
   ChatSendService,
-} from '@nx-platform-application/chat-access';
-import { ChatLiveDataService } from '@nx-platform-application/chat-live-data';
+} from '@nx-platform-application/messenger-infrastructure-chat-access';
+import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   SecureKeyService,
   KEY_SERVICE_URL,
-} from '@nx-platform-application/messenger-key-access';
+} from '@nx-platform-application/messenger-infrastructure-key-access';
 export interface TestClient {
   urn: URN;
   token: string;
