@@ -1,10 +1,16 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/services/dexie-outbox.storage.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { DexieOutboxStorage } from './dexie-outbox.storage';
-import { MessengerDatabase } from '../db/messenger.database';
-import { OutboxMapper } from '../db/mappers/outbox.mapper';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  MessengerDatabase,
+  OutboxMapper,
+  OutboxRecord,
+} from '@nx-platform-application/messenger-infrastructure-db-schema';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { OutboundTask } from '@nx-platform-application/messenger-domain-outbox';
-import { OutboxRecord } from '../db/records/outbox.record';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Dexie } from 'dexie';
 import 'fake-indexeddb/auto';
@@ -21,7 +27,7 @@ describe('DexieOutboxStorage', () => {
     payload: new Uint8Array([1]),
     tags: [],
     status: 'queued',
-    createdAt: '2025-01-01' as any,
+    createdAt: '2025-01-01' as ISODateTimeString,
     recipients: [],
   };
 
@@ -65,12 +71,12 @@ describe('DexieOutboxStorage', () => {
     await db.outbox.bulkPut([
       { ...mockRecord, id: 't1', status: 'queued' },
       { ...mockRecord, id: 't2', status: 'processing' },
-      { ...mockRecord, id: 't3', status: 'completed' }, // Should be ignored
+      { ...mockRecord, id: 't3', status: 'completed' },
     ]);
 
     const tasks = await storage.getPendingTasks();
     expect(tasks).toHaveLength(2);
-    // Sort to ensure stable test expectation
+
     const ids = tasks.map((t) => t.id).sort();
     expect(ids).toEqual(['t1', 't2']);
   });

@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/strategies/chat-deletion.strategy.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { Dexie } from 'dexie';
 import { ChatDeletionStrategy } from './chat-deletion.strategy';
@@ -10,6 +11,7 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { MockProvider } from 'ng-mocks';
 import 'fake-indexeddb/auto';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -39,17 +41,17 @@ describe('ChatDeletionStrategy', () => {
   beforeEach(async () => {
     await Dexie.delete('messenger');
 
-    // Create default domain object for mocks
-    const mockDomainMsg: any = {
+    // Partial mock of a domain message for the mapper return value
+    const mockDomainMsg: Partial<ChatMessage> = {
       typeId: URN.parse('urn:message:type:text'),
       payloadBytes: new TextEncoder().encode('Previous'),
+      textContent: 'Previous',
     };
 
     TestBed.configureTestingModule({
       providers: [
         ChatDeletionStrategy,
         MessengerDatabase,
-        // ✅ Mock the Mapper, not the Service
         MockProvider(MessageMapper, {
           toDomain: vi.fn().mockReturnValue(mockDomainMsg),
         }),
@@ -73,7 +75,6 @@ describe('ChatDeletionStrategy', () => {
         createMsgRecord('m1', 'Delete Me', '2024-01-01T10:00:00Z'),
       );
 
-      // ✅ Clean API: No storageService param
       await strategy.deleteMessage('m1');
 
       const msg = await db.messages.get('m1');
@@ -100,14 +101,16 @@ describe('ChatDeletionStrategy', () => {
         lastModified: '' as ISODateTimeString,
       });
 
-      // Act: Delete m2 (Head)
+      // Act: Delete m2 (the newest message)
       await strategy.deleteMessage('m2');
 
       // Assert
       const index = await db.conversations.get(mockUrn);
+
+      // Should roll back to the timestamp of m1
       expect(index?.lastActivityTimestamp).toBe('2024-01-01T10:00:00Z');
 
-      // Verify mapper was used
+      // Verify mapper was used to generate the new snippet
       expect(mapper.toDomain).toHaveBeenCalled();
     });
   });

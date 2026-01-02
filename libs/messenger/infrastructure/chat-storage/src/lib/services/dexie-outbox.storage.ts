@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/services/dexie-outbox.storage.ts
 import { Injectable, inject } from '@angular/core';
 import {
   OutboxStorage,
@@ -12,8 +13,8 @@ import {
 
 @Injectable()
 export class DexieOutboxStorage implements OutboxStorage {
-  private db = inject(MessengerDatabase);
-  private mapper = inject(OutboxMapper);
+  private readonly db = inject(MessengerDatabase);
+  private readonly mapper = inject(OutboxMapper);
 
   async addTask(task: OutboundTask): Promise<void> {
     const record = this.mapper.toRecord(task);

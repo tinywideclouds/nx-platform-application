@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/strategies/chat-merge.strategy.ts
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 
@@ -12,7 +13,7 @@ export class ChatMergeStrategy {
   private readonly logger = inject(Logger);
 
   /**
-   * Intelligently merges a Cloud Index into the Local Index.
+   * Merges a Cloud Index into the Local Index using Last-Write-Wins.
    * - If Cloud is NEWER: Update Local.
    * - If Local is NEWER (offline changes): Keep Local.
    * - If New Conversation: Insert.
@@ -36,7 +37,7 @@ export class ChatMergeStrategy {
           recordsToUpsert.push(cloudRec);
           newCount++;
         } else {
-          // Lexicographical string comparison works for ISO dates
+          // Lexicographical string comparison works correctly for ISO dates
           if (cloudRec.lastActivityTimestamp > localRec.lastActivityTimestamp) {
             recordsToUpsert.push(cloudRec);
             updatedCount++;
@@ -49,7 +50,7 @@ export class ChatMergeStrategy {
       if (recordsToUpsert.length > 0) {
         await this.db.conversations.bulkPut(recordsToUpsert);
         this.logger.info(
-          `[ChatMerge] Sync complete. New: ${newCount}, Updated: ${updatedCount}, Ignored (Local Newer): ${ignoredCount}`,
+          `[ChatMerge] Sync complete. New: ${newCount}, Updated: ${updatedCount}, Ignored: ${ignoredCount}`,
         );
       } else {
         this.logger.debug('[ChatMerge] Local index is already up to date.');

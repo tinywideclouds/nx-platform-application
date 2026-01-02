@@ -1,8 +1,14 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/services/dexie-quarantine.storage.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { DexieQuarantineStorage } from './dexie-quarantine.storage';
-import { MessengerDatabase } from '../db/messenger.database';
-import { QuarantineMapper } from '../db/mappers/quarantine.mapper';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  MessengerDatabase,
+  QuarantineMapper,
+} from '@nx-platform-application/messenger-infrastructure-db-schema';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Dexie } from 'dexie';
@@ -16,11 +22,11 @@ describe('DexieQuarantineStorage', () => {
 
   const mockTransport: TransportMessage = {
     senderId: senderUrn,
-    sentTimestamp: '2025-01-01T10:00:00Z' as any,
+    sentTimestamp: '2025-01-01T10:00:00Z' as ISODateTimeString,
     typeId: URN.parse('urn:message:type:text'),
     payloadBytes: new Uint8Array([1]),
     clientRecordId: 'uuid-123',
-  } as any;
+  } as unknown as TransportMessage;
 
   beforeEach(async () => {
     await Dexie.delete('messenger');

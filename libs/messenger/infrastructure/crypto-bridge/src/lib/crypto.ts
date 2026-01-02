@@ -4,16 +4,15 @@
  * platform-agnostic Web Crypto API.
  */
 
-// Define a return type for the updated encrypt function for clarity
 export interface EncryptedPayload {
   encryptedSymmetricKey: Uint8Array;
   encryptedData: Uint8Array;
 }
+
 /**
  * A class that encapsulates cryptographic operations using the Web Crypto API.
  */
 export class CryptoEngine {
-  // Parameters for RSA-OAEP key generation (for encryption).
   private rsaOaepKeyGenParams: RsaHashedKeyGenParams = {
     name: 'RSA-OAEP',
     modulusLength: 2048,
@@ -21,7 +20,6 @@ export class CryptoEngine {
     hash: 'SHA-256',
   };
 
-  // Parameters for RSA-PSS key generation (for signing).
   private rsaPssKeyGenParams: RsaHashedKeyGenParams = {
     name: 'RSA-PSS',
     modulusLength: 2048,
@@ -29,12 +27,10 @@ export class CryptoEngine {
     hash: 'SHA-256',
   };
 
-  // Parameters for RSA-OAEP encryption/decryption operations.
   private rsaOaepParams: RsaOaepParams = {
     name: 'RSA-OAEP',
   };
 
-  // Parameters for RSA-PSS signing operations.
   private signAlgorithm: RsaPssParams = {
     name: 'RSA-PSS',
     saltLength: 32,
@@ -42,7 +38,6 @@ export class CryptoEngine {
 
   /**
    * Generates a new RSA key pair for ENCRYPTION.
-   * @returns A promise that resolves with a CryptoKeyPair.
    */
   async generateEncryptionKeys(): Promise<CryptoKeyPair> {
     return crypto.subtle.generateKey(this.rsaOaepKeyGenParams, true, [
@@ -53,7 +48,6 @@ export class CryptoEngine {
 
   /**
    * Generates a new RSA key pair for SIGNING.
-   * @returns A promise that resolves with a CryptoKeyPair.
    */
   async generateSigningKeys(): Promise<CryptoKeyPair> {
     return crypto.subtle.generateKey(this.rsaPssKeyGenParams, true, [
@@ -64,15 +58,12 @@ export class CryptoEngine {
 
   /**
    * Encrypts a plaintext payload using a hybrid encryption scheme.
-   * @param publicKey - The recipient's public RSA-OAEP key.
-   * @param plaintext - The data to encrypt as a Uint8Array.
-   * @returns A promise that resolves with an EncryptedPayload object.
    */
   async encrypt(
     publicKey: CryptoKey,
     plaintext: Uint8Array,
   ): Promise<EncryptedPayload> {
-    // 1. Generate a temporary symmetric key for this message only
+    // 1. Generate a temporary symmetric key
     const aesKey = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 },
       true,
@@ -84,10 +75,9 @@ export class CryptoEngine {
     const encryptedContent = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       aesKey,
-      new Uint8Array(plaintext), // 👈 FIX 1: Wrap BufferSource
+      new Uint8Array(plaintext),
     );
 
-    // Prepend the IV to the ciphertext, as it's needed for decryption
     const encryptedData = new Uint8Array(
       iv.length + encryptedContent.byteLength,
     );
@@ -99,7 +89,7 @@ export class CryptoEngine {
     const encryptedSymmetricKey = await crypto.subtle.encrypt(
       this.rsaOaepParams,
       publicKey,
-      new Uint8Array(exportedAesKey), // 👈 FIX 2: Wrap BufferSource
+      new Uint8Array(exportedAesKey),
     );
 
     return {
@@ -108,27 +98,19 @@ export class CryptoEngine {
     };
   }
 
-  /**
-   * REFACTORED: This method now accepts separate arguments for the encrypted
-   * symmetric key and the encrypted data payload, matching the output of encrypt().
-   * @param privateKey - The user's private RSA-OAEP key.
-   * @param encryptedSymmetricKey - The RSA-encrypted AES key.
-   * @param encryptedData - The AES-encrypted data, prepended with its IV.
-   * @returns A promise that resolves with the decrypted plaintext as a Uint8Array.
-   */
   async decrypt(
     privateKey: CryptoKey,
     encryptedSymmetricKey: Uint8Array,
     encryptedData: Uint8Array,
   ): Promise<Uint8Array> {
-    // 1. Decrypt the symmetric AES key using our private RSA key
+    // 1. Decrypt the symmetric AES key
     const decryptedAesKeyBytes = await crypto.subtle.decrypt(
       this.rsaOaepParams,
       privateKey,
-      new Uint8Array(encryptedSymmetricKey), // 👈 FIX 3: Wrap BufferSource
+      new Uint8Array(encryptedSymmetricKey),
     );
 
-    // 2. Import the raw AES key so we can use it for decryption
+    // 2. Import the raw AES key
     const aesKey = await crypto.subtle.importKey(
       'raw',
       decryptedAesKeyBytes,
@@ -137,42 +119,29 @@ export class CryptoEngine {
       ['decrypt'],
     );
 
-    // 3. Separate the IV from the actual ciphertext
+    // 3. Separate IV and Ciphertext
     const iv = encryptedData.slice(0, 12);
     const ciphertext = encryptedData.slice(12);
 
-    // 4. Decrypt the data using the recovered AES key and IV
+    // 4. Decrypt data
     const decryptedData = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: iv },
       aesKey,
-      new Uint8Array(ciphertext), // 👈 FIX 4: Wrap BufferSource
+      new Uint8Array(ciphertext),
     );
 
     return new Uint8Array(decryptedData);
   }
 
-  /**
-   * Signs data with a private key to create a digital signature.
-   * @param privateKey - The private RSA-PSS key to sign with.
-   * @param data - The data to be signed.
-   * @returns A promise that resolves with the signature as a Uint8Array.
-   */
   async sign(privateKey: CryptoKey, data: Uint8Array): Promise<Uint8Array> {
     const signature = await crypto.subtle.sign(
       this.signAlgorithm,
       privateKey,
-      new Uint8Array(data), // 👈 FIX 5: Wrap BufferSource
+      new Uint8Array(data),
     );
     return new Uint8Array(signature);
   }
 
-  /**
-   * Verifies a digital signature against the original data and a public key.
-   * @param publicKey - The public RSA-PSS key to verify with.
-   * @param signature - The signature to verify.
-   * @param data - The original, un-tampered data.
-   * @returns A promise that resolves with a boolean indicating if the signature is valid.
-   */
   async verify(
     publicKey: CryptoKey,
     signature: Uint8Array,
@@ -181,8 +150,8 @@ export class CryptoEngine {
     return crypto.subtle.verify(
       this.signAlgorithm,
       publicKey,
-      new Uint8Array(signature), // 👈 FIX 6: Wrap BufferSource
-      new Uint8Array(data), // 👈 FIX 7: Wrap BufferSource
+      new Uint8Array(signature),
+      new Uint8Array(data),
     );
   }
 }

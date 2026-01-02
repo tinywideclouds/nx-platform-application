@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/services/chat-storage.service.ts
 import { Injectable, inject } from '@angular/core';
 import { Dexie } from 'dexie';
 import { Temporal } from '@js-temporal/polyfill';
@@ -24,7 +25,6 @@ import {
 
 import { ChatDeletionStrategy } from '../strategies/chat-deletion.strategy';
 
-// ✅ Port Imports
 import {
   HistoryReader,
   HistoryQuery,
@@ -32,21 +32,14 @@ import {
   ConversationStorage,
 } from '@nx-platform-application/messenger-domain-conversation';
 
-export interface ChatStorageQueryOptions {
-  conversationUrn: URN;
-  limit?: number;
-  beforeTimestamp?: ISODateTimeString;
-}
+const BULK_SAVE_CHUNK_SIZE = 200;
 
 @Injectable({ providedIn: 'root' })
 export class ChatStorageService implements HistoryReader, ConversationStorage {
-  private db = inject(MessengerDatabase);
-  private deletionStrategy = inject(ChatDeletionStrategy);
-
-  private messageMapper = inject(MessageMapper);
-  private conversationMapper = inject(ConversationMapper);
-
-  // --- HistoryReader Implementation ---
+  private readonly db = inject(MessengerDatabase);
+  private readonly deletionStrategy = inject(ChatDeletionStrategy);
+  private readonly messageMapper = inject(MessageMapper);
+  private readonly conversationMapper = inject(ConversationMapper);
 
   async getMessages(query: HistoryQuery): Promise<HistoryResult> {
     const messages = await this.loadHistorySegment(
@@ -64,8 +57,6 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
   async getConversationSummaries(): Promise<ConversationSummary[]> {
     return this.loadConversationSummaries();
   }
-
-  // --- History Reads ---
 
   async loadHistorySegment(
     conversationUrn: URN,
@@ -103,8 +94,6 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
   ): Promise<void> {
     await this.updateConversation(urn, { genesisTimestamp: timestamp });
   }
-
-  // --- Cloud Sync Support ---
 
   async getTombstonesInRange(
     start: string,
@@ -151,8 +140,18 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
   }
 
   async bulkSaveMessages(messages: ChatMessage[]): Promise<void> {
-    for (const msg of messages) {
-      await this.saveMessage(msg);
+    for (let i = 0; i < messages.length; i += BULK_SAVE_CHUNK_SIZE) {
+      const chunk = messages.slice(i, i + BULK_SAVE_CHUNK_SIZE);
+
+      await this.db.transaction(
+        'rw',
+        [this.db.messages, this.db.conversations],
+        async () => {
+          for (const msg of chunk) {
+            await this.saveInternal(msg);
+          }
+        },
+      );
     }
   }
 
@@ -184,54 +183,59 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     }));
   }
 
-  // --- Writer / Rescue ---
-
   async saveMessage(message: ChatMessage): Promise<void> {
-    const record = this.messageMapper.toRecord(message);
-    const conversationUrnStr = message.conversationUrn.toString();
-    const sentTime = message.sentTimestamp;
-
     await this.db.transaction(
       'rw',
       [this.db.messages, this.db.conversations],
       async () => {
-        await this.db.messages.put(record);
-
-        const existing = await this.db.conversations.get(conversationUrnStr);
-        const now = Temporal.Now.instant().toString() as ISODateTimeString;
-
-        const isNewer = !existing || sentTime >= existing.lastActivityTimestamp;
-        const isOlder =
-          existing?.genesisTimestamp && sentTime < existing.genesisTimestamp;
-
-        const update: ConversationIndexRecord = existing || {
-          conversationUrn: conversationUrnStr,
-          lastActivityTimestamp: sentTime,
-          snippet: '',
-          previewType: 'text',
-          unreadCount: 0,
-          lastModified: now,
-          genesisTimestamp: null,
-        };
-
-        update.lastModified = now;
-
-        if (isNewer) {
-          update.lastActivityTimestamp = sentTime;
-          update.snippet = generateSnippet(message);
-          update.previewType = getPreviewType(message.typeId.toString());
-          if (message.status === 'received') {
-            update.unreadCount = (existing?.unreadCount || 0) + 1;
-          }
-        }
-
-        if (isOlder) {
-          update.genesisTimestamp = sentTime;
-        }
-
-        await this.db.conversations.put(update);
+        await this.saveInternal(message);
       },
     );
+  }
+
+  private async saveInternal(message: ChatMessage): Promise<void> {
+    const record = this.messageMapper.toRecord(message);
+    const conversationUrnStr = message.conversationUrn.toString();
+    const sentTime = message.sentTimestamp;
+
+    await this.db.messages.put(record);
+
+    const existing = await this.db.conversations.get(conversationUrnStr);
+    const now = Temporal.Now.instant().toString() as ISODateTimeString;
+
+    const isNewer = !existing || sentTime >= existing.lastActivityTimestamp;
+
+    // FIX: Correctly determine "older" even if genesis is currently null
+    const currentGenesis =
+      existing?.genesisTimestamp ?? existing?.lastActivityTimestamp ?? sentTime;
+    const isOlder = sentTime < currentGenesis;
+
+    const update: ConversationIndexRecord = existing || {
+      conversationUrn: conversationUrnStr,
+      lastActivityTimestamp: sentTime,
+      snippet: '',
+      previewType: 'text',
+      unreadCount: 0,
+      lastModified: now,
+      genesisTimestamp: null,
+    };
+
+    update.lastModified = now;
+
+    if (isNewer) {
+      update.lastActivityTimestamp = sentTime;
+      update.snippet = generateSnippet(message);
+      update.previewType = getPreviewType(message.typeId.toString());
+      if (message.status === 'received') {
+        update.unreadCount = (existing?.unreadCount || 0) + 1;
+      }
+    }
+
+    if (isOlder) {
+      update.genesisTimestamp = sentTime;
+    }
+
+    await this.db.conversations.put(update);
   }
 
   async getConversationIndex(

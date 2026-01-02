@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/chat-storage/src/lib/strategies/chat-merge.strategy.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { ChatMergeStrategy } from './chat-merge.strategy';
 import {
@@ -71,6 +72,22 @@ describe('ChatMergeStrategy', () => {
 
       const result = await db.conversations.get('urn:bob');
       expect(result?.snippet).toBe('New Cloud');
+      expect(result?.lastActivityTimestamp).toBe('2023-01-01T12:00:00Z');
+    });
+
+    it('should IGNORE cloud record if Local is NEWER (Offline edits)', async () => {
+      await db.conversations.put(
+        createRecord('urn:bob', '2023-01-01T12:00:00Z', 'New Local'),
+      );
+
+      const cloudIndex = [
+        createRecord('urn:bob', '2023-01-01T10:00:00Z', 'Old Cloud'),
+      ];
+
+      await service.merge(cloudIndex);
+
+      const result = await db.conversations.get('urn:bob');
+      expect(result?.snippet).toBe('New Local');
       expect(result?.lastActivityTimestamp).toBe('2023-01-01T12:00:00Z');
     });
   });

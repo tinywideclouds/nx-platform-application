@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/crypto-bridge/src/lib/messenger-crypto.service.ts
 import { Injectable, inject } from '@angular/core';
 
 import {
@@ -30,7 +31,6 @@ const rsaPssImportParams: RsaHashedImportParams = {
   hash: 'SHA-256',
 };
 
-// --- Handshake Types ---
 export interface ReceiverSession {
   sessionId: string;
   qrPayload: string;
@@ -46,7 +46,7 @@ export interface SenderSession {
 
 export interface ParsedQr {
   sessionId: string;
-  key: CryptoKey; // Either RSA-Public or AES-Secret
+  key: CryptoKey;
   mode: 'RECEIVER_HOSTED' | 'SENDER_HOSTED';
 }
 
@@ -61,9 +61,6 @@ export class MessengerCryptoService {
 
   // --- 1. Handshake Mechanics (Key Gen & QR Formatting) ---
 
-  /**
-   * Mode A (Receiver-Hosted): Generates RSA Keypair for the Target.
-   */
   public async generateReceiverSession(): Promise<ReceiverSession> {
     const keyPair = await this.cryptoEngine.generateEncryptionKeys();
     const sessionId = crypto.randomUUID();
@@ -86,9 +83,6 @@ export class MessengerCryptoService {
     };
   }
 
-  /**
-   * Mode B (Sender-Hosted): Generates AES Key for the Source.
-   */
   public async generateSenderSession(): Promise<SenderSession> {
     const oneTimeKey = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 },
@@ -116,6 +110,7 @@ export class MessengerCryptoService {
 
   /**
    * Parses a raw QR string and imports the contained key.
+   * Validates the mode 'm' BEFORE decoding the key to ensure safety.
    */
   public async parseQrCode(qrString: string): Promise<ParsedQr> {
     let data: { sid: string; key: string; m: string; v: number };
@@ -125,13 +120,12 @@ export class MessengerCryptoService {
       throw new Error('Invalid QR Format: Not JSON');
     }
 
-    const binaryKey = this.base64ToArrayBuffer(data.key);
     let key: CryptoKey;
     let mode: 'RECEIVER_HOSTED' | 'SENDER_HOSTED';
 
     if (data.m === 'rh') {
       mode = 'RECEIVER_HOSTED';
-      // Import RSA Public Key
+      const binaryKey = this.base64ToArrayBuffer(data.key);
       key = await crypto.subtle.importKey(
         'spki',
         binaryKey,
@@ -141,7 +135,7 @@ export class MessengerCryptoService {
       );
     } else if (data.m === 'sh') {
       mode = 'SENDER_HOSTED';
-      // Import AES Secret Key
+      const binaryKey = this.base64ToArrayBuffer(data.key);
       key = await crypto.subtle.importKey(
         'raw',
         binaryKey,
@@ -198,8 +192,6 @@ export class MessengerCryptoService {
   public async generateAndStoreKeys(
     userUrn: URN,
   ): Promise<{ privateKeys: PrivateKeys; publicKeys: PublicKeys }> {
-    this.logger.debug(`CryptoService: Generating NEW keys for ${userUrn}`);
-
     const [encKeyPair, sigKeyPair] = await Promise.all([
       this.cryptoEngine.generateEncryptionKeys(),
       this.cryptoEngine.generateSigningKeys(),
@@ -223,21 +215,17 @@ export class MessengerCryptoService {
       sigKey: sigKeyPair.privateKey,
     };
 
-    this.logger.debug('CryptoService: Saving private keys to IndexedDB...');
     await Promise.all([
       this.storage.saveJwk(this.getEncKeyUrn(userUrn), encPrivKeyJwk),
       this.storage.saveJwk(this.getSigKeyUrn(userUrn), sigPrivKeyJwk),
     ]);
 
-    this.logger.debug('CryptoService: Uploading public keys to backend...');
     await this.keyService.storeKeys(userUrn, publicKeys);
 
     return { privateKeys, publicKeys };
   }
 
   public async storeMyKeys(userUrn: URN, keys: PrivateKeys): Promise<void> {
-    this.logger.debug(`CryptoService: Storing restored keys for ${userUrn}`);
-
     const [encPrivKeyJwk, sigPrivKeyJwk] = await Promise.all([
       crypto.subtle.exportKey('jwk', keys.encKey),
       crypto.subtle.exportKey('jwk', keys.sigKey),
@@ -279,7 +267,7 @@ export class MessengerCryptoService {
 
       return { encKey, sigKey };
     } catch (e) {
-      console.error('Failed to import keys from storage:', e);
+      this.logger.error('Failed to import keys from storage', e);
       return null;
     }
   }
@@ -357,7 +345,6 @@ export class MessengerCryptoService {
     };
   }
 
-  // Used for Receiver-Hosted Flow (Encrypting for RSA Session Key)
   public async encryptSyncMessage(
     payload: TransportMessage,
     sessionPublicKey: CryptoKey,
@@ -381,24 +368,19 @@ export class MessengerCryptoService {
     };
   }
 
-  // Used for Sender-Hosted Flow (Encrypting for AES Session Key)
   public async encryptSyncOffer(
     payload: TransportMessage,
     oneTimeKey: CryptoKey,
   ): Promise<SecureEnvelope> {
     const payloadBytes = serializePayloadToProtoBytes(payload);
-
-    // Generate IV
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
-    // Encrypt directly (AES-GCM)
     const encryptedContent = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       oneTimeKey,
       new Uint8Array(payloadBytes),
     );
 
-    // Combine IV + Ciphertext
     const encryptedData = new Uint8Array(
       iv.length + encryptedContent.byteLength,
     );
@@ -407,9 +389,9 @@ export class MessengerCryptoService {
 
     return {
       recipientId: payload.senderId,
-      encryptedSymmetricKey: new Uint8Array(0), // Empty, key is in QR
+      encryptedSymmetricKey: new Uint8Array(0),
       encryptedData,
-      signature: new Uint8Array(0), // Signature optional for drop-box
+      signature: new Uint8Array(0),
     };
   }
 
@@ -420,7 +402,6 @@ export class MessengerCryptoService {
     return this.internalVerifyAndDecrypt(envelope, myPrivateKeys.encKey);
   }
 
-  // Used for Receiver-Hosted Flow (Decrypting with RSA Session Key)
   public async decryptSyncMessage(
     envelope: SecureEnvelope,
     sessionPrivateKey: CryptoKey,
@@ -428,7 +409,6 @@ export class MessengerCryptoService {
     return this.internalVerifyAndDecrypt(envelope, sessionPrivateKey);
   }
 
-  // Used for Sender-Hosted Flow (Decrypting with AES Session Key)
   public async decryptSyncOffer(
     envelope: SecureEnvelope,
     oneTimeKey: CryptoKey,
@@ -527,7 +507,6 @@ export class MessengerCryptoService {
     return a.every((val, i) => val === b[i]);
   }
 
-  // --- Base64 Utilities ---
   private arrayBufferToBase64(buffer: ArrayBuffer): string {
     let binary = '';
     const bytes = new Uint8Array(buffer);

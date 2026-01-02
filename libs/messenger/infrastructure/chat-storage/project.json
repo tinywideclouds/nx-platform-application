@@ -1,5 +1,5 @@
 {
-  "name": "chat-storage",
+  "name": "messenger-infrastructure-chat-storage",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/messenger/infrastructure/chat-storage/src",
   "prefix": "lib",

@@ -1,3 +1,4 @@
+//libs/messenger/infrastructure/chat-access/src/lib/chat-data.service.spec.ts
 import { TestBed } from '@angular/core/testing';
 import {
   HttpClientTestingModule,
@@ -5,32 +6,23 @@ import {
 } from '@angular/common/http/testing';
 import { firstValueFrom } from 'rxjs';
 import { Mock, vi } from 'vitest';
-import { URN } from '@nx-platform-application/platform-types';
-
+import {
+  URN,
+  QueuedMessage,
+  SecureEnvelope,
+} from '@nx-platform-application/platform-types';
 import { ChatDataService } from './chat-data.service';
 
-// --- Mock platform-types ---
-// Mock the "queue" facade helpers
 vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
     ...actual,
     deserializeJsonToQueuedMessages: vi.fn(),
-    // We also mock the types/helpers we *don't* use anymore
-    // to ensure the service isn't importing them.
     serializeEnvelopeToJson: vi.fn(),
     deserializeJsonToEnvelopes: vi.fn(),
   };
 });
 
-import {
-  QueuedMessage,
-  SecureEnvelope,
-  deserializeJsonToQueuedMessages,
-} from '@nx-platform-application/platform-types';
-// --- End Mock ---
-
-// --- Mock Data ---
 const mockSmartEnvelope: SecureEnvelope = {
   recipientId: URN.parse('urn:contacts:user:test'),
   encryptedData: new Uint8Array([1]),
@@ -43,25 +35,19 @@ const mockSmartQueuedMessages: QueuedMessage[] = [
   { id: 'ack-id-2', envelope: mockSmartEnvelope },
 ];
 
-// Raw JSON response from GET /api/messages
-// --- THIS IS THE FIX ---
-const mockMessagesJsonResponse: object = {
-  // --- END FIX ---
+const mockMessagesJsonResponse = {
   messages: [
     {
       id: 'ack-id-1',
-      envelope: {
-        /* ... */
-      },
+      envelope: {},
     },
   ],
 };
 const baseApiUrl = '/api/messages';
 
-describe('ChatDataService (Refactored)', () => {
+describe('ChatDataService', () => {
   let service: ChatDataService;
   let httpMock: HttpTestingController;
-
   let mockDeserialize: Mock;
 
   beforeEach(async () => {
@@ -72,20 +58,16 @@ describe('ChatDataService (Refactored)', () => {
     service = TestBed.inject(ChatDataService);
     httpMock = TestBed.inject(HttpTestingController);
 
-    // Assign mock
     const platformTypes =
       await import('@nx-platform-application/platform-types');
     mockDeserialize = platformTypes.deserializeJsonToQueuedMessages as Mock;
 
-    // Reset mocks
     vi.clearAllMocks();
-
-    // Default mock implementation
     mockDeserialize.mockReturnValue(mockSmartQueuedMessages);
   });
 
   afterEach(() => {
-    httpMock.verify(); // Ensures no outstanding HTTP requests
+    httpMock.verify();
   });
 
   it('should be created', () => {
@@ -97,20 +79,16 @@ describe('ChatDataService (Refactored)', () => {
       const limit = 25;
       const promise = firstValueFrom(service.getMessageBatch(limit));
 
-      // Verify the HTTP call
       const req = httpMock.expectOne(
         (r) => r.url === baseApiUrl && r.params.has('limit'),
       );
       expect(req.request.method).toBe('GET');
       expect(req.request.params.get('limit')).toBe(limit.toString());
-      req.flush(mockMessagesJsonResponse); // Return the raw JSON
+      req.flush(mockMessagesJsonResponse);
 
-      // Verify the result
       const result = await promise;
 
-      // Check that the raw JSON was passed to the deserializer
       expect(mockDeserialize).toHaveBeenCalledWith(mockMessagesJsonResponse);
-      // Check that the final result is the "smart" model array
       expect(result).toEqual(mockSmartQueuedMessages);
     });
   });
@@ -121,15 +99,12 @@ describe('ChatDataService (Refactored)', () => {
       const ackUrl = `${baseApiUrl}/ack`;
       const promise = firstValueFrom(service.acknowledge(mockIds));
 
-      // Verify the HTTP call
       const req = httpMock.expectOne(ackUrl);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({ messageIds: mockIds });
       req.flush(null, { status: 204, statusText: 'No Content' });
 
-      // Verify the result (should be void)
       await promise;
-      expect(true).toBe(true); // Reached end of promise
     });
   });
 });
