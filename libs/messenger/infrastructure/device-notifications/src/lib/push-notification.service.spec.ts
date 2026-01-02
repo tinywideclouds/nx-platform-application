@@ -7,20 +7,20 @@ import { VAPID_PUBLIC_KEY } from './tokens';
 import { of } from 'rxjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// --- Mocks ---
+// --- MOCKS ---
 
-// 1. Mock the Platform Types Facade
-// We must mock this because "createWebPushSubscriptionFromBrowser"
-// contains DOM logic (ArrayBuffer) that might be brittle in simple unit tests,
-// and we want to verify the Service *delegates* to it correctly.
+// 1. Mock the External Platform Types Lib
 vi.mock('@nx-platform-application/platform-types', () => ({
-  createWebPushSubscriptionFromBrowser: vi.fn(),
   serializeWebPushSubscription: vi.fn(),
 }));
 
-// Import the mocked functions so we can control them in tests
-import { serializeWebPushSubscription } from '@nx-platform-application/platform-types';
+// 2. Mock the Local Adapter Module (Crucial Fix)
+vi.mock('./notification.adapter', () => ({
+  createWebPushSubscriptionFromBrowser: vi.fn(),
+}));
 
+// Imports must happen AFTER the mocks are defined for hoisting to work correctly
+import { serializeWebPushSubscription } from '@nx-platform-application/platform-types';
 import { createWebPushSubscriptionFromBrowser } from './notification.adapter';
 
 describe('PushNotificationService', () => {
@@ -31,25 +31,33 @@ describe('PushNotificationService', () => {
     subscription: any;
     isEnabled: boolean;
   };
-  let loggerSpy: { info: any; error: any; warn: any };
+  let loggerSpy: { info: any; error: any; warn: any; debug: any };
 
-  // Dummy Data
   const mockVapidKey = 'test-vapid-key';
+
+  // Raw object from browser
   const mockRawSub = {
     endpoint: 'https://browser.push/abc',
-    getKey: () => null,
+    getKey: () => new ArrayBuffer(8),
   } as any;
+
+  // Domain Object uses Uint8Array
   const mockDomainSub = {
     endpoint: 'https://browser.push/abc',
-    keys: { p256dh: 'k', auth: 'a' },
+    keys: {
+      p256dh: new Uint8Array([1, 2, 3]),
+      auth: new Uint8Array([4, 5, 6]),
+    },
   };
+
+  // Serialized Payload
   const mockSerializedPayload = {
     endpoint: 'https://browser.push/abc',
-    keys: { p256dh: 'k', auth: 'a' },
+    keys: { p256dh: 'base64-key', auth: 'base64-auth' },
   };
 
   beforeEach(() => {
-    // Reset Mocks
+    // Reset spies
     registrationServiceSpy = {
       registerWeb: vi.fn().mockResolvedValue(undefined),
       unregisterWeb: vi.fn().mockResolvedValue(undefined),
@@ -57,7 +65,7 @@ describe('PushNotificationService', () => {
 
     swPushSpy = {
       requestSubscription: vi.fn(),
-      subscription: of(null), // Default: No active sub
+      subscription: of(null),
       isEnabled: true,
     };
 
@@ -65,9 +73,11 @@ describe('PushNotificationService', () => {
       info: vi.fn(),
       error: vi.fn(),
       warn: vi.fn(),
+      debug: vi.fn(),
     };
 
-    // Reset Facade Mocks
+    // Reset the mocked functions
+    // Now that the modules are properly mocked, .mockReset() will exist.
     vi.mocked(createWebPushSubscriptionFromBrowser).mockReset();
     vi.mocked(serializeWebPushSubscription).mockReset();
 
@@ -98,8 +108,8 @@ describe('PushNotificationService', () => {
     });
 
     it('should register successfully (Happy Path)', async () => {
-      // Arrange
       swPushSpy.requestSubscription.mockResolvedValue(mockRawSub);
+
       vi.mocked(createWebPushSubscriptionFromBrowser).mockReturnValue(
         mockDomainSub,
       );
@@ -107,51 +117,40 @@ describe('PushNotificationService', () => {
         mockSerializedPayload,
       );
 
-      // Act
       await service.requestSubscription();
 
-      // Assert
-      // 1. Browser API called with VAPID key
       expect(swPushSpy.requestSubscription).toHaveBeenCalledWith({
         serverPublicKey: mockVapidKey,
       });
 
-      // 2. Facade called to parse/validate
       expect(createWebPushSubscriptionFromBrowser).toHaveBeenCalledWith(
         mockRawSub,
       );
       expect(serializeWebPushSubscription).toHaveBeenCalledWith(mockDomainSub);
 
-      // 3. Backend API called with the SERIALIZED payload
       expect(registrationServiceSpy.registerWeb).toHaveBeenCalledWith(
         mockSerializedPayload,
       );
 
-      // 4. State updated
       expect(service.permissionStatus()).toBe('granted');
       expect(service.isSubscribed()).toBe(true);
     });
 
     it('should handle invalid subscription object (Facade Validation Failure)', async () => {
-      // Arrange
       swPushSpy.requestSubscription.mockResolvedValue(mockRawSub);
-      // Simulate validation error (e.g. missing keys)
       const error = new Error('Missing keys');
       vi.mocked(createWebPushSubscriptionFromBrowser).mockImplementation(() => {
         throw error;
       });
 
-      // Act
       await expect(service.requestSubscription()).rejects.toThrow(error);
 
-      // Assert
       expect(loggerSpy.error).toHaveBeenCalled();
-      expect(registrationServiceSpy.registerWeb).not.toHaveBeenCalled(); // Backend NOT hit
+      expect(registrationServiceSpy.registerWeb).not.toHaveBeenCalled();
       expect(service.permissionStatus()).toBe('denied');
     });
 
     it('should handle Backend API failure', async () => {
-      // Arrange
       swPushSpy.requestSubscription.mockResolvedValue(mockRawSub);
       vi.mocked(createWebPushSubscriptionFromBrowser).mockReturnValue(
         mockDomainSub,
@@ -163,46 +162,35 @@ describe('PushNotificationService', () => {
       const apiError = new Error('500 Server Error');
       registrationServiceSpy.registerWeb.mockRejectedValue(apiError);
 
-      // Act
       await expect(service.requestSubscription()).rejects.toThrow(apiError);
 
-      // Assert
       expect(service.permissionStatus()).toBe('denied');
     });
   });
 
   describe('disableNotifications', () => {
     it('should unregister from backend and unsubscribe from browser', async () => {
-      // Arrange: Simulate active subscription
       const mockUnsubscribe = vi.fn().mockResolvedValue(true);
       const activeSub = {
         endpoint: 'https://sub.endpoint',
         unsubscribe: mockUnsubscribe,
       };
 
-      // Override the observable for this test
       Object.defineProperty(swPushSpy, 'subscription', {
         value: of(activeSub),
       });
 
-      // Act
       await service.disableNotifications();
 
-      // Assert
-      // 1. Backend Unregister called with Endpoint URL
       expect(registrationServiceSpy.unregisterWeb).toHaveBeenCalledWith(
         'https://sub.endpoint',
       );
 
-      // 2. Browser Unsubscribe called
       expect(mockUnsubscribe).toHaveBeenCalled();
-
-      // 3. State updated
       expect(service.isSubscribed()).toBe(false);
     });
 
     it('should unsubscribe from browser even if backend fails (Graceful Degrade)', async () => {
-      // Arrange
       const mockUnsubscribe = vi.fn().mockResolvedValue(true);
       const activeSub = {
         endpoint: 'https://sub.endpoint',
@@ -212,32 +200,25 @@ describe('PushNotificationService', () => {
         value: of(activeSub),
       });
 
-      // Backend fails
       registrationServiceSpy.unregisterWeb.mockRejectedValue(
         new Error('Network Fail'),
       );
 
-      // Act
       await service.disableNotifications();
 
-      // Assert
       expect(loggerSpy.warn).toHaveBeenCalledWith(
         'Backend unregister failed',
         expect.anything(),
       );
-      // Browser unsub MUST still happen
       expect(mockUnsubscribe).toHaveBeenCalled();
       expect(service.isSubscribed()).toBe(false);
     });
 
     it('should do nothing if no active subscription', async () => {
-      // Arrange: Observable emits null
       Object.defineProperty(swPushSpy, 'subscription', { value: of(null) });
 
-      // Act
       await service.disableNotifications();
 
-      // Assert
       expect(registrationServiceSpy.unregisterWeb).not.toHaveBeenCalled();
     });
   });

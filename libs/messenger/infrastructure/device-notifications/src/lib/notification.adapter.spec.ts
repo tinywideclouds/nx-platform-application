@@ -1,11 +1,10 @@
-// libs/messenger/device-notifications/src/lib/notification.adapter.spec.ts
 import { describe, it, expect, vi } from 'vitest';
 import { createWebPushSubscriptionFromBrowser } from './notification.adapter';
 
 describe('Notification Adapter', () => {
   const mockEndpoint = 'https://fcm.googleapis.com/fcm/send/test-endpoint';
 
-  // Helper to create ArrayBuffers from strings for testing
+  // Helper to create ArrayBuffers from strings
   const strToBuffer = (str: string) => {
     const buf = new ArrayBuffer(str.length);
     const bufView = new Uint8Array(buf);
@@ -15,13 +14,8 @@ describe('Notification Adapter', () => {
     return buf;
   };
 
-  // We rely on the test environment (JSDOM/HappyDOM) providing btoa.
-  // If your environment is strict Node, we might need a polyfill here,
-  // but Angular libs usually test in a browser-like environment.
-
-  it('should extract keys and convert ArrayBuffers to Base64', () => {
+  it('should extract keys and convert ArrayBuffers to Uint8Arrays', () => {
     // Arrange
-    // "test" in base64 is "dGVzdA=="
     const mockBrowserSub = {
       endpoint: mockEndpoint,
       getKey: vi.fn((keyName: string) => {
@@ -36,8 +30,12 @@ describe('Notification Adapter', () => {
 
     // Assert
     expect(result.endpoint).toBe(mockEndpoint);
-    expect(result.keys.p256dh).toBe('dGVzdA==');
-    expect(result.keys.auth).toBe('dGVzdA==');
+
+    // ✅ FIX: Verify the Typed Array content, not base64 strings.
+    // The adapter does NOT serialize to base64; it only bridges to Domain Types.
+    const expectedBuffer = new Uint8Array(strToBuffer('test'));
+    expect(result.keys.p256dh).toEqual(expectedBuffer);
+    expect(result.keys.auth).toEqual(expectedBuffer);
   });
 
   it('should throw if endpoint is missing', () => {

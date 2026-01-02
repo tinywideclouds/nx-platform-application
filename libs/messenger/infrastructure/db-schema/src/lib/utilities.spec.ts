@@ -1,4 +1,7 @@
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { generateSnippet, getPreviewType } from './utilities';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { describe, it, expect } from 'vitest';
@@ -13,7 +16,7 @@ const createMsg = (
   id: 'id-1',
   senderId: URN.parse('urn:contacts:user:me'),
   conversationUrn: URN.parse('urn:messenger:group:conv1'),
-  sentTimestamp: '2024-01-01T00:00:00Z' as any,
+  sentTimestamp: '2024-01-01T00:00:00Z' as ISODateTimeString,
   status: 'sent',
   typeId: typeId,
   payloadBytes: text ? new TextEncoder().encode(text) : undefined,

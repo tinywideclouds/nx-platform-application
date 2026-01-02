@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { MessageMapper } from './message.mapper';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { MessageRecord } from '../records/message.record';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
@@ -11,7 +14,7 @@ describe('MessageMapper', () => {
     messageId: 'msg-123',
     senderId: 'urn:contacts:user:me',
     recipientId: 'urn:contacts:user:bob',
-    sentTimestamp: '2024-01-01T10:00:00Z' as any,
+    sentTimestamp: '2024-01-01T10:00:00Z' as ISODateTimeString,
     typeId: 'urn:message:type:text',
     payloadBytes: new Uint8Array([1, 2, 3]),
     status: 'sent',
@@ -23,7 +26,7 @@ describe('MessageMapper', () => {
     id: 'msg-123',
     senderId: URN.parse('urn:contacts:user:me'),
     conversationUrn: URN.parse('urn:contacts:user:bob'),
-    sentTimestamp: '2024-01-01T10:00:00Z' as any,
+    sentTimestamp: '2024-01-01T10:00:00Z' as ISODateTimeString,
     typeId: URN.parse('urn:message:type:text'),
     payloadBytes: new Uint8Array([1, 2, 3]),
     status: 'sent',

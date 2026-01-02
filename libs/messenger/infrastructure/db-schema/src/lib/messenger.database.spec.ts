@@ -1,7 +1,7 @@
+import 'fake-indexeddb/auto';
 import { TestBed } from '@angular/core/testing';
 import { MessengerDatabase } from './messenger.database';
 import { Dexie } from 'dexie';
-import 'fake-indexeddb/auto';
 
 describe('MessengerDatabase', () => {
   let db: MessengerDatabase;

@@ -16,7 +16,6 @@ import {
 
 import { KeyCacheService } from './key-cache.service';
 
-// --- Mock the platform-types lib ---
 vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
@@ -26,7 +25,6 @@ vi.mock('@nx-platform-application/platform-types', async (importOriginal) => {
   };
 });
 
-// --- Mock Dependencies ---
 const mockSecureKeyService = {
   getKey: vi.fn(),
   storeKeys: vi.fn(),
@@ -38,11 +36,9 @@ const mockKeyStorageService = {
   clearDatabase: vi.fn(),
 };
 
-// --- Fixtures ---
 const mockUserUrn = URN.parse('urn:contacts:user:test-user');
 const mockUserUrnString = mockUserUrn.toString();
 
-// Deterministic mock timestamps
 const mockNowInstant = Temporal.Instant.from('2025-11-10T10:00:00Z');
 const mockOneHourAgoInstant = mockNowInstant.subtract({ hours: 1 });
 const mockTwoDaysAgoInstant = mockNowInstant.subtract({ hours: 48 });
@@ -51,7 +47,6 @@ const isoNow = mockNowInstant.toString() as ISODateTimeString;
 const isoOneHourAgo = mockOneHourAgoInstant.toString() as ISODateTimeString;
 const isoTwoDaysAgo = mockTwoDaysAgoInstant.toString() as ISODateTimeString;
 
-// JSON/Smart object fixtures
 const mockJsonKeys: Record<string, string> = {
   encKey: 'b64...',
   sigKey: 'b64...',
@@ -66,7 +61,6 @@ describe('KeyCacheService', () => {
   let mockDeserialize: Mock;
   let mockSerialize: Mock;
 
-  // --- Mock Temporal.Now.instant() ---
   const temporalNowSpy = vi
     .spyOn(Temporal.Now, 'instant')
     .mockImplementation(() => mockNowInstant);
@@ -88,7 +82,6 @@ describe('KeyCacheService', () => {
     mockDeserialize = mappers.deserializeJsonToPublicKeys as Mock;
     mockSerialize = mappers.serializePublicKeysToJson as Mock;
 
-    // Default mock behaviors
     mockDeserialize.mockReturnValue(mockPublicKeys);
     mockSerialize.mockReturnValue(mockJsonKeys);
     mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys);
@@ -104,7 +97,7 @@ describe('KeyCacheService', () => {
   });
 
   describe('getPublicKey', () => {
-    it('[Cache Miss] should fetch from network if key not in cache', async () => {
+    it('should fetch from network if key not in cache', async () => {
       mockKeyStorageService.getKey.mockResolvedValue(undefined);
 
       const result = await service.getPublicKey(mockUserUrn);
@@ -122,11 +115,11 @@ describe('KeyCacheService', () => {
       expect(result).toBe(mockPublicKeys);
     });
 
-    it('[Cache Stale] should fetch from network if key is expired (stale)', async () => {
+    it('should fetch from network if key is expired (stale)', async () => {
       const staleRecord: PublicKeyRecord = {
         urn: mockUserUrnString,
         keys: mockJsonKeys,
-        timestamp: isoTwoDaysAgo, // 2 days ago, > 24h TTL
+        timestamp: isoTwoDaysAgo,
       };
       mockKeyStorageService.getKey.mockResolvedValue(staleRecord);
 
@@ -145,11 +138,11 @@ describe('KeyCacheService', () => {
       expect(result).toBe(mockPublicKeys);
     });
 
-    it('[Cache Hit] should return from cache if key is fresh', async () => {
+    it('should return from cache if key is fresh', async () => {
       const freshRecord: PublicKeyRecord = {
         urn: mockUserUrnString,
         keys: mockJsonKeys,
-        timestamp: isoOneHourAgo, // 1 hour ago, < 24h TTL
+        timestamp: isoOneHourAgo,
       };
       mockKeyStorageService.getKey.mockResolvedValue(freshRecord);
 
@@ -187,9 +180,8 @@ describe('KeyCacheService', () => {
 
   describe('hasKeys', () => {
     it('should return true if keys are found (cache or network)', async () => {
-      // Simulate success
-      mockKeyStorageService.getKey.mockResolvedValue(undefined); // Cache miss
-      mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys); // Net success
+      mockKeyStorageService.getKey.mockResolvedValue(undefined);
+      mockSecureKeyService.getKey.mockResolvedValue(mockPublicKeys);
 
       const result = await service.hasKeys(mockUserUrn);
       expect(result).toBe(true);

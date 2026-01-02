@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
-
-// ✅ IMPORT: Now consuming the Domain Error, not defining it
 import {
   URN,
   PublicKeys,
@@ -18,9 +16,9 @@ import { KEY_SERVICE_URL } from './key-access.config';
   providedIn: 'root',
 })
 export class SecureKeyService {
-  private http = inject(HttpClient);
-  private logger = inject(Logger);
-  private keyCache = new Map<string, PublicKeys>();
+  private readonly http = inject(HttpClient);
+  private readonly logger = inject(Logger);
+  private readonly keyCache = new Map<string, PublicKeys>();
 
   private readonly baseApiUrl =
     inject(KEY_SERVICE_URL, { optional: true }) ?? 'api/keys';
@@ -39,7 +37,6 @@ export class SecureKeyService {
         this.http.get<unknown>(url, { observe: 'response' }),
       );
 
-      // ✅ LOGIC: Explicitly Signal the Domain State
       if (response.status === 204) {
         this.logger.debug(
           `[SecureKeyService] 204 No Content for ${userUrnString}`,
@@ -58,7 +55,6 @@ export class SecureKeyService {
     }
   }
 
-  // ... (storeKeys, clearCache, buildUrl remain unchanged) ...
   public async storeKeys(userUrn: URN, keys: PublicKeys): Promise<void> {
     const userUrnString = userUrn.toString();
     const url = this.buildUrl(userUrnString);

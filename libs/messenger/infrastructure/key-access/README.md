@@ -18,10 +18,10 @@ It is designed to be a "smart" client:
 
 An `@Injectable` Angular service that provides the following public methods:
 
-**`getKey(userId: URN): Promise<PublicKeys | null>`**
+**`getKey(userId: URN): Promise<PublicKeys>`**
 
 - Fetches the public encryption and signing keys for a given user.
-- **Resilient 404s:** If the user has not uploaded keys yet (404), this method returns `null` instead of throwing an error.
+- **Explicit Missing State:** If the user has not uploaded keys yet (API returns `204 No Content`), this method **throws** a `KeyNotFoundError`. This allows the consumer (Domain Layer) to explicitly handle the "User not fully onboarded" scenario.
 - **Caching:** Checks an internal cache first. On a cache miss, performs an HTTP `GET` to `/api/keys/{urn}`.
 - **Format:** Uses `deserializeJsonToPublicKeys` to convert the raw JSON response.
 
@@ -38,4 +38,4 @@ An `@Injectable` Angular service that provides the following public methods:
 
 ## Running unit tests
 
-Run `nx test messenger-key-access` to execute the unit tests for this library.
+Run `nx test messenger-infrastructure-key-access` to execute the unit tests for this library.

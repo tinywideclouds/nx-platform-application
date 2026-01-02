@@ -1,9 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { ConversationMapper } from './conversation.mapper';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { ConversationIndexRecord } from '../records/conversation.record';
 import { ConversationSummary } from '@nx-platform-application/messenger-types';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { Temporal } from '@js-temporal/polyfill';
 
 describe('ConversationMapper', () => {
@@ -20,12 +23,12 @@ describe('ConversationMapper', () => {
     it('should map Record -> Domain and handle property renames', () => {
       const record: ConversationIndexRecord = {
         conversationUrn: 'urn:messenger:group:lisbon',
-        lastActivityTimestamp: '2024-01-01T12:00:00Z' as any,
+        lastActivityTimestamp: '2024-01-01T12:00:00Z' as ISODateTimeString,
         snippet: 'See you there',
         previewType: 'text',
         unreadCount: 3,
         genesisTimestamp: null,
-        lastModified: '2024-01-01T12:00:00Z' as any,
+        lastModified: '2024-01-01T12:00:00Z' as ISODateTimeString,
       };
 
       const domain = mapper.toDomain(record);
@@ -45,12 +48,11 @@ describe('ConversationMapper', () => {
     it('should map Domain -> Record and generate metadata', () => {
       const domain: ConversationSummary = {
         conversationUrn: URN.parse('urn:messenger:group:lisbon'),
-        timestamp: '2024-01-01T12:00:00Z' as any,
+        timestamp: '2024-01-01T12:00:00Z' as ISODateTimeString,
         latestSnippet: 'See you there',
         previewType: 'text',
         unreadCount: 0,
-        latestMessage: undefined, // Summary doesn't always have full message
-      } as any; // Cast as any because chat.model might have other fields
+      };
 
       // Mock Temporal
       const nowStr = '2025-01-01T00:00:00Z';

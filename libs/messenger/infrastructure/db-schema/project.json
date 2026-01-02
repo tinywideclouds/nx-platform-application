@@ -4,7 +4,7 @@
   "sourceRoot": "libs/messenger/infrastructure/db-schema/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:infrastructure"],
   "targets": {
     "lint": {
       "executor": "@nx/eslint:lint"

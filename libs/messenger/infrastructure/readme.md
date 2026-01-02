@@ -60,6 +60,10 @@ The infrastructure is organized by the **Technical Capability** it provides.
 
 **Role:** The Local Database. Wraps `Dexie.js` to provide type-safe storage.
 
+- **DB Schema (`infrastructure-db-schema`):**
+  - **The Source of Truth.** Defines the exact shape of every record stored in IndexedDB (`MessageRecord`, `ConversationRecord`).
+  - Contains **Mappers** that translate between `Domain Objects` (rich logic) and `Storage Records` (flat data).
+  - Ensures different storage libraries speak the same language.
 - **Chat Storage (`infrastructure-chat-storage`):**
   - Stores `Conversations` and `Messages`.
   - Manages indexes for fast querying (e.g., "Find all messages in Conversation X").

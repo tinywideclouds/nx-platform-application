@@ -12,11 +12,10 @@ export class MessageMapper {
       senderId: URN.parse(record.senderId),
       sentTimestamp: record.sentTimestamp,
       typeId: URN.parse(record.typeId),
-      // Binary Restoration: Ensure we pass a typed array back to the domain
       payloadBytes: new Uint8Array(record.payloadBytes),
       tags: (record.tags || []).map((t) => URN.parse(t)),
       status: record.status,
-      textContent: undefined, // Lazy decoded by UI
+      textContent: undefined,
     };
   }
 
@@ -24,7 +23,6 @@ export class MessageMapper {
     return {
       messageId: message.id,
       senderId: message.senderId.toString(),
-      // Logic: For storage, the Conversation URN is the effective 'recipient bucket'
       recipientId: message.conversationUrn.toString(),
       conversationUrn: message.conversationUrn.toString(),
       sentTimestamp: message.sentTimestamp,

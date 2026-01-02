@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import { TestBed } from '@angular/core/testing';
 import { KeyDatabase } from './key.database';
 import { Dexie } from 'dexie';
@@ -7,7 +8,7 @@ describe('KeyDatabase', () => {
 
   beforeEach(async () => {
     // Ensure a clean slate for IndexedDB mocks
-    Dexie.delete('messenger_keys');
+    await Dexie.delete('messenger_keys');
 
     TestBed.configureTestingModule({
       providers: [KeyDatabase],

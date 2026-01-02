@@ -4,7 +4,7 @@
   "sourceRoot": "libs/messenger/infrastructure/device-notifications/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:infrastructure"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

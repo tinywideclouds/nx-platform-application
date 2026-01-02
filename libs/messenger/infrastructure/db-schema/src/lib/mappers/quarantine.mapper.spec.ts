@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { QuarantineMapper } from './quarantine.mapper';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { QuarantineRecord } from '../records/quarantine.record';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
 
@@ -19,7 +22,7 @@ describe('QuarantineMapper', () => {
       const record: QuarantineRecord = {
         messageId: 'q-1',
         senderId: 'urn:contacts:user:stranger',
-        sentTimestamp: '2024-01-01T10:00:00Z' as any,
+        sentTimestamp: '2024-01-01T10:00:00Z' as ISODateTimeString,
         typeId: 'urn:message:type:text',
         payloadBytes: new Uint8Array([99]),
       };
@@ -37,16 +40,16 @@ describe('QuarantineMapper', () => {
   });
 
   describe('toRecord', () => {
-    it('should map TransportMessage -> QuarantineRecord using client ID if present', () => {
-      const transport: TransportMessage = {
-        senderId: URN.parse('urn:contacts:user:stranger'),
-        sentTimestamp: '2024-01-01T10:00:00Z' as any,
-        typeId: URN.parse('urn:message:type:text'),
-        payloadBytes: new Uint8Array([10]),
-        clientRecordId: 'uuid-123',
-      } as any;
+    const mockTransport: TransportMessage = {
+      senderId: URN.parse('urn:contacts:user:stranger'),
+      sentTimestamp: '2024-01-01T10:00:00Z' as ISODateTimeString,
+      typeId: URN.parse('urn:message:type:text'),
+      payloadBytes: new Uint8Array([10]),
+      clientRecordId: 'uuid-123',
+    };
 
-      const record = mapper.toRecord(transport);
+    it('should map TransportMessage -> QuarantineRecord using client ID if present', () => {
+      const record = mapper.toRecord(mockTransport);
 
       expect(record.messageId).toBe('uuid-123');
       expect(record.clientRecordId).toBe('uuid-123');
@@ -54,15 +57,12 @@ describe('QuarantineMapper', () => {
     });
 
     it('should generate ID if clientRecordId is missing', () => {
-      const transport: TransportMessage = {
-        senderId: URN.parse('urn:contacts:user:stranger'),
-        sentTimestamp: '2024-01-01T10:00:00Z' as any,
-        typeId: URN.parse('urn:message:type:text'),
-        payloadBytes: new Uint8Array([10]),
+      const transportWithoutId = {
+        ...mockTransport,
         clientRecordId: undefined,
-      } as any;
+      };
 
-      const record = mapper.toRecord(transport);
+      const record = mapper.toRecord(transportWithoutId);
 
       expect(record.messageId).toBeDefined();
       expect(record.messageId).not.toBe('');

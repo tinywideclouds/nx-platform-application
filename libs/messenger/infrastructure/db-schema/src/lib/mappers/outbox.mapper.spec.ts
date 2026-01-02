@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { OutboxMapper } from './outbox.mapper';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { OutboundTask } from '@nx-platform-application/messenger-domain-outbox';
 import { OutboxRecord } from '../records/outbox.record';
 
@@ -24,7 +27,7 @@ describe('OutboxMapper', () => {
         payload: new Uint8Array([1]),
         tags: [URN.parse('urn:messenger:tag:important')],
         status: 'queued',
-        createdAt: '2024-01-01' as any,
+        createdAt: '2024-01-01' as ISODateTimeString,
         recipients: [
           {
             urn: URN.parse('urn:contacts:user:alice'),
@@ -52,7 +55,7 @@ describe('OutboxMapper', () => {
         payload: new Uint8Array([1]),
         tags: ['urn:messenger:tag:important'],
         status: 'queued',
-        createdAt: '2024-01-01',
+        createdAt: '2024-01-01' as ISODateTimeString,
         recipients: [
           { urn: 'urn:contacts:user:alice', status: 'pending', attempts: 0 },
         ],

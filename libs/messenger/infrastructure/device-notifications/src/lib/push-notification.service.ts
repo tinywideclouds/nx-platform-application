@@ -1,22 +1,20 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { SwPush } from '@angular/service-worker';
 import { Logger } from '@nx-platform-application/console-logger';
-import { DeviceRegistrationService } from './device-registration.service';
-import { VAPID_PUBLIC_KEY } from './tokens';
 import { firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
-
-// Import the Facade from your platform-types library
 import { serializeWebPushSubscription } from '@nx-platform-application/platform-types';
 
+import { DeviceRegistrationService } from './device-registration.service';
+import { VAPID_PUBLIC_KEY } from './tokens';
 import { createWebPushSubscriptionFromBrowser } from './notification.adapter';
 
 @Injectable({ providedIn: 'root' })
 export class PushNotificationService {
-  private swPush = inject(SwPush);
-  private registrationService = inject(DeviceRegistrationService);
-  private logger = inject(Logger);
-  private vapidKey = inject(VAPID_PUBLIC_KEY);
+  private readonly swPush = inject(SwPush);
+  private readonly registrationService = inject(DeviceRegistrationService);
+  private readonly logger = inject(Logger);
+  private readonly vapidKey = inject(VAPID_PUBLIC_KEY);
 
   readonly permissionStatus = signal<NotificationPermission>('default');
   readonly isSubscribed = signal<boolean>(false);
@@ -38,20 +36,16 @@ export class PushNotificationService {
 
     this.logger.info('[PushService] Requesting subscription...');
     try {
-      // 1. Get Raw Subscription from Browser
       const rawSub = await this.swPush.requestSubscription({
         serverPublicKey: this.vapidKey,
       });
       this.logger.debug('[PushService] Raw Subscription:', rawSub);
-      // 2. Convert to Clean Domain Object (Validation + Key Extraction)
-      // This will throw if keys are missing (safe guard).
-      const domainSub = createWebPushSubscriptionFromBrowser(rawSub);
 
+      const domainSub = createWebPushSubscriptionFromBrowser(rawSub);
       this.logger.debug('[PushService] Domain Subscription:', domainSub);
-      // 3. Serialize to Proto-Compliant JSON
+
       const payload = serializeWebPushSubscription(domainSub);
 
-      // 4. Send to Backend
       await this.registrationService.registerWeb(payload);
 
       this.permissionStatus.set('granted');
@@ -69,13 +63,10 @@ export class PushNotificationService {
 
     if (sub) {
       try {
-        // 1. Unregister from Backend first
-        // We only need the endpoint to identify it in the DB
         await this.registrationService
           .unregisterWeb(sub.endpoint)
           .catch((err) => this.logger.warn('Backend unregister failed', err));
 
-        // 2. Unsubscribe locally in Browser
         await sub.unsubscribe();
 
         this.isSubscribed.set(false);
