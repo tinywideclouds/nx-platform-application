@@ -14,10 +14,10 @@ import { IdentityResolver } from '@nx-platform-application/messenger-domain-iden
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 
-import {
-  OutboxStorage,
-  OutboxWorkerService,
-} from '@nx-platform-application/messenger-domain-outbox';
+// ✅ ARCHITECTURE FIX: Import Contract from Infrastructure
+import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+
+import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 
 describe('OutboundService', () => {
   let service: OutboundService;

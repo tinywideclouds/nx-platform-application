@@ -1,10 +1,10 @@
 {
-  "name": "messenger-device-pairing",
+  "name": "messenger-domain-device-pairing",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/messenger/domain/device-pairing/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:domain"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

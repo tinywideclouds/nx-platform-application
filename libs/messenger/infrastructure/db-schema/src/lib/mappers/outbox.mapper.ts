@@ -6,7 +6,7 @@ import {
 import {
   OutboundTask,
   RecipientProgress,
-} from '@nx-platform-application/messenger-domain-outbox';
+} from '@nx-platform-application/messenger-types';
 import { OutboxRecord } from '../records/outbox.record';
 
 @Injectable({ providedIn: 'root' })

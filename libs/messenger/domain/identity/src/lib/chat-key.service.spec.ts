@@ -4,7 +4,6 @@ import { URN } from '@nx-platform-application/platform-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-// Services
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -88,10 +87,12 @@ describe('ChatKeyService', () => {
       expect(mockCryptoService.generateAndStoreKeys).toHaveBeenCalledWith(
         myUrn,
       );
-      expect(mockKeyService.storeKeys).toHaveBeenCalledWith(
-        expect.objectContaining({ entityId: 'me@test.com' }),
-        mockKeyResult.publicKeys,
-      );
+
+      // Robust check: Inspect the URN string rather than object structure
+      const [capturedUrn, capturedKeys] =
+        mockKeyService.storeKeys.mock.calls[0];
+      expect(capturedUrn.toString()).toBe('urn:lookup:email:me@test.com');
+      expect(capturedKeys).toBe(mockKeyResult.publicKeys);
     });
   });
 });

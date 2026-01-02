@@ -5,8 +5,12 @@ import {
 import { URN } from '@nx-platform-application/platform-types';
 
 /**
- * CONTRACT: The Domain needs a place to hold untrusted messages
- * before they are decrypted or accepted into history.
+ * CONTRACT: Quarantine Storage
+ * Defined in Infrastructure (Layer 1). Consumed by Domain (Layer 2).
+ *
+ * This abstract class acts as a "Service Contract" or "Capability" that
+ * the ChatStorageService implements. It segregates the Quarantine
+ * capability from the rest of the database logic.
  */
 export abstract class QuarantineStorage {
   /**

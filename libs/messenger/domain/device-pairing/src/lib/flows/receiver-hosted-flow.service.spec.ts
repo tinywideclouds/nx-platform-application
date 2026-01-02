@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ReceiverHostedFlowService } from './receiver-hosted-flow.service';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter'; // ✅ NEW
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN, Priority } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
@@ -30,8 +30,6 @@ describe('ReceiverHostedFlowService', () => {
     encryptSyncMessage: vi.fn(),
   };
   const mockSend = { sendMessage: vi.fn() };
-
-  // ✅ NEW: Mock Resolver
   const mockIdentityResolver = {
     resolveToHandle: vi.fn(),
   };
@@ -43,7 +41,7 @@ describe('ReceiverHostedFlowService', () => {
         ReceiverHostedFlowService,
         { provide: MessengerCryptoService, useValue: mockCrypto },
         { provide: ChatSendService, useValue: mockSend },
-        { provide: IdentityResolver, useValue: mockIdentityResolver }, // ✅ Provide Mock
+        { provide: IdentityResolver, useValue: mockIdentityResolver },
         { provide: Logger, useValue: { info: vi.fn(), warn: vi.fn() } },
       ],
     });
@@ -56,32 +54,26 @@ describe('ReceiverHostedFlowService', () => {
     const myHandleUrn = URN.parse('urn:lookup:email:me@test.com');
 
     it('processScannedQr should resolve identity and send to HANDLE', async () => {
-      // 1. Setup
       mockCrypto.parseQrCode.mockResolvedValue({
         mode: 'RECEIVER_HOSTED',
         key: 'target-pub-key',
       });
 
-      // Resolver returns handle
       mockIdentityResolver.resolveToHandle.mockResolvedValue(myHandleUrn);
 
       const mockEnvelope = { isEphemeral: false, recipientId: null };
       mockCrypto.encryptSyncMessage.mockResolvedValue(mockEnvelope);
       mockSend.sendMessage.mockReturnValue(of(void 0));
 
-      // 2. Act
       await service.processScannedQr('qr', myKeys, myAuthUrn);
 
-      // 3. Assert
       expect(mockIdentityResolver.resolveToHandle).toHaveBeenCalledWith(
         myAuthUrn,
       );
 
-      // ✅ VERIFY FIX: Check Envelope Destination
       expect(mockEnvelope.recipientId).toBe(myHandleUrn);
       expect(mockEnvelope.recipientId).not.toBe(myAuthUrn);
 
-      // Verify other flags
       expect(mockEnvelope.isEphemeral).toBe(true);
       expect((mockEnvelope as any).priority).toBe(Priority.High);
       expect(mockSend.sendMessage).toHaveBeenCalledWith(mockEnvelope);

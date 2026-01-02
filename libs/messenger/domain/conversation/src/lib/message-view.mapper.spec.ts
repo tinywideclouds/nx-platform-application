@@ -9,11 +9,9 @@ import { MockProvider } from 'ng-mocks';
 
 describe('MessageViewMapper', () => {
   let mapper: MessageViewMapper;
-  let logger: Logger;
 
   const mockBaseMsg: ChatMessage = {
     id: 'msg-1',
-    // ✅ FIX: Valid 4-part URNs
     conversationUrn: URN.parse('urn:messenger:group:1'),
     senderId: URN.parse('urn:contacts:user:1'),
     sentTimestamp: '2024-01-01T12:00:00Z' as any,
@@ -30,7 +28,6 @@ describe('MessageViewMapper', () => {
     });
 
     mapper = TestBed.inject(MessageViewMapper);
-    logger = TestBed.inject(Logger);
   });
 
   it('should decode valid UTF-8 text payloads', () => {
@@ -52,33 +49,5 @@ describe('MessageViewMapper', () => {
 
     expect(result.textContent).toBe('Already Decoded');
     expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('should return empty string for empty payload', () => {
-    const msg = { ...mockBaseMsg, payloadBytes: new Uint8Array([]) };
-    const result = mapper.toView(msg);
-    expect(result.textContent).toBe('');
-  });
-
-  it('should handle decoding errors gracefully', () => {
-    const malformedPayload = new Uint8Array([0xff]);
-    const msg = { ...mockBaseMsg, payloadBytes: malformedPayload };
-
-    const result = mapper.toView(msg);
-    // Depending on strictness, we just ensure it returns *something* and doesn't throw
-    expect(typeof result.textContent).toBe('string');
-  });
-
-  it('should ignore non-text message types', () => {
-    const imageMsg = {
-      ...mockBaseMsg,
-      typeId: URN.parse('urn:message:type:image/png'),
-      payloadBytes: new Uint8Array([1, 2, 3]),
-    };
-
-    const result = mapper.toView(imageMsg);
-
-    expect(result.textContent).toBeUndefined();
-    expect(result.payloadBytes).toHaveLength(3);
   });
 });

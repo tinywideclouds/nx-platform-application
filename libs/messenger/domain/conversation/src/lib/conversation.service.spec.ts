@@ -7,9 +7,14 @@ import {
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-import { HistoryReader } from './ports/history.reader';
-import { ConversationStorage } from './ports/conversation.storage';
-import { RemoteHistoryLoader } from './ports/remote-history.loader';
+// ✅ IMPORT: Infrastructure Contracts
+import {
+  HistoryReader,
+  ConversationStorage,
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
+
+// ✅ IMPORT: Domain Service
+import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
@@ -27,7 +32,7 @@ describe('ConversationService', () => {
   let service: ConversationService;
   let historyReader: HistoryReader;
   let storage: ConversationStorage;
-  let remoteLoader: RemoteHistoryLoader;
+  let chatSync: ChatSyncService;
   let outbound: OutboundService;
 
   const myUrn = URN.parse('urn:contacts:user:me');
@@ -81,7 +86,8 @@ describe('ConversationService', () => {
           deleteMessage: vi.fn().mockResolvedValue(undefined),
           clearMessageHistory: vi.fn().mockResolvedValue(undefined),
         }),
-        MockProvider(RemoteHistoryLoader, {
+        // ✅ Mock ChatSyncService directly
+        MockProvider(ChatSyncService, {
           isCloudEnabled: vi.fn().mockReturnValue(true),
           restoreVaultForDate: vi.fn().mockResolvedValue(0),
         }),
@@ -113,7 +119,7 @@ describe('ConversationService', () => {
     service = TestBed.inject(ConversationService);
     historyReader = TestBed.inject(HistoryReader);
     storage = TestBed.inject(ConversationStorage);
-    remoteLoader = TestBed.inject(RemoteHistoryLoader);
+    chatSync = TestBed.inject(ChatSyncService);
     outbound = TestBed.inject(OutboundService);
   });
 
@@ -136,7 +142,7 @@ describe('ConversationService', () => {
 
       await service.loadConversation(partnerUrn, myUrn);
 
-      expect(remoteLoader.restoreVaultForDate).toHaveBeenCalledWith(
+      expect(chatSync.restoreVaultForDate).toHaveBeenCalledWith(
         '2025-01-01T10:00:00Z',
         partnerUrn,
       );
@@ -155,16 +161,16 @@ describe('ConversationService', () => {
         unreadCount: 0,
         lastActivityTimestamp: undefined,
       } as any);
-      vi.mocked(remoteLoader.restoreVaultForDate).mockResolvedValue(10);
+      vi.mocked(chatSync.restoreVaultForDate).mockResolvedValue(10);
 
       await service.loadConversation(partnerUrn, myUrn);
 
-      expect(remoteLoader.restoreVaultForDate).toHaveBeenCalled();
+      expect(chatSync.restoreVaultForDate).toHaveBeenCalled();
       expect(historyReader.getMessages).toHaveBeenCalledTimes(2);
     });
 
     it('OPTIMISTIC: should skip Cloud logic if cloud is disabled', async () => {
-      vi.mocked(remoteLoader.isCloudEnabled).mockReturnValue(false);
+      vi.mocked(chatSync.isCloudEnabled).mockReturnValue(false);
       vi.mocked(historyReader.getMessages).mockResolvedValue({
         messages: [],
         genesisReached: false,
@@ -172,7 +178,7 @@ describe('ConversationService', () => {
 
       await service.loadConversation(partnerUrn, myUrn);
 
-      expect(remoteLoader.restoreVaultForDate).not.toHaveBeenCalled();
+      expect(chatSync.restoreVaultForDate).not.toHaveBeenCalled();
     });
   });
 

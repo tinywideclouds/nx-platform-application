@@ -1,7 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { URN } from '@nx-platform-application/platform-types';
-import { TransportMessage } from '@nx-platform-application/messenger-types';
+import {
+  TransportMessage,
+  OutboundTask,
+  RecipientProgress,
+} from '@nx-platform-application/messenger-types';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
   MessengerCryptoService,
@@ -11,17 +15,19 @@ import { ChatSendService } from '@nx-platform-application/messenger-infrastructu
 import { Logger } from '@nx-platform-application/console-logger';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 
-import { OutboxStorage } from './outbox.storage';
-import { OutboundTask, RecipientProgress } from './models/outbound-task.model';
+// ✅ Import Contract from Infrastructure
+import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
 @Injectable({ providedIn: 'root' })
 export class OutboxWorkerService {
+  // ✅ Inject the Contract Token
   private readonly repo = inject(OutboxStorage);
+
   private readonly keyCache = inject(KeyCacheService);
   private readonly crypto = inject(MessengerCryptoService);
   private readonly sendService = inject(ChatSendService);
   private readonly logger = inject(Logger);
-  private readonly metadataService = inject(MessageMetadataService); // ✅ Inject central logic
+  private readonly metadataService = inject(MessageMetadataService);
 
   private isProcessing = false;
 
@@ -81,7 +87,6 @@ export class OutboxWorkerService {
   ): Promise<void> {
     const recipientKeys = await this.keyCache.getPublicKey(recipient.urn);
 
-    // ✅ FIX: Use centralized wrapping logic for ConversationID and Tags
     const innerTypedPayload = this.metadataService.wrap(
       task.payload,
       task.conversationUrn,

@@ -14,7 +14,8 @@ describe('HotQueueSpy', () => {
     decryptSyncMessage: vi.fn(),
     decryptSyncOffer: vi.fn(),
   };
-  const mockLogger = { debug: vi.fn(), info: vi.fn() };
+  // ✅ FIX: Added 'warn' to satisfy the service's error handling
+  const mockLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
 
   const myUrn = URN.parse('urn:contacts:user:me');
   const mockSessionKey = { algorithm: { name: 'RSA-OAEP' } } as any;
@@ -45,7 +46,6 @@ describe('HotQueueSpy', () => {
     ];
     mockDataService.getMessageBatch.mockReturnValue(of(batch));
 
-    // Simulate all failing
     mockCryptoService.decryptSyncMessage.mockRejectedValue(
       new Error('Bad Key'),
     );
@@ -53,8 +53,9 @@ describe('HotQueueSpy', () => {
     const result = await service.checkQueueForInvite(mockSessionKey, myUrn);
 
     expect(result).toBeNull();
-    // Should have tried both
     expect(mockCryptoService.decryptSyncMessage).toHaveBeenCalledTimes(2);
+    // Verify the warning was logged
+    expect(mockLogger.warn).toHaveBeenCalledTimes(2);
   });
 
   it('should return payload when Valid Invite is found', async () => {

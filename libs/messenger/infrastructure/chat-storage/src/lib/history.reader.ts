@@ -1,7 +1,4 @@
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   ConversationSummary,
@@ -19,8 +16,8 @@ export interface HistoryResult {
 }
 
 /**
- * PORT: Defines how the domain accesses message history.
- * Implementations (Adapters) must handle Storage I/O and Cloud Hydration.
+ * CONTRACT: Defines how the domain accesses message history.
+ * Defined in Infrastructure. Consumed by Domain.
  */
 export abstract class HistoryReader {
   abstract getMessages(query: HistoryQuery): Promise<HistoryResult>;

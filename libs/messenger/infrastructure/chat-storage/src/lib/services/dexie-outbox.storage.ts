@@ -1,15 +1,15 @@
-//libs/messenger/infrastructure/chat-storage/src/lib/services/dexie-outbox.storage.ts
 import { Injectable, inject } from '@angular/core';
 import {
-  OutboxStorage,
   OutboundTask,
   DeliveryStatus,
   RecipientProgress,
-} from '@nx-platform-application/messenger-domain-outbox';
+} from '@nx-platform-application/messenger-types';
 import {
   MessengerDatabase,
   OutboxMapper,
 } from '@nx-platform-application/messenger-infrastructure-db-schema';
+
+import { OutboxStorage } from '../outbox.storage';
 
 @Injectable()
 export class DexieOutboxStorage implements OutboxStorage {
@@ -41,6 +41,8 @@ export class DexieOutboxStorage implements OutboxStorage {
     taskId: string,
     recipients: RecipientProgress[],
   ): Promise<void> {
+    // We must manually serialize the recipients array to update it partially
+    // Dexie doesn't deeply merge arrays automatically in this context
     const serializedRecipients = recipients.map((r) => ({
       ...r,
       urn: r.urn.toString(),

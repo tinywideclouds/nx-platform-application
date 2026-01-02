@@ -1,55 +1,61 @@
-# 📦 libs/messenger/message-content
+# 📦 @nx-platform-application/messenger-domain-message-content
 
-This library provides the schema, parsers, and UI components for **Rich Message Content**. It enables the application to move beyond simple text messages to support Contact Sharing, Images, and other structured data.
+This library acts as the **Parser & Schema Engine** for the Messenger application. It defines the "Language" of the chat system, specifying how raw bytes are interpreted into rich content or system signals.
 
 ## 📐 The "Content Envelope" Pattern
 
-To support rapid iteration, we use a **Hybrid Serialization Strategy**:
+To support rapid iteration and lean signaling, we use a **Hybrid Serialization Strategy**:
 
-1.  **Outer Envelope (Protobuf):** Strictly typed routing data (`senderId`, `timestamp`, `typeId`).
-2.  **Inner Payload (`payloadBytes`):** Flexible content determined by `typeId`.
+1.  **Outer Envelope (Protobuf/Infrastructure):** Strictly typed routing data (`senderId`, `timestamp`, `typeId`) handled by the Infrastructure layer.
+2.  **Inner Payload (`payloadBytes`):** Flexible content determined by `typeId`, handled by this library.
 
 ### Supported Types
 
-| Type ID                          | Payload Format | Description                                     |
-| :------------------------------- | :------------- | :---------------------------------------------- |
-| `urn:message:type:text`          | **Raw UTF-8**  | Standard text message. No JSON overhead.        |
-| `urn:message:type:contact-share` | **JSON**       | A structured Contact Card (URN, Alias, Avatar). |
+| Type ID                          | Payload Format | Description                                                              |
+| :------------------------------- | :------------- | :----------------------------------------------------------------------- |
+| `urn:message:type:text`          | **Raw UTF-8**  | Standard text message. Wraps in JSON envelope if metadata (tags) exists. |
+| `urn:message:type:contact-share` | **JSON**       | A structured Contact Card (URN, Alias, Avatar).                          |
+| `urn:message:type:read-receipt`  | **JSON**       | A "Signal" indicating messages were read.                                |
+| `urn:message:type:typing`        | **Empty**      | A lean "Signal" indicating activity.                                     |
 
 ---
 
-## 🛠 Components & Services
+## 🛠 Services
 
-### `MessageContentParser` (Service)
+### `MessageContentParser`
 
-A robust parser that takes `typeId` + `bytes` and returns a discriminated union `MessageContent`.
+The core service that converts raw bytes into a strictly typed `ParsedMessage` union.
 
-- Handles Text decoding.
-- Handles JSON parsing with error safety.
-- Returns `type: 'unknown'` for unsupported feature flags (forward compatibility).
+**Capabilities:**
 
-### `MessageRendererComponent` (UI)
+- **Content Unwrapping:** Detects and unwraps metadata envelopes (`{ c: conversationId, t: tags, d: data }`) used for filtering and threading.
+- **Signal Routing:** Identifies "Signals" (like Read Receipts) that don't belong in the chat history but trigger system actions.
+- **Error Safety:** Returns `kind: 'unknown'` for unsupported types or malformed payloads, preventing UI crashes.
 
-The "Smart Bubble" that replaces simple text tags.
+### `MessageMetadataService`
 
-- **Input:** `ChatMessage`
-- **Logic:** Parses content on-the-fly.
-- **View:** Uses Angular `@switch` to render the correct child component (`<p>` for text, `<contact-share-card>` for contacts).
+A utility for wrapping and unwrapping the lightweight JSON metadata envelope.
 
-### `ContactShareCardComponent` (UI)
-
-A reusable visual card for displaying a shared identity.
-
-- **Features:** Avatar display, Name truncation, "View Contact" action.
-
----
+- **Wrap:** `(content, convoId, tags) -> Uint8Array`
+- **Unwrap:** `Uint8Array -> { content, convoId, tags }`
 
 ## 💻 Usage
 
-```html
-@for (msg of messages(); track msg.id) {
-<div class="message-bubble">
-  <messenger-message-renderer [message]="msg" />
-</div>
+```typescript
+// In your Ingestion Service (Domain Layer)
+const parsed = this.parser.parse(message.typeId, message.payloadBytes);
+
+switch (parsed.kind) {
+  case 'content':
+    // Save to DB, Update UI
+    this.storage.save(parsed.payload);
+    break;
+  case 'signal':
+    // Dispatch Action
+    this.dispatcher.dispatch(parsed.payload);
+    break;
+  case 'unknown':
+    this.logger.warn('Unknown message type received');
+    break;
 }
 ```

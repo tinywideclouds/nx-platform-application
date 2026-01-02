@@ -1,7 +1,7 @@
 import {
   DeliveryStatus,
   RecipientProgress,
-} from '@nx-platform-application/messenger-domain-outbox';
+} from '@nx-platform-application/messenger-types';
 
 /**
  * Represents the flat DB record for an outbox task.

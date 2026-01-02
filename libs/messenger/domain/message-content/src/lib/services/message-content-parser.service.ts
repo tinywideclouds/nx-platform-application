@@ -1,5 +1,3 @@
-// libs/messenger/message-content/src/lib/services/message-content-parser.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import {
@@ -44,7 +42,10 @@ export class MessageContentParser {
         }
 
         // Rich Content (Contact Share)
-        const data = JSON.parse(this.decoder.decode(content));
+        const data = JSON.parse(
+          this.decoder.decode(content),
+        ) as ContactShareData;
+
         return {
           kind: 'content',
           conversationId,

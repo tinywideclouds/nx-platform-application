@@ -34,14 +34,7 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-storag
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
 import { MESSENGER_MOCK_USERS } from './mocks/users';
 
-// --- Domain Ports ---
-import {
-  HistoryReader,
-  ConversationStorage,
-  RemoteHistoryLoader,
-} from '@nx-platform-application/messenger-domain-conversation';
-import { OutboxStorage } from '@nx-platform-application/messenger-domain-outbox';
-import { QuarantineStorage } from '@nx-platform-application/messenger-domain-quarantine';
+// --- Domain Services (Directly Provided) ---
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 
 // --- Service Tokens ---
@@ -49,7 +42,7 @@ import { ROUTING_SERVICE_URL } from '@nx-platform-application/messenger-infrastr
 import { WSS_URL_TOKEN } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-key-access';
 
-// ✅ NEW: Notification Tokens
+// --- Notification Tokens ---
 import {
   NOTIFICATION_SERVICE_URL,
   VAPID_PUBLIC_KEY,
@@ -69,10 +62,17 @@ import {
   GoogleDriveService,
 } from '@nx-platform-application/platform-cloud-access';
 import { provideMessengerIdentity } from '@nx-platform-application/messenger-domain-identity-adapter';
+
+// --- Infrastructure: Implementation & Ports ---
 import {
   ChatStorageService,
   DexieOutboxStorage,
   DexieQuarantineStorage,
+  // ✅ Ports are now imported from Infrastructure (The Contract Definition)
+  HistoryReader,
+  ConversationStorage,
+  OutboxStorage,
+  QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
 // --- Conditional Mock Providers ---
@@ -150,22 +150,19 @@ export const appConfig: ApplicationConfig = {
     provideServiceWorker('ngsw-worker.js', {
       enabled: environment.enableServiceWorker,
       registrationStrategy: 'registerWhenStable:30000',
-      // enabled: true, // (Ensure this is still true from our previous step)
-      // // 🔴 WAS: 'registerWhenStable:10000'
-      // // 🟢 CHANGE TO:
-      // registrationStrategy: 'registerImmediately',
     }),
 
     ...authProviders,
     provideMessengerIdentity(),
+
     // ✅ Wiring Domain Ports to Infrastructure Implementation
+    // Note: The Ports (Abstract Classes) and Implementations (Services)
+    // both live in 'messenger-infrastructure-chat-storage' now.
     { provide: HistoryReader, useExisting: ChatStorageService },
     { provide: ConversationStorage, useExisting: ChatStorageService },
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
     { provide: QuarantineStorage, useClass: DexieQuarantineStorage },
 
-    // ✅ Wiring Domain Ports to Domain Implementation (Cross-Lib)
-    { provide: RemoteHistoryLoader, useExisting: ChatSyncService },
     chatProvider,
     contactsProvider,
     ...tokenProviders,

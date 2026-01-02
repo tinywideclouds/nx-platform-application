@@ -83,7 +83,6 @@ describe('ChatService', () => {
   };
 
   const mockAuth = {
-    // ✅ FIX: Use BehaviorSubject so init() sees the value immediately upon subscription
     sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
     currentUser: signal<User | null>(null),
     getJwtToken: vi.fn(() => 'token'),
@@ -160,7 +159,6 @@ describe('ChatService', () => {
     service = TestBed.inject(ChatService);
 
     mockAuth.currentUser.set(mockUser);
-    // ✅ FIX: Emit initial state to BehaviorSubject
     mockAuth.sessionLoaded$.next({
       authenticated: true,
       user: mockUser,
@@ -209,7 +207,6 @@ describe('ChatService', () => {
       (service.onboardingState as any).set('READY');
       (service as any).myKeys.set(mockPrivateKeys);
 
-      // ✅ FIX: Provide a complete message object with senderId
       const validMessage = {
         id: 'm1',
         senderId: URN.parse('urn:contacts:user:1'),

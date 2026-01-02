@@ -8,7 +8,7 @@ import {
 import {
   ChatMessage,
   TransportMessage,
-  MessageDeliveryStatus, // ✅ Use shared union type
+  MessageDeliveryStatus,
 } from '@nx-platform-application/messenger-types';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
@@ -175,7 +175,6 @@ export class IngestionService {
               `[Ingestion] Applying Read Receipt for ${ids.length} msgs`,
             );
 
-            // ✅ Use the formal union type to guard the status
             const newStatus: MessageDeliveryStatus = 'read';
             await this.storageService.updateMessageStatus(ids, newStatus);
 

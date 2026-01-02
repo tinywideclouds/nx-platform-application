@@ -1,10 +1,10 @@
 {
-  "name": "chat-session",
+  "name": "messenger-state-chat-session",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/messenger/state/chat-session/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:state"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

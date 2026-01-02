@@ -10,7 +10,7 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { OutboundTask } from '@nx-platform-application/messenger-domain-outbox';
+import { OutboundTask } from '@nx-platform-application/messenger-types';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Dexie } from 'dexie';
 import 'fake-indexeddb/auto';

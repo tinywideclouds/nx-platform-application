@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { CloudSyncService } from './cloud-sync.service';
 import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
-// 1. UPDATE IMPORT
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import {
   CLOUD_PROVIDERS,
@@ -39,7 +38,6 @@ describe('CloudSyncService (Orchestrator)', () => {
           restoreFromCloud: vi.fn().mockResolvedValue(undefined),
           backupToCloud: vi.fn().mockResolvedValue(undefined),
         }),
-        // 2. MOCK THE NEW DOMAIN SERVICE
         MockProvider(ChatSyncService, {
           syncMessages: vi.fn().mockResolvedValue(true),
         }),
@@ -56,8 +54,6 @@ describe('CloudSyncService (Orchestrator)', () => {
     vi.restoreAllMocks();
   });
 
-  // ... (Connect tests remain unchanged) ...
-
   describe('syncNow', () => {
     it('should Authenticate ONCE and run BOTH syncs', async () => {
       vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(false);
@@ -73,7 +69,6 @@ describe('CloudSyncService (Orchestrator)', () => {
       expect(mockProvider.requestAccess).toHaveBeenCalledTimes(1);
 
       // Assert Messenger Flow
-      // 3. VERIFY NEW CALL
       expect(chatSync.syncMessages).toHaveBeenCalledWith('google');
 
       expect(result.success).toBe(true);

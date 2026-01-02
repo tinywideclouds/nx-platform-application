@@ -4,7 +4,7 @@
   "sourceRoot": "libs/messenger/domain/quarantine/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:domain"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

@@ -1,12 +1,9 @@
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { ConversationSyncState } from '@nx-platform-application/messenger-types';
 
 /**
- * PORT: Write/Update operations for conversations.
- * Implemented by ChatStorageService (Infrastructure).
+ * CONTRACT: Write/Update operations for conversations.
+ * Defined in Infrastructure. Consumed by Domain.
  */
 export abstract class ConversationStorage {
   abstract markConversationAsRead(urn: URN): Promise<void>;

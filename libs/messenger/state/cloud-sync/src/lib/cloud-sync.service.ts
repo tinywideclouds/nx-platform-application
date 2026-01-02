@@ -1,9 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
-// 1. REMOVE OLD IMPORT
-// import { ChatCloudService } from '@nx-platform-application/chat-cloud-access';
-// 2. ADD NEW DOMAIN IMPORT
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { CLOUD_PROVIDERS } from '@nx-platform-application/platform-cloud-access';
 import { SyncOptions, SyncResult } from './models/sync-options.interface';
@@ -16,10 +13,7 @@ const GOOGLE_SCOPES = {
 export class CloudSyncService {
   private logger = inject(Logger);
   private contactsCloud = inject(ContactsCloudService);
-
-  // 3. INJECT THE DOMAIN FACADE
   private chatSync = inject(ChatSyncService);
-
   private providers = inject(CLOUD_PROVIDERS, { optional: true }) || [];
 
   public readonly isSyncing = signal<boolean>(false);
@@ -99,11 +93,9 @@ export class CloudSyncService {
         }
       }
 
-      // --- MESSENGER PHASE (Refactored) ---
+      // --- MESSENGER PHASE ---
       if (options.syncMessages) {
         try {
-          // 4. DELEGATE TO DOMAIN
-          // The Orchestrator no longer knows about 'indexes' or 'vaults'.
           const success = await this.chatSync.syncMessages(options.providerId);
 
           if (success) {

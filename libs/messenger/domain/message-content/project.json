@@ -1,10 +1,10 @@
 {
-  "name": "message-content",
+  "name": "messenger-domain-message-content",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/messenger/domain/message-content/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:domain"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

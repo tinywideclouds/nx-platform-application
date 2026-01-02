@@ -1,26 +1,26 @@
 {
-  "name": "messenger-cloud-sync",
+  "name": "messenger-state-cloud-sync",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/messenger/state/cloud-sync/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:state"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/chat-storage",
-        "configFile": "libs/messenger/chat-storage/vite.config.mts"
+        "outputPath": "dist/libs/messenger/state/cloud-sync",
+        "configFile": "libs/messenger/state/cloud-sync/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/chat-storage",
-        "configFile": "libs/messenger/chat-storage/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/state/cloud-sync",
+        "configFile": "libs/messenger/state/cloud-sync/vitest.config.mts"
       }
     },
     "lint": {

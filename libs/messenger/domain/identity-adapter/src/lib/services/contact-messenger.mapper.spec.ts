@@ -16,8 +16,10 @@ describe('ContactMessengerMapper (Adapter)', () => {
     findByEmail: vi.fn(),
     findContactByAuthUrn: vi.fn(),
   };
+
+  // Mocking the Signal-based Auth Service
   const mockAuth = {
-    currentUser: signal(null),
+    currentUser: signal<{ id: URN; email?: string } | null>(null),
   };
 
   const contactUrn = URN.parse('urn:contacts:user:bob');
@@ -55,7 +57,9 @@ describe('ContactMessengerMapper (Adapter)', () => {
 
     it('should use Self Email if resolving own URN', async () => {
       const meUrn = URN.parse('urn:contacts:user:me');
-      mockAuth.currentUser.set({ id: meUrn, email: 'me@test.com' } as any);
+
+      // Update signal with a typed object
+      mockAuth.currentUser.set({ id: meUrn, email: 'me@test.com' });
 
       const result = await service.resolveToHandle(meUrn);
       expect(result.toString()).toBe('urn:lookup:email:me@test.com');

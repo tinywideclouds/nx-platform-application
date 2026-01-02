@@ -15,9 +15,15 @@ import {
   ConversationSummary,
 } from '@nx-platform-application/messenger-types';
 
-import { HistoryReader, HistoryQuery } from './ports/history.reader';
-import { ConversationStorage } from './ports/conversation.storage';
-import { RemoteHistoryLoader } from './ports/remote-history.loader';
+// ✅ ARCHITECTURE FIX: Import Contracts from Infrastructure
+import {
+  HistoryReader,
+  HistoryQuery,
+  ConversationStorage,
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
+
+// ✅ ARCHITECTURE FIX: Direct Domain Dependency (Replaces RemoteHistoryLoader)
+import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
@@ -42,7 +48,7 @@ export class ConversationService {
 
   private historyReader = inject(HistoryReader);
   private storage = inject(ConversationStorage);
-  private remoteLoader = inject(RemoteHistoryLoader);
+  private chatSync = inject(ChatSyncService); // Renamed from remoteLoader
 
   private outbound = inject(OutboundService);
   private keyService = inject(ChatKeyService);
@@ -189,7 +195,7 @@ export class ConversationService {
 
   private async loadSmartHistory(query: HistoryQuery) {
     const { conversationUrn, limit, beforeTimestamp } = query;
-    const isCloudEnabled = this.remoteLoader.isCloudEnabled();
+    const isCloudEnabled = this.chatSync.isCloudEnabled();
 
     let result = await this.historyReader.getMessages(query);
 
@@ -204,10 +210,7 @@ export class ConversationService {
         this.logger.info(
           `[Conversation] Local stale. Fetching vault for ${knownLatest}`,
         );
-        await this.remoteLoader.restoreVaultForDate(
-          knownLatest,
-          conversationUrn,
-        );
+        await this.chatSync.restoreVaultForDate(knownLatest, conversationUrn);
         result = await this.historyReader.getMessages(query);
       }
     }
@@ -228,7 +231,7 @@ export class ConversationService {
       const MAX_LOOPS = 3;
 
       for (let i = 0; i < MAX_LOOPS; i++) {
-        const count = await this.remoteLoader.restoreVaultForDate(
+        const count = await this.chatSync.restoreVaultForDate(
           cursor,
           conversationUrn,
         );

@@ -1,6 +1,4 @@
-//libs/messenger/infrastructure/chat-storage/src/lib/services/dexie-quarantine.storage.ts
 import { Injectable, inject } from '@angular/core';
-import { QuarantineStorage } from '@nx-platform-application/messenger-domain-quarantine';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
@@ -11,7 +9,9 @@ import {
   QuarantineMapper,
 } from '@nx-platform-application/messenger-infrastructure-db-schema';
 
-@Injectable()
+import { QuarantineStorage } from '../quarantine.storage';
+
+@Injectable({ providedIn: 'root' })
 export class DexieQuarantineStorage implements QuarantineStorage {
   private readonly db = inject(MessengerDatabase);
   private readonly mapper = inject(QuarantineMapper);

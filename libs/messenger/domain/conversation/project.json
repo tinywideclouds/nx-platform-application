@@ -4,7 +4,7 @@
   "sourceRoot": "libs/messenger/domain/conversation/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:domain"],
   "targets": {
     "lint": {
       "executor": "@nx/eslint:lint"

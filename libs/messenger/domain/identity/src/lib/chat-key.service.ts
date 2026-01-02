@@ -2,14 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 
-// Services
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
-// TODO: Phase 2.1 - We will move this class into this library next.
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 @Injectable({ providedIn: 'root' })

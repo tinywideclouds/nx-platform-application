@@ -25,12 +25,9 @@ import {
 
 import { ChatDeletionStrategy } from '../strategies/chat-deletion.strategy';
 
-import {
-  HistoryReader,
-  HistoryQuery,
-  HistoryResult,
-  ConversationStorage,
-} from '@nx-platform-application/messenger-domain-conversation';
+import { HistoryReader, HistoryQuery, HistoryResult } from '../history.reader';
+
+import { ConversationStorage } from '../conversation.storage';
 
 const BULK_SAVE_CHUNK_SIZE = 200;
 

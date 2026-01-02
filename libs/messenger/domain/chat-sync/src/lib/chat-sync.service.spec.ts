@@ -1,11 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatSyncService } from './chat-sync.service';
 import { ChatVaultEngine } from './internal/chat-vault-engine.service';
-import { HistoryReader } from '@nx-platform-application/messenger-domain-conversation';
+import { HistoryReader } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { URN } from '@nx-platform-application/platform-types';
 import { signal } from '@angular/core';
 
 describe('ChatSyncService (Domain Facade)', () => {

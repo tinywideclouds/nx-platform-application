@@ -1,29 +1,25 @@
-import { Injectable, inject, signal } from '@angular/core'; // ✅ Added signal
+import { Injectable, inject, signal } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import { HistoryReader } from '@nx-platform-application/messenger-domain-conversation';
+import { HistoryReader } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { ChatVaultEngine } from './internal/chat-vault-engine.service';
 
-// ✅ DECOUPLED: Defined locally to avoid circular dependency on Orchestrator
 export interface ChatSyncRequest {
   providerId: string;
   syncMessages: boolean;
-  // Domain doesn't care about 'syncContacts', that's for the Orchestrator
 }
 
 @Injectable({ providedIn: 'root' })
 export class ChatSyncService {
-  private logger = inject(Logger);
-  private engine = inject(ChatVaultEngine);
-  private historyReader = inject(HistoryReader);
+  private readonly logger = inject(Logger);
+  private readonly engine = inject(ChatVaultEngine);
+  private readonly historyReader = inject(HistoryReader);
 
-  // ✅ NEW: Intrinsic State (Engine Running)
   public readonly isSyncing = signal<boolean>(false);
 
   /**
    * COMPATIBILITY BRIDGE
-   * Allows ChatService to call this without knowing internal details.
-   * By accepting a compatible shape, we break the hard dependency on the Orchestrator lib.
+   * Allows consumers to trigger sync without knowing internal details.
    */
   async performSync(options: ChatSyncRequest): Promise<boolean> {
     if (options.syncMessages) {
@@ -36,7 +32,6 @@ export class ChatSyncService {
    * Main Sync Workflow (Backup + Index Restore)
    */
   async syncMessages(providerId: string): Promise<boolean> {
-    // ✅ State Toggle: Start
     this.isSyncing.set(true);
     this.logger.info('[ChatSyncService] Starting sync sequence...', providerId);
 
@@ -59,7 +54,6 @@ export class ChatSyncService {
       this.logger.error('[ChatSyncService] Sync failed', e);
       return false;
     } finally {
-      // ✅ State Toggle: End (Always reset)
       this.isSyncing.set(false);
     }
   }

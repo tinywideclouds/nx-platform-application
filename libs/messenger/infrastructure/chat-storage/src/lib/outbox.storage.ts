@@ -2,11 +2,12 @@ import {
   OutboundTask,
   DeliveryStatus,
   RecipientProgress,
-} from './models/outbound-task.model';
+} from '@nx-platform-application/messenger-types';
 
 /**
- * CONTRACT: The Domain needs storage, but Infrastructure decides HOW.
- * This decouples the Domain from Dexie/IndexedDB.
+ * CONTRACT: Outbox Storage
+ * Defined in Infrastructure (Layer 1).
+ * Consumed by Domain (Layer 2) to decouple logic from Dexie.
  */
 export abstract class OutboxStorage {
   abstract addTask(task: OutboundTask): Promise<void>;

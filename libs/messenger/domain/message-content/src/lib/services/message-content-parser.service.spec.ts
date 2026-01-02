@@ -7,7 +7,6 @@ import {
   MESSAGE_TYPE_CONTACT_SHARE,
   MESSAGE_TYPE_READ_RECEIPT,
   MESSAGE_TYPE_TYPING,
-  ContactShareData,
   ReadReceiptData,
 } from '../models/content-types';
 import { describe, it, expect, beforeEach, vi } from 'vitest';

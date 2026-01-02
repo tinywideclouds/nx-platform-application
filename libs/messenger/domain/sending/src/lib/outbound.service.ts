@@ -3,7 +3,6 @@ import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 
-// Services
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   MessengerCryptoService,
@@ -18,14 +17,11 @@ import {
   MESSAGE_TYPE_TEXT,
 } from '@nx-platform-application/messenger-domain-message-content';
 
-// Internal Dependencies
-import {
-  OutboxStorage,
-  OutboxWorkerService,
-  OutboundTask,
-} from '@nx-platform-application/messenger-domain-outbox';
+// ✅ ARCHITECTURE FIX: Import Contract from Infrastructure
+import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// Types
+import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
+
 import {
   URN,
   ISODateTimeString,
@@ -34,6 +30,7 @@ import {
   TransportMessage,
   MessageDeliveryStatus,
   ChatMessage,
+  OutboundTask,
 } from '@nx-platform-application/messenger-types';
 
 export interface SendOptions {
@@ -140,7 +137,6 @@ export class OutboundService {
         const participants =
           await this.contactsState.getGroupParticipants(groupUrn);
 
-        // ✅ Signal Fix: Group signals bypass the metadata envelope
         const finalPayload = isEphemeral
           ? msg.payloadBytes || new Uint8Array([])
           : this.metadataService.wrap(
@@ -195,7 +191,6 @@ export class OutboundService {
         const payloadSenderUrn =
           await this.identityResolver.resolveToHandle(myUrn);
 
-        // ✅ Signal Fix: Direct signals bypass the metadata envelope
         const transportPayloadBytes = isEphemeral
           ? msg.payloadBytes || new Uint8Array([])
           : this.metadataService.wrap(

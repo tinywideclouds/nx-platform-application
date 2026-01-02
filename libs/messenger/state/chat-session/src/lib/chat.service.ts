@@ -118,13 +118,8 @@ export class ChatService {
     return user?.id ? user.id : null;
   });
 
-  // The UI needs these to show the spinner and the "Cloud Active" tooltip
   public readonly isBackingUp = computed(() => this.syncService.isSyncing());
 
-  // Note: isCloudEnabled is a method on the domain service,
-  // but for reactivity in the UI, we might want to expose it.
-  // Since it's a configuration check, we can expose a simple getter or computed if it were reactive.
-  // For now, we wrap the method to keep the UI from injecting the domain service.
   public isCloudEnabled(): boolean {
     return this.syncService.isCloudEnabled();
   }
@@ -606,7 +601,6 @@ export class ChatService {
       readAt: Temporal.Now.instant().toString(),
     };
 
-    // ✅ Cleaned call
     await this.conversationService.sendReadReceiptSignal(
       recipient,
       data,
