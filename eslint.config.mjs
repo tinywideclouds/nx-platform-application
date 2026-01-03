@@ -32,7 +32,6 @@ export default [
           /**
            * THE "SPECIAL PERMIT"
            * Allows deep imports ONLY for the two protos libraries and the test helpers in platform-auth-access/testing.
-           * This rule doesn't grant access; it just bypasses the barrel file (`index.ts`) check.
            */
           allow: [
             '@nx-platform-application/platform-protos/**',
@@ -45,7 +44,10 @@ export default [
            * These are the architectural zoning rules based on tags.
            */
           depConstraints: [
-            // --- Protos Rules (Self-contained) ---
+            // =========================================================
+            // 1. SCOPE RULES (Vertical Boundaries)
+            // =========================================================
+            // Protos (Self-contained)
             {
               sourceTag: 'scope:protos-platform',
               onlyDependOnLibsWithTags: [],
@@ -54,7 +56,7 @@ export default [
               sourceTag: 'scope:protos-messenger',
               onlyDependOnLibsWithTags: [],
             },
-            // --- Types Rules ("Buddy System") ---
+            // Types ("Buddy System" - can see Protos)
             {
               sourceTag: 'scope:types-platform',
               onlyDependOnLibsWithTags: ['scope:protos-platform'],
@@ -66,8 +68,7 @@ export default [
                 'scope:types-platform',
               ],
             },
-            // --- Existing App/Feature Rules (Updated) ---
-            // Platform projects can now depend on platform-types, but NOT protos directly.
+            // Platform Scope
             {
               sourceTag: 'scope:platform',
               onlyDependOnLibsWithTags: [
@@ -75,7 +76,7 @@ export default [
                 'scope:types-platform',
               ],
             },
-            // Contacts projects can depend on platform.
+            // Contacts Scope (Can see Platform)
             {
               sourceTag: 'scope:contacts',
               onlyDependOnLibsWithTags: [
@@ -84,7 +85,7 @@ export default [
                 'scope:types-platform',
               ],
             },
-            // Messenger projects can depend on its types and platform, but NOT protos directly.
+            // Messenger Scope (Can see Contacts & Platform)
             {
               sourceTag: 'scope:messenger',
               onlyDependOnLibsWithTags: [
@@ -93,6 +94,55 @@ export default [
                 'scope:platform',
                 'scope:types-messenger',
                 'scope:types-platform',
+              ],
+            },
+
+            // =========================================================
+            // 2. LAYER RULES (Horizontal Boundaries)
+            // =========================================================
+            {
+              sourceTag: 'layer:ui',
+              onlyDependOnLibsWithTags: [
+                'layer:ui',
+                'layer:state',
+                // Allow Types (Layer 0)
+                'scope:types-messenger',
+                'scope:types-platform',
+                'scope:types-contacts',
+              ],
+            },
+            {
+              sourceTag: 'layer:state',
+              onlyDependOnLibsWithTags: [
+                'layer:state',
+                'layer:domain',
+                // Allow Types
+                'scope:types-messenger',
+                'scope:types-platform',
+                'scope:types-contacts',
+              ],
+            },
+            {
+              sourceTag: 'layer:domain',
+              onlyDependOnLibsWithTags: [
+                'layer:domain',
+                'layer:infrastructure', // Pragmatic: Domain imports Contracts from Infra
+                'layer:state', // Pragmatic: Domain imports Contacts State
+                // Allow Types
+                'scope:types-messenger',
+                'scope:types-platform',
+                'scope:types-contacts',
+              ],
+            },
+            {
+              sourceTag: 'layer:infrastructure',
+              onlyDependOnLibsWithTags: [
+                'layer:infrastructure',
+                'layer:domain', // Pragmatic: Infra imports Domain Models
+                // Allow Types
+                'scope:types-messenger',
+                'scope:types-platform',
+                'scope:types-contacts',
               ],
             },
           ],

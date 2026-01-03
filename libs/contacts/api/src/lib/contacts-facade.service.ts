@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Contact } from '@nx-platform-application/contacts-types';
-import { ContactSummary, ContactsQueryApi } from './models';
+import { ContactSummary, ContactsQueryApi } from './contacts.query.api';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsFacadeService implements ContactsQueryApi {

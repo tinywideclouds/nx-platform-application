@@ -78,7 +78,7 @@ export class ContactGroupFormComponent {
           id: currentGroup.id.toString(),
           name: currentGroup.name,
           description: currentGroup.description,
-          contactIds: currentGroup.contactIds.map((id) => id.toString()),
+          contactIds: currentGroup.members.map((id) => id.toString()),
         });
       } else {
         // Reset to primitives
@@ -104,7 +104,7 @@ export class ContactGroupFormComponent {
             id: currentGroup.id.toString(),
             name: currentGroup.name,
             description: currentGroup.description,
-            contactIds: currentGroup.contactIds.map((id) => id.toString()),
+            contactIds: currentGroup.members.map((id) => id.toString()),
           });
         }
       }
@@ -140,8 +140,9 @@ export class ContactGroupFormComponent {
         id: originalGroup!.id,
         name: formValue.name,
         description: formValue.description,
+        scope: 'local',
         // Convert string[] from form back to URN[]
-        contactIds: formValue.contactIds.map((id: string) => URN.parse(id)),
+        members: formValue.contactIds.map((id: string) => URN.parse(id)),
       });
     }
   }

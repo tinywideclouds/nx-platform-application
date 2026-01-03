@@ -110,8 +110,9 @@ export class ContactGroupPageComponent {
     return of({
       id: newGroupUrn,
       name: '',
+      scope: 'local',
       description: '',
-      contactIds: [],
+      members: [],
     });
   }
 }

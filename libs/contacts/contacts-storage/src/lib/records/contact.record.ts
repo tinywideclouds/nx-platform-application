@@ -1,7 +1,4 @@
-// Imports Domain Types from the new Lib
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
-
-// --- STORABLE MODELS (Database Schema) ---
 
 export interface StorableServiceContact {
   id: string;
@@ -20,13 +17,6 @@ export interface StorableContact {
   emailAddresses: string[];
   serviceContacts: Record<string, StorableServiceContact>;
   lastModified: ISODateTimeString;
-}
-
-export interface StorableGroup {
-  id: string;
-  name: string;
-  description?: string;
-  contactIds: string[];
 }
 
 export interface StorableIdentityLink {

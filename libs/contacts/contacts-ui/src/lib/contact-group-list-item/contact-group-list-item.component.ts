@@ -32,7 +32,7 @@ export class ContactGroupListItemComponent {
 
   // v20: Computed Signal (Memoized)
   // Replaces the 'get memberCount()' which runs on every CD cycle
-  memberCount = computed(() => this.group().contactIds.length);
+  memberCount = computed(() => this.group().members.length);
 
   onHostClick(): void {
     this.select.emit(this.group());

@@ -1,14 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
 import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
-import { ContactTombstone } from '@nx-platform-application/contacts-types'; // ✅ Import from new types lib
+import { ContactTombstone } from '@nx-platform-application/contacts-types';
 import {
   StorableContact,
-  StorableGroup,
   StorableIdentityLink,
   StorablePendingIdentity,
   StorableBlockedIdentity,
-} from '../models/contacts';
+} from '../records/contact.record';
+import { StorableGroup } from '../records/group.record';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsDatabase extends PlatformDexieService {
@@ -22,19 +22,18 @@ export class ContactsDatabase extends PlatformDexieService {
   constructor() {
     super('contacts');
 
-    // VERSION 3
-    this.version(3).stores({
-      // Use * for MultiEntry indexes (arrays of strings)
+    // ✅ VERSION 5: Polymorphic Groups Schema
+    this.version(5).stores({
       contacts: 'id, alias, email, *emailAddresses, *phoneNumbers, isFavorite',
 
-      groups: 'id, name, *contactIds',
+      // scope: To filter 'local' vs 'messenger'
+      // parentId: To find all chats spawned from a template
+      // *contactIds: MultiEntry index for reverse lookups
+      groups: 'id, name, scope, parentId, *contactIds',
 
       links: '++id, authUrn, contactId',
-
       pending: '++id, urn, firstSeenAt',
-
       blocked: '++id, urn, blockedAt',
-
       tombstones: 'urn',
     });
 

@@ -4,20 +4,19 @@ import { ContactsStorageService } from './contacts-storage.service';
 import { ContactsDatabase } from './db/contacts.database';
 import {
   StorableContact,
-  StorableGroup,
   StorableServiceContact,
-  StorableBlockedIdentity, // New
-} from './models/contacts';
+  StorableBlockedIdentity,
+} from './records/contact.record';
+import { StorableGroup } from './records/group.record';
 
-import {
-  Contact,
-  ContactGroup,
-  ServiceContact,
-} from '@nx-platform-application/contacts-types';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+
+// ✅ NEW: Import Real Mappers (No mocks needed for pure logic)
+import { ContactMapper } from './mappers/contact.mapper';
+import { GroupMapper } from './mappers/group.mapper';
 
 // --- Mocks ---
 const {
@@ -25,10 +24,11 @@ const {
   mockDbGroupTable,
   mockDbLinksTable,
   mockDbPendingTable,
-  mockDbBlockedTable, // ✅ NEW
+  mockDbBlockedTable,
   mockDbTombstonesTable,
   mockContactsDb,
 } = vi.hoisted(() => {
+  // ... (Same mock setup as before, omitted for brevity) ...
   const tableMock = {
     put: vi.fn(),
     update: vi.fn(),
@@ -42,6 +42,7 @@ const {
     toArray: vi.fn(),
     first: vi.fn(),
     clear: vi.fn(),
+    filter: vi.fn(() => tableMock),
   };
 
   const groupTableMock = {
@@ -72,9 +73,9 @@ const {
     toArray: vi.fn(),
     bulkDelete: vi.fn(),
     clear: vi.fn(),
+    orderBy: vi.fn(() => pendingTableMock),
   };
 
-  // ✅ NEW: Blocked Table Mock
   const blockedTableMock = {
     put: vi.fn(),
     where: vi.fn(() => blockedTableMock),
@@ -83,6 +84,7 @@ const {
     toArray: vi.fn(),
     bulkDelete: vi.fn(),
     clear: vi.fn(),
+    orderBy: vi.fn(() => blockedTableMock),
   };
 
   const tombstonesTableMock = {
@@ -98,14 +100,14 @@ const {
     mockDbGroupTable: groupTableMock,
     mockDbLinksTable: linksTableMock,
     mockDbPendingTable: pendingTableMock,
-    mockDbBlockedTable: blockedTableMock, // ✅ NEW
+    mockDbBlockedTable: blockedTableMock,
     mockDbTombstonesTable: tombstonesTableMock,
     mockContactsDb: {
       contacts: tableMock,
       groups: groupTableMock,
       links: linksTableMock,
       pending: pendingTableMock,
-      blocked: blockedTableMock, // ✅ NEW
+      blocked: blockedTableMock,
       tombstones: tombstonesTableMock,
       transaction: vi.fn(async (_mode, _tables, callback) => await callback()),
     },
@@ -115,12 +117,9 @@ const {
 // --- Fixtures ---
 const mockContactUrn = URN.parse('urn:contacts:user:user-123');
 const mockGroupUrn = URN.parse('urn:contacts:group:grp-abc');
-const mockStrangerUrn = URN.parse('urn:auth:apple:stranger');
-const mockGoogleAuthUrn = URN.parse('urn:auth:google:bob-123');
+const mockBlockedUrn = URN.parse('urn:lookup:email:pest@test.com');
 const mockServiceContactUrn = URN.parse('urn:message:service:msg-uuid-1');
 
-// Block Fixtures
-const mockBlockedUrn = URN.parse('urn:lookup:email:pest@test.com');
 const mockStorableBlocked: StorableBlockedIdentity = {
   id: 1,
   urn: mockBlockedUrn.toString(),
@@ -129,33 +128,6 @@ const mockStorableBlocked: StorableBlockedIdentity = {
   reason: 'spam',
 };
 
-const mockServiceContact: ServiceContact = {
-  id: mockServiceContactUrn,
-  alias: 'jd_messenger',
-  lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
-};
-
-const mockContact: Contact = {
-  id: mockContactUrn,
-  alias: 'johndoe',
-  email: 'john@example.com',
-  firstName: 'John',
-  surname: 'Doe',
-  phoneNumbers: ['+15550199'],
-  emailAddresses: ['john@example.com', 'work@example.com'],
-  serviceContacts: {
-    messenger: mockServiceContact,
-  },
-  lastModified: '2020-01-01T00:00:00Z' as ISODateTimeString,
-};
-
-const mockGroup: ContactGroup = {
-  id: mockGroupUrn,
-  name: 'Family',
-  contactIds: [mockContactUrn],
-};
-
-// --- STORABLE FIXTURES ---
 const mockStorableServiceContact: StorableServiceContact = {
   id: mockServiceContactUrn.toString(),
   alias: 'jd_messenger',
@@ -176,10 +148,21 @@ const mockStorableContact: StorableContact = {
   lastModified: '2020-01-01T00:00:00Z' as ISODateTimeString,
 };
 
+// ✅ UPDATED: Mock Group with new fields
 const mockStorableGroup: StorableGroup = {
   id: mockGroupUrn.toString(),
   name: 'Family',
+  description: 'My Group',
+  scope: 'local',
   contactIds: [mockContactUrn.toString()],
+  members: [
+    {
+      contactId: mockContactUrn.toString(),
+      role: 'member',
+      status: 'joined',
+    },
+  ],
+  lastModified: '2023-01-01T00:00:00Z' as ISODateTimeString,
 };
 
 describe('ContactsStorageService', () => {
@@ -192,6 +175,9 @@ describe('ContactsStorageService', () => {
       providers: [
         ContactsStorageService,
         { provide: ContactsDatabase, useValue: mockContactsDb },
+        // ✅ Provide Real Mappers
+        ContactMapper,
+        GroupMapper,
       ],
     });
 
@@ -200,6 +186,11 @@ describe('ContactsStorageService', () => {
     // Setup Default Returns
     mockDbTable.get.mockResolvedValue(mockStorableContact);
     mockDbTable.toArray.mockResolvedValue([mockStorableContact]);
+
+    // Group Returns
+    mockDbGroupTable.get.mockResolvedValue(mockStorableGroup);
+    mockDbGroupTable.toArray.mockResolvedValue([mockStorableGroup]);
+
     mockDbBlockedTable.toArray.mockResolvedValue([]);
     mockDbBlockedTable.first.mockResolvedValue(undefined);
   });
@@ -208,7 +199,25 @@ describe('ContactsStorageService', () => {
     expect(service).toBeTruthy();
   });
 
-  // ... (Existing CRUD, Search, Group tests omitted for brevity) ...
+  describe('Groups (Polymorphic)', () => {
+    it('should retrieve groups by scope', async () => {
+      await service.getGroupsByScope('local');
+      expect(mockDbGroupTable.where).toHaveBeenCalledWith('scope');
+      expect(mockDbGroupTable.equals).toHaveBeenCalledWith('local');
+    });
+
+    it('should map storable group to domain group correctly', async () => {
+      const groups = await service.getGroupsForContact(mockContactUrn);
+      const group = groups[0];
+
+      expect(group.id.toString()).toBe(mockGroupUrn.toString());
+      expect((group as any).scope).toBe('local');
+      expect(group.members.length).toBe(1);
+      expect(group.members[0].contactId.toString()).toBe(
+        mockContactUrn.toString(),
+      );
+    });
+  });
 
   describe('Gatekeeper: Blocking', () => {
     it('should add identity to block list', async () => {
@@ -225,16 +234,14 @@ describe('ContactsStorageService', () => {
     });
 
     it('should update existing blocked entry if present', async () => {
-      // Return existing
       mockDbBlockedTable.first.mockResolvedValue(mockStorableBlocked);
 
       await service.blockIdentity(mockBlockedUrn, ['messenger']);
 
       expect(mockDbBlockedTable.put).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 1, // Should preserve ID
+          id: 1,
           scopes: ['messenger'],
-          // Should preserve previous reason if not provided
           reason: 'spam',
         }),
       );
@@ -251,7 +258,6 @@ describe('ContactsStorageService', () => {
     });
 
     it('should unblock identity (delete from DB)', async () => {
-      // Simulate finding 2 records (defensive)
       mockDbBlockedTable.toArray.mockResolvedValue([
         { id: 1 },
         { id: 2 },

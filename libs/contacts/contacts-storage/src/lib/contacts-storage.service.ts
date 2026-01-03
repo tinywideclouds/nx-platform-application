@@ -1,15 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { liveQuery } from 'dexie';
-import { Observable, from } from 'rxjs';
-import { map } from 'rxjs';
+import { Observable, from, map } from 'rxjs';
 import { ContactsDatabase } from './db/contacts.database';
-import {
-  StorableContact,
-  StorableGroup,
-  StorableServiceContact,
-  StorablePendingIdentity,
-  StorableBlockedIdentity,
-} from './models/contacts';
+import { StorableContact } from './records/contact.record';
 import {
   URN,
   ISODateTimeString,
@@ -17,84 +10,30 @@ import {
 import {
   Contact,
   ContactGroup,
-  ServiceContact,
   IdentityLink,
   PendingIdentity,
   BlockedIdentity,
   ContactTombstone,
 } from '@nx-platform-application/contacts-types';
 
+// ✅ NEW: Import Mappers
+import { ContactMapper } from './mappers/contact.mapper';
+import { GroupMapper } from './mappers/group.mapper';
+
 @Injectable({
   providedIn: 'root',
 })
 export class ContactsStorageService {
   private readonly db = inject(ContactsDatabase);
+  private readonly contactMapper = inject(ContactMapper);
+  private readonly groupMapper = inject(GroupMapper);
 
-  private mapStorableToContact(c: StorableContact): Contact {
-    const serviceContacts: Record<string, ServiceContact> = {};
-    for (const [key, s] of Object.entries(c.serviceContacts || {})) {
-      if (s && s.id) {
-        serviceContacts[key] = { ...s, id: URN.parse(s.id) };
-      }
-    }
-    return {
-      ...c,
-      id: URN.parse(c.id),
-      serviceContacts,
-      lastModified: c.lastModified,
-    };
-  }
-
-  private mapContactToStorable(c: Contact): StorableContact {
-    const serviceContacts: Record<string, StorableServiceContact> = {};
-    for (const [key, s] of Object.entries(c.serviceContacts || {})) {
-      if (s) {
-        serviceContacts[key] = { ...s, id: s.id.toString() };
-      }
-    }
-    return {
-      ...c,
-      id: c.id.toString(),
-      serviceContacts,
-      lastModified: c.lastModified,
-    };
-  }
-
-  private mapStorableToGroup(g: StorableGroup): ContactGroup {
-    return {
-      ...g,
-      id: URN.parse(g.id),
-      contactIds: (g.contactIds || []).map((id) => URN.parse(id)),
-    };
-  }
-
-  private mapGroupToStorable(g: ContactGroup): StorableGroup {
-    return {
-      ...g,
-      id: g.id.toString(),
-      contactIds: (g.contactIds || []).map((id) => id.toString()),
-    };
-  }
-
-  private mapStorableToPending(p: StorablePendingIdentity): PendingIdentity {
-    return {
-      ...p,
-      urn: URN.parse(p.urn),
-      vouchedBy: p.vouchedBy ? URN.parse(p.vouchedBy) : undefined,
-    };
-  }
-
-  private mapStorableToBlocked(b: StorableBlockedIdentity): BlockedIdentity {
-    return {
-      ...b,
-      urn: URN.parse(b.urn),
-    };
-  }
+  // --- QUERIES ---
 
   readonly contacts$: Observable<Contact[]> = from(
     liveQuery(() => this.db.contacts.orderBy('alias').toArray()),
   ).pipe(
-    map((storables) => storables.map((c) => this.mapStorableToContact(c))),
+    map((storables) => storables.map((c) => this.contactMapper.toDomain(c))),
   );
 
   readonly favorites$: Observable<Contact[]> = from(
@@ -102,29 +41,37 @@ export class ContactsStorageService {
       this.db.contacts.filter((c) => (c as any).isFavorite === true).toArray(),
     ),
   ).pipe(
-    map((storables) => storables.map((c) => this.mapStorableToContact(c))),
+    map((storables) => storables.map((c) => this.contactMapper.toDomain(c))),
   );
 
   readonly groups$: Observable<ContactGroup[]> = from(
     liveQuery(() => this.db.groups.orderBy('name').toArray()),
-  ).pipe(map((storables) => storables.map((g) => this.mapStorableToGroup(g))));
+  ).pipe(
+    map((storables) => storables.map((g) => this.groupMapper.toDomain(g))),
+  );
 
   readonly pending$: Observable<PendingIdentity[]> = from(
     liveQuery(() => this.db.pending.orderBy('firstSeenAt').toArray()),
   ).pipe(
-    map((storables) => storables.map((p) => this.mapStorableToPending(p))),
+    map((storables) =>
+      storables.map((p) => this.contactMapper.toPendingDomain(p)),
+    ),
   );
 
   readonly blocked$: Observable<BlockedIdentity[]> = from(
     liveQuery(() => this.db.blocked.orderBy('blockedAt').toArray()),
   ).pipe(
-    map((storables) => storables.map((b) => this.mapStorableToBlocked(b))),
+    map((storables) =>
+      storables.map((b) => this.contactMapper.toBlockedDomain(b)),
+    ),
   );
+
+  // --- CONTACT COMMANDS ---
 
   async saveContact(contact: Contact): Promise<void> {
     const now = new Date().toISOString() as ISODateTimeString;
     const contactWithTime = { ...contact, lastModified: now };
-    const storable = this.mapContactToStorable(contactWithTime);
+    const storable = this.contactMapper.toStorable(contactWithTime);
 
     await this.db.transaction(
       'rw',
@@ -152,7 +99,8 @@ export class ContactsStorageService {
 
     if (urnId) storableChanges.id = urnId.toString();
     if (domainServiceContacts) {
-      const serviceContacts: Record<string, StorableServiceContact> = {};
+      // Inline partial mapping for service contacts
+      const serviceContacts: Record<string, any> = {};
       for (const key in domainServiceContacts) {
         const s = domainServiceContacts[key];
         if (s) serviceContacts[key] = { ...s, id: s.id.toString() };
@@ -165,7 +113,7 @@ export class ContactsStorageService {
   async getContact(id: URN): Promise<Contact | undefined> {
     if (!id) return undefined;
     const storable = await this.db.contacts.get(id.toString());
-    return storable ? this.mapStorableToContact(storable) : undefined;
+    return storable ? this.contactMapper.toDomain(storable) : undefined;
   }
 
   async deleteContact(id: URN): Promise<void> {
@@ -191,7 +139,7 @@ export class ContactsStorageService {
         .equals(email)
         .first();
     }
-    return storable ? this.mapStorableToContact(storable) : undefined;
+    return storable ? this.contactMapper.toDomain(storable) : undefined;
   }
 
   async findByPhone(phone: string): Promise<Contact | undefined> {
@@ -200,25 +148,38 @@ export class ContactsStorageService {
       .where('phoneNumbers')
       .equals(phone)
       .first();
-    return storable ? this.mapStorableToContact(storable) : undefined;
+    return storable ? this.contactMapper.toDomain(storable) : undefined;
   }
 
   async bulkUpsert(contacts: Contact[]): Promise<void> {
-    const storables = contacts.map((c) => this.mapContactToStorable(c));
+    const storables = contacts.map((c) => this.contactMapper.toStorable(c));
     await this.db.transaction('rw', this.db.contacts, async () => {
       await this.db.contacts.bulkPut(storables);
     });
   }
 
+  // --- GROUP COMMANDS ---
+
   async saveGroup(group: ContactGroup): Promise<void> {
-    const storable = this.mapGroupToStorable(group);
+    // Cast to internal type to support extended fields if necessary
+    const storable = this.groupMapper.toStorable(group as any);
     await this.db.groups.put(storable);
   }
 
   async getGroup(id: URN): Promise<ContactGroup | undefined> {
     if (!id) return undefined;
     const storable = await this.db.groups.get(id.toString());
-    return storable ? this.mapStorableToGroup(storable) : undefined;
+    return storable ? this.groupMapper.toDomain(storable) : undefined;
+  }
+
+  async getGroupsByScope(
+    scope: 'local' | 'messenger',
+  ): Promise<ContactGroup[]> {
+    const storables = await this.db.groups
+      .where('scope')
+      .equals(scope)
+      .toArray();
+    return storables.map((g) => this.groupMapper.toDomain(g));
   }
 
   async deleteGroup(id: URN): Promise<void> {
@@ -232,19 +193,21 @@ export class ContactsStorageService {
       .where('contactIds')
       .equals(contactId.toString())
       .toArray();
-    return storables.map((g) => this.mapStorableToGroup(g));
+    return storables.map((g) => this.groupMapper.toDomain(g));
   }
 
   async getContactsForGroup(groupId: URN): Promise<Contact[]> {
     if (!groupId) return [];
     const groupStorable = await this.db.groups.get(groupId.toString());
     if (!groupStorable || groupStorable.contactIds.length === 0) return [];
-    const contactIdStrings = groupStorable.contactIds;
-    const storables = await this.db.contacts.bulkGet(contactIdStrings);
+
+    const storables = await this.db.contacts.bulkGet(groupStorable.contactIds);
     return storables
       .filter((c): c is StorableContact => Boolean(c))
-      .map((c) => this.mapStorableToContact(c));
+      .map((c) => this.contactMapper.toDomain(c));
   }
+
+  // --- IDENTITY & SECURITY COMMANDS ---
 
   async linkIdentityToContact(contactId: URN, authUrn: URN): Promise<void> {
     if (!contactId || !authUrn) return;
@@ -280,7 +243,7 @@ export class ContactsStorageService {
       .first();
     if (!link) return null;
     const c = await this.db.contacts.get(link.contactId);
-    return c ? this.mapStorableToContact(c) : null;
+    return c ? this.contactMapper.toDomain(c) : null;
   }
 
   async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
@@ -289,7 +252,7 @@ export class ContactsStorageService {
       .where('urn')
       .equals(urn.toString())
       .first();
-    const pending: StorablePendingIdentity = {
+    await this.db.pending.put({
       id: existing?.id,
       urn: urn.toString(),
       firstSeenAt:
@@ -297,8 +260,7 @@ export class ContactsStorageService {
         (new Date().toISOString() as ISODateTimeString),
       vouchedBy: vouchedBy ? vouchedBy.toString() : existing?.vouchedBy,
       note: note ?? existing?.note,
-    };
-    await this.db.pending.put(pending);
+    });
   }
 
   async getPendingIdentity(urn: URN): Promise<PendingIdentity | null> {
@@ -307,7 +269,7 @@ export class ContactsStorageService {
       .where('urn')
       .equals(urn.toString())
       .first();
-    return storable ? this.mapStorableToPending(storable) : null;
+    return storable ? this.contactMapper.toPendingDomain(storable) : null;
   }
 
   async deletePending(urn: URN): Promise<void> {
@@ -335,15 +297,14 @@ export class ContactsStorageService {
       .equals(urn.toString())
       .first();
 
-    const blocked: StorableBlockedIdentity = {
+    await this.db.blocked.put({
       id: existing?.id,
       urn: urn.toString(),
       blockedAt:
         existing?.blockedAt ?? (new Date().toISOString() as ISODateTimeString),
       scopes: scopes,
       reason: reason ?? existing?.reason,
-    };
-    await this.db.blocked.put(blocked);
+    });
   }
 
   async unblockIdentity(urn: URN): Promise<void> {
@@ -362,7 +323,7 @@ export class ContactsStorageService {
 
   async getAllBlockedIdentities(): Promise<BlockedIdentity[]> {
     const list = await this.db.blocked.toArray();
-    return list.map((b) => this.mapStorableToBlocked(b));
+    return list.map((b) => this.contactMapper.toBlockedDomain(b));
   }
 
   async getAllTombstones(): Promise<ContactTombstone[]> {
@@ -371,12 +332,12 @@ export class ContactsStorageService {
 
   async getAllContacts(): Promise<Contact[]> {
     const list = await this.db.contacts.toArray();
-    return list.map((c) => this.mapStorableToContact(c));
+    return list.map((c) => this.contactMapper.toDomain(c));
   }
 
   async getAllGroups(): Promise<ContactGroup[]> {
     const list = await this.db.groups.toArray();
-    return list.map((g) => this.mapStorableToGroup(g));
+    return list.map((g) => this.groupMapper.toDomain(g));
   }
 
   async clearAllContacts(): Promise<void> {

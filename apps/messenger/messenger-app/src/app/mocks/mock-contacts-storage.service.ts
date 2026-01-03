@@ -59,9 +59,16 @@ const MOCK_GROUPS: ContactGroup[] = [
     id: URN.parse('urn:contacts:group:mock-group-1'),
     name: 'Mock Dev Team',
     description: 'A mock group for testing the UI',
-    contactIds: [
-      URN.parse('urn:contacts:user:mock-contact-1'),
-      URN.parse('urn:contacts:user:mock-contact-2'),
+    scope: 'local',
+    members: [
+      {
+        contactId: URN.parse('urn:contacts:user:mock-contact-1'),
+        status: 'added',
+      },
+      {
+        contactId: URN.parse('urn:contacts:user:mock-contact-2'),
+        status: 'added',
+      },
     ],
   },
 ];
@@ -113,7 +120,7 @@ export class MockContactsStorageService {
   async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
     // Simple mock logic: check if contactId string is in the group's contactIds list
     return MOCK_GROUPS.filter((g) =>
-      g.contactIds.some((id) => id.toString() === contactId.toString()),
+      g.members.some((id) => id.toString() === contactId.toString()),
     );
   }
 
