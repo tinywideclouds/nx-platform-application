@@ -3,12 +3,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { vi } from 'vitest';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
-  ContactsStorageService,
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
-import { URN } from '@nx-platform-application/platform-types';
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { Subject } from 'rxjs';
 import { By } from '@angular/platform-browser';
 
@@ -31,6 +31,7 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
     phoneNumbers: [],
     emailAddresses: [],
+    lastModified: '' as ISODateTimeString,
   } as Contact,
 ];
 
@@ -38,7 +39,8 @@ const MOCK_GROUP: ContactGroup = {
   id: mockGroupUrn,
   name: 'Test Group',
   description: 'A test group',
-  contactIds: [mockContactUrn],
+  scope: 'local',
+  members: [{ contactId: mockContactUrn, status: 'added' }],
 };
 
 const mockActivatedRoute = {
@@ -131,7 +133,7 @@ describe('ContactGroupPageComponent', () => {
     await fixture.whenStable();
 
     const formComponent = fixture.debugElement.query(
-      By.directive(ContactGroupFormComponent)
+      By.directive(ContactGroupFormComponent),
     );
 
     formComponent.triggerEventHandler('save', MOCK_GROUP);

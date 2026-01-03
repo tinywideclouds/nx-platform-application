@@ -1,5 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.ts
-
 import { Component, inject, input, signal, computed } from '@angular/core';
 
 import { Router, RouterLink } from '@angular/router';
@@ -8,11 +6,12 @@ import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { map, switchMap } from 'rxjs/operators';
+import { map, switchMap, tap } from 'rxjs/operators';
 import { from, of, Observable } from 'rxjs';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips'; // ✅ NEW
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
 @Component({
@@ -22,6 +21,7 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
     RouterLink,
     MatButtonModule,
     MatIconModule,
+    MatChipsModule,
     ContactGroupFormComponent,
     ContactsPageToolbarComponent,
   ],
@@ -35,13 +35,15 @@ export class ContactGroupPageComponent {
   /**
    * The Group ID to edit.
    * If null/undefined, we assume "Add Mode".
-   * Can be provided via Router Component Input Binding or direct Input.
    */
   groupId = input<URN | undefined>(undefined);
 
   // --- Internal State ---
 
   startInEditMode = signal(false);
+
+  // ✅ NEW: Store active network chats spawned from this group
+  subGroups = signal<ContactGroup[]>([]);
 
   allContacts = toSignal(this.contactsService.contacts$, {
     initialValue: [] as Contact[],
@@ -82,29 +84,24 @@ export class ContactGroupPageComponent {
 
   /**
    * EDIT MODE: Returns a stream for an existing group.
+   * ✅ Also fetches network children.
    */
   private getGroup(urn: URN): Observable<ContactGroup | null> {
-    // Reset edit mode when switching to an existing group
     this.startInEditMode.set(false);
 
     return from(this.contactsService.getGroup(urn)).pipe(
-      map((group) => {
-        if (!group) {
-          // Handle Not Found: Redirect or return null
-          // For now, we'll return null which keeps the loading state or could show an error
-          return null;
+      tap((group) => {
+        if (group) {
+          this.loadSubGroups(group.id);
         }
-        return group;
       }),
+      map((group) => group ?? null),
     );
   }
 
-  /**
-   * ADD MODE: Returns a stream for a new, empty group.
-   */
   private getNewGroup(): Observable<ContactGroup> {
-    // Force edit mode when creating new
     this.startInEditMode.set(true);
+    this.subGroups.set([]); // Reset children for new group
 
     const newGroupUrn = URN.create('group', crypto.randomUUID(), 'contacts');
     return of({
@@ -113,6 +110,12 @@ export class ContactGroupPageComponent {
       scope: 'local',
       description: '',
       members: [],
-    });
+      contactIds: [],
+    } as ContactGroup);
+  }
+
+  private async loadSubGroups(parentId: URN): Promise<void> {
+    const children = await this.contactsService.getGroupsByParent(parentId);
+    this.subGroups.set(children);
   }
 }

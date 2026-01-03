@@ -6,6 +6,11 @@ export interface ContactSummary {
   profilePictureUrl?: string;
 }
 
+/**
+ * CONTRACT & TOKEN
+ * Abstract class pattern allows this to be used as both an Interface and an Injection Token.
+ * This decouples the consumer (Messenger) from the implementation (Storage).
+ */
 export abstract class ContactsQueryApi {
   abstract getGroupParticipants(groupUrn: URN): Promise<ContactSummary[]>;
   abstract isBlocked(urn: URN, scope: string): Promise<boolean>;

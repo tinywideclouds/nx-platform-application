@@ -16,7 +16,6 @@ import {
   ContactTombstone,
 } from '@nx-platform-application/contacts-types';
 
-// ✅ NEW: Import Mappers
 import { ContactMapper } from './mappers/contact.mapper';
 import { GroupMapper } from './mappers/group.mapper';
 
@@ -99,7 +98,6 @@ export class ContactsStorageService {
 
     if (urnId) storableChanges.id = urnId.toString();
     if (domainServiceContacts) {
-      // Inline partial mapping for service contacts
       const serviceContacts: Record<string, any> = {};
       for (const key in domainServiceContacts) {
         const s = domainServiceContacts[key];
@@ -160,9 +158,9 @@ export class ContactsStorageService {
 
   // --- GROUP COMMANDS ---
 
+  // ✅ Refactor: Uses Domain Type directly (Polymorphic)
   async saveGroup(group: ContactGroup): Promise<void> {
-    // Cast to internal type to support extended fields if necessary
-    const storable = this.groupMapper.toStorable(group as any);
+    const storable = this.groupMapper.toStorable(group);
     await this.db.groups.put(storable);
   }
 
@@ -178,6 +176,16 @@ export class ContactsStorageService {
     const storables = await this.db.groups
       .where('scope')
       .equals(scope)
+      .toArray();
+    return storables.map((g) => this.groupMapper.toDomain(g));
+  }
+
+  // ✅ NEW: Find Active Chats spawned from a Template
+  async getGroupsByParent(parentId: URN): Promise<ContactGroup[]> {
+    if (!parentId) return [];
+    const storables = await this.db.groups
+      .where('parentId')
+      .equals(parentId.toString())
       .toArray();
     return storables.map((g) => this.groupMapper.toDomain(g));
   }
@@ -199,7 +207,14 @@ export class ContactsStorageService {
   async getContactsForGroup(groupId: URN): Promise<Contact[]> {
     if (!groupId) return [];
     const groupStorable = await this.db.groups.get(groupId.toString());
-    if (!groupStorable || groupStorable.contactIds.length === 0) return [];
+
+    if (
+      !groupStorable ||
+      !groupStorable.contactIds ||
+      groupStorable.contactIds.length === 0
+    ) {
+      return [];
+    }
 
     const storables = await this.db.contacts.bulkGet(groupStorable.contactIds);
     return storables

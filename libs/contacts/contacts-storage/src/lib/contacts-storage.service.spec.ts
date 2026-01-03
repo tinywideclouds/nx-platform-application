@@ -6,15 +6,14 @@ import {
   StorableContact,
   StorableServiceContact,
   StorableBlockedIdentity,
-} from './records/contact.record';
-import { StorableGroup } from './records/group.record';
+} from './records/contact.record'; // ✅ Updated path
+import { StorableGroup } from './records/group.record'; // ✅ Updated path
 
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 
-// ✅ NEW: Import Real Mappers (No mocks needed for pure logic)
 import { ContactMapper } from './mappers/contact.mapper';
 import { GroupMapper } from './mappers/group.mapper';
 
@@ -28,7 +27,6 @@ const {
   mockDbTombstonesTable,
   mockContactsDb,
 } = vi.hoisted(() => {
-  // ... (Same mock setup as before, omitted for brevity) ...
   const tableMock = {
     put: vi.fn(),
     update: vi.fn(),
@@ -204,6 +202,15 @@ describe('ContactsStorageService', () => {
       await service.getGroupsByScope('local');
       expect(mockDbGroupTable.where).toHaveBeenCalledWith('scope');
       expect(mockDbGroupTable.equals).toHaveBeenCalledWith('local');
+    });
+
+    // ✅ NEW TEST: Child Retrieval
+    it('should retrieve child groups by parentId', async () => {
+      await service.getGroupsByParent(mockGroupUrn);
+      expect(mockDbGroupTable.where).toHaveBeenCalledWith('parentId');
+      expect(mockDbGroupTable.equals).toHaveBeenCalledWith(
+        mockGroupUrn.toString(),
+      );
     });
 
     it('should map storable group to domain group correctly', async () => {

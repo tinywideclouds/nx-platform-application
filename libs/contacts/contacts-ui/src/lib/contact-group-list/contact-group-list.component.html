@@ -3,6 +3,7 @@
     @for (group of groups(); track trackGroupById($index, group)) {
       <contacts-group-list-item
         [group]="group"
+        [badgeResolver]="badgeResolver()"
         [class.bg-blue-50]="selectedId() === group.id.toString()"
         [class.border-l-4]="selectedId() === group.id.toString()"
         [class.border-blue-600]="selectedId() === group.id.toString()"
@@ -10,10 +11,7 @@
       />
     }
   } @else {
-    <div
-      class="p-4 text-center text-gray-500"
-      data-testid="empty-group-list"
-    >
+    <div class="p-4 text-center text-gray-500" data-testid="empty-group-list">
       No groups found.
     </div>
   }

@@ -29,6 +29,9 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
 import { ContactListComponent } from '../contact-list/contact-list.component';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
 
+// ✅ NEW: Import Adapter Model
+import { GroupBadgeResolver } from './../models/group-badge.model';
+
 @Component({
   selector: 'contacts-sidebar',
   standalone: true,
@@ -56,6 +59,9 @@ export class ContactsSidebarComponent {
   showAddActions = input(true);
   selectionMode = input(false);
   title = input<string>('Contacts');
+
+  // ✅ NEW: Threading the Badge Resolver
+  badgeResolver = input<GroupBadgeResolver | undefined>(undefined);
 
   /** * Controls visibility of the internal filter.
    * Disable this if the parent component (e.g. Messenger) provides its own filter.

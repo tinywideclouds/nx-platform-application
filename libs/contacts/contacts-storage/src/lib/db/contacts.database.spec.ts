@@ -25,8 +25,8 @@ describe('ContactsDatabase', () => {
     expect(db).toBeTruthy();
   });
 
-  it('should be on version 3', () => {
-    expect(db.verno).toBe(3);
+  it('should be on version 5', () => {
+    expect(db.verno).toBe(5);
   });
 
   // --- Table Checks ---

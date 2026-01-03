@@ -7,6 +7,7 @@ import {
 
 import { ContactGroup } from '@nx-platform-application/contacts-types';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
+import { GroupBadgeResolver } from './../models/group-badge.model';
 
 @Component({
   selector: 'contacts-group-list',
@@ -18,9 +19,10 @@ import { ContactGroupListItemComponent } from '../contact-group-list-item/contac
 })
 export class ContactGroupListComponent {
   groups = input.required<ContactGroup[]>();
-
-  /** The ID of the currently selected group */
   selectedId = input<string | undefined>(undefined);
+
+  // ✅ NEW: Threading Input
+  badgeResolver = input<GroupBadgeResolver | undefined>(undefined);
 
   groupSelected = output<ContactGroup>();
 

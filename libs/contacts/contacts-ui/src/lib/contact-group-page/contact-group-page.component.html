@@ -1,36 +1,64 @@
 <contacts-page-toolbar #toolbar>
   @if (toolbar.mode() === 'full') {
-  <div class="flex gap-2">
-    <a
-      matButton="tonal"
-      routerLink="/contacts"
-      [queryParams]="{ tab: 'contacts' }"
-      data-testid="close-button"
-    >
-      Close
-    </a>
-  </div>
+    <div class="flex gap-2">
+      <a
+        matButton="tonal"
+        routerLink="/contacts"
+        [queryParams]="{ tab: 'contacts' }"
+        data-testid="close-button"
+      >
+        Close
+      </a>
+    </div>
   } @else {
-  <div class="flex gap-2">
-    <a
-      mat-icon-button
-      routerLink="/contacts"
-      [queryParams]="{ tab: 'contacts' }"
-      data-testid="close-button"
-      aria-label="Close"
-    >
-      <mat-icon>close</mat-icon>
-    </a>
-  </div>
+    <div class="flex gap-2">
+      <a
+        mat-icon-button
+        routerLink="/contacts"
+        [queryParams]="{ tab: 'contacts' }"
+        data-testid="close-button"
+        aria-label="Close"
+      >
+        <mat-icon>close</mat-icon>
+      </a>
+    </div>
   }
 </contacts-page-toolbar>
+
 @if (groupToEdit()) {
-<contacts-group-form
-  [group]="groupToEdit()"
-  [allContacts]="allContacts()"
-  [startInEditMode]="startInEditMode()"
-  (save)="onSave($event)"
-/>
+  <contacts-group-form
+    [group]="groupToEdit()"
+    [allContacts]="allContacts()"
+    [startInEditMode]="startInEditMode()"
+    (save)="onSave($event)"
+  />
+
+  @if (subGroups().length > 0) {
+    <div class="p-4 border-t border-gray-100 mt-4 bg-gray-50 rounded-lg mx-4">
+      <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
+        App usage:
+      </h3>
+
+      <div class="flex flex-col gap-3">
+        @for (child of subGroups(); track child.id.toString()) {
+          <div class="bg-white p-3 rounded shadow-sm border border-gray-200">
+            <div class="flex items-center gap-2 mb-2">
+              <mat-icon class="text-blue-500">hub</mat-icon>
+              <span class="font-medium text-gray-900">{{ child.name }}</span>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <span
+                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
+              >
+                {{ child.members.length }} Joined
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
 } @else {
-<p>Loading group details...</p>
+  <p class="p-4 text-gray-500">Loading group details...</p>
 }

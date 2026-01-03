@@ -14,5 +14,6 @@ export * from './lib/contacts-security/contacts-security.component';
 
 export * from './lib/pipes/contact-name.pipe';
 export * from './lib/pipes/contact-initials.pipe';
+export * from './lib/models/group-badge.model';
 
 export * from '@nx-platform-application/contacts-storage';
