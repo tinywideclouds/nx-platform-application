@@ -1,16 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactsSecurityComponent } from './contacts-security.component';
-import {
-  ContactsStorageService,
-  PendingIdentity,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
+import { PendingIdentity } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { MockComponent, MockProvider } from 'ng-mocks';
 import { PendingListComponent } from '../pending-list/pending-list.component';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { of } from 'rxjs';
+import { signal } from '@angular/core';
 
-// Test Data
 const MOCK_PENDING: PendingIdentity = {
   urn: URN.parse('urn:auth:google:stranger'),
   firstSeenAt: '2025-01-01T00:00:00Z' as any,
@@ -19,23 +16,24 @@ const MOCK_PENDING: PendingIdentity = {
 describe('ContactsSecurityComponent', () => {
   let component: ContactsSecurityComponent;
   let fixture: ComponentFixture<ContactsSecurityComponent>;
-  let contactsService: ContactsStorageService;
+  let stateService: ContactsStateService;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ContactsSecurityComponent, MockComponent(PendingListComponent)],
       providers: [
-        MockProvider(ContactsStorageService, {
-          // Mock the signal stream
-          pending$: of([MOCK_PENDING]),
+        // ✅ CORRECT: Mock the State Service directly
+        MockProvider(ContactsStateService, {
+          pending: signal([MOCK_PENDING]),
           deletePending: vi.fn(),
+          blockIdentity: vi.fn(),
         }),
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactsSecurityComponent);
     component = fixture.componentInstance;
-    contactsService = TestBed.inject(ContactsStorageService);
+    stateService = TestBed.inject(ContactsStateService);
     fixture.detectChanges();
   });
 
@@ -43,24 +41,19 @@ describe('ContactsSecurityComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load pending requests from storage', () => {
-    // The component uses toSignal, so it should read the observable immediately
+  it('should load pending requests from state', () => {
     expect(component.pending()).toEqual([MOCK_PENDING]);
   });
 
-  it('should delegate APPROVE action to storage', async () => {
+  it('should delegate APPROVE action to state', async () => {
     await component.approveIdentity(MOCK_PENDING);
-    // Approving just means removing it from the pending list (and usually adding to contacts, handled elsewhere or implicit)
-    expect(contactsService.deletePending).toHaveBeenCalledWith(
-      MOCK_PENDING.urn
-    );
+    expect(stateService.deletePending).toHaveBeenCalledWith(MOCK_PENDING.urn);
   });
 
-  it('should delegate BLOCK action to storage', async () => {
+  it('should delegate BLOCK action to state', async () => {
     await component.blockPending(MOCK_PENDING);
-
-    expect(contactsService.deletePending).toHaveBeenCalledWith(
-      MOCK_PENDING.urn
-    );
+    expect(stateService.blockIdentity).toHaveBeenCalledWith(MOCK_PENDING.urn, [
+      'messenger',
+    ]);
   });
 });

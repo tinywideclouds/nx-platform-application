@@ -20,14 +20,18 @@ export interface Contact extends User {
   lastModified: ISODateTimeString;
 }
 
-// ✅ NEW: Group Definitions
+// Group Definitions
 export type GroupScope = 'local' | 'messenger';
+
 export type GroupMemberStatus =
   | 'added'
   | 'invited'
   | 'joined'
   | 'left'
-  | 'removed';
+  | 'removed'
+  | 'declined';
+
+export type GroupInviteDecision = 'accept' | 'reject';
 
 export interface ContactGroupMember {
   contactId: URN;
@@ -39,11 +43,22 @@ export interface ContactGroup extends Resource {
   name: string;
   description?: string;
 
-  // ✅ NEW: Polymorphic Fields
+  /**
+   * Defines the persistence strategy for the group.
+   * - 'local': A user-defined distribution list (stored only in local DB).
+   * - 'messenger': A network-synced chat group.
+   */
   scope: GroupScope;
-  parentId?: URN; // If this is a 'messenger' group, this points to the 'local' template
 
-  // ✅ NEW: Rich Membership
+  /**
+   * If this is a 'messenger' group, this ID links back to the 'local' group
+   * that acted as the template/origin for the chat.
+   */
+  parentId?: URN;
+
+  /**
+   * Rich membership list containing status and timestamps.
+   */
   members: ContactGroupMember[];
 }
 

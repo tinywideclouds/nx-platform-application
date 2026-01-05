@@ -23,13 +23,13 @@ import { URN } from '@nx-platform-application/platform-types';
 // DOMAIN STATE & LOGIC
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import {
-  MessageContentParser,
-  ContentPayload,
-} from '@nx-platform-application/messenger-domain-message-content';
-import {
   ChatMessage,
-  MessageDeliveryStatus,
+  ChatParticipant,
 } from '@nx-platform-application/messenger-types';
+import {
+  MESSAGE_TYPE_TEXT,
+  MESSAGE_TYPE_GROUP_INVITE,
+} from '@nx-platform-application/messenger-domain-message-content';
 
 // UI COMPONENTS
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
@@ -38,14 +38,12 @@ import {
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
   MessageRendererComponent,
+  ChatInviteMessageComponent, // ✅ New Import
+  InviteViewModel, // ✅ New Import
 } from '@nx-platform-application/messenger-ui-chat';
+import { ChatInputComponent } from '../chat-input/chat-input.component'; // ✅ New Import
 
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
-
-// View Model
-type MessageViewModel = ChatMessage & {
-  contentPayload: ContentPayload | null;
-};
 
 @Component({
   selector: 'messenger-chat-conversation',
@@ -60,6 +58,8 @@ type MessageViewModel = ChatMessage & {
     ChatMessageDividerComponent,
     ChatTypingIndicatorComponent,
     MessageRendererComponent,
+    ChatInviteMessageComponent,
+    ChatInputComponent,
     ContactNamePipe,
   ],
   providers: [DatePipe],
@@ -69,14 +69,15 @@ type MessageViewModel = ChatMessage & {
 })
 export class ChatConversationComponent {
   private chatService = inject(ChatService);
-  private parser = inject(MessageContentParser);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
 
   // --- SIGNALS ---
   autoScroll = viewChild.required<AutoScrollDirective>('autoScroll');
 
-  rawMessages = this.chatService.messages;
+  // We use the raw messages now to allow the @switch to see the real typeId
+  chatMessages = this.chatService.messages;
+
   currentUserUrn = this.chatService.currentUserUrn;
   selectedConversation = this.chatService.selectedConversation;
   isLoading = this.chatService.isLoadingHistory;
@@ -84,8 +85,6 @@ export class ChatConversationComponent {
   typingActivity = this.chatService.typingActivity;
   readCursors = this.chatService.readCursors;
 
-  // Signal for Input
-  messageText = signal('');
   showNewMessageIndicator = signal(false);
 
   // Timer for Typing Indicators
@@ -93,15 +92,9 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
-  // --- COMPUTED VIEW MODEL ---
-  messagesVM = computed<MessageViewModel[]>(() => {
-    return this.rawMessages().map((msg) => ({
-      ...msg,
-      // Just wrap it if you strictly need the ViewModel type,
-      // but the data should ALREADY be there from the Mapper.
-      contentPayload: { kind: 'text', text: msg.textContent || '' },
-    }));
-  });
+  // --- CONSTANTS FOR TEMPLATE ---
+  readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
+  readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
 
   constructor() {
     effect((onCleanup) => {
@@ -147,7 +140,7 @@ export class ChatConversationComponent {
 
   shouldShowDateDivider(msg: ChatMessage, index: number): boolean {
     if (index === 0) return true;
-    const prevMsg = this.rawMessages()[index - 1];
+    const prevMsg = this.chatMessages()[index - 1];
 
     const currDate = Temporal.Instant.from(msg.sentTimestamp)
       .toZonedDateTimeISO('UTC')
@@ -163,42 +156,65 @@ export class ChatConversationComponent {
     return this.showNewMessageIndicator() && msg.id === this.firstUnreadId();
   }
 
+  /**
+   * Safe ViewModel Factory for Invites.
+   * Extracts group details from the payload for the Dumb Component.
+   */
+  getInviteViewModel(msg: ChatMessage): InviteViewModel {
+    if (!msg.payloadBytes) {
+      return { groupName: 'Unknown Group', groupUrn: '' };
+    }
+    try {
+      const parsed = JSON.parse(new TextDecoder().decode(msg.payloadBytes));
+      return {
+        groupName: parsed.name || 'Unnamed Group',
+        groupUrn: parsed.groupUrn || '',
+      };
+    } catch (e) {
+      console.warn('Failed to parse invite payload', e);
+      return { groupName: 'Corrupted Invite', groupUrn: '' };
+    }
+  }
+
   // --- ACTIONS ---
 
-  async onRetryMessage(msg: MessageViewModel): Promise<void> {
+  async onRetryMessage(msg: ChatMessage): Promise<void> {
     if (msg.status !== 'failed') return;
-
-    // Delegate recovery to service
     const restoredText = await this.chatService.recoverFailedMessage(msg.id);
-
-    if (restoredText) {
-      this.messageText.set(restoredText);
-    }
+    // TODO: Pass this text back to input if needed, or retry in place
+    console.log('Retried message:', restoredText);
   }
 
   onContentAction(urnString: string): void {
     this.router.navigate(['/contacts/edit', urnString]);
   }
 
-  onMessageInput(event: Event): void {
-    const val = (event.target as HTMLInputElement).value;
-    this.messageText.set(val);
-    if (val.length > 0) this.chatService.notifyTyping();
+  onTyping(): void {
+    this.chatService.notifyTyping();
   }
 
-  onSendMessage(): void {
-    const text = this.messageText().trim();
+  onSendMessage(text: string): void {
     const recipient = this.selectedConversation();
-
     if (text && recipient) {
       this.chatService.sendMessage(recipient, text);
-      this.messageText.set('');
     }
+  }
+
+  async onAcceptInvite(msg: ChatMessage): Promise<void> {
+    await this.chatService.acceptInvite(msg);
+    const vm = this.getInviteViewModel(msg);
+    if (vm.groupUrn) {
+      this.router.navigate(['/messenger', 'conversations', vm.groupUrn]);
+    }
+  }
+
+  async onRejectInvite(msg: ChatMessage): Promise<void> {
+    await this.chatService.rejectInvite(msg);
   }
 
   onAlertVisibility(show: boolean): void {
     if (show) {
-      const msgs = this.rawMessages();
+      const msgs = this.chatMessages();
       const latest = msgs[msgs.length - 1];
       if (latest?.textContent) {
         this.snackBar

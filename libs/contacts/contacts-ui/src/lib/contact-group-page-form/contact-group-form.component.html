@@ -5,12 +5,13 @@
     [hideRequiredMarker]="!isEditing()"
   >
     <mat-label>Group Name</mat-label>
-    <input matInput formControlName="name" />
+    <input aria-label="name" matInput formControlName="name" />
   </mat-form-field>
 
   <mat-form-field [floatLabel]="'always'" class="w-full">
     <mat-label>Description</mat-label>
     <textarea
+      aria-label="description"
       matInput
       formControlName="description"
       rows="3"
@@ -20,74 +21,118 @@
   <div>
     <label class="font-medium text-sm text-gray-700">Members</label>
     @if (isEditing()) {
-    <contacts-multi-selector
-      class="mt-1"
-      [allContacts]="allContacts()"
-      [selectedIds]="form.get('contactIds')?.value"
-      (selectedIdsChange)="form.get('contactIds')?.setValue($event)"
-    />
+      <contacts-multi-selector
+        class="mt-1"
+        [allContacts]="allContacts()"
+        [selectedIds]="form.get('contactIds')?.value"
+        (selectedIdsChange)="form.get('contactIds')?.setValue($event)"
+      />
     } @else {
-    <div
-      class="mt-1 border rounded-md overflow-hidden"
-      style="max-height: 300px; overflow-y: auto;"
-    >
-      @for (contact of groupMembers(); track trackContactById($index, contact)) {
-      <div
-        class="flex items-center p-3 space-x-3 border-b last:border-b-0 bg-gray-50"
-      >
-        <contacts-avatar
-          [profilePictureUrl]="getProfilePicture(contact)"
-          [initials]="getInitials(contact)"
-        ></contacts-avatar>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium text-gray-900 truncate">
-            {{ contact.alias }}
+      <div class="mt-1 border rounded-md overflow-hidden group-form">
+        @for (
+          contact of groupMembers();
+          track trackContactById($index, contact)
+        ) {
+          <div
+            class="flex items-center p-3 space-x-3 border-b last:border-b-0 bg-gray-50"
+          >
+            <contacts-avatar
+              [profilePictureUrl]="getProfilePicture(contact)"
+              [initials]="getInitials(contact)"
+            ></contacts-avatar>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-gray-900 truncate">
+                {{ contact.alias }}
+              </div>
+              <div class="text-sm text-gray-500 truncate">
+                {{ contact.firstName }} {{ contact.surname }}
+              </div>
+            </div>
           </div>
-          <div class="text-sm text-gray-500 truncate">
-            {{ contact.firstName }} {{ contact.surname }}
+        } @empty {
+          <div class="p-4 text-center text-gray-500">
+            No members in this group.
           </div>
-        </div>
+        }
       </div>
-      } @empty {
-      <div class="p-4 text-center text-gray-500">
-        No members in this group.
-      </div>
-      }
-    </div>
     }
   </div>
 
-  @if (isEditing()) {
-  <div class="flex justify-end gap-2 pt-4">
-    <button
-      type="button"
-      (click)="onCancel()"
-      mat-button
-      data-testid="cancel-button"
-    >
-      Cancel
-    </button>
-    <button
-      type="submit"
-      [disabled]="form.invalid"
-      mat-flat-button
-      color="primary"
-      data-testid="save-button"
-    >
-      Save Group
-    </button>
-  </div>
-  } @else {
-  <div class="flex justify-end gap-2 pt-4">
-    <button
-      type="button"
-      (click)="isEditing.set(true)"
-      mat-flat-button
-      color="primary"
-      data-testid="edit-button"
-    >
-      Edit
-    </button>
-  </div>
+  @if (!readonly()) {
+    @if (isEditing()) {
+      <div class="flex justify-between items-center pt-4">
+        @if (group()) {
+          <button
+            type="button"
+            mat-button
+            color="warn"
+            (click)="onDelete()"
+            data-testid="delete-button"
+            class="!text-red-600"
+          >
+            <mat-icon>delete</mat-icon> Delete Group
+          </button>
+        } @else {
+          <div></div>
+        }
+
+        <div class="flex gap-2">
+          <button
+            type="button"
+            (click)="onCancel()"
+            mat-button
+            data-testid="cancel-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            [disabled]="form.invalid"
+            mat-flat-button
+            color="primary"
+            data-testid="save-button"
+          >
+            Save Group
+          </button>
+        </div>
+      </div>
+
+      @if (group() && linkedChildrenCount() > 0) {
+        <div
+          class="mt-4 p-3 bg-red-50 border border-red-100 rounded flex items-start gap-3"
+        >
+          <mat-icon class="text-red-500 mt-0.5 text-lg">info</mat-icon>
+          <div class="flex-1">
+            <p class="text-sm text-red-800 font-medium mb-1">
+              Linked Network Chats
+            </p>
+            <p class="text-xs text-red-600 mb-2">
+              This group is used as a template for
+              {{ linkedChildrenCount() }} active chats.
+            </p>
+
+            <mat-checkbox
+              [checked]="deleteRecursive()"
+              (change)="deleteRecursive.set($event.checked)"
+              color="warn"
+            >
+              <span class="text-sm">Delete linked chats as well</span>
+            </mat-checkbox>
+          </div>
+        </div>
+      }
+    } @else {
+      <div class="flex justify-end gap-2 pt-4">
+        <button
+          type="button"
+          (click)="isEditing.set(true)"
+          mat-flat-button
+          color="primary"
+          data-testid="edit-button"
+        >
+          Edit
+        </button>
+      </div>
+    }
   }
 </form>

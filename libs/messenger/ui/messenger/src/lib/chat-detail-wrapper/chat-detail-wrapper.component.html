@@ -1,0 +1,31 @@
+<div class="flex flex-col h-full bg-white">
+  @if (isKeyMissing()) {
+    <div class="bg-red-50 border-b border-red-200 p-4 flex gap-3 items-start">
+      <mat-icon class="text-red-600 shrink-0">encrypted_off</mat-icon>
+      <div>
+        <h4 class="text-red-800 font-medium text-sm">
+          Encryption Keys Missing
+        </h4>
+        <p class="text-red-600 text-xs mt-1">
+          This user has not set up secure messaging yet. You cannot send
+          messages until they log in.
+        </p>
+      </div>
+    </div>
+  }
+
+  <div class="flex-grow overflow-y-auto">
+    @if (isGroup()) {
+      <messenger-chat-group-detail [groupId]="contactId()" />
+    } @else {
+      <contacts-detail [readonly]="true" [contactId]="contactId()" />
+    }
+  </div>
+
+  @if (!isGroup()) {
+    <messenger-share-contact-footer
+      [contactToShare]="contactId()"
+      (share)="onShare($event)"
+    />
+  }
+</div>

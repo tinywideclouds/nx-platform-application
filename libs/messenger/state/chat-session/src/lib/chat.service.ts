@@ -8,7 +8,11 @@ import {
   computed,
 } from '@angular/core';
 import { throttleTime, filter, take, skip } from 'rxjs/operators';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import {
+  takeUntilDestroyed,
+  toObservable,
+  toSignal,
+} from '@angular/core/rxjs-interop';
 import {
   firstValueFrom,
   combineLatest,
@@ -37,8 +41,14 @@ import {
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { SyncOptions } from '@nx-platform-application/messenger-state-cloud-sync';
+
+// REFACTOR: Import APIs
+import {
+  GatekeeperApi,
+  AddressBookManagementApi,
+} from '@nx-platform-application/contacts-api';
+import { BlockedIdentity } from '@nx-platform-application/contacts-types';
 
 // Domain Imports
 import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
@@ -48,6 +58,7 @@ import { ChatKeyService } from '@nx-platform-application/messenger-domain-identi
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
+import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
 
 import {
   MessageContentParser,
@@ -72,8 +83,11 @@ export class ChatService {
   private readonly liveService = inject(ChatLiveDataService);
   private readonly storageService = inject(ChatStorageService);
   private readonly keyService = inject(KeyCacheService);
-  private readonly contactsService = inject(ContactsStateService);
   private readonly parser = inject(MessageContentParser);
+
+  // APIs
+  private readonly gatekeeper = inject(GatekeeperApi);
+  private readonly addressBookManager = inject(AddressBookManagementApi);
 
   // Domain Services
   private readonly conversationService = inject(ConversationService);
@@ -83,12 +97,13 @@ export class ChatService {
   private readonly outboxWorker = inject(OutboxWorkerService);
   private readonly pairingService = inject(DevicePairingService);
   private readonly quarantineService = inject(QuarantineService);
+  private readonly groupProtocol = inject(GroupProtocolService);
 
   private readonly destroyRef = inject(DestroyRef);
 
   private myKeys = signal<PrivateKeys | null>(null);
-  private identityLinkMap = signal(new Map<string, URN>());
-  private blockedSet = signal(new Set<string>());
+
+  // Execution Lock
   private operationLock = Promise.resolve();
 
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
@@ -110,8 +125,23 @@ export class ChatService {
   );
   public readonly readCursors = this.conversationService.readCursors;
 
-  private readonly messengerBlockedSet =
-    this.contactsService.getFilteredBlockedSet('messenger');
+  // FIX: Signal conversion for Computed Blocked Set
+  private readonly blockedIdentities = toSignal(this.gatekeeper.blocked$, {
+    initialValue: [] as BlockedIdentity[],
+  });
+
+  private readonly messengerBlockedSet = computed(() => {
+    const all = this.blockedIdentities();
+    const set = new Set<string>();
+    for (const b of all) {
+      if (b.scopes.includes('messenger') || b.scopes.includes('all')) {
+        set.add(b.urn.toString());
+      }
+    }
+    return set;
+  });
+
+  public readonly blockedSet = signal(new Set<string>()); // Derived copy for ingestion
 
   public readonly currentUserUrn = computed(() => {
     const user = this.authService.currentUser();
@@ -153,8 +183,6 @@ export class ChatService {
 
       const currentUser = this.authService.currentUser();
       if (!currentUser) throw new Error('Authentication failed.');
-
-      await this.refreshIdentityMap();
 
       const senderUrn = this.currentUserUrn();
       if (!senderUrn) throw new Error('No user URN found');
@@ -480,10 +508,6 @@ export class ChatService {
 
     if (success) {
       if (options.syncMessages) await this.refreshActiveConversations();
-      if (options.syncContacts) {
-        await this.refreshIdentityMap();
-        await this.refreshActiveConversations();
-      }
     }
   }
 
@@ -625,19 +649,6 @@ export class ChatService {
     this.activeConversations.set(summaries);
   }
 
-  private async refreshIdentityMap(): Promise<void> {
-    try {
-      const links = await this.contactsService.getAllIdentityLinks();
-      const newMap = new Map<string, URN>();
-      links.forEach((link) =>
-        newMap.set(link.authUrn.toString(), link.contactId),
-      );
-      this.identityLinkMap.set(newMap);
-    } catch (e) {
-      this.logger.error('Failed to load identity links', e);
-    }
-  }
-
   private handleConnectionStatus(): void {
     this.liveService.status$
       .pipe(
@@ -665,20 +676,6 @@ export class ChatService {
       .subscribe(() => this.fetchAndProcessMessages());
   }
 
-  private async runExclusive<T>(task: () => Promise<T>): Promise<T> {
-    const previousLock = this.operationLock;
-    let releaseLock: () => void;
-    this.operationLock = new Promise((resolve) => {
-      releaseLock = resolve;
-    });
-    try {
-      await previousLock;
-      return await task();
-    } finally {
-      releaseLock!();
-    }
-  }
-
   public async sessionLogout(): Promise<void> {
     this.liveService.disconnect();
     this.resetMemoryState();
@@ -690,7 +687,7 @@ export class ChatService {
     try {
       await Promise.all([
         this.storageService.clearDatabase(),
-        this.contactsService.clearDatabase(),
+        this.addressBookManager.clearData(),
         this.keyService.clear(),
         this.cryptoService.clearKeys(),
         this.outboxWorker.clearAllTasks(),
@@ -708,7 +705,6 @@ export class ChatService {
 
   private resetMemoryState(): void {
     this.myKeys.set(null);
-    this.identityLinkMap.set(new Map());
     this.blockedSet.set(new Set());
     this.activeConversations.set([]);
     this.conversationService.loadConversation(null, null);
@@ -778,7 +774,7 @@ export class ChatService {
     scope: 'messenger' | 'all' = 'messenger',
   ): Promise<void> {
     await Promise.all(
-      urns.map((urn) => this.contactsService.blockIdentity(urn, [scope])),
+      urns.map((urn) => this.gatekeeper.blockIdentity(urn, [scope])),
     );
     await Promise.all(urns.map((urn) => this.quarantineService.reject(urn)));
   }
@@ -796,11 +792,55 @@ export class ChatService {
   }
 
   public async clearLocalContacts(): Promise<void> {
-    await this.contactsService.performContactsWipe();
+    await this.addressBookManager.clearData();
     this.activeConversations.set([]);
   }
 
   public triggerWorker(senderUrn: URN, keys: PrivateKeys): void {
     this.outboxWorker.processQueue(senderUrn, keys);
+  }
+
+  async createNetworkGroup(localGroupUrn: URN): Promise<URN> {
+    const keys = this.myKeys();
+    const me = this.currentUserUrn();
+
+    if (!keys || !me) {
+      throw new Error('Cannot create group: No active session');
+    }
+
+    return this.groupProtocol.upgradeGroup(localGroupUrn, keys, me);
+  }
+
+  // ✅ DELEGATED: Invite Logic moved to GroupProtocolService
+  async acceptInvite(msg: ChatMessage): Promise<void> {
+    const keys = this.myKeys();
+    const me = this.currentUserUrn();
+    if (!keys || !me) {
+      this.logger.warn('[ChatService] Cannot accept invite: No active session');
+      return;
+    }
+    await this.groupProtocol.acceptInvite(msg, keys, me);
+  }
+
+  async rejectInvite(msg: ChatMessage): Promise<void> {
+    const keys = this.myKeys();
+    const me = this.currentUserUrn();
+    if (!keys || !me) return;
+
+    await this.groupProtocol.rejectInvite(msg, keys, me);
+  }
+
+  private async runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    const previousLock = this.operationLock;
+    let releaseLock: () => void;
+    this.operationLock = new Promise((resolve) => {
+      releaseLock = resolve;
+    });
+    try {
+      await previousLock;
+      return await task();
+    } finally {
+      releaseLock!();
+    }
   }
 }

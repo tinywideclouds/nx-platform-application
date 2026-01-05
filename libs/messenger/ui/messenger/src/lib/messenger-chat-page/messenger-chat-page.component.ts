@@ -9,6 +9,7 @@ import {
 import { Router, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
+import { Temporal } from '@js-temporal/polyfill';
 
 // SHARED & UI
 import {
@@ -26,7 +27,14 @@ import { MessageRequestReviewComponent } from '../message-request-review/message
 
 // SERVICES
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+
+// ✅ REFACTOR: Import API Tokens
+import {
+  AddressBookApi,
+  AddressBookManagementApi,
+  GatekeeperApi,
+} from '@nx-platform-application/contacts-api';
+
 import {
   Contact,
   ContactGroup,
@@ -72,7 +80,12 @@ export class MessengerChatPageComponent {
   protected router = inject(Router);
   private route = inject(ActivatedRoute);
   private chatService = inject(ChatService);
-  private contactsService = inject(ContactsStorageService);
+
+  // ✅ REFACTOR: Inject New APIs
+  private addressBook = inject(AddressBookApi);
+  private addressBookManager = inject(AddressBookManagementApi);
+  private gatekeeper = inject(GatekeeperApi);
+
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
@@ -108,16 +121,19 @@ export class MessengerChatPageComponent {
   loadingPreviews = signal<Set<string>>(new Set());
 
   // --- DATA SOURCES ---
-  private allContacts = toSignal(this.contactsService.contacts$, {
+
+  // ✅ REFACTOR: Use AddressBookApi
+  private allContacts = toSignal(this.addressBook.contacts$, {
     initialValue: [] as Contact[],
   });
 
-  private allGroups = toSignal(this.contactsService.groups$, {
+  private allGroups = toSignal(this.addressBook.groups$, {
     initialValue: [] as ContactGroup[],
   });
 
   // Source of Truth for Pending Requests (Gatekeeper)
-  pendingRequests = toSignal(this.contactsService.pending$, {
+  // ✅ REFACTOR: Use GatekeeperApi
+  pendingRequests = toSignal(this.gatekeeper.pending$, {
     initialValue: [] as PendingIdentity[],
   });
 
@@ -235,9 +251,7 @@ export class MessengerChatPageComponent {
     const urnStr = urn.toString();
     const cached = this.previewMessages()[urnStr];
 
-    // ✅ FIX: Relaxed Check
     // If we have cached content, show it.
-    // If we have cached "Empty Array" (from a failed/early fetch), allow retry!
     if (cached && cached.length > 0) {
       return;
     }
@@ -295,6 +309,8 @@ export class MessengerChatPageComponent {
       const isEmail = urn.entityType === 'email';
       const initialAlias = isEmail ? urn.entityId : 'New Contact';
 
+      const now = Temporal.Now.instant().toString() as ISODateTimeString;
+
       const newContact: Contact = {
         id: newContactId,
         alias: initialAlias,
@@ -307,20 +323,22 @@ export class MessengerChatPageComponent {
           messenger: {
             id: urn, // Link the Service Contact ID (The Handle)
             alias: initialAlias,
-            lastSeen: new Date().toISOString() as ISODateTimeString,
+            lastSeen: now,
           },
         },
-        lastModified: new Date().toISOString() as ISODateTimeString,
+        lastModified: now,
       };
 
       // 3. Save Contact
-      await this.contactsService.saveContact(newContact);
+      // ✅ REFACTOR: Use AddressBookManagementApi for Write
+      await this.addressBookManager.saveContact(newContact);
 
       // 4. Promote Messages (Data Move + Index Update)
       await this.chatService.promoteQuarantinedMessages(urn, newContactId);
 
       // 5. Cleanup Pending
-      await this.contactsService.deletePending(urn);
+      // ✅ REFACTOR: Use GatekeeperApi
+      await this.gatekeeper.deletePending(urn);
 
       // 6. Redirect to "Edit Contact" Page
       this.showFeedback('Contact created. Opening details...');

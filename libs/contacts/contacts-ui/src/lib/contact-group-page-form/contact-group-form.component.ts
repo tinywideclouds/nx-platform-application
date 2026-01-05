@@ -1,5 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-page-form/contact-group-form.component.ts
-
 import {
   Component,
   input,
@@ -17,13 +15,18 @@ import {
   FormGroup,
   Validators,
 } from '@angular/forms';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
-// --- 1. Import URN ---
+import {
+  Contact,
+  ContactGroup,
+  ContactGroupMember,
+} from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatCheckboxModule } from '@angular/material/checkbox'; // ✅ Material Checkbox
+import { MatIconModule } from '@angular/material/icon';
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
@@ -31,10 +34,13 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
   standalone: true,
   imports: [
     ReactiveFormsModule,
+    // Note: No FormsModule here. strictly signals.
     ContactMultiSelectorComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    MatCheckboxModule,
+    MatIconModule,
     ContactAvatarComponent,
   ],
   templateUrl: './contact-group-form.component.html',
@@ -43,15 +49,27 @@ import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.compone
 export class ContactGroupFormComponent {
   group = input<ContactGroup | null>(null);
   allContacts = input.required<Contact[]>();
+
+  // ✅ NEW: To display recursive delete option
+  linkedChildrenCount = input(0);
+
   startInEditMode = input(false);
+  readonly = input(false);
+
   save = output<ContactGroup>();
+
+  // ✅ NEW: Emits true if recursive delete is requested
+  delete = output<{ recursive: boolean }>();
 
   private fb = inject(FormBuilder);
   isEditing = signal(false);
 
+  // ✅ Pure Signal State for the checkbox
+  deleteRecursive = signal(true);
+
   // The form is kept identical to the original: it holds string IDs
   form: FormGroup = this.fb.group({
-    id: [''], // This will hold the string version of the URN
+    id: [''],
     name: ['', Validators.required],
     description: [''],
     contactIds: [[] as string[]],
@@ -69,19 +87,16 @@ export class ContactGroupFormComponent {
       this.isEditing.set(this.startInEditMode());
     });
 
-    // --- 2. Update Input effect ---
     effect(() => {
       const currentGroup = this.group();
       if (currentGroup) {
-        // Convert URNs to strings before patching the form
         this.form.patchValue({
           id: currentGroup.id.toString(),
           name: currentGroup.name,
           description: currentGroup.description,
-          contactIds: currentGroup.members.map((id) => id.toString()),
+          contactIds: currentGroup.members.map((m) => m.contactId.toString()),
         });
       } else {
-        // Reset to primitives
         this.form.reset({
           id: '',
           name: '',
@@ -96,10 +111,8 @@ export class ContactGroupFormComponent {
         this.form.enable();
       } else {
         this.form.disable();
-        // --- 3. Update Reset effect ---
         if (this.group()) {
           const currentGroup = this.group()!;
-          // Convert URNs to strings before resetting the form
           this.form.reset({
             id: currentGroup.id.toString(),
             name: currentGroup.name,
@@ -111,47 +124,56 @@ export class ContactGroupFormComponent {
     });
   }
 
-  // --- 4. Update computed property ---
   groupMembers = computed(() => {
-    // Create the Map using string keys
     const membersMap = new Map(
       this.allContacts().map((c) => [c.id.toString(), c]),
     );
-    // Get the string[] from the form
     const contactIds = this.contactIdsValue() ?? [];
-
-    // This logic now works perfectly
     return contactIds
       .map((id: string) => membersMap.get(id))
       .filter((c: Contact | undefined): c is Contact => Boolean(c));
   });
 
-  // --- 5. Update Output method ---
   onSave(): void {
     if (this.form.valid) {
       const formValue = this.form.value;
       const originalGroup = this.group();
+      if (!originalGroup) return;
 
-      // We must construct a valid ContactGroup to emit
+      const selectedIdStrings = formValue.contactIds as string[];
+      const updatedMembers: ContactGroupMember[] = selectedIdStrings.map(
+        (idStr) => {
+          const idUrn = URN.parse(idStr);
+          const existingMember = originalGroup.members.find(
+            (m) => m.contactId.toString() === idStr,
+          );
+          if (existingMember) return existingMember;
+          return {
+            contactId: idUrn,
+            status: 'added',
+          };
+        },
+      );
+
       this.save.emit({
-        // Spread the original group to preserve non-form properties
         ...originalGroup,
-        // The ID is the original URN, not the string from the form
-        id: originalGroup!.id,
         name: formValue.name,
         description: formValue.description,
-        scope: 'local',
-        // Convert string[] from form back to URN[]
-        members: formValue.contactIds.map((id: string) => URN.parse(id)),
+        scope: originalGroup.scope || 'local',
+        members: updatedMembers,
       });
     }
+  }
+
+  // ✅ NEW: Delete Handler reads pure signal
+  onDelete(): void {
+    this.delete.emit({ recursive: this.deleteRecursive() });
   }
 
   onCancel(): void {
     this.isEditing.set(false);
   }
 
-  // --- 6. Add trackBy function ---
   trackContactById(index: number, contact: Contact): string {
     return contact.id.toString();
   }

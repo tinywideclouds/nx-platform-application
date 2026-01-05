@@ -1,12 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Component, signal } from '@angular/core';
-import {
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import {} from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 // --- 1. Import URN ---
-import { URN } from '@nx-platform-application/platform-types';
+import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 // --- 2. Import NoopAnimationsModule ---
@@ -31,6 +29,7 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
     phoneNumbers: [],
     emailAddresses: [],
+    lastModified: '' as ISODateTimeString,
   } as Contact,
   {
     id: mockContact2Urn,
@@ -41,14 +40,17 @@ const MOCK_CONTACTS: Contact[] = [
     serviceContacts: {},
     phoneNumbers: [],
     emailAddresses: [],
+    lastModified: '' as ISODateTimeString,
   } as Contact,
 ];
 
 const MOCK_GROUP: ContactGroup = {
   id: mockGroupUrn,
   name: 'Test Group',
-  description: 'A test group',
-  contactIds: [mockContact2Urn], // <-- Use URN
+  scope: 'local',
+  members: [
+    { contactId: mockContact2Urn, status: 'added' }
+  ]
 };
 
 // --- Test Host (This is the original, correct setup) ---
@@ -99,7 +101,7 @@ describe('ContactGroupFormComponent', () => {
     componentEl = fixture.nativeElement;
 
     formComponent = fixture.debugElement.query(
-      By.directive(ContactGroupFormComponent)
+      By.directive(ContactGroupFormComponent),
     ).componentInstance;
 
     fixture.detectChanges();
@@ -115,7 +117,7 @@ describe('ContactGroupFormComponent', () => {
     fixture.detectChanges();
 
     const nameInput = componentEl.querySelector(
-      'input[formControlName="name"]'
+      'input[formControlName="name"]',
     ) as HTMLInputElement;
     expect(nameInput.value).toBe('');
     expect(formComponent.form.value.contactIds).toEqual([]);
@@ -129,7 +131,7 @@ describe('ContactGroupFormComponent', () => {
     await fixture.whenStable();
 
     const nameInput = componentEl.querySelector(
-      'input[formControlName="name"]'
+      'input[formControlName="name"]',
     ) as HTMLInputElement;
     expect(nameInput.value).toBe('Test Group');
     // Assert against the string version in the form
@@ -139,7 +141,7 @@ describe('ContactGroupFormComponent', () => {
     ]);
 
     const selectorCheckboxes = componentEl.querySelectorAll<HTMLInputElement>(
-      'contacts-multi-selector input[type="checkbox"]'
+      'contacts-multi-selector input[type="checkbox"]',
     );
     expect(selectorCheckboxes.length).toBe(MOCK_CONTACTS.length);
     expect(selectorCheckboxes[0].checked).toBe(false);
@@ -153,7 +155,7 @@ describe('ContactGroupFormComponent', () => {
     await fixture.whenStable();
 
     const firstCheckbox = fixture.debugElement.query(
-      By.css('contacts-multi-selector input[type="checkbox"]')
+      By.css('contacts-multi-selector input[type="checkbox"]'),
     ).nativeElement as HTMLInputElement;
 
     firstCheckbox.click();
@@ -185,7 +187,7 @@ describe('ContactGroupFormComponent', () => {
     await fixture.whenStable();
 
     const saveButton = fixture.debugElement.query(
-      By.css('[data-testid="save-button"]')
+      By.css('[data-testid="save-button"]'),
     ).nativeElement as HTMLButtonElement;
     saveButton.click();
     fixture.detectChanges();
@@ -195,7 +197,10 @@ describe('ContactGroupFormComponent', () => {
     expect(hostComponent.savedGroup).toBeTruthy();
     expect(hostComponent.savedGroup?.name).toBe('New Group Name');
     expect(hostComponent.savedGroup?.id).toBe(mockGroupUrn); // Preserved URN
-    expect(hostComponent.savedGroup?.contactIds).toEqual([mockContact1Urn]); // Converted URN
+
+    expect(hostComponent.savedGroup?.members).toEqual([
+      { contactId: mockContact1Urn, status: 'added' }
+    ]);
   });
 
   it('should set isEditing to false on cancel click', () => {
@@ -204,7 +209,7 @@ describe('ContactGroupFormComponent', () => {
     expect(formComponent.isEditing()).toBe(true);
 
     const cancelButton = fixture.debugElement.query(
-      By.css('[data-testid="cancel-button"]')
+      By.css('[data-testid="cancel-button"]'),
     ).nativeElement as HTMLButtonElement;
     cancelButton.click();
     fixture.detectChanges();
@@ -218,7 +223,7 @@ describe('ContactGroupFormComponent', () => {
     await fixture.whenStable();
 
     const saveButton = fixture.debugElement.query(
-      By.css('[data-testid="save-button"]')
+      By.css('[data-testid="save-button"]'),
     ).nativeElement as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
 
@@ -236,7 +241,7 @@ describe('ContactGroupFormComponent', () => {
     expect(formComponent.isEditing()).toBe(false);
 
     const editButton = fixture.debugElement.query(
-      By.css('[data-testid="edit-button"]')
+      By.css('[data-testid="edit-button"]'),
     ).nativeElement;
     editButton.click();
     fixture.detectChanges();

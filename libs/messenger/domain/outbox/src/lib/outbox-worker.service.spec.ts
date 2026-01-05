@@ -1,107 +1,125 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
-import { MockProvider } from 'ng-mocks';
+import { OutboxWorkerService } from './outbox-worker.service';
 import { URN } from '@nx-platform-application/platform-types';
-import { OutboundTask } from '@nx-platform-application/messenger-types';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { Logger } from '@nx-platform-application/console-logger';
-import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockProvider } from 'ng-mocks';
+import { of } from 'rxjs';
 
 import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-
-import { OutboxWorkerService } from './outbox-worker.service';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
+import {
+  MessengerCryptoService,
+  PrivateKeys,
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
+import { Logger } from '@nx-platform-application/console-logger';
+// REMOVED: MessageMetadataService import (No longer used)
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 describe('OutboxWorkerService', () => {
   let service: OutboxWorkerService;
-  let storage: OutboxStorage;
-  let metadataService: MessageMetadataService;
+  let keyCache: KeyCacheService;
+  let crypto: MessengerCryptoService;
+  let sendService: ChatSendService;
+  let identityResolver: IdentityResolver;
 
-  const mockSender = URN.parse('urn:contacts:user:me');
-  const mockKeys = { encKey: {} as any, sigKey: {} as any };
+  const myUrn = URN.parse('urn:contacts:user:me');
+  const recipientUrn = URN.parse('urn:contacts:user:bob');
+  const networkUrn = URN.parse('urn:identity:user:uuid-bob-123'); // Network Handle
 
-  let task: OutboundTask; // Defined here, initialized in beforeEach
+  const myKeys = {} as PrivateKeys;
+  const rawPayload = new Uint8Array([1, 2, 3]);
 
   beforeEach(() => {
-    // ✅ FIX: Re-initialize task before EVERY test to prevent 'sent' state leaking
-    task = {
-      id: 't1',
-      messageId: 'm1',
-      conversationUrn: URN.parse('urn:messenger:group:g1'),
-      typeId: URN.parse('urn:message:type:text'),
-      payload: new Uint8Array([1]),
-      tags: [URN.parse('urn:tags:label:test')],
-      status: 'queued',
-      createdAt: '2025-01-01T10:00:00Z' as any,
-      recipients: [
-        {
-          urn: URN.parse('urn:contacts:user:alice'),
-          status: 'pending',
-          attempts: 0,
-        },
-      ],
-    };
+    vi.clearAllMocks();
 
     TestBed.configureTestingModule({
       providers: [
         OutboxWorkerService,
         MockProvider(OutboxStorage, {
-          // Return the fresh task instance
-          getPendingTasks: vi.fn().mockResolvedValue([task]),
+          getPendingTasks: vi.fn().mockResolvedValue([]),
           updateTaskStatus: vi.fn().mockResolvedValue(undefined),
           updateRecipientProgress: vi.fn().mockResolvedValue(undefined),
-          clearAll: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(KeyCacheService, {
           getPublicKey: vi.fn().mockResolvedValue({}),
         }),
         MockProvider(MessengerCryptoService, {
-          encryptAndSign: vi.fn().mockResolvedValue({ id: 'env-1' }),
+          encryptAndSign: vi.fn().mockResolvedValue({ isEphemeral: false }),
         }),
         MockProvider(ChatSendService, {
-          sendMessage: vi.fn().mockReturnValue(of({ success: true })),
-        }),
-        MockProvider(MessageMetadataService, {
-          wrap: vi.fn().mockReturnValue(new Uint8Array([1, 1, 1])),
+          sendMessage: vi.fn().mockReturnValue(of(undefined)),
         }),
         MockProvider(Logger),
+        MockProvider(IdentityResolver, {
+          resolveToHandle: vi.fn().mockResolvedValue(networkUrn),
+        }),
       ],
     });
 
     service = TestBed.inject(OutboxWorkerService);
-    storage = TestBed.inject(OutboxStorage);
-    metadataService = TestBed.inject(MessageMetadataService);
+    keyCache = TestBed.inject(KeyCacheService);
+    crypto = TestBed.inject(MessengerCryptoService);
+    sendService = TestBed.inject(ChatSendService);
+    identityResolver = TestBed.inject(IdentityResolver);
   });
 
-  it('should call metadataService.wrap during delivery', async () => {
-    await service.processQueue(mockSender, mockKeys);
+  describe('sendEphemeralBatch (Fast Lane)', () => {
+    it('should pass RAW bytes directly to crypto without wrapping', async () => {
+      const recipients = [recipientUrn];
+      const typeId = URN.parse('urn:message:type:typing');
 
-    expect(metadataService.wrap).toHaveBeenCalledWith(
-      task.payload,
-      task.conversationUrn,
-      task.tags,
-    );
-  });
+      await service.sendEphemeralBatch(
+        recipients,
+        typeId,
+        rawPayload,
+        myUrn,
+        myKeys,
+      );
 
-  it('should update recipient progress on success', async () => {
-    await service.processQueue(mockSender, mockKeys);
+      // 1. Verify Identity Resolution (For Routing only)
+      expect(identityResolver.resolveToHandle).toHaveBeenCalledWith(
+        recipientUrn,
+      );
 
-    expect(storage.updateRecipientProgress).toHaveBeenCalledWith(
-      task.id,
-      expect.arrayContaining([
+      // 2. Verify Payload Integrity
+      // The worker must NOT modify the payload.
+      // It should pass [1, 2, 3] directly to the encryption service.
+      expect(crypto.encryptAndSign).toHaveBeenCalledWith(
         expect.objectContaining({
-          urn: task.recipients[0].urn,
-          status: 'sent',
+          payloadBytes: rawPayload,
         }),
-      ]),
-    );
+        networkUrn,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 
-  it('should mark task as completed when all recipients are sent', async () => {
-    await service.processQueue(mockSender, mockKeys);
+  describe('processTask (Slow Lane)', () => {
+    it('should pass stored payload directly to crypto', async () => {
+      const task = {
+        id: 'task-1',
+        typeId: URN.parse('urn:message:type:text'),
+        payload: rawPayload, // Already wrapped by Strategy
+        recipients: [{ urn: recipientUrn, status: 'pending' }],
+        conversationUrn: recipientUrn,
+        messageId: 'msg-1',
+      } as any;
 
-    expect(storage.updateTaskStatus).toHaveBeenCalledWith(task.id, 'completed');
+      const storage = TestBed.inject(OutboxStorage);
+      vi.mocked(storage.getPendingTasks).mockResolvedValue([task]);
+
+      await service.processQueue(myUrn, myKeys);
+
+      expect(crypto.encryptAndSign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payloadBytes: rawPayload, // Passthrough verification
+        }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 });

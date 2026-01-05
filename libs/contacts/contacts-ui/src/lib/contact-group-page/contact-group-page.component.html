@@ -30,7 +30,9 @@
     [group]="groupToEdit()"
     [allContacts]="allContacts()"
     [startInEditMode]="startInEditMode()"
+    [linkedChildrenCount]="linkedChildrenCount()"
     (save)="onSave($event)"
+    (delete)="onDelete($event)"
   />
 
   @if (subGroups().length > 0) {

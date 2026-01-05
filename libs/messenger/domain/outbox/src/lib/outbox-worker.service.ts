@@ -1,10 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import {
   TransportMessage,
   OutboundTask,
-  RecipientProgress,
 } from '@nx-platform-application/messenger-types';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
@@ -13,21 +15,18 @@ import {
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { Logger } from '@nx-platform-application/console-logger';
-import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
-
-// ✅ Import Contract from Infrastructure
 import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
+import { Temporal } from '@js-temporal/polyfill';
 
 @Injectable({ providedIn: 'root' })
 export class OutboxWorkerService {
-  // ✅ Inject the Contract Token
   private readonly repo = inject(OutboxStorage);
-
   private readonly keyCache = inject(KeyCacheService);
   private readonly crypto = inject(MessengerCryptoService);
   private readonly sendService = inject(ChatSendService);
   private readonly logger = inject(Logger);
-  private readonly metadataService = inject(MessageMetadataService);
+  private readonly identityResolver = inject(IdentityResolver);
 
   private isProcessing = false;
 
@@ -45,9 +44,40 @@ export class OutboxWorkerService {
     }
   }
 
-  async clearAllTasks(): Promise<void> {
-    await this.repo.clearAll();
+  /**
+   * FAST LANE: Handles ephemeral signals.
+   * Contract: 'payloadBytes' is the final Wire Format (Raw or Wrapped).
+   * The Worker does NOT inspect or modify the payload.
+   */
+  async sendEphemeralBatch(
+    recipients: URN[],
+    typeId: URN,
+    payloadBytes: Uint8Array,
+    senderUrn: URN,
+    myKeys: PrivateKeys,
+  ): Promise<void> {
+    const promises = recipients.map(async (recipientUrn) => {
+      try {
+        await this.coreDelivery(
+          recipientUrn,
+          payloadBytes,
+          typeId,
+          senderUrn,
+          myKeys,
+          undefined,
+          true,
+        );
+      } catch (e) {
+        this.logger.warn(
+          `[OutboxWorker] Ephemeral send failed for ${recipientUrn.toString()}`,
+        );
+      }
+    });
+
+    await Promise.allSettled(promises);
   }
+
+  // --- Internal Helpers ---
 
   private async processTask(
     task: OutboundTask,
@@ -60,7 +90,17 @@ export class OutboxWorkerService {
       if (recipient.status === 'sent') continue;
 
       try {
-        await this.deliverToRecipient(task, recipient, senderUrn, myKeys);
+        // The Strategy has already formatted the payload (Resolved & Wrapped).
+        // We deliver it opaquely.
+        await this.coreDelivery(
+          recipient.urn,
+          task.payload,
+          task.typeId,
+          senderUrn,
+          myKeys,
+          task.messageId,
+        );
+
         recipient.status = 'sent';
       } catch (error: any) {
         recipient.status = 'failed';
@@ -71,7 +111,6 @@ export class OutboxWorkerService {
           error,
         );
       }
-
       await this.repo.updateRecipientProgress(task.id, task.recipients);
     }
 
@@ -79,35 +118,51 @@ export class OutboxWorkerService {
     await this.repo.updateTaskStatus(task.id, allDone ? 'completed' : 'failed');
   }
 
-  private async deliverToRecipient(
-    task: OutboundTask,
-    recipient: RecipientProgress,
-    senderUrn: URN,
+  private async coreDelivery(
+    recipientContactUrn: URN,
+    finalPayloadBytes: Uint8Array,
+    typeId: URN,
+    senderContactUrn: URN,
     myKeys: PrivateKeys,
+    messageId?: string,
+    isEphemeral = false,
   ): Promise<void> {
-    const recipientKeys = await this.keyCache.getPublicKey(recipient.urn);
+    // 1. Resolve Envelope Identities (Local -> Network)
+    // This is for ROUTING, not for the payload context.
+    const targetRoutingUrn =
+      await this.identityResolver.resolveToHandle(recipientContactUrn);
+    const payloadSenderUrn =
+      await this.identityResolver.resolveToHandle(senderContactUrn);
 
-    const innerTypedPayload = this.metadataService.wrap(
-      task.payload,
-      task.conversationUrn,
-      task.tags || [],
-    );
+    // 2. Fetch Recipient Keys
+    const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
 
-    const payload: TransportMessage = {
-      senderId: senderUrn,
-      sentTimestamp: task.createdAt,
-      typeId: task.typeId,
-      payloadBytes: innerTypedPayload,
-      clientRecordId: task.messageId,
+    // 3. Create Transport Envelope
+    const transportPayload: TransportMessage = {
+      senderId: payloadSenderUrn,
+      sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+      typeId: typeId,
+      payloadBytes: finalPayloadBytes,
+      clientRecordId: messageId,
     };
 
+    // 4. Encrypt & Sign
     const envelope = await this.crypto.encryptAndSign(
-      payload as any,
-      recipient.urn,
+      transportPayload,
+      targetRoutingUrn,
       myKeys,
       recipientKeys,
     );
 
+    if (isEphemeral) {
+      envelope.isEphemeral = true;
+    }
+
+    // 5. Send
     await firstValueFrom(this.sendService.sendMessage(envelope));
+  }
+
+  async clearAllTasks(): Promise<void> {
+    await this.repo.clearAll();
   }
 }

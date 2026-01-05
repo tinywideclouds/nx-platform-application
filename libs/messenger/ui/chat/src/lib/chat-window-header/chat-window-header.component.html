@@ -1,0 +1,80 @@
+<header
+  class="flex-shrink-0 flex items-center layout-header h-16 px-4 bg-white border-b border-gray-200"
+>
+  <button
+    type="button"
+    mat-icon-button
+    (click)="back.emit()"
+    class="mr-2 text-gray-600"
+    aria-label="Back"
+  >
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+
+  <div
+    role="img"
+    title="profile listing"
+    class="relative flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gray-600 text-white flex-shrink-0"
+  >
+    @if (participant().profilePictureUrl) {
+      <img
+        alt="profile picture"
+        [src]="participant().profilePictureUrl"
+        [alt]="participant().name"
+        class="h-full w-full object-cover"
+      />
+    } @else {
+      <span data-testid="initials" class="text-base font-medium">
+        {{ participant().initials }}
+      </span>
+    }
+  </div>
+
+  <div class="ml-3 flex-grow min-w-0 flex flex-col justify-center">
+    <div class="font-medium text-gray-900 truncate leading-tight">
+      {{ participant().name }}
+    </div>
+    <div class="text-xs text-gray-500 truncate">
+      @if (scopeMode() === 'local') {
+        Broadcast List
+      } @else if (scopeMode() === 'network') {
+        Group Chat
+      }
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2">
+    @if (scopeMode(); as currentScope) {
+      <mat-button-toggle-group
+        [value]="currentScope"
+        (change)="scopeChange.emit($event.value)"
+        class="scale-90 origin-right mr-2"
+        appearance="legacy"
+        name="chatScope"
+        hideSingleSelectionIndicator
+      >
+        <mat-button-toggle value="local" matTooltip="Broadcast Mode">
+          <mat-icon class="!w-4 !h-4 text-[18px]">campaign</mat-icon>
+        </mat-button-toggle>
+        <mat-button-toggle value="network" matTooltip="Network Group">
+          <mat-icon class="!w-4 !h-4 text-[18px]">hub</mat-icon>
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+    }
+
+    <button
+      type="button"
+      mat-icon-button
+      (click)="toggleInfo.emit()"
+      [color]="mode() === 'details' ? 'primary' : ''"
+      aria-label="Contact Details"
+      data-testid="info-button"
+      [matBadge]="hasKeyIssue() ? '!' : ''"
+      matBadgeColor="warn"
+      [matBadgeHidden]="!hasKeyIssue()"
+      matBadgeSize="small"
+    >
+      <mat-icon>{{ mode() === 'details' ? 'chat' : 'info' }}</mat-icon>
+    </button>
+  </div>
+</header>

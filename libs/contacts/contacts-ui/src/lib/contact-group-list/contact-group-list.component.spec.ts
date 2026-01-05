@@ -1,22 +1,26 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { ContactGroup } from '@nx-platform-application/contacts-storage';
+// ✅ FIX: Import from types, not storage (cleaner separation)
+import { ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 
 import { ContactGroupListComponent } from './contact-group-list.component';
 import { ContactGroupListItemComponent } from '../contact-group-list-item/contact-group-list-item.component';
 
+// ✅ FIX: Add missing 'members' array to prevent crash in child component
 const MOCK_GROUPS: ContactGroup[] = [
   {
     id: URN.parse('urn:contacts:group:grp-123'),
     name: 'Family',
-    contactIds: [],
+    scope: 'local',
+    members: [],
   },
   {
     id: URN.parse('urn:contacts:group:grp-456'),
     name: 'Work',
-    contactIds: [],
+    scope: 'local',
+    members: [],
   },
 ];
 
@@ -60,7 +64,7 @@ describe('ContactGroupListComponent', () => {
   it('should render correct number of items', () => {
     fixture.detectChanges();
     const items = fixture.debugElement.queryAll(
-      By.css('contacts-group-list-item')
+      By.css('contacts-group-list-item'),
     );
     expect(items.length).toBe(2);
   });
@@ -70,7 +74,7 @@ describe('ContactGroupListComponent', () => {
     fixture.detectChanges();
 
     const items = fixture.debugElement.queryAll(
-      By.css('contacts-group-list-item')
+      By.css('contacts-group-list-item'),
     );
 
     // First item (not selected)

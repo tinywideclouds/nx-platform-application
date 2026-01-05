@@ -1,135 +1,81 @@
 import { TestBed } from '@angular/core/testing';
 import { OutboundService } from './outbound.service';
 import { URN } from '@nx-platform-application/platform-types';
-import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { Logger } from '@nx-platform-application/console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { ContactsStateService } from '@nx-platform-application/contacts-state';
-import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
-
-// ✅ ARCHITECTURE FIX: Import Contract from Infrastructure
-import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
+import { Logger } from '@nx-platform-application/console-logger';
+import { DirectSendStrategy } from './strategies/direct-send.strategy';
+import { NetworkGroupStrategy } from './strategies/group-network.strategy';
+import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';
+import { OutboundResult } from './outbound.service';
 
 describe('OutboundService', () => {
   let service: OutboundService;
-  let storageService: ChatStorageService;
-  let cryptoService: MessengerCryptoService;
-  let metadataService: MessageMetadataService;
-  let outboxStorage: OutboxStorage;
+  let outboxWorker: OutboxWorkerService;
+  let directStrategy: DirectSendStrategy;
 
-  const myUrn = URN.parse('urn:auth:user:me');
-  const contactUrn = URN.parse('urn:contacts:user:bob');
-  const handleUrn = URN.parse('urn:lookup:email:bob@test.com');
+  const myUrn = URN.parse('urn:contacts:user:me');
+  const recipientUrn = URN.parse('urn:contacts:user:bob');
   const typeId = URN.parse('urn:message:type:text');
-  const signalId = URN.parse('urn:message:type:read-receipt');
-  const rawPayload = new Uint8Array([72, 101, 108, 108, 111]);
-  const wrappedPayload = new Uint8Array([255, 255, 255]);
+  const payload = new Uint8Array([]);
+  const keys = {} as any;
+
+  const mockResult: OutboundResult = {
+    message: {} as any,
+    outcome: Promise.resolve('pending'),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-
     TestBed.configureTestingModule({
       providers: [
         OutboundService,
-        MockProvider(ChatSendService, {
-          sendMessage: vi.fn().mockReturnValue(of(undefined)),
-        }),
-        MockProvider(MessengerCryptoService, {
-          encryptAndSign: vi.fn().mockResolvedValue({ recipientId: handleUrn }),
-        }),
+        MockProvider(Logger),
         MockProvider(ChatStorageService, {
           saveMessage: vi.fn().mockResolvedValue(undefined),
-          updateMessageStatus: vi.fn().mockResolvedValue(undefined),
-        }),
-        MockProvider(KeyCacheService, {
-          getPublicKey: vi.fn().mockResolvedValue({}),
         }),
         MockProvider(IdentityResolver, {
-          resolveToHandle: vi.fn().mockResolvedValue(handleUrn),
-          getStorageUrn: vi.fn().mockResolvedValue(contactUrn),
+          getStorageUrn: vi.fn().mockResolvedValue(recipientUrn),
         }),
-        MockProvider(MessageMetadataService, {
-          wrap: vi.fn().mockReturnValue(wrappedPayload),
+        MockProvider(OutboxWorkerService, {
+          processQueue: vi.fn(),
         }),
-        MockProvider(OutboxStorage, {
-          addTask: vi.fn().mockResolvedValue(undefined),
+        MockProvider(DirectSendStrategy, {
+          send: vi.fn().mockResolvedValue(mockResult),
         }),
-        MockProvider(OutboxWorkerService, { processQueue: vi.fn() }),
-        MockProvider(ContactsStateService, {
-          getGroupParticipants: vi.fn().mockResolvedValue([{ id: contactUrn }]),
-        }),
-        MockProvider(Logger),
+        MockProvider(NetworkGroupStrategy),
+        MockProvider(LocalBroadcastStrategy),
       ],
     });
 
     service = TestBed.inject(OutboundService);
-    storageService = TestBed.inject(ChatStorageService);
-    cryptoService = TestBed.inject(MessengerCryptoService);
-    metadataService = TestBed.inject(MessageMetadataService);
-    outboxStorage = TestBed.inject(OutboxStorage);
+    outboxWorker = TestBed.inject(OutboxWorkerService);
+    directStrategy = TestBed.inject(DirectSendStrategy);
   });
 
-  describe('Signal Handling', () => {
-    it('should BYPASS metadata wrap for ephemeral signals', async () => {
-      await service.sendMessage(
-        {} as any,
-        myUrn,
-        contactUrn,
-        signalId,
-        rawPayload,
-        { isEphemeral: true },
-      );
-
-      // Metadata wrap should NOT be called
-      expect(metadataService.wrap).not.toHaveBeenCalled();
-
-      // Crypto should receive the RAW payload
-      expect(cryptoService.encryptAndSign).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payloadBytes: rawPayload,
-        }),
-        expect.any(Object),
-        expect.any(Object),
-        expect.any(Object),
-      );
+  it('should delegate to strategy and then trigger worker for persistent messages', async () => {
+    await service.sendMessage(keys, myUrn, recipientUrn, typeId, payload, {
+      isEphemeral: false,
     });
 
-    it('should NOT save ephemeral signals to local storage', async () => {
-      await service.sendMessage(
-        {} as any,
-        myUrn,
-        contactUrn,
-        signalId,
-        rawPayload,
-        { isEphemeral: true },
-      );
+    // 1. Strategy Execution
+    expect(directStrategy.send).toHaveBeenCalled();
 
-      expect(storageService.saveMessage).not.toHaveBeenCalled();
-    });
+    // 2. Worker Trigger
+    // ✅ FIX: Expect 'myUrn' (Sender), not 'recipientUrn'
+    expect(outboxWorker.processQueue).toHaveBeenCalledWith(myUrn, keys);
   });
 
-  describe('Standard Messaging', () => {
-    it('should use metadata wrap for non-ephemeral content', async () => {
-      await service.sendMessage(
-        {} as any,
-        myUrn,
-        contactUrn,
-        typeId,
-        rawPayload,
-        { isEphemeral: false },
-      );
-
-      expect(metadataService.wrap).toHaveBeenCalled();
-      expect(storageService.saveMessage).toHaveBeenCalled();
+  it('should NOT trigger worker for ephemeral messages', async () => {
+    await service.sendMessage(keys, myUrn, recipientUrn, typeId, payload, {
+      isEphemeral: true,
     });
+
+    expect(directStrategy.send).toHaveBeenCalled();
+    expect(outboxWorker.processQueue).not.toHaveBeenCalled();
   });
 });

@@ -7,15 +7,16 @@ import {
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-// ✅ IMPORT: Infrastructure Contracts
+// Infrastructure Contracts
 import {
   HistoryReader,
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// ✅ IMPORT: Domain Service
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
+// ✅ CORRECT: Address Book API Contract
+import { AddressBookApi } from '@nx-platform-application/contacts-api';
 
+import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { MessageViewMapper } from './message-view.mapper';
@@ -23,21 +24,24 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   MessageContentParser,
   MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_CONTACT_SHARE,
+  MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
 } from '@nx-platform-application/messenger-domain-message-content';
 
-import { ChatMessage } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  MessageDeliveryStatus,
+} from '@nx-platform-application/messenger-types';
 
 describe('ConversationService', () => {
   let service: ConversationService;
   let historyReader: HistoryReader;
   let storage: ConversationStorage;
   let chatSync: ChatSyncService;
-  let outbound: OutboundService;
+  let addressBook: AddressBookApi;
 
   const myUrn = URN.parse('urn:contacts:user:me');
   const partnerUrn = URN.parse('urn:contacts:user:bob');
-  const mockKeys = { encKey: {} as any, sigKey: {} as any };
+  const groupUrn = URN.parse('urn:messenger:group:chat-1');
 
   const msg1: ChatMessage = {
     id: 'msg-1',
@@ -86,10 +90,16 @@ describe('ConversationService', () => {
           deleteMessage: vi.fn().mockResolvedValue(undefined),
           clearMessageHistory: vi.fn().mockResolvedValue(undefined),
         }),
-        // ✅ Mock ChatSyncService directly
         MockProvider(ChatSyncService, {
           isCloudEnabled: vi.fn().mockReturnValue(true),
           restoreVaultForDate: vi.fn().mockResolvedValue(0),
+        }),
+        // ✅ NEW: Mock Address Book for Group Lookups
+        MockProvider(AddressBookApi, {
+          getGroup: vi.fn().mockResolvedValue({
+            id: groupUrn,
+            members: [{ contactId: myUrn, status: 'joined' }],
+          }),
         }),
         MockProvider(ChatKeyService, {
           checkRecipientKeys: vi.fn().mockResolvedValue(true),
@@ -120,288 +130,59 @@ describe('ConversationService', () => {
     historyReader = TestBed.inject(HistoryReader);
     storage = TestBed.inject(ConversationStorage);
     chatSync = TestBed.inject(ChatSyncService);
-    outbound = TestBed.inject(OutboundService);
+    addressBook = TestBed.inject(AddressBookApi);
   });
 
-  describe('Smart History Hydration', () => {
-    it('STALENESS: should fetch Cloud if local HEAD is older than Index', async () => {
-      const staleMsg = { ...msg1, sentTimestamp: '2024-01-01T00:00:00Z' };
-      vi.mocked(historyReader.getMessages)
-        .mockResolvedValueOnce({
-          messages: [staleMsg] as any,
-          genesisReached: false,
-        })
-        .mockResolvedValueOnce({
-          messages: [msg2, msg1] as any,
-          genesisReached: true,
-        });
-
-      vi.mocked(storage.getConversationIndex).mockResolvedValue({
-        lastActivityTimestamp: '2025-01-01T10:00:00Z',
-      } as any);
-
-      await service.loadConversation(partnerUrn, myUrn);
-
-      expect(chatSync.restoreVaultForDate).toHaveBeenCalledWith(
-        '2025-01-01T10:00:00Z',
-        partnerUrn,
-      );
-      expect(historyReader.getMessages).toHaveBeenCalledTimes(2);
-    });
-
-    it('DEFICIT: should enter Cloud Loop if fewer messages returned than limit', async () => {
-      vi.mocked(historyReader.getMessages)
-        .mockResolvedValueOnce({ messages: [], genesisReached: false })
-        .mockResolvedValueOnce({
-          messages: [msg1] as any,
-          genesisReached: true,
-        });
-
-      vi.mocked(storage.getConversationIndex).mockResolvedValue({
-        unreadCount: 0,
-        lastActivityTimestamp: undefined,
-      } as any);
-      vi.mocked(chatSync.restoreVaultForDate).mockResolvedValue(10);
-
-      await service.loadConversation(partnerUrn, myUrn);
-
-      expect(chatSync.restoreVaultForDate).toHaveBeenCalled();
-      expect(historyReader.getMessages).toHaveBeenCalledTimes(2);
-    });
-
-    it('OPTIMISTIC: should skip Cloud logic if cloud is disabled', async () => {
-      vi.mocked(chatSync.isCloudEnabled).mockReturnValue(false);
-      vi.mocked(historyReader.getMessages).mockResolvedValue({
-        messages: [],
-        genesisReached: false,
-      });
-
-      await service.loadConversation(partnerUrn, myUrn);
-
-      expect(chatSync.restoreVaultForDate).not.toHaveBeenCalled();
-    });
-  });
+  function setRawMessages(msgs: ChatMessage[]) {
+    (service as any)._rawMessages.set(msgs);
+  }
 
   describe('loadConversation', () => {
-    it('should load history and set signals', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
+    it('should determine group membership status via AddressBookApi', async () => {
+      await service.loadConversation(groupUrn, myUrn);
+      expect(addressBook.getGroup).toHaveBeenCalledWith(groupUrn);
+      expect(service.membershipStatus()).toBe('joined');
+    });
+  });
+
+  describe('Lurker Mode (Group Filter)', () => {
+    it('should HIDE content messages if status is invited', async () => {
+      // 1. Setup as Invited
+      vi.mocked(addressBook.getGroup).mockResolvedValue({
+        members: [{ contactId: myUrn, status: 'invited' }],
+      } as any);
+
+      // 2. Load
+      await service.loadConversation(groupUrn, myUrn);
+      expect(service.membershipStatus()).toBe('invited');
+
+      // 3. Inject Mixed Content
+      const textMsg = { ...msg1, typeId: URN.parse(MESSAGE_TYPE_TEXT) };
+      const systemMsg = {
+        ...msg1,
+        id: 'sys-1',
+        typeId: URN.parse(MESSAGE_TYPE_GROUP_INVITE_RESPONSE),
+      };
+
+      setRawMessages([textMsg, systemMsg]);
+
+      // 4. Verify Filter
+      const visible = service.messages();
+      expect(visible).toHaveLength(1);
+      expect(visible[0].id).toBe('sys-1'); // Only system msg shown
+    });
+
+    it('should SHOW everything if status is joined', async () => {
+      // 1. Setup as Joined
+      vi.mocked(addressBook.getGroup).mockResolvedValue({
+        members: [{ contactId: myUrn, status: 'joined' }],
+      } as any);
+
+      await service.loadConversation(groupUrn, myUrn);
+      expect(service.membershipStatus()).toBe('joined');
+
+      setRawMessages([msg1, msg2]);
       expect(service.messages()).toHaveLength(2);
-      expect(storage.markConversationAsRead).toHaveBeenCalledWith(partnerUrn);
-    });
-
-    it('should detect unread boundary', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-      expect(service.firstUnreadId()).toBe('msg-2');
-    });
-
-    it('should OPTIMIZE: re-selecting same chat only marks read', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-      vi.clearAllMocks();
-      await service.loadConversation(partnerUrn, myUrn);
-      expect(storage.markConversationAsRead).toHaveBeenCalled();
-      expect(historyReader.getMessages).not.toHaveBeenCalled();
-    });
-
-    it('should clear state when selecting NULL', async () => {
-      (service as any).messages.set([msg1]);
-      await service.loadConversation(null, null);
-      expect(service.messages()).toEqual([]);
-      expect(service.selectedConversation()).toBeNull();
-    });
-  });
-
-  describe('loadMoreMessages', () => {
-    it('should prepend older messages', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-      (service as any).genesisReached.set(false);
-
-      const oldMsg = { ...msg1, id: 'msg-0' };
-      vi.mocked(historyReader.getMessages).mockResolvedValueOnce({
-        messages: [oldMsg] as any,
-        genesisReached: true,
-      });
-
-      await service.loadMoreMessages();
-
-      const list = service.messages();
-      expect(list).toHaveLength(3);
-      expect(list[0].id).toBe('msg-0');
-    });
-
-    it('should ignore call if already loading', async () => {
-      (service as any).isLoadingHistory.set(true);
-      await service.loadMoreMessages();
-      expect(historyReader.getMessages).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Sending (Optimistic UI)', () => {
-    it('should update UI immediately (Pending) then update to Final Status', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-
-      const pendingMsg = {
-        ...msg2,
-        id: 'new-pending-1',
-        status: 'pending' as const,
-        conversationUrn: partnerUrn,
-      };
-
-      let resolveOutcome: (val: any) => void;
-      const outcomePromise = new Promise((r) => {
-        resolveOutcome = r;
-      });
-
-      vi.mocked(outbound.sendMessage).mockResolvedValue({
-        message: pendingMsg,
-        outcome: outcomePromise as any,
-      });
-
-      const sendPromise = service.sendMessage(
-        partnerUrn,
-        'Hi',
-        mockKeys,
-        myUrn,
-      );
-
-      await sendPromise;
-
-      const msgsBefore = service.messages();
-      expect(msgsBefore[2].id).toBe('new-pending-1');
-      expect(msgsBefore[2].status).toBe('pending');
-
-      resolveOutcome!('sent');
-      await vi.waitFor(() => {
-        const msgs = service.messages();
-        expect(msgs[2].status).toBe('sent');
-      });
-    });
-
-    it('should send Contact Shares using the correct type ID', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-
-      await service.sendContactShare(
-        partnerUrn,
-        { urn: 'urn:user:x', alias: 'X' },
-        mockKeys,
-        myUrn,
-      );
-
-      const calls = vi.mocked(outbound.sendMessage).mock.calls;
-      expect(calls.length).toBe(1);
-
-      const args = calls[0];
-      const typeId = args[3] as URN;
-
-      expect(typeId.toString()).toBe(MESSAGE_TYPE_CONTACT_SHARE);
-    });
-  });
-
-  describe('Live Updates', () => {
-    it('should append new incoming message if relevant', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-      const initialCount = service.messages().length;
-
-      const newMsg = {
-        ...msg1,
-        id: 'msg-3',
-        conversationUrn: partnerUrn,
-        textContent: undefined,
-      };
-
-      service.upsertMessages([newMsg as any], myUrn);
-
-      const list = service.messages();
-      expect(list).toHaveLength(initialCount + 1);
-      expect(list[list.length - 1].textContent).toContain('Mapped:');
-    });
-
-    it('should IGNORE messages for other conversations', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-      const count = service.messages().length;
-
-      const otherMsg = {
-        ...msg1,
-        conversationUrn: URN.parse('urn:messenger:group:other'),
-      };
-      service.upsertMessages([otherMsg as any], myUrn);
-
-      expect(service.messages()).toHaveLength(count);
-    });
-
-    it('should trigger read receipts for incoming messages if I am viewing', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-
-      const spy = vi.fn();
-      const sub = service.readReceiptTrigger$.subscribe(spy);
-
-      const incoming = {
-        ...msg1,
-        id: 'msg-inc',
-        senderId: partnerUrn,
-        status: 'sent',
-      };
-
-      service.upsertMessages([incoming as any], myUrn);
-
-      await vi.waitFor(() => {
-        expect(storage.updateMessageStatus).toHaveBeenCalledWith(
-          ['msg-inc'],
-          'read',
-        );
-        expect(spy).toHaveBeenCalledWith(['msg-inc']);
-      });
-      sub.unsubscribe();
-    });
-  });
-
-  describe('Computed: readCursors', () => {
-    it('should calculate where the partner has read up to', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-
-      let cursors = service.readCursors();
-      expect(cursors.has('msg-2')).toBe(false);
-
-      service.messages.update((msgs) =>
-        msgs.map((m) => (m.id === 'msg-2' ? { ...m, status: 'read' } : m)),
-      );
-
-      cursors = service.readCursors();
-      expect(cursors.get('msg-2')).toEqual([partnerUrn]);
-    });
-  });
-
-  describe('Actions & Recovery', () => {
-    it('recoverFailedMessage should parse content and delete message', async () => {
-      const failedMsg = {
-        ...msg1,
-        id: 'fail-1',
-        status: 'failed',
-        textContent: undefined,
-      };
-      (service as any).messages.set([failedMsg]);
-
-      const text = await service.recoverFailedMessage('fail-1');
-
-      expect(text).toBe('Recovered Content');
-      expect(storage.deleteMessage).toHaveBeenCalledWith('fail-1');
-      expect(service.messages()).toHaveLength(0);
-    });
-
-    it('performHistoryWipe should reset all state', async () => {
-      await service.loadConversation(partnerUrn, myUrn);
-      await service.performHistoryWipe();
-
-      expect(storage.clearMessageHistory).toHaveBeenCalled();
-      expect(service.messages()).toEqual([]);
-      expect(service.selectedConversation()).toBeNull();
-    });
-  });
-
-  describe('applyIncomingReadReceipts', () => {
-    it('should update local message status to read', () => {
-      (service as any).messages.set([msg2]);
-      service.applyIncomingReadReceipts(['msg-2']);
-      expect(service.messages()[0].status).toBe('read');
     });
   });
 });

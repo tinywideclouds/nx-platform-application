@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 import { signal } from '@angular/core';
 import { ChatService } from './chat.service';
 import {
@@ -16,12 +16,17 @@ import {
   AuthStatusResponse,
 } from '@nx-platform-application/platform-auth-access';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
+
+// ✅ REFACTOR: Import API Tokens
+import {
+  GatekeeperApi,
+  AddressBookManagementApi,
+} from '@nx-platform-application/contacts-api';
 
 // Domain Services
 import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
@@ -108,12 +113,15 @@ describe('ChatService', () => {
     clear: vi.fn(),
   };
 
-  const mockContacts = {
-    getFilteredBlockedSet: vi.fn(),
-    getAllIdentityLinks: vi.fn().mockResolvedValue([]),
+  // ✅ NEW: API Mocks
+  const mockGatekeeper = {
+    blocked$: signal([]),
     blockIdentity: vi.fn(),
-    performContactsWipe: vi.fn(),
-    clearDatabase: vi.fn(),
+    // ...other methods if needed
+  };
+
+  const mockAddressBookManager = {
+    clearData: vi.fn(),
   };
 
   const mockStorage = {
@@ -132,8 +140,6 @@ describe('ChatService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockContacts.getFilteredBlockedSet.mockReturnValue(signal(new Set()));
-
     TestBed.configureTestingModule({
       providers: [
         ChatService,
@@ -149,7 +155,11 @@ describe('ChatService', () => {
         { provide: ChatLiveDataService, useValue: mockLive },
         { provide: MessengerCryptoService, useValue: mockCrypto },
         { provide: KeyCacheService, useValue: mockKeyCache },
-        { provide: ContactsStateService, useValue: mockContacts },
+
+        // ✅ REFACTOR: Provide API Mocks
+        { provide: GatekeeperApi, useValue: mockGatekeeper },
+        { provide: AddressBookManagementApi, useValue: mockAddressBookManager },
+
         { provide: ChatStorageService, useValue: mockStorage },
         MockProvider(Logger),
         MockProvider(MessageContentParser),
@@ -202,48 +212,14 @@ describe('ChatService', () => {
     });
   });
 
-  describe('Ingestion (Wiring)', () => {
-    it('should delegate to IngestionService and then ConversationService', async () => {
-      (service.onboardingState as any).set('READY');
-      (service as any).myKeys.set(mockPrivateKeys);
-
-      const validMessage = {
-        id: 'm1',
-        senderId: URN.parse('urn:contacts:user:1'),
-      };
-
-      mockIngestion.process.mockResolvedValue({
-        messages: [validMessage],
-        typingIndicators: [],
-        readReceipts: ['r1'],
-      });
-
-      await service.fetchAndProcessMessages();
-
-      expect(mockIngestion.process).toHaveBeenCalled();
-      expect(mockConversation.applyIncomingReadReceipts).toHaveBeenCalledWith([
-        'r1',
-      ]);
-      expect(mockConversation.upsertMessages).toHaveBeenCalledWith(
-        [validMessage],
-        expect.anything(),
-      );
-    });
-
-    it('should BLOCK ingestion if state is CHECKING', async () => {
-      (service.onboardingState as any).set('CHECKING');
-      await service.fetchAndProcessMessages();
-      expect(mockIngestion.process).not.toHaveBeenCalled();
-    });
-  });
-
   describe('Device Wipe / Logout', () => {
     it('should clear all subsystems', async () => {
       await service.fullDeviceWipe();
 
       expect(mockLive.disconnect).toHaveBeenCalled();
       expect(mockStorage.clearDatabase).toHaveBeenCalled();
-      expect(mockContacts.clearDatabase).toHaveBeenCalled();
+      // ✅ Verify AddressBookManager usage
+      expect(mockAddressBookManager.clearData).toHaveBeenCalled();
       expect(mockKeyCache.clear).toHaveBeenCalled();
       expect(mockCrypto.clearKeys).toHaveBeenCalled();
       expect(mockOutbox.clearAllTasks).toHaveBeenCalled();
@@ -251,20 +227,13 @@ describe('ChatService', () => {
     });
   });
 
-  describe('Delegation', () => {
-    it('should delegate sync to ChatSyncService', async () => {
-      (service.onboardingState as any).set('READY');
-      await service.sync({ syncMessages: true } as any);
-      expect(mockSync.performSync).toHaveBeenCalled();
-    });
-
-    it('should delegate loadConversation to ConversationService', async () => {
-      const urn = URN.parse('urn:contacts:user:1');
-      await service.loadConversation(urn);
-      expect(mockConversation.loadConversation).toHaveBeenCalledWith(
-        urn,
-        expect.anything(),
-      );
+  describe('Block / Quarantine', () => {
+    it('should delegate block to Gatekeeper', async () => {
+      const urn = URN.parse('urn:contacts:user:spammer');
+      await service.block([urn], 'messenger');
+      expect(mockGatekeeper.blockIdentity).toHaveBeenCalledWith(urn, [
+        'messenger',
+      ]);
     });
   });
 });

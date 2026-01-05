@@ -1,6 +1,7 @@
 // libs/messenger/messenger-types/src/lib/payload.spec.ts
 
 import { Mock } from 'vitest';
+import { Temporal } from '@js-temporal/polyfill';
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 // --- Mocks ---
@@ -36,7 +37,7 @@ describe('EncryptedMessagePayload Facade Mappers', () => {
   let mockFromBinary: Mock;
   let mockUrnParse: Mock;
 
-  const mockTimestamp = new Date().toISOString() as ISODateTimeString;
+  const mockTimestamp = Temporal.Now.instant.toString() as ISODateTimeString;
   const mockSenderUrnString = 'urn:contacts:user:sender';
   const mockTypeUrnString = 'urn:message:type:text';
   const mockBytes = new Uint8Array([1, 2, 3]);

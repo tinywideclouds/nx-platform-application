@@ -1,0 +1,13 @@
+{
+  "name": "messenger-domain-group-protocol",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/domain/group-protocol/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger", "layer:domain"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

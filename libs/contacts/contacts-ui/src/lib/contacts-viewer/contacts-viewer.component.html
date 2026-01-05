@@ -42,7 +42,11 @@
         @if (activeTab() === 'groups') {
           <contacts-group-page [groupId]="urn" />
         } @else {
-          <contacts-detail [contactId]="urn" />
+          <contacts-detail
+            [contactId]="urn"
+            (saved)="clearSelection()"
+            (deleted)="clearSelection()"
+          />
         }
       </div>
     } @else {

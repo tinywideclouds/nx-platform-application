@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { ContactsCloudService } from './contacts-cloud.service';
+// ✅ Import Concrete Storage Classes
 import {
   ContactsStorageService,
-  BlockedIdentity,
+  GatekeeperStorage,
 } from '@nx-platform-application/contacts-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
@@ -16,10 +17,12 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+import { BlockedIdentity } from '@nx-platform-application/contacts-types';
 
 describe('ContactsCloudService', () => {
   let service: ContactsCloudService;
   let storage: ContactsStorageService;
+  let gatekeeper: GatekeeperStorage;
 
   const mockProvider: CloudStorageProvider = {
     providerId: 'mock-drive',
@@ -48,13 +51,17 @@ describe('ContactsCloudService', () => {
     TestBed.configureTestingModule({
       providers: [
         ContactsCloudService,
+        // 1. Mock Address Book Storage
         MockProvider(ContactsStorageService, {
           contacts$: of([{ id: 'c1' } as any]),
           groups$: of([]),
-          blocked$: of(mockBlocked), // ✅ Mock Blocked Stream
           bulkUpsert: vi.fn().mockResolvedValue(undefined),
           saveGroup: vi.fn().mockResolvedValue(undefined),
-          blockIdentity: vi.fn().mockResolvedValue(undefined), // ✅ Mock Block Method
+        }),
+        // 2. Mock Gatekeeper Storage (Concrete)
+        MockProvider(GatekeeperStorage, {
+          blocked$: of(mockBlocked),
+          blockIdentity: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(Logger),
         { provide: CLOUD_PROVIDERS, useValue: [mockProvider] },
@@ -63,6 +70,7 @@ describe('ContactsCloudService', () => {
 
     service = TestBed.inject(ContactsCloudService);
     storage = TestBed.inject(ContactsStorageService);
+    gatekeeper = TestBed.inject(GatekeeperStorage);
   });
 
   afterEach(() => {
@@ -70,7 +78,7 @@ describe('ContactsCloudService', () => {
   });
 
   describe('Backup', () => {
-    it('should snapshot data (including blocked) and upload via provider', async () => {
+    it('should snapshot data (Address Book + Gatekeeper) and upload', async () => {
       vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(true);
 
       await service.backupToCloud('mock-drive');
@@ -79,39 +87,37 @@ describe('ContactsCloudService', () => {
         expect.objectContaining({
           contacts: [{ id: 'c1' }],
           groups: [],
-          blocked: mockBlocked, // ✅ Assertion
+          blocked: mockBlocked, // Verified from DexieGatekeeperStorage
           version: 5,
         }),
-        expect.stringContaining('contacts_backup_')
+        expect.stringContaining('contacts_backup_'),
       );
     });
   });
 
   describe('Restore', () => {
-    it('should download and merge data (including blocked) into storage', async () => {
+    it('should restore data to respective storage services', async () => {
       vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(true);
       const mockPayload = {
         version: 5,
         contacts: [{ id: 'restored-1' }],
         groups: [{ id: 'g1' }],
-        blocked: mockBlocked, // ✅ Payload
+        blocked: mockBlocked,
       };
-      // Use downloadFile as per updated implementation
+
       vi.spyOn(mockProvider, 'downloadFile').mockResolvedValue(mockPayload);
 
       await service.restoreFromCloud('mock-drive', 'file-123');
 
-      expect(mockProvider.downloadFile).toHaveBeenCalledWith(
-        expect.stringContaining('file-123')
-      );
+      // Verify Address Book Restore
       expect(storage.bulkUpsert).toHaveBeenCalledWith(mockPayload.contacts);
       expect(storage.saveGroup).toHaveBeenCalledWith(mockPayload.groups[0]);
 
-      // ✅ Verify Blocked Restore
-      expect(storage.blockIdentity).toHaveBeenCalledWith(
+      // Verify Gatekeeper Restore (Concrete Call)
+      expect(gatekeeper.blockIdentity).toHaveBeenCalledWith(
         mockBlocked[0].urn,
         mockBlocked[0].scopes,
-        undefined
+        undefined,
       );
     });
   });

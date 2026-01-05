@@ -1,13 +1,52 @@
-# 📚 @nx-platform-application/contacts-storage
+# 💾 @nx-platform-application/contacts-storage
 
-This library is the **Persistence Layer for the Trust Model**. It provides a root-injectable Angular service, `ContactsStorageService`, which abstracts all interactions with a local **Dexie.js (IndexedDB)** database.
+This library implements the **Infrastructure Layer** for the Contacts domain. It provides the services that perform CRUD operations, transaction management, and reactive queries against the local database.
 
-It is designed to be the single source of truth for the user's **Social Graph** (Contacts) and **Security Rules** (Gatekeeper).
+> **Role:** "The Smart Layer" — It handles the logic of storage (e.g., updating timestamps, atomic transactions, consensus updates).
+
+## 🏗️ Architecture
+
+This library consumes `@nx-platform-application/contacts-persistence` to access the database and implements interfaces from `@nx-platform-application/contacts-api`.
+
+### **1. `ContactsStorageService` (Address Book)**
+
+The primary facade for managing the user's personal address book and local groups.
+
+- **Reactive:** Exposes `contacts$` and `groups$` as live Observables (via Dexie `liveQuery`).
+- **Transactional:** Handles atomic writes (e.g., `deleteContact` also creates a `tombstone`).
+
+### **2. `DexieGroupNetworkStorage` (Protocol)**
+
+A specialized adapter for the Messenger Protocol.
+
+- **Atomic:** Performs high-frequency updates to group member statuses (`joined`, `left`) without triggering full UI refreshes.
+- **Usage:** Used strictly by the Messenger domain for network sync.
+
+### **3. `DexieGatekeeperStorage` (Security)**
+
+Manages the "Waiting Room" and "Block List".
+
+- **Function:** Persists `PendingIdentity` and `BlockedIdentity` records.
+
+## 🛠️ Usage
+
+Inject these services into your State Management layer (e.g., `ContactsStateService`). **Do not use these services directly in UI Components.**
+
+```typescript
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+
+@Injectable()
+export class ContactsStateService {
+  // The storage service provides the 'How', the state service provides the 'When'
+  constructor(private storage: ContactsStorageService) {}
+
+  readonly contacts$ = this.storage.contacts$; // Auto-updating list
+}
+```
 
 ### **✨ Features**
 
 - **Reactive API:** Provides RxJS Observable streams (`contacts$`, `pending$`, `blocked$`) powered by `liveQuery`.
-- **Offline-First:** Built on **Dexie.js**, ensuring the app works perfectly without a network connection.
 - **Gatekeeper Logic:** Manages the local "Allow/Deny" lists used by the Messenger to filter incoming traffic.
 - **Type Safety:** Implements domain interfaces from `@nx-platform-application/contacts-types`.
 
@@ -36,21 +75,6 @@ A holding area for message senders who are not yet in the Address Book.
 
 - **Usage:** Unknown senders are quarantined here until the user clicks "Accept" or "Block".
 - **Vouchers:** Supports "Vouched By" logic (e.g., "Alice introduced you to Bob").
-
----
-
-### **🗄️ Database Schema**
-
-The `ContactsDatabase` class defines the Dexie schema (v3).
-
-| Table            | Primary Key | Indexes                                              | Description                       |
-| :--------------- | :---------- | :--------------------------------------------------- | :-------------------------------- |
-| **`contacts`**   | `id`        | `alias`, `email`, `*emailAddresses`, `*phoneNumbers` | The main address book.            |
-| **`groups`**     | `id`        | `name`, `*contactIds`                                | User-defined collections.         |
-| **`links`**      | `++id`      | `contactId`, `authUrn`                               | Maps Contact ID <-> Auth URN.     |
-| **`blocked`**    | `++id`      | `urn`, `blockedAt`                                   | The Gatekeeper deny-list.         |
-| **`pending`**    | `++id`      | `urn`, `firstSeenAt`                                 | The "Waiting Room" for strangers. |
-| **`tombstones`** | `urn`       | `deletedAt`                                          | Tracks deletions for Sync.        |
 
 ---
 

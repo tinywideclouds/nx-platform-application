@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { Component } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { ContactGroup } from '@nx-platform-application/contacts-types';
 import { vi } from 'vitest';
 import { URN } from '@nx-platform-application/platform-types';
@@ -19,51 +19,74 @@ const MOCK_GROUP: ContactGroup = {
   ],
 };
 
+@Component({
+  standalone: true,
+  imports: [ContactGroupListItemComponent],
+  template: `
+    <contacts-group-list-item
+      [group]="group"
+      [badgeResolver]="resolver"
+      (select)="onSelected($event)"
+    />
+  `,
+})
+class TestHostComponent {
+  group = MOCK_GROUP;
+  resolver: GroupBadgeResolver | undefined = undefined;
+
+  @ViewChild(ContactGroupListItemComponent)
+  child!: ContactGroupListItemComponent;
+
+  onSelected(group: ContactGroup) {}
+}
+
 describe('ContactGroupListItemComponent', () => {
-  let fixture: ComponentFixture<ContactGroupListItemComponent>;
-  let component: ContactGroupListItemComponent;
+  let fixture: ComponentFixture<TestHostComponent>;
+  let hostComponent: TestHostComponent;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ContactGroupListItemComponent],
+      imports: [TestHostComponent],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(ContactGroupListItemComponent);
-    component = fixture.componentInstance;
+    fixture = TestBed.createComponent(TestHostComponent);
+    hostComponent = fixture.componentInstance;
+    // Don't call detectChanges here yet, let individual tests drive the initial data
   });
 
   describe('Rendering', () => {
     it('should render the group name', () => {
-      fixture.componentRef.setInput('group', MOCK_GROUP);
-      fixture.detectChanges();
-      const el = fixture.nativeElement;
+      fixture.detectChanges(); // First render
+      const el = fixture.debugElement.query(
+        By.css('contacts-group-list-item'),
+      ).nativeElement;
       expect(el.textContent).toContain('Family');
     });
 
-    it('should render badges when resolver returns them', () => {
+    it('should render badges when resolver returns them', async () => {
       const mockResolver: GroupBadgeResolver = () => [
         { icon: 'hub', tooltip: 'Network', color: 'primary' },
       ];
 
-      fixture.componentRef.setInput('group', MOCK_GROUP);
-      fixture.componentRef.setInput('badgeResolver', mockResolver);
+      // ✅ FIX: Set input BEFORE first detectChanges to prevent NG0100
+      hostComponent.resolver = mockResolver;
       fixture.detectChanges();
+      await fixture.whenStable();
 
       const badgesEl = fixture.debugElement.query(
         By.css('[data-testid="group-badges"]'),
       );
       expect(badgesEl).toBeTruthy();
-
-      const icon = badgesEl.query(By.css('mat-icon'));
-      expect(icon.nativeElement.textContent).toContain('hub');
+      expect(badgesEl.nativeElement.textContent).toContain('hub');
     });
 
-    it('should NOT render badges section if resolver returns empty', () => {
+    it('should NOT render badges section if resolver returns empty', async () => {
       const mockResolver: GroupBadgeResolver = () => [];
 
-      fixture.componentRef.setInput('group', MOCK_GROUP);
-      fixture.componentRef.setInput('badgeResolver', mockResolver);
+      // ✅ FIX: Set input BEFORE first detectChanges
+      hostComponent.resolver = mockResolver;
       fixture.detectChanges();
+      await fixture.whenStable();
 
       const badgesEl = fixture.debugElement.query(
         By.css('[data-testid="group-badges"]'),
@@ -73,44 +96,16 @@ describe('ContactGroupListItemComponent', () => {
   });
 
   describe('Events', () => {
-    @Component({
-      standalone: true,
-      imports: [ContactGroupListItemComponent],
-      template: `
-        <contacts-group-list-item
-          [group]="group"
-          (select)="onSelected($event)"
-        />
-      `,
-    })
-    class TestHostComponent {
-      group = MOCK_GROUP;
-      selectedGroup?: ContactGroup;
-      onSelected(group: ContactGroup) {
-        this.selectedGroup = group;
-      }
-    }
-
-    let hostFixture: ComponentFixture<TestHostComponent>;
-    let hostComponent: TestHostComponent;
-
-    beforeEach(async () => {
-      await TestBed.configureTestingModule({
-        imports: [TestHostComponent],
-      }).compileComponents();
-
-      hostFixture = TestBed.createComponent(TestHostComponent);
-      hostComponent = hostFixture.componentInstance;
-      hostFixture.detectChanges();
-    });
-
     it('should emit (select) with the group when clicked', () => {
+      fixture.detectChanges(); // Standard init
       const selectSpy = vi.spyOn(hostComponent, 'onSelected');
-      const componentEl = hostFixture.debugElement.query(
+      const componentEl = fixture.debugElement.query(
         By.css('contacts-group-list-item'),
       );
+
       componentEl.triggerEventHandler('click');
-      hostFixture.detectChanges();
+      fixture.detectChanges();
+
       expect(selectSpy).toHaveBeenCalledWith(MOCK_GROUP);
     });
   });

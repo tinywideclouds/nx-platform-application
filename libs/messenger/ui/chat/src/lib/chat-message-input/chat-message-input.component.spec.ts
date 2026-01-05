@@ -1,8 +1,7 @@
 // libs/messenger/chat-ui/src/lib/chat-message-input/chat-message-input.component.spec.ts
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
-import { By } from '@angular/platform-browser';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ChatMessageInputComponent } from './chat-message-input.component';
 
 describe('ChatMessageInputComponent', () => {
@@ -12,7 +11,7 @@ describe('ChatMessageInputComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ChatMessageInputComponent], // No ReactiveFormsModule
+      imports: [ChatMessageInputComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ChatMessageInputComponent);
@@ -36,8 +35,6 @@ describe('ChatMessageInputComponent', () => {
     const sendButton = el.querySelector(
       '[data-testid="send-button"]',
     ) as HTMLButtonElement;
-
-    // REFACTOR: Simulate Native Input
     const textarea = el.querySelector(
       '[data-testid="message-textarea"]',
     ) as HTMLTextAreaElement;
@@ -53,7 +50,6 @@ describe('ChatMessageInputComponent', () => {
   it('should emit (messageSent) and reset on send', () => {
     const emitSpy = vi.spyOn(component.messageSent, 'emit');
 
-    // Set state via signal
     component.messageText.set('Test message');
     fixture.detectChanges();
 
@@ -87,6 +83,20 @@ describe('ChatMessageInputComponent', () => {
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     fixture.detectChanges();
     expect(emitSpy).toHaveBeenCalledWith('Test message');
+  });
+
+  // ✅ NEW TEST: Verify the chain is fixed
+  it('should emit (typing) on input event', () => {
+    const typingSpy = vi.spyOn(component.typing, 'emit');
+    const textarea = el.querySelector(
+      '[data-testid="message-textarea"]',
+    ) as HTMLTextAreaElement;
+
+    textarea.value = 'Typing...';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(typingSpy).toHaveBeenCalled();
   });
 
   it('should disable the textarea when the disabled input is true', () => {

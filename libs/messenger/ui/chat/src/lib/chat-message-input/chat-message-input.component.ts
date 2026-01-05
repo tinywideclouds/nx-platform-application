@@ -11,7 +11,7 @@ import {
 @Component({
   selector: 'chat-message-input',
   standalone: true,
-  imports: [], // REFACTOR: No ReactiveFormsModule needed
+  imports: [],
   templateUrl: './chat-message-input.component.html',
   styleUrl: './chat-message-input.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -20,33 +20,35 @@ export class ChatMessageInputComponent {
   disabled = input(false);
   messageSent = output<string>();
 
-  // REFACTOR: Pure Signal State
+  // ✅ FIX: Restore the typing output so the parent's (typing)="onTyping()" works
+  typing = output<void>();
+
   messageText = signal('');
 
-  // REFACTOR: Handle keydown manually (Enter vs Shift+Enter)
   onKeyDown(event: KeyboardEvent): void {
+    // ✅ FIX: Emit typing on keydown (catches all interactions)
+    this.typing.emit();
+
     if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault(); // Prevent new line
+      event.preventDefault();
       this.sendMessage();
     }
   }
 
-  // REFACTOR: Native Input Handler
   onInput(event: Event): void {
     const target = event.target as HTMLTextAreaElement;
     this.messageText.set(target.value);
+
+    // ✅ FIX: Emit typing when text changes
+    this.typing.emit();
   }
 
   sendMessage(): void {
-    // 1. Check disabled signal
     if (this.disabled()) return;
-
-    // 2. Read signal
     const message = this.messageText().trim();
 
     if (message) {
       this.messageSent.emit(message);
-      // 3. Reset signal
       this.messageText.set('');
     }
   }

@@ -1,31 +1,53 @@
 import { Injectable, inject, computed, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { URN } from '@nx-platform-application/platform-types';
+import { Temporal } from '@js-temporal/polyfill';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import {
   Contact,
   ContactGroup,
   IdentityLink,
-  GroupNotFoundError,
-  EmptyGroupError,
   BlockedIdentity,
+  PendingIdentity,
 } from '@nx-platform-application/contacts-types';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+
+import {
+  ContactsStorageService,
+  GatekeeperStorage,
+} from '@nx-platform-application/contacts-storage';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsStateService {
   private storage = inject(ContactsStorageService);
+  private gatekeeper = inject(GatekeeperStorage);
 
-  readonly contacts = toSignal(this.storage.contacts$, {
+  // --- RAW OBSERVABLES (For Facade/API) ---
+  readonly contacts$ = this.storage.contacts$;
+  readonly groups$ = this.storage.groups$;
+  readonly blocked$ = this.gatekeeper.blocked$;
+  readonly pending$ = this.gatekeeper.pending$;
+
+  // --- SIGNALS (Source of Truth for UI) ---
+  readonly contacts = toSignal(this.contacts$, {
     initialValue: [] as Contact[],
   });
+
   readonly favorites = toSignal(this.storage.favorites$, {
     initialValue: [] as Contact[],
   });
-  readonly groups = toSignal(this.storage.groups$, {
+
+  readonly groups = toSignal(this.groups$, {
     initialValue: [] as ContactGroup[],
   });
-  readonly blocked = toSignal(this.storage.blocked$, {
+
+  readonly blocked = toSignal(this.blocked$, {
     initialValue: [] as BlockedIdentity[],
+  });
+
+  readonly pending = toSignal(this.pending$, {
+    initialValue: [] as PendingIdentity[],
   });
 
   private readonly contactMap = computed(() => {
@@ -36,12 +58,36 @@ export class ContactsStateService {
     return map;
   });
 
-  // --- API Support Methods (New) ---
+  // --- Lookups ---
 
-  /**
-   * Checks blocked status for a specific scope.
-   * Required for the Contacts API Contract.
-   */
+  resolveContact(
+    urn: URN | string | null | undefined,
+  ): Signal<Contact | undefined> {
+    return computed(() => {
+      if (!urn) return undefined;
+      const idStr = urn.toString();
+      return this.contactMap().get(idStr);
+    });
+  }
+
+  getContactSnapshot(urn: URN): Contact | undefined {
+    return this.contactMap().get(urn.toString());
+  }
+
+  resolveContactName(urn: URN | string | null | undefined): Signal<string> {
+    return computed(() => {
+      if (!urn) return 'Unknown';
+      const idStr = urn.toString();
+      const contact = this.contactMap().get(idStr);
+      if (contact) {
+        return contact.alias || contact.firstName || 'Unknown Contact';
+      }
+      return this.formatUnknownUrn(idStr);
+    });
+  }
+
+  // --- API Support Methods ---
+
   async isBlocked(urn: URN, scope: string): Promise<boolean> {
     const idStr = urn.toString();
     const allBlocked = this.blocked();
@@ -51,16 +97,6 @@ export class ContactsStateService {
         (b.scopes.includes('all') || b.scopes.includes(scope)),
     );
   }
-
-  /**
-   * Resolves a URN to a Contact immediately (Non-Reactive).
-   * Used by Facades/APIs for business logic (O(1) lookup).
-   */
-  getContactSnapshot(urn: URN): Contact | undefined {
-    return this.contactMap().get(urn.toString());
-  }
-
-  // --- Existing Logic ---
 
   async isTrusted(urn: URN, scope: string = 'messenger'): Promise<boolean> {
     const idStr = urn.toString();
@@ -74,75 +110,98 @@ export class ContactsStateService {
     return !blocked;
   }
 
-  getFilteredBlockedSet(scope: string): Signal<Set<string>> {
-    return computed(() => {
-      const filteredSet = new Set<string>();
-      const allBlocked = this.blocked();
+  // --- Factory Methods (Domain Logic) ---
 
-      for (const b of allBlocked) {
-        if (b.scopes.includes('all') || b.scopes.includes(scope)) {
-          filteredSet.add(b.urn.toString());
-        }
-      }
-      return filteredSet;
-    });
+  async createContact(alias: string, networkId?: URN): Promise<URN> {
+    const uuid = crypto.randomUUID();
+    const localId = URN.create('user', uuid, 'contacts');
+
+    const parts = alias.trim().split(' ');
+    const firstName = parts[0] || alias;
+    const surname = parts.length > 1 ? parts.slice(1).join(' ') : '';
+    const now = Temporal.Now.instant().toString() as ISODateTimeString;
+
+    const newContact: Contact = {
+      id: localId,
+      alias: alias,
+      email: '',
+      firstName,
+      surname,
+      emailAddresses: [],
+      phoneNumbers: [],
+      serviceContacts: {},
+      lastModified: now,
+    };
+
+    if (networkId) {
+      newContact.serviceContacts['messenger'] = {
+        id: networkId,
+        alias: '',
+        lastSeen: now,
+      };
+    }
+
+    await this.storage.saveContact(newContact);
+    return localId;
   }
 
-  resolveContactName(urn: URN | string | null | undefined): Signal<string> {
-    return computed(() => {
-      if (!urn) return 'Unknown';
-      const idStr = urn.toString();
-      const contact = this.contactMap().get(idStr);
+  // --- Orchestration ---
 
-      if (contact) {
-        return contact.alias || contact.firstName || 'Unknown Contact';
-      }
-
-      return this.formatUnknownUrn(idStr);
-    });
-  }
-
-  resolveContact(
-    urn: URN | string | null | undefined,
-  ): Signal<Contact | undefined> {
-    return computed(() => {
-      if (!urn) return undefined;
-      return this.contactMap().get(urn.toString());
-    });
-  }
-
-  /**
-   * Resolves a Group URN into a list of individual participant contacts.
-   */
   async getGroupParticipants(groupUrn: URN): Promise<Contact[]> {
-    const group = await this.storage.getGroup(groupUrn);
-
-    if (!group) {
-      throw new GroupNotFoundError(groupUrn.toString());
-    }
-
-    const participants = await this.storage.getContactsForGroup(groupUrn);
-
-    if (participants.length === 0) {
-      throw new EmptyGroupError(groupUrn.toString());
-    }
-
-    return participants;
+    return this.storage.getContactsForGroup(groupUrn);
   }
 
-  // --- Wrapper Methods (The Facade) ---
+  // --- Delegation (To Storage) ---
+
+  async saveContact(contact: Contact): Promise<void> {
+    await this.storage.saveContact(contact);
+  }
+
+  async deleteContact(id: URN): Promise<void> {
+    await this.storage.deleteContact(id);
+  }
+
+  async saveGroup(group: ContactGroup): Promise<void> {
+    await this.storage.saveGroup(group);
+  }
+
+  async deleteGroup(id: URN): Promise<void> {
+    await this.storage.deleteGroup(id);
+  }
+
+  async getGroupsByParent(parentId: URN): Promise<ContactGroup[]> {
+    return this.storage.getGroupsByParent(parentId);
+  }
+
+  async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
+    return this.storage.getGroupsForContact(contactId);
+  }
+
+  async getLinkedIdentities(contactId: URN): Promise<URN[]> {
+    return this.storage.getLinkedIdentities(contactId);
+  }
+
+  // --- Gatekeeper Delegation ---
 
   async blockIdentity(urn: URN, scopes: string[] = ['all']): Promise<void> {
-    await this.storage.blockIdentity(urn, scopes);
-    await this.storage.deletePending(urn);
+    await this.gatekeeper.blockIdentity(urn, scopes);
+    await this.gatekeeper.deletePending(urn);
   }
 
   async unblockIdentity(urn: URN): Promise<void> {
-    await this.storage.unblockIdentity(urn);
+    await this.gatekeeper.unblockIdentity(urn);
   }
 
   async deletePending(urn: URN): Promise<void> {
-    await this.storage.deletePending(urn);
+    await this.gatekeeper.deletePending(urn);
+  }
+
+  async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
+    await this.gatekeeper.addToPending(urn, vouchedBy, note);
+  }
+
+  async getPendingIdentity(urn: URN): Promise<PendingIdentity | null> {
+    return this.gatekeeper.getPendingIdentity(urn);
   }
 
   async getAllIdentityLinks(): Promise<IdentityLink[]> {
@@ -154,16 +213,22 @@ export class ContactsStateService {
   }
 
   async performContactsWipe(): Promise<void> {
-    await this.storage.clearAllContacts(); // Note: Changed from performContactsWipe to match Storage
+    await this.storage.clearAllContacts();
+  }
+
+  async getContact(id: URN): Promise<Contact | undefined> {
+    return this.storage.getContact(id);
+  }
+
+  async getGroup(id: URN): Promise<ContactGroup | undefined> {
+    return this.storage.getGroup(id);
   }
 
   private formatUnknownUrn(str: string): string {
     const id = str.includes(':') ? str.split(':').pop()! : str;
-
     if (id.length === 36 && id.includes('-')) {
       return `User ${id.slice(-4).toUpperCase()}`;
     }
-
     return id;
   }
 }

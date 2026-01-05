@@ -1,5 +1,3 @@
-// libs/messenger/messenger-ui/src/lib/chat-window/chat-window.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
@@ -8,8 +6,8 @@ import {
   computed,
   effect,
   untracked,
+  signal,
 } from '@angular/core';
-
 import {
   ActivatedRoute,
   Router,
@@ -19,24 +17,33 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
 
-// --- Services ---
+// Services
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
+import { ChatParticipant } from '@nx-platform-application/messenger-types';
 
-// --- Components ---
+// Components
 import {
   ChatWindowHeaderComponent,
   ChatWindowMode,
-} from '../chat-window-header/chat-window-header.component';
-import { ChatParticipant } from '@nx-platform-application/messenger-types';
+  ChatScopeMode,
+  ChatGroupIntroComponent,
+} from '@nx-platform-application/messenger-ui-chat';
+// ✅ NEW IMPORT
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
   selector: 'messenger-chat-window',
   standalone: true,
-  imports: [RouterOutlet, ChatWindowHeaderComponent],
+  imports: [
+    RouterOutlet,
+    ChatWindowHeaderComponent,
+    ChatGroupIntroComponent,
+    MatProgressSpinnerModule, // ✅ Registered
+  ],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,32 +51,29 @@ import { ChatParticipant } from '@nx-platform-application/messenger-types';
 export class ChatWindowComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private chatService = inject(ChatService);
+  protected chatService = inject(ChatService);
   private contactsService = inject(ContactsStorageService);
   private logger = inject(Logger);
 
-  // --- 1. Determine Mode from Router ---
+  // --- Router & Data State ---
   private routerEvents$ = this.router.events;
+  private routeParams = toSignal(this.route.paramMap);
+  private queryParams = toSignal(this.route.queryParamMap);
+
+  // ✅ NEW: Loading State
+  isLoading = signal(false);
 
   viewMode = toSignal(
     this.routerEvents$.pipe(
       filter((e) => e instanceof NavigationEnd),
       map(() => {
-        const url = this.router.url;
-        return url.endsWith('/details')
+        return this.router.url.endsWith('/details')
           ? ('details' as ChatWindowMode)
           : ('chat' as ChatWindowMode);
       }),
     ),
-    {
-      initialValue: this.router.url.endsWith('/details')
-        ? ('details' as ChatWindowMode)
-        : ('chat' as ChatWindowMode),
-    },
+    { initialValue: 'chat' as ChatWindowMode },
   );
-
-  // --- 2. Data Loading Logic ---
-  private routeParams = toSignal(this.route.paramMap);
 
   conversationUrnString = computed(() => this.routeParams()?.get('id') || null);
 
@@ -84,17 +88,45 @@ export class ChatWindowComponent {
     }
   });
 
-  // --- 3. State Signals ---
   isKeyMissing = this.chatService.isRecipientKeyMissing;
+  messages = this.chatService.messages;
 
   private contacts = toSignal(this.contactsService.contacts$, {
-    initialValue: [] as Contact[],
+    initialValue: [],
   });
-  private groups = toSignal(this.contactsService.groups$, {
-    initialValue: [] as ContactGroup[],
+  private groups = toSignal(this.contactsService.groups$, { initialValue: [] });
+
+  // --- Zero State Logic ---
+  hasDismissedIntro = signal(false);
+
+  activeScope = computed<ChatScopeMode | null>(() => {
+    const urn = this.conversationUrn();
+    if (!urn) return null;
+    const param = this.queryParams()?.get('scope');
+    if (param === 'local' || param === 'network') return param as ChatScopeMode;
+    if (urn.entityType === 'group') {
+      return urn.namespace.startsWith('messenger') ? 'network' : 'local';
+    }
+    return null;
   });
 
-  // --- 4. Participant Computation ---
+  isUpgradeView = computed(() => {
+    const scope = this.activeScope();
+    const urn = this.conversationUrn();
+    return scope === 'network' && urn?.namespace.startsWith('contacts');
+  });
+
+  isEmptyBroadcast = computed(() => {
+    const scope = this.activeScope();
+    const msgs = this.messages();
+    const dismissed = this.hasDismissedIntro();
+    // Logic: Only consider it "Empty" if we are NOT loading.
+    // This prevents the check from firing while the fetch is in progress.
+    return (
+      !this.isLoading() && scope === 'local' && msgs.length === 0 && !dismissed
+    );
+  });
+
   participant = computed<ChatParticipant | null>(() => {
     const urn = this.conversationUrn();
     if (!urn) return null;
@@ -122,38 +154,91 @@ export class ChatWindowComponent {
   });
 
   constructor() {
-    // MODERN CLEANUP: Reset service when this component is destroyed
     inject(DestroyRef).onDestroy(() => {
       this.chatService.loadConversation(null);
     });
+
+    // Reset local UI state when conversation changes
+    effect(() => {
+      this.conversationUrn();
+      untracked(() => this.hasDismissedIntro.set(false));
+    });
+
+    // ✅ UPDATED: Loader Effect
+    effect(() => {
+      const urn = this.conversationUrn();
+      if (urn) {
+        untracked(async () => {
+          this.isLoading.set(true); // 1. Start Loading
+          try {
+            await this.chatService.loadConversation(urn); // 2. Wait for data
+          } catch (e) {
+            this.logger.error('Failed to load conversation', e);
+          } finally {
+            this.isLoading.set(false); // 3. Resolve
+          }
+        });
+      }
+    });
   }
 
-  // --- REFACTOR: Field Initializer Effect ---
-  // Cleaned up from constructor injection
-  private conversationLoader = effect(() => {
-    const urn = this.conversationUrn();
-    if (urn) {
-      untracked(() => {
-        this.chatService.loadConversation(urn);
-      });
-    }
-  });
-
-  // --- Navigation Handlers ---
+  // --- Actions ---
 
   onHeaderBack(): void {
     if (this.viewMode() === 'details') {
-      this.router.navigate(['./'], { relativeTo: this.route });
+      this.router.navigate(['./'], {
+        relativeTo: this.route,
+        queryParamsHandling: 'merge',
+      });
     } else {
       this.router.navigate(['/messenger']);
     }
   }
 
   onToggleInfo(): void {
-    if (this.viewMode() === 'chat') {
-      this.router.navigate(['details'], { relativeTo: this.route });
+    const target = this.viewMode() === 'chat' ? 'details' : './';
+    this.router.navigate([target], {
+      relativeTo: this.route,
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  async onScopeChange(newMode: ChatScopeMode): Promise<void> {
+    const currentUrn = this.conversationUrn();
+    if (!currentUrn) return;
+
+    if (newMode === 'network') {
+      const children = await this.contactsService.getGroupsByParent(currentUrn);
+      if (children.length > 0) {
+        this.router.navigate([
+          '/messenger',
+          'conversations',
+          children[0].id.toString(),
+        ]);
+      } else {
+        this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { scope: 'network' },
+          queryParamsHandling: 'merge',
+        });
+      }
     } else {
-      this.router.navigate(['./'], { relativeTo: this.route });
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { scope: null },
+        queryParamsHandling: 'merge',
+      });
     }
+  }
+
+  onStartBroadcast(): void {
+    if (this.isUpgradeView()) {
+      this.onScopeChange('local');
+    }
+    this.hasDismissedIntro.set(true);
+  }
+
+  async onCreateGroupChat(): Promise<void> {
+    console.log('[ChatWindow] TODO: Create Group Chat Logic (Phase 3)');
   }
 }

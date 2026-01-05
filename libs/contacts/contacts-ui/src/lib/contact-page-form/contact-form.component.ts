@@ -1,5 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-page-form/contact-form.component.ts
-
 import {
   Component,
   Output,
@@ -42,11 +40,12 @@ import { MatChipsModule } from '@angular/material/chips';
 })
 export class ContactFormComponent {
   contact = input<Contact | null>(null);
-  // --- NEW INPUT ---
   linkedIdentities = input<URN[]>([]);
   startInEditMode = input(false);
+  readonly = input(false);
 
   @Output() save = new EventEmitter<Contact>();
+  @Output() delete = new EventEmitter<void>(); // ✅ NEW
 
   isEditing = signal(false);
 
@@ -70,7 +69,6 @@ export class ContactFormComponent {
 
     effect(() => {
       const currentContact = this.contact();
-
       if (currentContact) {
         this.form.patchValue(currentContact);
         this.phoneNumbers.clear();
@@ -131,20 +129,20 @@ export class ContactFormComponent {
 
   onSave(): void {
     if (this.form.valid) {
-      this.save.emit({
-        ...this.contact(),
-        ...this.form.value,
-      });
+      this.save.emit({ ...this.contact(), ...this.form.value });
     }
+  }
+
+  // ✅ NEW
+  onDelete(): void {
+    this.delete.emit();
   }
 
   onCancel(): void {
     this.isEditing.set(false);
   }
 
-  // --- Helper to format URNs for display ---
   getProviderName(urn: URN): string {
-    // urn:auth:google:123 -> google
     const parts = urn.toString().split(':');
     return parts.length > 2 ? parts[2] : 'Unknown';
   }

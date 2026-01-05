@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Temporal } from '@js-temporal/polyfill';
 import { MessageContentParser } from './message-content-parser.service';
 import { MessageMetadataService } from './message-metadata.service';
 import { URN } from '@nx-platform-application/platform-types';
@@ -70,7 +71,7 @@ describe('MessageContentParser', () => {
       const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
       const receiptData: ReadReceiptData = {
         messageIds: ['msg-1'],
-        readAt: new Date().toISOString(),
+        readAt: Temporal.Now.instant().toString(),
       };
       // Signals are NOT wrapped in the metadata JSON envelope
       const bytes = encoder.encode(JSON.stringify(receiptData));

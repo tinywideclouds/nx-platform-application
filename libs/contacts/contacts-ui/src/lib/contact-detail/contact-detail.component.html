@@ -4,7 +4,9 @@
       [contact]="contactToEdit()"
       [linkedIdentities]="linkedIdentities()"
       [startInEditMode]="startInEditMode()"
+      [readonly]="readonly()"
       (save)="onSave($event)"
+      (delete)="onDelete()"
     />
 
     @if (groupsForContact().length > 0) {
@@ -12,18 +14,16 @@
         <h3 class="font-medium text-gray-700">Member of Groups:</h3>
         <div class="flex flex-wrap gap-2 mt-2">
           <mat-chip-listbox aria-label="Group membership">
-          @for (group of groupsForContact(); track group.id.toString()) {
-            <mat-chip data-testid="group-chip">
-              {{ group.name }}
-            </mat-chip>
-          }
+            @for (group of groupsForContact(); track group.id.toString()) {
+              <mat-chip data-testid="group-chip">
+                {{ group.name }}
+              </mat-chip>
+            }
           </mat-chip-listbox>
         </div>
       </div>
     }
   } @else {
-    <div class="p-8 text-center text-gray-500">
-      Loading contact details...
-    </div>
+    <div class="p-8 text-center text-gray-500">Loading contact details...</div>
   }
 </div>

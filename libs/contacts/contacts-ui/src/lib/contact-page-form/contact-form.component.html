@@ -1,51 +1,70 @@
-<form [formGroup]="form" (ngSubmit)="onSave()" class="space-y-4 p-4 form-view-mode">
-  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
+<form
+  [formGroup]="form"
+  (ngSubmit)="onSave()"
+  class="space-y-4 p-4 form-view-mode"
+>
+  <mat-form-field
+    [floatLabel]="'always'"
+    [hideRequiredMarker]="!isEditing()"
+    class="w-full"
+  >
     <mat-label>First Name</mat-label>
-    <input matInput formControlName="firstName" />
+    <input aria-label="first name" matInput formControlName="firstName" />
   </mat-form-field>
 
-  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
+  <mat-form-field
+    [floatLabel]="'always'"
+    [hideRequiredMarker]="!isEditing()"
+    class="w-full"
+  >
     <mat-label>Surname</mat-label>
-    <input matInput formControlName="surname" />
+    <input aria-label="surname" matInput formControlName="surname" />
   </mat-form-field>
 
-  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
+  <mat-form-field
+    [floatLabel]="'always'"
+    [hideRequiredMarker]="!isEditing()"
+    class="w-full"
+  >
     <mat-label>Alias</mat-label>
-    <input matInput formControlName="alias" />
+    <input aria-label="alias" matInput formControlName="alias" />
   </mat-form-field>
 
-  <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="w-full">
+  <mat-form-field
+    [floatLabel]="'always'"
+    [hideRequiredMarker]="!isEditing()"
+    class="w-full"
+  >
     <mat-label>Primary Email</mat-label>
-    <input matInput formControlName="email" type="email" />
+    <input aria-label="email" matInput formControlName="email" type="email" />
   </mat-form-field>
 
   <div formArrayName="phoneNumbers">
     <h3 class="font-medium text-gray-700">Phone Numbers</h3>
-    
     @for (phone of phoneNumbers.controls; track phone; let i = $index) {
       <div class="flex gap-2 mb-2 items-center">
-        <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="flex-1">
+        <mat-form-field
+          class="flex-1"
+          [floatLabel]="'always'"
+          [hideRequiredMarker]="!isEditing()"
+        >
           <mat-label>Phone Number</mat-label>
-          <input matInput [formControlName]="i" />
+          <input aria-label="phoneNumber" matInput [formControlName]="i" />
         </mat-form-field>
-        
         @if (isEditing()) {
           <button
             type="button"
             (click)="removePhoneNumber(i)"
             mat-icon-button
             color="warn"
-            aria-label="Remove phone number"
-            data-testid="remove-phone"
           >
             <mat-icon>delete</mat-icon>
           </button>
         }
       </div>
     }
-
     @if (isEditing()) {
-      <button type="button" (click)="addPhoneNumber()" mat-stroked-button data-testid="add-phone">
+      <button type="button" (click)="addPhoneNumber()" mat-stroked-button>
         Add Phone
       </button>
     }
@@ -53,37 +72,39 @@
 
   <div formArrayName="emailAddresses">
     <h3 class="font-medium text-gray-700">Other Emails</h3>
-    
     @for (email of emailAddresses.controls; track email; let i = $index) {
       <div class="flex gap-2 mb-2 items-center">
-        <mat-form-field [floatLabel]="'always'" [hideRequiredMarker]="!isEditing()" class="flex-1">
+        <mat-form-field
+          class="flex-1"
+          [floatLabel]="'always'"
+          [hideRequiredMarker]="!isEditing()"
+        >
           <mat-label>Email Address</mat-label>
-          <input matInput [formControlName]="i" type="email" />
+          <input
+            aria-label="email"
+            matInput
+            [formControlName]="i"
+            type="email"
+          />
         </mat-form-field>
-        
         @if (isEditing()) {
           <button
             type="button"
             (click)="removeEmailAddress(i)"
             mat-icon-button
             color="warn"
-            aria-label="Remove email address"
-            data-testid="remove-email"
           >
             <mat-icon>delete</mat-icon>
           </button>
         }
       </div>
     }
-
     @if (isEditing()) {
-      <button type="button" (click)="addEmailAddress()" mat-stroked-button data-testid="add-email">
+      <button type="button" (click)="addEmailAddress()" mat-stroked-button>
         Add Email
       </button>
     }
   </div>
-
-  
 
   @if (linkedIdentities().length > 0) {
     <div class="mt-4">
@@ -91,7 +112,9 @@
       <mat-chip-listbox aria-label="Linked Identities">
         @for (urn of linkedIdentities(); track urn.toString()) {
           <mat-chip data-testid="identity-chip">
-            <span class="font-bold">{{ getProviderName(urn) | titlecase }}: </span>
+            <span class="font-bold"
+              >{{ getProviderName(urn) | titlecase }}:
+            </span>
             <span>{{ getProviderId(urn) }}</span>
           </mat-chip>
         }
@@ -99,37 +122,56 @@
     </div>
   }
 
-  @if (isEditing()) {
-  <div class="flex justify-end gap-2 pt-4">
-    <button
-      type="button"
-      (click)="onCancel()"
-      mat-button
-      data-testid="cancel-button"
-    >
-      Cancel
-    </button>
-    <button
-      type="submit"
-      [disabled]="form.invalid"
-      mat-flat-button
-      color="primary"
-      data-testid="save-button"
-    >
-      Save
-    </button>
-  </div>
-  } @else {
-  <div class="flex justify-end gap-2 pt-4">
-    <button
-      type="button"
-      (click)="isEditing.set(true)"
-      mat-flat-button
-      color="primary"
-      data-testid="edit-button"
-    >
-      Edit
-    </button>
-  </div>
+  @if (!readonly()) {
+    @if (isEditing()) {
+      <div class="flex justify-between items-center pt-4">
+        @if (contact()) {
+          <button
+            type="button"
+            mat-button
+            color="warn"
+            (click)="onDelete()"
+            class="!text-red-600"
+            data-testid="delete-button"
+          >
+            <mat-icon>delete</mat-icon> Delete Contact
+          </button>
+        } @else {
+          <div></div>
+        }
+
+        <div class="flex gap-2">
+          <button
+            type="button"
+            (click)="onCancel()"
+            mat-button
+            data-testid="cancel-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            [disabled]="form.invalid"
+            mat-flat-button
+            color="primary"
+            data-testid="save-button"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    } @else {
+      <div class="flex justify-end gap-2 pt-4">
+        <button
+          type="button"
+          (click)="isEditing.set(true)"
+          mat-flat-button
+          color="primary"
+          data-testid="edit-button"
+        >
+          Edit
+        </button>
+      </div>
+    }
   }
 </form>

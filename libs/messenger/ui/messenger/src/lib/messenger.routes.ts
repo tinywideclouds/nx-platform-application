@@ -8,7 +8,7 @@ import { MessengerHomePageComponent } from './messenger-home-page/messenger-home
 import { MessengerChatPageComponent } from './messenger-chat-page/messenger-chat-page.component';
 import { ChatWindowComponent } from './chat-window/chat-window.component';
 import { ChatConversationComponent } from './chat-conversation/chat-conversation.component';
-import { ChatContactDetailWrapperComponent } from './chat-contact-detail-wrapper/chat-contact-detail-wrapper.component';
+import { ChatContactDetailWrapperComponent } from './chat-detail-wrapper/chat-detail-wrapper.component';
 
 export const messengerRoutes: Routes = [
   {

@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Temporal } from '@js-temporal/polyfill';
 import { CloudStorageProvider } from '../cloud-provider.interface';
 import { BackupFile } from '../models/cloud-storage.models';
 
@@ -47,7 +48,7 @@ export class InMemoryCloudProvider implements CloudStorageProvider {
     this.metadata.set(path, {
       fileId: `id-${path}`,
       name: name,
-      createdAt: new Date().toISOString(),
+      createdAt: Temporal.Now.instant().toString(),
       sizeBytes: content.length,
     });
   }

@@ -1,22 +1,19 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactsSettingsPageComponent } from './contacts-settings-page.component';
-import {
-  ContactsStorageService,
-  PendingIdentity,
-} from '@nx-platform-application/contacts-storage';
-import {
-  ContactsCloudService,
-  CloudBackupMetadata,
-} from '@nx-platform-application/contacts-cloud-access';
-import { MockComponent, MockProvider } from 'ng-mocks';
-import { PendingListComponent } from '../pending-list/pending-list.component';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { of } from 'rxjs';
+import { signal } from '@angular/core';
 
-const mockBackup: CloudBackupMetadata = {
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
+import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
+
+import { MockComponent, MockProvider } from 'ng-mocks';
+import { ContactsSecurityComponent } from '../contacts-security/contacts-security.component';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { BackupFile } from '@nx-platform-application/platform-cloud-access';
+
+const mockBackup: BackupFile = {
   fileId: 'f1',
   name: 'backup.json',
-  createdAt: '',
+  createdAt: '2025-01-01',
   sizeBytes: 100,
 };
 
@@ -29,14 +26,14 @@ describe('ContactsSettingsPageComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ContactsSettingsPageComponent,
-        MockComponent(PendingListComponent),
+        MockComponent(ContactsSecurityComponent),
       ],
       providers: [
-        MockProvider(ContactsStorageService, {
-          pending$: of([]),
-          deletePending: vi.fn(),
-          blockIdentity: vi.fn(),
-        }),
+        // ✅ FIX: Use useValue to avoid class instantiation/toSignal crash
+        {
+          provide: ContactsStateService,
+          useValue: { pending: signal([]) },
+        },
         MockProvider(ContactsCloudService, {
           hasPermission: vi.fn().mockReturnValue(true),
           listBackups: vi.fn().mockResolvedValue([mockBackup]),

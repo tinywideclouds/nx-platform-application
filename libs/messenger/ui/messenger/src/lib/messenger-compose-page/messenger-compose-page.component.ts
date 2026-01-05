@@ -18,10 +18,7 @@ import {
 import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 
 // TYPES
-import {
-  Contact,
-  ContactGroup,
-} from '@nx-platform-application/contacts-storage';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 
 @Component({
   selector: 'messenger-compose-page',

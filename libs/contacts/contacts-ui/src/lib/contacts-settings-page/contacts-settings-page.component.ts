@@ -10,12 +10,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 
-import {
-  ContactsCloudService,
-  CloudBackupMetadata,
-} from '@nx-platform-application/contacts-cloud-access';
+// ✅ UPDATE: Service remains here, but metadata type comes from Platform
+import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
+import { BackupFile } from '@nx-platform-application/platform-cloud-access';
 
-// ✅ Import the new sub-component
 import { ContactsSecurityComponent } from '../contacts-security/contacts-security.component';
 
 @Component({
@@ -26,8 +24,8 @@ import { ContactsSecurityComponent } from '../contacts-security/contacts-securit
     MatIconModule,
     MatCardModule,
     MatProgressBarModule,
-    ContactsSecurityComponent
-],
+    ContactsSecurityComponent,
+  ],
   templateUrl: './contacts-settings-page.component.html',
   styleUrl: './contacts-settings-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,10 +33,10 @@ import { ContactsSecurityComponent } from '../contacts-security/contacts-securit
 export class ContactsSettingsPageComponent {
   private cloudService = inject(ContactsCloudService);
 
-  // --- CLOUD STATE (Kept here for Contacts App) ---
+  // --- CLOUD STATE ---
   isBackingUp = signal(false);
   isRestoring = signal(false);
-  cloudBackups = signal<CloudBackupMetadata[]>([]);
+  cloudBackups = signal<BackupFile[]>([]);
 
   constructor() {
     if (this.cloudService.hasPermission('google')) {

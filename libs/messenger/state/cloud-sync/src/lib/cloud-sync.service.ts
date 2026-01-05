@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
@@ -46,7 +47,7 @@ export class CloudSyncService {
       contactsProcessed: false,
       messagesProcessed: false,
       errors: [],
-      timestamp: new Date().toISOString(),
+      timestamp: Temporal.Now.instant().toString(),
     };
 
     if (!this.hasPermission(options.providerId)) {

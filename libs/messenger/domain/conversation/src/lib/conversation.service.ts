@@ -15,16 +15,16 @@ import {
   ConversationSummary,
 } from '@nx-platform-application/messenger-types';
 
-// ✅ ARCHITECTURE FIX: Import Contracts from Infrastructure
 import {
   HistoryReader,
   HistoryQuery,
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// ✅ ARCHITECTURE FIX: Direct Domain Dependency (Replaces RemoteHistoryLoader)
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
+// ✅ CORRECT: Use the Read-Only Address Book API
+import { AddressBookApi } from '@nx-platform-application/contacts-api';
 
+import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 
@@ -34,6 +34,7 @@ import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_CONTACT_SHARE,
   MESSAGE_TYPE_READ_RECEIPT,
+  MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
   ReadReceiptData,
   MessageTypingIndicator,
   ContactShareData,
@@ -48,7 +49,8 @@ export class ConversationService {
 
   private historyReader = inject(HistoryReader);
   private storage = inject(ConversationStorage);
-  private chatSync = inject(ChatSyncService); // Renamed from remoteLoader
+  private chatSync = inject(ChatSyncService);
+  private addressBook = inject(AddressBookApi); // ✅ READ-ONLY Access
 
   private outbound = inject(OutboundService);
   private keyService = inject(ChatKeyService);
@@ -57,7 +59,37 @@ export class ConversationService {
 
   public readonly myUrn = signal<URN | null>(null);
   public readonly selectedConversation = signal<URN | null>(null);
-  public readonly messages: WritableSignal<ChatMessage[]> = signal([]);
+
+  // STATE: Tracks Lurker vs Member status
+  public readonly membershipStatus = signal<'invited' | 'joined' | 'unknown'>(
+    'unknown',
+  );
+
+  // Internal: The unfiltered stream from DB/Network
+  private readonly _rawMessages: WritableSignal<ChatMessage[]> = signal([]);
+
+  // PUBLIC COMPUTED: Applies the "Lurker Filter"
+  public readonly messages = computed(() => {
+    const raw = this._rawMessages();
+    const status = this.membershipStatus();
+    const currentUrn = this.selectedConversation();
+    const me = this.myUrn();
+
+    // 1. Direct Chats (Non-Group): Show Everything
+    if (currentUrn && currentUrn.entityType !== 'group') return raw;
+
+    // 2. Member/Joined: Show Everything
+    if (status === 'joined') return raw;
+
+    // 3. Lurker (Invited/Unknown): Shield Content
+    // Show only System Messages (Join events) or my own messages
+    return raw.filter(
+      (m) =>
+        m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE_RESPONSE ||
+        (me && m.senderId.equals(me)),
+    );
+  });
+
   public readonly genesisReached = signal<boolean>(false);
   public readonly isLoadingHistory = signal<boolean>(false);
   public readonly isRecipientKeyMissing = signal<boolean>(false);
@@ -114,11 +146,39 @@ export class ConversationService {
       this.selectedConversation.set(urn);
       this.genesisReached.set(false);
       this.firstUnreadId.set(null);
-      this.messages.set([]);
+      this._rawMessages.set([]);
+      this.membershipStatus.set('unknown');
 
       if (!urn) {
         this.isRecipientKeyMissing.set(false);
         return;
+      }
+
+      // LOGIC: Determine Group Status
+      if (urn.entityType === 'group') {
+        // ✅ Use AddressBookApi to check local membership
+        const group = await this.addressBook.getGroup(urn);
+        if (group && myUrn) {
+          const me = group.members.find((m) => m.contactId.equals(myUrn));
+          if (me) {
+            const s = me.status;
+            if (s === 'joined' || s === 'added') {
+              this.membershipStatus.set('joined');
+            } else if (s === 'invited') {
+              this.membershipStatus.set('invited');
+            } else {
+              this.membershipStatus.set('unknown');
+            }
+          } else {
+            this.membershipStatus.set('unknown');
+          }
+        } else {
+          // Group not in address book yet -> Invited context
+          this.membershipStatus.set('invited');
+        }
+      } else {
+        // 1:1 Chats are always 'joined'
+        this.membershipStatus.set('joined');
       }
 
       const index = await this.storage.getConversationIndex(urn);
@@ -154,7 +214,7 @@ export class ConversationService {
           await this.processReadReceipts(viewMessages, myUrn);
         }
 
-        this.messages.set(viewMessages);
+        this._rawMessages.set(viewMessages);
         this.genesisReached.set(result.genesisReached);
       } finally {
         this.isLoadingHistory.set(false);
@@ -166,7 +226,7 @@ export class ConversationService {
     if (this.isLoadingHistory() || this.genesisReached()) return;
 
     return this.runExclusive(async () => {
-      const currentMsgs = this.messages();
+      const currentMsgs = this._rawMessages();
       const urn = this.selectedConversation();
       if (!urn || currentMsgs.length === 0) return;
 
@@ -182,7 +242,7 @@ export class ConversationService {
 
         if (result.messages.length > 0) {
           const newHistory = result.messages.map((m) => this.mapper.toView(m));
-          this.messages.update((current) => [...newHistory, ...current]);
+          this._rawMessages.update((current) => [...newHistory, ...current]);
         }
         this.genesisReached.set(result.genesisReached);
       } catch (e) {
@@ -264,7 +324,7 @@ export class ConversationService {
   applyIncomingReadReceipts(ids: string[]): void {
     if (ids.length === 0) return;
     const idSet = new Set(ids);
-    this.messages.update((current) =>
+    this._rawMessages.update((current) =>
       current.map((msg) =>
         idSet.has(msg.id) && msg.status !== 'read'
           ? { ...msg, status: 'read' }
@@ -343,13 +403,13 @@ export class ConversationService {
           this.logger.warn('Failed to process live receipts', err),
         );
       }
-      this.messages.update((current) => [...current, ...viewed]);
+      this._rawMessages.update((current) => [...current, ...viewed]);
       this.storage.markConversationAsRead(activeConvo);
     }
   }
 
   async recoverFailedMessage(messageId: string): Promise<string | undefined> {
-    const targetMsg = this.messages().find((m) => m.id === messageId);
+    const targetMsg = this._rawMessages().find((m) => m.id === messageId);
     if (!targetMsg) return undefined;
 
     let textToRestore: string | undefined = targetMsg.textContent;
@@ -365,18 +425,19 @@ export class ConversationService {
     }
 
     await this.storage.deleteMessage(messageId);
-    this.messages.update((msgs) => msgs.filter((m) => m.id !== messageId));
+    this._rawMessages.update((msgs) => msgs.filter((m) => m.id !== messageId));
     return textToRestore;
   }
 
   async performHistoryWipe(): Promise<void> {
     await this.storage.clearMessageHistory();
-    this.messages.set([]);
+    this._rawMessages.set([]);
     this.genesisReached.set(false);
     this.firstUnreadId.set(null);
     this.selectedConversation.set(null);
     this.isRecipientKeyMissing.set(false);
     this.isLoadingHistory.set(false);
+    this.membershipStatus.set('unknown');
     this.logger.info('[ConversationService] Local history wiped.');
   }
 
@@ -430,7 +491,7 @@ export class ConversationService {
     id: string,
     status: MessageDeliveryStatus,
   ): void {
-    this.messages.update((current) =>
+    this._rawMessages.update((current) =>
       current.map((msg) => (msg.id === id ? { ...msg, status } : msg)),
     );
   }

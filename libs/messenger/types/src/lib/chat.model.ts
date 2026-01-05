@@ -54,7 +54,7 @@ export interface MessageTombstone {
   deletedAt: ISODateTimeString;
 }
 
-// ✅ NEW: A clean, public contract for syncing Conversation State
+// A clean, public contract for syncing Conversation State
 export interface ConversationSyncState extends Conversation {
   snippet: string;
   unreadCount: number;

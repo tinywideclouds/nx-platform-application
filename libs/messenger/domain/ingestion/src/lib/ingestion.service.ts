@@ -15,6 +15,7 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { GroupNetworkStorageApi } from '@nx-platform-application/contacts-api';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
@@ -37,6 +38,7 @@ export class IngestionService {
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
   private quarantineService = inject(QuarantineService);
+  private groupStorage = inject(GroupNetworkStorageApi);
   private parser = inject(MessageContentParser);
   private logger = inject(Logger);
 
@@ -108,13 +110,16 @@ export class IngestionService {
     const transport: TransportMessage =
       await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
 
+    // 1. SECURITY CHECK: Quarantine Gatekeeper
+    // Resolves Network Identity -> Local Contact Identity
+    // Returns null if Blocked or Untrusted
     const canonicalSenderUrn = await this.quarantineService.process(
       transport,
       blockedSet,
     );
 
     if (!canonicalSenderUrn) {
-      return;
+      return; // Message Rejected
     }
 
     await this.parseAndStore(
@@ -142,9 +147,41 @@ export class IngestionService {
             ? parsed.conversationId
             : canonicalSenderUrn;
 
+        // Side Effect for Group Consensus
+        // If this is a "Joined" message, we must update the Roster state immediately.
+        if (parsed.payload.kind === 'group-system') {
+          const data = parsed.payload.data; // GroupJoinData
+
+          try {
+            const groupUrn = URN.parse(data.groupUrn);
+
+            if (data.status === 'joined') {
+              this.logger.info(
+                `[Ingestion] Roster Update: ${canonicalSenderUrn} joined ${groupUrn}`,
+              );
+              await this.groupStorage.updateGroupMemberStatus(
+                groupUrn,
+                canonicalSenderUrn, // The trusted sender
+                'joined',
+              );
+            } else if (data.status === 'declined') {
+              this.logger.info(
+                `[Ingestion] Roster Update: ${canonicalSenderUrn} declined ${groupUrn}`,
+              );
+              await this.groupStorage.updateGroupMemberStatus(
+                groupUrn,
+                canonicalSenderUrn,
+                'declined', // Assumes ContactsTypes supports 'declined'
+              );
+            }
+          } catch (e) {
+            this.logger.error('[Ingestion] Failed to update group roster', e);
+          }
+        }
+
         const chatMessage: ChatMessage = {
           id: canonicalId,
-          senderId: transport.senderId,
+          senderId: canonicalSenderUrn,
           sentTimestamp: transport.sentTimestamp as ISODateTimeString,
           typeId: transport.typeId,
           status: 'received',
@@ -165,7 +202,8 @@ export class IngestionService {
 
       case 'signal': {
         if (typeStr === MESSAGE_TYPE_TYPING) {
-          accumulator.typingIndicators.push(transport.senderId);
+          // ✅ FIX: Use Canonical (Contact) URN so the UI can map it to the active conversation
+          accumulator.typingIndicators.push(canonicalSenderUrn);
         } else if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
           const rr = parsed.payload.data as ReadReceiptData;
           const ids = rr?.messageIds || [];

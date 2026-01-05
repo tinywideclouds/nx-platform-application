@@ -1,8 +1,11 @@
 <form
+  id="input form"
   (submit)="$event.preventDefault(); sendMessage()"
   class="flex items-start space-x-2 p-2 border-t"
 >
   <textarea
+    id="textarea"
+    name="input text"
     [value]="messageText()"
     (input)="onInput($event)"
     (keydown)="onKeyDown($event)"
@@ -14,6 +17,7 @@
   ></textarea>
 
   <button
+    id="button"
     type="submit"
     [disabled]="!messageText() || disabled()"
     class="bg-blue-600 text-white rounded-md p-2 h-full disabled:bg-gray-400 transition-colors"

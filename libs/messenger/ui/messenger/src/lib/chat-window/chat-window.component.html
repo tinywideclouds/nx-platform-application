@@ -3,13 +3,39 @@
     <messenger-chat-window-header
       [participant]="p"
       [mode]="viewMode()"
+      [scopeMode]="activeScope()"
       [hasKeyIssue]="isKeyMissing()"
       (back)="onHeaderBack()"
       (toggleInfo)="onToggleInfo()"
+      (scopeChange)="onScopeChange($event)"
     />
 
     <div class="flex-grow overflow-hidden relative">
-      <router-outlet></router-outlet>
+      @if (isLoading()) {
+        <div
+          class="absolute inset-0 flex items-center justify-center bg-white z-50"
+        >
+          <mat-spinner diameter="40" class="opacity-50"></mat-spinner>
+        </div>
+      }
+
+      @if (isUpgradeView()) {
+        <messenger-chat-group-intro
+          [groupName]="p.name"
+          [memberCount]="0"
+          (startBroadcast)="onStartBroadcast()"
+          (createGroupChat)="onCreateGroupChat()"
+        />
+      } @else if (isEmptyBroadcast()) {
+        <messenger-chat-group-intro
+          [groupName]="p.name"
+          [memberCount]="0"
+          (startBroadcast)="onStartBroadcast()"
+          (createGroupChat)="onCreateGroupChat()"
+        />
+      } @else {
+        <router-outlet></router-outlet>
+      }
     </div>
   } @else {
     <div class="flex items-center justify-center h-full text-gray-500">

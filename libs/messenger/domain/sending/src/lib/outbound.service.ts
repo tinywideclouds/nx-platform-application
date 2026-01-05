@@ -18,8 +18,8 @@ import { MESSAGE_TYPE_TEXT } from '@nx-platform-application/messenger-domain-mes
 // Strategies
 import { SendContext } from './strategies/send-strategy.interface';
 import { DirectSendStrategy } from './strategies/direct-send.strategy';
-import { NetworkGroupStrategy } from './strategies/network-group.strategy';
-import { LocalBroadcastStrategy } from './strategies/local-broadcast.strategy';
+import { NetworkGroupStrategy } from './strategies/group-network.strategy';
+import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';
 
 export interface SendOptions {
   isEphemeral?: boolean;
@@ -38,7 +38,6 @@ export class OutboundService {
   private identityResolver = inject(IdentityResolver);
   private outboxWorker = inject(OutboxWorkerService);
 
-  // ✅ Inject Strategies
   private directStrategy = inject(DirectSendStrategy);
   private networkStrategy = inject(NetworkGroupStrategy);
   private broadcastStrategy = inject(LocalBroadcastStrategy);
@@ -74,6 +73,7 @@ export class OutboundService {
       const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
       const localId = `local-${crypto.randomUUID()}`;
 
+      // Create Optimistic Record
       const optimisticMsg: ChatMessage = {
         id: localId,
         senderId: myUrn,
@@ -89,6 +89,7 @@ export class OutboundService {
         status: 'pending',
       };
 
+      // Persist to UI storage immediately (unless ephemeral)
       if (!isEphemeral) {
         await this.storageService.saveMessage(optimisticMsg);
       }
@@ -101,14 +102,27 @@ export class OutboundService {
         isEphemeral,
       };
 
-      // ✅ Delegate to Strategy
+      // 1. Execute Strategy (Enqueue or Bypass)
+      let result: OutboundResult;
+
+      console.log('decide strategy');
+
       if (isNetworkGroup) {
-        return this.networkStrategy.send(context);
+        result = await this.networkStrategy.send(context);
       } else if (isLocalGroup) {
-        return this.broadcastStrategy.send(context);
+        result = await this.broadcastStrategy.send(context);
       } else {
-        return this.directStrategy.send(context);
+        result = await this.directStrategy.send(context);
       }
+
+      // 2. Trigger Worker (Standard Persistent Messages Only)
+      // The strategy only queues the task. We must wake up the worker to process it.
+      if (!isEphemeral) {
+        // Note: For Groups, we use 'myUrn' as the Sender context for key retrieval
+        this.outboxWorker.processQueue(myUrn, myKeys);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error('[Outbound] Failed to coordinate send', error);
       return null;

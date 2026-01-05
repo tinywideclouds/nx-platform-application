@@ -1,25 +1,33 @@
 import { Injectable, inject } from '@angular/core';
+import { Temporal } from '@js-temporal/polyfill';
 import { firstValueFrom } from 'rxjs';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
   CloudStorageProvider,
   BackupFile,
   CLOUD_PROVIDERS,
 } from '@nx-platform-application/platform-cloud-access';
+
+// ✅ FIX: Use the concrete storage class exported by the storage lib
+import {
+  ContactsStorageService,
+  GatekeeperStorage,
+} from '@nx-platform-application/contacts-storage';
+
 import { BackupPayload } from './models/backup-payload.interface';
 
-const CURRENT_SCHEMA_VERSION = 5; // Bumped version for Block Support
+const CURRENT_SCHEMA_VERSION = 5;
 const BASE_PATH = 'tinywide/contacts';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsCloudService {
   private storage = inject(ContactsStorageService);
+  private gatekeeper = inject(GatekeeperStorage);
   private logger = inject(Logger);
   private providersList = inject(CLOUD_PROVIDERS, { optional: true }) || [];
 
   private providersMap = new Map<string, CloudStorageProvider>(
-    this.providersList.map((p) => [p.providerId, p])
+    this.providersList.map((p) => [p.providerId, p]),
   );
 
   getAvailableProviders(): string[] {
@@ -38,28 +46,28 @@ export class ContactsCloudService {
     const provider = this.getProvider(providerId);
     await this.ensurePermission(provider);
 
-    // 1. Snapshot (Parallel Fetch)
+    // 1. Snapshot Data (Direct Access)
     const [contacts, groups, blocked] = await Promise.all([
       firstValueFrom(this.storage.contacts$),
       firstValueFrom(this.storage.groups$),
-      firstValueFrom(this.storage.blocked$), // ✅ Fetch Blocked
+      firstValueFrom(this.gatekeeper.blocked$),
     ]);
+
+    const now = Temporal.Now.instant().toString();
 
     const payload: BackupPayload = {
       version: CURRENT_SCHEMA_VERSION,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       sourceDevice:
         typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
       contacts,
       groups,
-      blocked, // ✅ Add to Payload
+      blocked,
     };
 
-    // 2. Construct Path
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = now.split('T')[0];
     const path = `${BASE_PATH}/contacts_backup_${dateStr}.json`;
 
-    // 3. Upload
     await provider.uploadBackup(payload, path);
     this.logger.info(`[ContactsCloud] Uploaded to ${path}`);
   }
@@ -77,26 +85,24 @@ export class ContactsCloudService {
       throw new Error(`Backup file not found at path: ${path}`);
     }
 
-    // 1. Restore Contacts
+    // 1. Restore Address Book
     if (payload.contacts?.length) {
       await this.storage.bulkUpsert(payload.contacts);
     }
 
-    // 2. Restore Groups
     for (const group of payload.groups || []) {
       await this.storage.saveGroup(group);
     }
 
-    // 3. Restore Blocked Identities ✅
+    // 2. Restore Security Data
     if (payload.blocked?.length) {
       this.logger.info(
-        `[ContactsCloud] Restoring ${payload.blocked.length} blocked identities...`
+        `[ContactsCloud] Restoring ${payload.blocked.length} blocked identities...`,
       );
-      // We run these in parallel as they are independent
       await Promise.all(
         payload.blocked.map((b) =>
-          this.storage.blockIdentity(b.urn, b.scopes, b.reason)
-        )
+          this.gatekeeper.blockIdentity(b.urn, b.scopes, b.reason),
+        ),
       );
     }
 
@@ -116,7 +122,7 @@ export class ContactsCloudService {
   }
 
   private async ensurePermission(
-    provider: CloudStorageProvider
+    provider: CloudStorageProvider,
   ): Promise<void> {
     if (!provider.hasPermission()) {
       if (!(await provider.requestAccess())) {

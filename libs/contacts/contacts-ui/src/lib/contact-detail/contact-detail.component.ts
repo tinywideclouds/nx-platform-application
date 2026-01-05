@@ -1,12 +1,9 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-detail/contact-detail.component.ts
-
-import { Component, inject, input, output, signal } from '@angular/core';
-
+import { Component, inject, input, output } from '@angular/core';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { map, switchMap } from 'rxjs/operators';
-import { from, of, Observable } from 'rxjs';
+import { from, Observable } from 'rxjs';
 
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStateService } from '@nx-platform-application/contacts-state'; // ✅ State
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
   ISODateTimeString,
@@ -14,8 +11,12 @@ import {
 } from '@nx-platform-application/platform-types';
 
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
-// Toolbar Removed
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog } from '@angular/material/dialog';
+import {
+  ConfirmationDialogComponent,
+  ConfirmationData,
+} from '@nx-platform-application/platform-ui-toolkit';
 
 @Component({
   selector: 'contacts-detail',
@@ -25,23 +26,21 @@ import { MatChipsModule } from '@angular/material/chips';
   styleUrl: './contact-detail.component.scss',
 })
 export class ContactDetailComponent {
-  private contactsService = inject(ContactsStorageService);
+  private state = inject(ContactsStateService); // ✅ State
+  private dialog = inject(MatDialog);
 
-  // --- Inputs ---
   contactId = input.required<URN>();
   startInEditMode = input(false);
+  readonly = input(false);
 
-  // --- Outputs ---
   saved = output<Contact>();
-  // 'close' output REMOVED (Parent handles navigation context)
-
-  // --- Internal State ---
+  deleted = output<void>();
 
   private contactStream$: Observable<Contact | null> = toObservable(
     this.contactId,
   ).pipe(
     switchMap((id) => {
-      return from(this.contactsService.getContact(id)).pipe(
+      return from(this.state.getContact(id)).pipe(
         map((existing) => existing ?? this.createEmptyContact(id)),
       );
     }),
@@ -51,7 +50,9 @@ export class ContactDetailComponent {
 
   private linkedIdentitiesStream$: Observable<URN[]> = toObservable(
     this.contactId,
-  ).pipe(switchMap((id) => from(this.contactsService.getLinkedIdentities(id))));
+  ).pipe(
+    switchMap((id) => from(this.state.getLinkedIdentities(id))), // ✅ Delegated
+  );
 
   linkedIdentities = toSignal(this.linkedIdentitiesStream$, {
     initialValue: [],
@@ -59,17 +60,43 @@ export class ContactDetailComponent {
 
   private groupsForContactStream$: Observable<ContactGroup[]> = toObservable(
     this.contactId,
-  ).pipe(switchMap((id) => from(this.contactsService.getGroupsForContact(id))));
+  ).pipe(
+    switchMap((id) => from(this.state.getGroupsForContact(id))), // ✅ Delegated
+  );
 
   groupsForContact = toSignal(this.groupsForContactStream$, {
     initialValue: [],
   });
 
-  // --- Actions ---
-
   async onSave(contact: Contact): Promise<void> {
-    await this.contactsService.saveContact(contact);
+    await this.state.saveContact(contact);
     this.saved.emit(contact);
+  }
+
+  async onDelete(): Promise<void> {
+    const contact = this.contactToEdit();
+    if (!contact) return;
+
+    const ref = this.dialog.open<
+      ConfirmationDialogComponent,
+      ConfirmationData,
+      boolean
+    >(ConfirmationDialogComponent, {
+      data: {
+        title: 'Delete Contact?',
+        message: `Are you sure you want to delete <strong>${contact.alias}</strong>?`,
+        confirmText: 'Delete',
+        confirmColor: 'warn',
+        icon: 'delete',
+      },
+    });
+
+    const result = await ref.afterClosed().toPromise();
+
+    if (result) {
+      await this.state.deleteContact(contact.id);
+      this.deleted.emit();
+    }
   }
 
   private createEmptyContact(id: URN): Contact {

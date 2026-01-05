@@ -27,10 +27,11 @@
 
   <div class="flex-grow overflow-y-auto">
     @if (contactId(); as data) {
-      <contacts-detail 
+      <contacts-detail
         [contactId]="data.urn"
         [startInEditMode]="data.isNew"
         (saved)="onSaved()"
+        (deleted)="onClose()"
       />
     } @else {
       <div class="p-4 text-red-500">Invalid Contact ID</div>

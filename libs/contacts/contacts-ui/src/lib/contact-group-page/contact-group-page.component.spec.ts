@@ -54,6 +54,8 @@ const mockActivatedRoute = {
 const mockContactsService = {
   getGroup: vi.fn(),
   saveGroup: vi.fn(),
+  deleteGroup: vi.fn(),
+  getGroupsByParent: vi.fn().mockResolvedValue([]),
   contacts$: new Subject<Contact[]>(),
 };
 

@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Temporal } from '@js-temporal/polyfill';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
@@ -78,7 +79,7 @@ export class ReceiverHostedFlowService {
 
     const messagePayload: TransportMessage = {
       senderId: myUrn,
-      sentTimestamp: new Date().toISOString() as ISODateTimeString,
+      sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
       typeId: URN.parse(MESSAGE_TYPE_DEVICE_SYNC),
       payloadBytes: payloadBytes,
     };

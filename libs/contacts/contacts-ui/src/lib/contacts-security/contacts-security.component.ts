@@ -1,11 +1,9 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-
-import { toSignal } from '@angular/core/rxjs-interop';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-
+// ✅ CORRECT: Internal UI uses Internal State Service
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { PendingIdentity } from '@nx-platform-application/contacts-types';
 
 import { PendingListComponent } from '../pending-list/pending-list.component';
@@ -19,16 +17,18 @@ import { PendingListComponent } from '../pending-list/pending-list.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactsSecurityComponent {
-  private contactsService = inject(ContactsStorageService);
+  private state = inject(ContactsStateService);
 
-  // Logic extracted from the original settings page
-  pending = toSignal(this.contactsService.pending$, { initialValue: [] });
+  // ✅ Signal exposed directly from State
+  pending = this.state.pending;
 
   async approveIdentity(pending: PendingIdentity) {
-    await this.contactsService.deletePending(pending.urn);
+    // "Approve" removes it from the pending list (Quarantine)
+    await this.state.deletePending(pending.urn);
   }
 
   async blockPending(pending: PendingIdentity) {
-    await this.contactsService.deletePending(pending.urn);
+    // State orchestration handles blocking AND removing from pending
+    await this.state.blockIdentity(pending.urn, ['messenger']);
   }
 }
