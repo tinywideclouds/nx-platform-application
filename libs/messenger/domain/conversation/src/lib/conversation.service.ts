@@ -21,25 +21,16 @@ import {
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// ✅ CORRECT: Use the Read-Only Address Book API
 import { AddressBookApi } from '@nx-platform-application/contacts-api';
-
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
-import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 
 import { MessageViewMapper } from './message-view.mapper';
 import {
   MessageContentParser,
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_CONTACT_SHARE,
-  MESSAGE_TYPE_READ_RECEIPT,
   MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
-  ReadReceiptData,
-  MessageTypingIndicator,
-  ContactShareData,
+  MESSAGE_TYPE_GROUP_INVITE, // ✅ Imported for filter fix
 } from '@nx-platform-application/messenger-domain-message-content';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -50,9 +41,8 @@ export class ConversationService {
   private historyReader = inject(HistoryReader);
   private storage = inject(ConversationStorage);
   private chatSync = inject(ChatSyncService);
-  private addressBook = inject(AddressBookApi); // ✅ READ-ONLY Access
+  private addressBook = inject(AddressBookApi);
 
-  private outbound = inject(OutboundService);
   private keyService = inject(ChatKeyService);
   private mapper = inject(MessageViewMapper);
   private contentParser = inject(MessageContentParser);
@@ -82,11 +72,11 @@ export class ConversationService {
     if (status === 'joined') return raw;
 
     // 3. Lurker (Invited/Unknown): Shield Content
-    // Show only System Messages (Join events) or my own messages
     return raw.filter(
       (m) =>
         m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE_RESPONSE ||
-        (me && m.senderId.equals(me)),
+        m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE || // ✅ FIX: Allow Invites!
+        (me && m.senderId.equals(me)), // My own messages
     );
   });
 
@@ -156,7 +146,6 @@ export class ConversationService {
 
       // LOGIC: Determine Group Status
       if (urn.entityType === 'group') {
-        // ✅ Use AddressBookApi to check local membership
         const group = await this.addressBook.getGroup(urn);
         if (group && myUrn) {
           const me = group.members.find((m) => m.contactId.equals(myUrn));
@@ -333,60 +322,9 @@ export class ConversationService {
     );
   }
 
-  async sendTypingIndicator(myKeys: PrivateKeys, myUrn: URN): Promise<void> {
-    const recipient = this.selectedConversation();
-    if (!recipient) return;
-
-    await this.outbound.sendMessage(
-      myKeys,
-      myUrn,
-      recipient,
-      MessageTypingIndicator,
-      new Uint8Array([]),
-      { isEphemeral: true },
-    );
-  }
-
-  async sendMessage(
-    recipientUrn: URN,
-    text: string,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
-    const bytes = new TextEncoder().encode(text);
-    const typeId = URN.parse(MESSAGE_TYPE_TEXT);
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
-  }
-
-  async sendContactShare(
-    recipientUrn: URN,
-    data: ContactShareData,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
-    const json = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(json);
-    const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
-  }
-
-  async sendReadReceiptSignal(
-    recipientUrn: URN,
-    data: ReadReceiptData,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
-    const bytes = new TextEncoder().encode(JSON.stringify(data));
-    await this.outbound.sendMessage(
-      myKeys,
-      myUrn,
-      recipientUrn,
-      URN.parse(MESSAGE_TYPE_READ_RECEIPT),
-      bytes,
-      { isEphemeral: true },
-    );
-  }
-
+  /**
+   * Called by ActionService to optimistically update UI
+   */
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
@@ -406,6 +344,15 @@ export class ConversationService {
       this._rawMessages.update((current) => [...current, ...viewed]);
       this.storage.markConversationAsRead(activeConvo);
     }
+  }
+
+  /**
+   * Called by ActionService when network confirms delivery
+   */
+  updateMessageStatusInSignal(id: string, status: MessageDeliveryStatus): void {
+    this._rawMessages.update((current) =>
+      current.map((msg) => (msg.id === id ? { ...msg, status } : msg)),
+    );
   }
 
   async recoverFailedMessage(messageId: string): Promise<string | undefined> {
@@ -457,43 +404,6 @@ export class ConversationService {
 
     await this.storage.updateMessageStatus(ids, 'read');
     this.readReceiptTrigger$.next(ids);
-  }
-
-  private async sendGeneric(
-    recipientUrn: URN,
-    typeId: URN,
-    bytes: Uint8Array,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
-    return this.runExclusive(async () => {
-      const result = await this.outbound.sendMessage(
-        myKeys,
-        myUrn,
-        recipientUrn,
-        typeId,
-        bytes,
-      );
-
-      if (result) {
-        const { message, outcome } = result;
-        this.upsertMessages([message], myUrn);
-        outcome.then((finalStatus) => {
-          if (finalStatus !== 'pending') {
-            this.updateMessageStatusInSignal(message.id, finalStatus);
-          }
-        });
-      }
-    });
-  }
-
-  private updateMessageStatusInSignal(
-    id: string,
-    status: MessageDeliveryStatus,
-  ): void {
-    this._rawMessages.update((current) =>
-      current.map((msg) => (msg.id === id ? { ...msg, status } : msg)),
-    );
   }
 
   private async runExclusive<T>(task: () => Promise<T>): Promise<T> {

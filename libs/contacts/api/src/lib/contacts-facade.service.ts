@@ -6,6 +6,7 @@ import {
   ContactGroup,
   BlockedIdentity,
   PendingIdentity,
+  GroupMemberStatus,
 } from '@nx-platform-application/contacts-types';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 
@@ -96,9 +97,30 @@ export class ContactsFacadeService
 
   // === ContactsQueryApi (Legacy/Adapter) ===
 
+  // async getGroupParticipants(groupUrn: URN): Promise<ContactSummary[]> {
+  //   const contacts = await this.state.getGroupParticipants(groupUrn);
+  //   return contacts.map((c) => this.toSummary(c));
+  // }
   async getGroupParticipants(groupUrn: URN): Promise<ContactSummary[]> {
+    // 1. Fetch Profiles (Existing)
     const contacts = await this.state.getGroupParticipants(groupUrn);
-    return contacts.map((c) => this.toSummary(c));
+
+    // 2. Fetch Group Roster (New: To get status)
+    const group = await this.state.getGroup(groupUrn);
+
+    // 3. Create Status Map
+    const statusMap = new Map<string, GroupMemberStatus>();
+    if (group) {
+      group.members.forEach((m) =>
+        statusMap.set(m.contactId.toString(), m.status),
+      );
+    }
+
+    // 4. Merge
+    return contacts.map((c) => ({
+      ...this.toSummary(c),
+      memberStatus: statusMap.get(c.id.toString()) || 'joined', // Default to joined if missing
+    }));
   }
 
   async isBlocked(urn: URN, scope: string): Promise<boolean> {

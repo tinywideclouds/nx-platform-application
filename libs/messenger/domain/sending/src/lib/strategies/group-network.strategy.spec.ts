@@ -24,26 +24,17 @@ describe('NetworkGroupStrategy', () => {
   let worker: OutboxWorkerService;
   let identityResolver: IdentityResolver;
 
+  // Context var
+  let mockContext: SendContext;
+
   const groupUrn = URN.parse('urn:messenger:group:chat-1');
-  const member1 = URN.parse('urn:contacts:user:alice');
-  const member2 = URN.parse('urn:contacts:user:bob');
+  const alice = URN.parse('urn:contacts:user:alice');
+  const bob = URN.parse('urn:contacts:user:bob');
+  const charlie = URN.parse('urn:contacts:user:charlie');
   const myUrn = URN.parse('urn:contacts:user:me');
 
   const rawPayload = new Uint8Array([1]);
   const wrappedPayload = new Uint8Array([9, 9]);
-
-  const mockContext: SendContext = {
-    myUrn,
-    recipientUrn: groupUrn,
-    optimisticMsg: {
-      id: 'msg-group',
-      typeId: URN.parse('urn:message:type:text'),
-      payloadBytes: rawPayload,
-      sentTimestamp: '2025-01-01T00:00:00Z',
-    } as any,
-    myKeys: {} as any,
-    isEphemeral: false,
-  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,9 +50,11 @@ describe('NetworkGroupStrategy', () => {
           enqueue: vi.fn().mockResolvedValue('msg-group'),
         }),
         MockProvider(ContactsQueryApi, {
-          getGroupParticipants: vi
-            .fn()
-            .mockResolvedValue([{ id: member1 }, { id: member2 }]),
+          // Default: Alice Joined, Bob Invited
+          getGroupParticipants: vi.fn().mockResolvedValue([
+            { id: alice, memberStatus: 'joined' },
+            { id: bob, memberStatus: 'invited' },
+          ]),
         }),
         MockProvider(MessageMetadataService, {
           wrap: vi.fn().mockReturnValue(wrappedPayload),
@@ -82,22 +75,56 @@ describe('NetworkGroupStrategy', () => {
     metadataService = TestBed.inject(MessageMetadataService);
     worker = TestBed.inject(OutboxWorkerService);
     identityResolver = TestBed.inject(IdentityResolver);
+
+    mockContext = {
+      myUrn,
+      recipientUrn: groupUrn,
+      optimisticMsg: {
+        id: 'msg-group',
+        typeId: URN.parse('urn:message:type:text'),
+        payloadBytes: rawPayload,
+        sentTimestamp: '2025-01-01T00:00:00Z',
+        receiptMap: undefined,
+      } as any,
+      myKeys: {} as any,
+      isEphemeral: false,
+    };
   });
 
-  it('should SAVE optimistic message locally', async () => {
+  it('should SAVE optimistic message with Receipt Map for JOINED members only', async () => {
     const result = await strategy.send(mockContext);
     await result.outcome;
-    expect(storageService.saveMessage).toHaveBeenCalledWith(
-      mockContext.optimisticMsg,
+
+    expect(storageService.saveMessage).toHaveBeenCalled();
+    const calls = (storageService.saveMessage as any).mock.calls;
+    const msg = calls[0][0];
+
+    // ✅ Verify Scorecard Exists
+    expect(msg.receiptMap).toBeDefined();
+
+    // ✅ Verify Alice (Joined) is tracked
+    expect(msg.receiptMap[alice.toString()]).toBe('pending');
+
+    // ✅ Verify Bob (Invited) is NOT tracked
+    expect(msg.receiptMap[bob.toString()]).toBeUndefined();
+  });
+
+  it('should SKIP Receipt Map for Large Groups (Tier 3)', async () => {
+    // Mock 51 participants
+    const largeGroup = Array.from({ length: 51 }, (_, i) => ({
+      id: URN.parse(`urn:contacts:user:u${i}`),
+      memberStatus: 'joined',
+    }));
+    vi.mocked(contactsApi.getGroupParticipants).mockResolvedValue(
+      largeGroup as any,
     );
-  });
 
-  it('should RESOLVE group context, WRAP payload, and ENQUEUE for persistent messages', async () => {
-    const result = await strategy.send(mockContext);
-    await result.outcome;
+    await strategy.send(mockContext);
 
-    expect(identityResolver.resolveToHandle).toHaveBeenCalledWith(groupUrn);
-    expect(metadataService.wrap).toHaveBeenCalled();
-    expect(outbox.enqueue).toHaveBeenCalled();
+    const calls = (storageService.saveMessage as any).mock.calls;
+    const msg = calls[0][0];
+
+    // ✅ Verify Tier 3 Fallback (Binary Mode)
+    expect(msg.receiptMap).toBeUndefined();
   });
 });

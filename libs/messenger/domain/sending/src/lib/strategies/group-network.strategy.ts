@@ -10,8 +10,16 @@ import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
-import { SendStrategy, SendContext } from '../send-strategy.interface';
-import { OutboundResult } from '../send-strategy.interface';
+import {
+  SendStrategy,
+  SendContext,
+  OutboundResult,
+} from '../send-strategy.interface';
+
+// Policy: Only track up to 50 active members
+const SCALING_POLICY = {
+  MAX_RECEIPT_TRACKING: 50,
+};
 
 const MAX_EPHEMERAL_FANOUT = 5;
 
@@ -30,12 +38,37 @@ export class NetworkGroupStrategy implements SendStrategy {
 
     // === 0. Optimistic Persistence (Strategy Owned) ===
     if (!isEphemeral) {
-      // Network Group: 1 Message (to Group) -> 1 Record
+      const participants =
+        await this.contactsApi.getGroupParticipants(recipientUrn);
+
+      // ✅ TIER 2 LOGIC: Receipt Tracking (Scorecard)
+      // Check limits
+      if (participants.length <= SCALING_POLICY.MAX_RECEIPT_TRACKING) {
+        // FILTER: Only track members who have actually JOINED.
+        // We do NOT track 'invited' or 'declined'.
+        const activeMembers = participants.filter(
+          (p) => p.memberStatus === 'joined' || !p.memberStatus,
+        );
+
+        // Initialize Map
+        if (activeMembers.length > 0) {
+          const initialMap: Record<string, MessageDeliveryStatus> = {};
+          activeMembers.forEach(
+            (p) => (initialMap[p.id.toString()] = 'pending'),
+          );
+          optimisticMsg.receiptMap = initialMap;
+        }
+      }
+      // If > 50, receiptMap is undefined -> Binary Fallback Mode
+
       await this.storageService.saveMessage(optimisticMsg);
     }
 
     const outcomePromise = (async (): Promise<MessageDeliveryStatus> => {
       try {
+        // Re-fetch (or reuse) participants for transport
+        // Note: We send to EVERYONE (even invited/lurkers) so they see the message
+        // if they decide to join.
         const participants =
           await this.contactsApi.getGroupParticipants(recipientUrn);
 
@@ -59,7 +92,6 @@ export class NetworkGroupStrategy implements SendStrategy {
         if (isEphemeral) {
           if (participants.length <= MAX_EPHEMERAL_FANOUT) {
             const recipientUrns = participants.map((p) => p.id);
-
             this.worker.sendEphemeralBatch(
               recipientUrns,
               optimisticMsg.typeId,
@@ -85,10 +117,12 @@ export class NetworkGroupStrategy implements SendStrategy {
         return 'pending';
       } catch (err) {
         this.logger.error('[NetworkGroupStrategy] Failed', err);
-        await this.storageService.updateMessageStatus(
-          [optimisticMsg.id],
-          'failed',
-        );
+        if (!isEphemeral) {
+          await this.storageService.updateMessageStatus(
+            [optimisticMsg.id],
+            'failed',
+          );
+        }
         return 'failed';
       }
     })();

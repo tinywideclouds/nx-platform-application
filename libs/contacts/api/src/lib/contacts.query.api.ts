@@ -1,9 +1,13 @@
 import { URN } from '@nx-platform-application/platform-types';
+import { GroupMemberStatus } from 'libs/contacts/types/src/lib/contacts.model';
 
 export interface ContactSummary {
   id: URN;
   alias: string;
   profilePictureUrl?: string;
+
+  // ✅ NEW: Contextual Status (Optional, populated when querying groups)
+  memberStatus?: GroupMemberStatus;
 }
 
 /**

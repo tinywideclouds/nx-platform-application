@@ -43,15 +43,18 @@ import { ChatStorageService } from '@nx-platform-application/messenger-infrastru
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { SyncOptions } from '@nx-platform-application/messenger-state-cloud-sync';
 
-// REFACTOR: Import APIs
+// APIs
 import {
   GatekeeperApi,
   AddressBookManagementApi,
 } from '@nx-platform-application/contacts-api';
 import { BlockedIdentity } from '@nx-platform-application/contacts-types';
 
-// Domain Imports
-import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
+// Domain Services
+import {
+  ConversationService,
+  ConversationActionService, // ✅ NEW
+} from '@nx-platform-application/messenger-domain-conversation';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
@@ -91,6 +94,7 @@ export class ChatService {
 
   // Domain Services
   private readonly conversationService = inject(ConversationService);
+  private readonly conversationActions = inject(ConversationActionService); // ✅ NEW
   private readonly syncService = inject(ChatSyncService);
   private readonly ingestionService = inject(IngestionService);
   private readonly keyWorker = inject(ChatKeyService);
@@ -103,7 +107,6 @@ export class ChatService {
 
   private myKeys = signal<PrivateKeys | null>(null);
 
-  // Execution Lock
   private operationLock = Promise.resolve();
 
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
@@ -478,7 +481,7 @@ export class ChatService {
         const keys = this.myKeys();
         const sender = this.currentUserUrn();
         if (keys && sender) {
-          this.conversationService
+          this.conversationActions
             .sendTypingIndicator(keys, sender)
             .catch((err) =>
               this.logger.warn('Failed to send typing indicator', err),
@@ -493,10 +496,17 @@ export class ChatService {
       .subscribe((messageIds) => {
         const keys = this.myKeys();
         const sender = this.currentUserUrn();
-        if (keys && sender && messageIds.length > 0) {
-          this.sendReadReceipt(messageIds, keys, sender).catch((err) =>
-            this.logger.warn('Failed to send read receipt', err),
-          );
+        const recipient = this.conversationService.selectedConversation();
+        if (keys && sender && recipient && messageIds.length > 0) {
+          const data: ReadReceiptData = {
+            messageIds,
+            readAt: Temporal.Now.instant().toString(),
+          };
+          this.conversationActions
+            .sendReadReceiptSignal(recipient, data, keys, sender)
+            .catch((err) =>
+              this.logger.warn('Failed to send read receipt', err),
+            );
         }
       });
   }
@@ -524,6 +534,8 @@ export class ChatService {
   }
 
   public async fetchAndProcessMessages(): Promise<void> {
+    // Note: Ingestion logic remains here as it's orchestrating global data flow
+    // not specific conversation actions
     return this.runExclusive(async () => {
       const state = this.onboardingState();
       if (state !== 'READY' && state !== 'OFFLINE_READY') return;
@@ -587,7 +599,7 @@ export class ChatService {
     const keys = this.myKeys();
     const sender = this.currentUserUrn();
     if (!keys || !sender) return;
-    await this.conversationService.sendMessage(
+    await this.conversationActions.sendMessage(
       recipientUrn,
       text,
       keys,
@@ -603,34 +615,13 @@ export class ChatService {
     const keys = this.myKeys();
     const sender = this.currentUserUrn();
     if (!keys || !sender) return;
-    await this.conversationService.sendContactShare(
+    await this.conversationActions.sendContactShare(
       recipientUrn,
       data,
       keys,
       sender,
     );
     this.refreshActiveConversations();
-  }
-
-  private async sendReadReceipt(
-    messageIds: string[],
-    keys: PrivateKeys,
-    sender: URN,
-  ): Promise<void> {
-    const recipient = this.selectedConversation();
-    if (!recipient) return;
-
-    const data: ReadReceiptData = {
-      messageIds,
-      readAt: Temporal.Now.instant().toString(),
-    };
-
-    await this.conversationService.sendReadReceiptSignal(
-      recipient,
-      data,
-      keys,
-      sender,
-    );
   }
 
   private handleReadStatusUpdate(urn: URN): void {
@@ -811,7 +802,6 @@ export class ChatService {
     return this.groupProtocol.upgradeGroup(localGroupUrn, keys, me);
   }
 
-  // ✅ DELEGATED: Invite Logic moved to GroupProtocolService
   async acceptInvite(msg: ChatMessage): Promise<void> {
     const keys = this.myKeys();
     const me = this.currentUserUrn();

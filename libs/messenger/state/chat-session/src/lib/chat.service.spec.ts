@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { BehaviorSubject, Subject, of } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import { ChatService } from './chat.service';
 import {
@@ -22,23 +22,28 @@ import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastr
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 
-// ✅ REFACTOR: Import API Tokens
+// API Tokens
 import {
   GatekeeperApi,
   AddressBookManagementApi,
 } from '@nx-platform-application/contacts-api';
 
 // Domain Services
-import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
+import {
+  ConversationService,
+  ConversationActionService,
+} from '@nx-platform-application/messenger-domain-conversation';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
+import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
 
 describe('ChatService', () => {
   let service: ChatService;
+  let actionService: ConversationActionService;
 
   // --- Mocks ---
   const mockIngestion = {
@@ -61,18 +66,21 @@ describe('ChatService', () => {
     loadConversation: vi.fn(),
     loadConversationSummaries: vi.fn().mockResolvedValue([]),
     loadMoreMessages: vi.fn(),
-    sendMessage: vi.fn(),
-    sendContactShare: vi.fn(),
     upsertMessages: vi.fn(),
     notifyTyping: vi.fn(),
     applyIncomingReadReceipts: vi.fn(),
-    sendTypingIndicator: vi.fn(),
-    sendReadReceiptSignal: vi.fn(),
     performHistoryWipe: vi.fn(),
     recoverFailedMessage: vi.fn(),
 
     typingTrigger$: new Subject(),
     readReceiptTrigger$: new Subject(),
+  };
+
+  const mockActionService = {
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendContactShare: vi.fn().mockResolvedValue(undefined),
+    sendTypingIndicator: vi.fn().mockResolvedValue(undefined),
+    sendReadReceiptSignal: vi.fn().mockResolvedValue(undefined),
   };
 
   const mockSync = { performSync: vi.fn().mockResolvedValue(true) };
@@ -85,6 +93,11 @@ describe('ChatService', () => {
     linkTargetDevice: vi.fn(),
     pollForReceiverSync: vi.fn(),
     redeemSenderSession: vi.fn(),
+  };
+  const mockGroupProtocol = {
+    upgradeGroup: vi.fn(),
+    acceptInvite: vi.fn(),
+    rejectInvite: vi.fn(),
   };
 
   const mockAuth = {
@@ -113,11 +126,11 @@ describe('ChatService', () => {
     clear: vi.fn(),
   };
 
-  // ✅ NEW: API Mocks
   const mockGatekeeper = {
-    blocked$: signal([]),
+    // ✅ FIX: Use BehaviorSubject (Observable) instead of signal
+    // The service uses toSignal(this.gatekeeper.blocked$), so this must be subscribable.
+    blocked$: new BehaviorSubject([]),
     blockIdentity: vi.fn(),
-    // ...other methods if needed
   };
 
   const mockAddressBookManager = {
@@ -136,6 +149,7 @@ describe('ChatService', () => {
     email: 'me@test.com',
   };
   const mockPrivateKeys = { encKey: 'priv', sigKey: 'priv' } as any;
+  const mockRecipientUrn = URN.parse('urn:contacts:user:bob');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -145,18 +159,20 @@ describe('ChatService', () => {
         ChatService,
         { provide: IngestionService, useValue: mockIngestion },
         { provide: ConversationService, useValue: mockConversation },
+        { provide: ConversationActionService, useValue: mockActionService },
+
         { provide: ChatSyncService, useValue: mockSync },
         { provide: ChatKeyService, useValue: mockKeyWorker },
         { provide: OutboxWorkerService, useValue: mockOutbox },
         { provide: DevicePairingService, useValue: mockPairing },
         { provide: QuarantineService, useValue: mockQuarantine },
+        { provide: GroupProtocolService, useValue: mockGroupProtocol },
 
         { provide: IAuthService, useValue: mockAuth },
         { provide: ChatLiveDataService, useValue: mockLive },
         { provide: MessengerCryptoService, useValue: mockCrypto },
         { provide: KeyCacheService, useValue: mockKeyCache },
 
-        // ✅ REFACTOR: Provide API Mocks
         { provide: GatekeeperApi, useValue: mockGatekeeper },
         { provide: AddressBookManagementApi, useValue: mockAddressBookManager },
 
@@ -167,6 +183,7 @@ describe('ChatService', () => {
     });
 
     service = TestBed.inject(ChatService);
+    actionService = TestBed.inject(ConversationActionService);
 
     mockAuth.currentUser.set(mockUser);
     mockAuth.sessionLoaded$.next({
@@ -212,13 +229,45 @@ describe('ChatService', () => {
     });
   });
 
+  describe('Delegation Logic (Actions)', () => {
+    // Setup state for delegation tests
+    beforeEach(async () => {
+      mockCrypto.loadMyKeys.mockResolvedValue(mockPrivateKeys);
+      mockKeyCache.getPublicKey.mockResolvedValue({} as any);
+      mockCrypto.verifyKeysMatch.mockResolvedValue(true);
+      await (service as any).init();
+    });
+
+    it('should delegate sendMessage to ConversationActionService', async () => {
+      await service.sendMessage(mockRecipientUrn, 'Hello');
+
+      expect(mockActionService.sendMessage).toHaveBeenCalledWith(
+        mockRecipientUrn,
+        'Hello',
+        mockPrivateKeys,
+        mockUser.id,
+      );
+    });
+
+    it('should delegate sendContactShare to ConversationActionService', async () => {
+      const data = { urn: 'u:1', alias: 'A' };
+      await service.sendContactShare(mockRecipientUrn, data);
+
+      expect(mockActionService.sendContactShare).toHaveBeenCalledWith(
+        mockRecipientUrn,
+        data,
+        mockPrivateKeys,
+        mockUser.id,
+      );
+    });
+  });
+
   describe('Device Wipe / Logout', () => {
     it('should clear all subsystems', async () => {
       await service.fullDeviceWipe();
 
       expect(mockLive.disconnect).toHaveBeenCalled();
       expect(mockStorage.clearDatabase).toHaveBeenCalled();
-      // ✅ Verify AddressBookManager usage
       expect(mockAddressBookManager.clearData).toHaveBeenCalled();
       expect(mockKeyCache.clear).toHaveBeenCalled();
       expect(mockCrypto.clearKeys).toHaveBeenCalled();
