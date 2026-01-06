@@ -1,4 +1,3 @@
-//libs/messenger/infrastructure/chat-storage/src/lib/services/chat-storage.service.ts
 import { Injectable, inject } from '@angular/core';
 import { Dexie } from 'dexie';
 import { Temporal } from '@js-temporal/polyfill';
@@ -136,6 +135,52 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     return setting?.value ?? false;
   }
 
+  // ✅ NEW: Hybrid Receipt Logic
+  async applyReceipt(
+    messageId: string,
+    readerUrn: URN,
+    status: MessageDeliveryStatus,
+  ): Promise<void> {
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.conversations],
+      async () => {
+        const record = await this.db.messages.get(messageId);
+        if (!record) return;
+
+        const domainMsg = this.messageMapper.toDomain(record);
+
+        if (domainMsg.receiptMap) {
+          // === MODE A: High Fidelity (Tier 1 & 2) ===
+          domainMsg.receiptMap[readerUrn.toString()] = status;
+
+          const values = Object.values(domainMsg.receiptMap);
+          if (values.length > 0) {
+            if (values.every((s) => s === 'read')) {
+              domainMsg.status = 'read';
+            } else if (
+              values.every(
+                (s) => s === 'read' || s === 'received' || s === 'delivered',
+              )
+            ) {
+              domainMsg.status = 'delivered';
+            }
+          }
+        } else {
+          // === MODE B: Low Fidelity (Tier 3) ===
+          // Binary "High Water Mark" Logic
+          if (status === 'read') {
+            domainMsg.status = 'read';
+          } else if (status === 'delivered' && domainMsg.status !== 'read') {
+            domainMsg.status = 'delivered';
+          }
+        }
+
+        await this.saveInternal(domainMsg);
+      },
+    );
+  }
+
   async bulkSaveMessages(messages: ChatMessage[]): Promise<void> {
     for (let i = 0; i < messages.length; i += BULK_SAVE_CHUNK_SIZE) {
       const chunk = messages.slice(i, i + BULK_SAVE_CHUNK_SIZE);
@@ -201,8 +246,6 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     const now = Temporal.Now.instant().toString() as ISODateTimeString;
 
     const isNewer = !existing || sentTime >= existing.lastActivityTimestamp;
-
-    // FIX: Correctly determine "older" even if genesis is currently null
     const currentGenesis =
       existing?.genesisTimestamp ?? existing?.lastActivityTimestamp ?? sentTime;
     const isOlder = sentTime < currentGenesis;

@@ -11,7 +11,7 @@ import { IdentityResolver } from '@nx-platform-application/messenger-domain-iden
 import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { SendStrategy, SendContext } from '../send-strategy.interface';
-import { OutboundResult } from '../outbound.service';
+import { OutboundResult } from '../send-strategy.interface';
 
 const MAX_EPHEMERAL_FANOUT = 5;
 

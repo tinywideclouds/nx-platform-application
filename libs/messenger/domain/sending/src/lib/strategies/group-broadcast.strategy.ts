@@ -5,7 +5,10 @@ import {
   OutboxStorage,
   OutboundMessageRequest,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
+import {
+  MessageMetadataService,
+  messageTagBroadcast,
+} from '@nx-platform-application/messenger-domain-message-content';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import {
@@ -14,7 +17,16 @@ import {
 } from '@nx-platform-application/messenger-types';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { SendStrategy, SendContext } from '../send-strategy.interface';
-import { OutboundResult } from '../outbound.service';
+import { OutboundResult } from '../send-strategy.interface';
+
+// ✅ FORMAL DIVISION: Scaling Policies
+const SCALING_POLICY = {
+  // Tier 1: Full History (Ghosts) + Full Tracking
+  MAX_GHOSTING: 10,
+  // Tier 2: Full Tracking (Receipt Map)
+  MAX_RECEIPT_TRACKING: 50,
+  // Tier 3: Binary Status Only
+};
 
 @Injectable({ providedIn: 'root' })
 export class LocalBroadcastStrategy implements SendStrategy {
@@ -29,49 +41,57 @@ export class LocalBroadcastStrategy implements SendStrategy {
   async send(ctx: SendContext): Promise<OutboundResult> {
     const { myUrn, recipientUrn, optimisticMsg, isEphemeral, myKeys } = ctx;
 
+    // Inject Broadcast Tag
+    const tags = optimisticMsg.tags || [];
+    if (!tags.some((t) => t.toString() === messageTagBroadcast.toString())) {
+      tags.push(messageTagBroadcast);
+      optimisticMsg.tags = tags;
+    }
+
     // === 0. Optimistic Persistence (Strategy Owned) ===
     if (!isEphemeral) {
-      // 1. Save the Source of Truth (Group Message)
+      const participants =
+        await this.contactsApi.getGroupParticipants(recipientUrn);
+
+      // ✅ POLICY CHECK: Receipt Tracking (Tier 1 & 2)
+      if (participants.length <= SCALING_POLICY.MAX_RECEIPT_TRACKING) {
+        const initialMap: Record<string, MessageDeliveryStatus> = {};
+        participants.forEach((p) => (initialMap[p.id.toString()] = 'pending'));
+        optimisticMsg.receiptMap = initialMap;
+      }
+      // Else: Tier 3 (Large) -> receiptMap remains undefined (triggers Binary Mode in Storage)
+
+      // Save Main Message (Source of Truth)
       await this.storageService.saveMessage(optimisticMsg);
 
-      // 2. Ghosting Logic (Shadow copies for 1:1 history)
-      try {
-        const participants =
-          await this.contactsApi.getGroupParticipants(recipientUrn);
-
-        // Safety Cap: Don't flood DB for mass broadcasts > 10
-        if (participants.length <= 10) {
+      // ✅ POLICY CHECK: Ghosting (Tier 1 Only)
+      if (participants.length <= SCALING_POLICY.MAX_GHOSTING) {
+        try {
           const ghosts = participants.map((p) => {
             const ghostMsg: ChatMessage = {
               ...optimisticMsg,
-              // NEW Identity
               id: `ghost-${crypto.randomUUID()}`,
-              // 1:1 Context
               conversationUrn: p.id,
-              // Reference Status (No delivery tracking)
               status: 'reference',
-              // Link back to original
               tags: [
-                ...(optimisticMsg.tags || []),
+                ...tags,
                 `urn:messenger:ghost-of:${optimisticMsg.id}`,
               ] as any,
             };
             return ghostMsg;
           });
 
-          // Parallel Save (Fire & Forget - don't block main flow if ghosts fail)
           await Promise.all(
             ghosts.map((g) => this.storageService.saveMessage(g)),
           ).catch((err) =>
             this.logger.warn('[LocalBroadcastStrategy] Ghosting failed', err),
           );
+        } catch (err) {
+          this.logger.warn(
+            '[LocalBroadcastStrategy] Failed to fetch participants for ghosting',
+            err,
+          );
         }
-      } catch (err) {
-        // Non-critical error
-        this.logger.warn(
-          '[LocalBroadcastStrategy] Failed to fetch participants for ghosting',
-          err,
-        );
       }
     }
 
@@ -109,14 +129,13 @@ export class LocalBroadcastStrategy implements SendStrategy {
           return 'sent';
         }
 
-        // SLOW LANE: Enqueue to DB (Looping for individual 1:1 persistence)
+        // SLOW LANE: Enqueue to DB
         const loopPromises = participants.map(async (p) => {
           const request: OutboundMessageRequest = {
             conversationUrn: p.id,
             typeId: optimisticMsg.typeId,
             payload: wirePayload,
             tags: optimisticMsg.tags || [],
-            // Use fresh ID for task, link to SOT via parentMessageId
             messageId: crypto.randomUUID(),
             parentMessageId: optimisticMsg.id,
           };

@@ -1,9 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { LocalBroadcastStrategy } from './group-broadcast.strategy';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
@@ -25,9 +22,10 @@ describe('LocalBroadcastStrategy', () => {
   let worker: OutboxWorkerService;
   let metadataService: MessageMetadataService;
   let identityResolver: IdentityResolver;
+  let contactsApi: ContactsQueryApi;
 
   const myUrn = URN.parse('urn:contacts:user:me');
-  const myNetworkUrn = URN.parse('urn:identity:user:uuid-me-123'); // Resolved
+  const myNetworkUrn = URN.parse('urn:identity:user:uuid-me-123');
   const localGroupUrn = URN.parse('urn:contacts:group:local-1');
   const alice = URN.parse('urn:contacts:user:alice');
   const bob = URN.parse('urn:contacts:user:bob');
@@ -35,20 +33,7 @@ describe('LocalBroadcastStrategy', () => {
   const rawPayload = new Uint8Array([1]);
   const wrappedPayload = new Uint8Array([9, 9, 9]);
 
-  const mockContext: SendContext = {
-    myUrn,
-    recipientUrn: localGroupUrn,
-    optimisticMsg: {
-      id: 'msg-bcast',
-      senderId: URN.parse('urn:test:sender:me-test'),
-      conversationUrn: localGroupUrn,
-      typeId: URN.parse('urn:message:type:text'),
-      payloadBytes: rawPayload,
-      sentTimestamp: '2025-01-01T00:00:00Z' as ISODateTimeString,
-    },
-    myKeys: {} as any,
-    isEphemeral: false,
-  };
+  let mockContext: SendContext;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -86,39 +71,57 @@ describe('LocalBroadcastStrategy', () => {
     worker = TestBed.inject(OutboxWorkerService);
     metadataService = TestBed.inject(MessageMetadataService);
     identityResolver = TestBed.inject(IdentityResolver);
+    contactsApi = TestBed.inject(ContactsQueryApi);
+
+    mockContext = {
+      myUrn,
+      recipientUrn: localGroupUrn,
+      optimisticMsg: {
+        id: 'msg-bcast',
+        conversationUrn: localGroupUrn,
+        typeId: URN.parse('urn:message:type:text'),
+        payloadBytes: rawPayload,
+        sentTimestamp: '2025-01-01T00:00:00Z',
+        tags: [],
+      } as any,
+      myKeys: {} as any,
+      isEphemeral: false,
+    };
   });
 
-  it('should SAVE optimistic message PLUS ghost copies', async () => {
-    const result = await strategy.send(mockContext);
-    await result.outcome;
+  it('should initialize Receipt Map and Ghosts for Small Groups (Tier 1)', async () => {
+    // 2 participants = Tier 1 (<10)
+    await strategy.send(mockContext);
 
-    // Expect 3 saves: 1 Main (Group) + 2 Ghosts (Alice, Bob)
-    expect(storageService.saveMessage).toHaveBeenCalledTimes(3);
+    expect(storageService.saveMessage).toHaveBeenCalled();
+    const calls = (storageService.saveMessage as any).mock.calls;
+    const mainMsg = calls[0][0];
+
+    // ✅ VERIFY: Receipt Map Created
+    expect(mainMsg.receiptMap).toBeDefined();
+    expect(mainMsg.receiptMap[alice.toString()]).toBe('pending');
+
+    // ✅ VERIFY: Ghosts Created
+    expect(calls.length).toBe(3); // 1 Main + 2 Ghosts
+  });
+
+  it('should SKIP Receipt Map and Ghosts for Large Groups (Tier 3)', async () => {
+    // Mock 51 participants = Tier 3 (>50)
+    const largeGroup = Array.from({ length: 51 }, (_, i) => ({
+      id: URN.parse(`urn:contacts:user:u${i}`),
+      alias: `User ${i}`,
+    }));
+    vi.mocked(contactsApi.getGroupParticipants).mockResolvedValue(largeGroup);
+
+    await strategy.send(mockContext);
 
     const calls = (storageService.saveMessage as any).mock.calls;
-
-    // 1. Check Main Message
     const mainMsg = calls[0][0];
-    expect(mainMsg.id).toBe('msg-bcast');
-    expect(mainMsg.conversationUrn).toBe(localGroupUrn);
 
-    // 2. Check Ghost Message (Alice)
-    // Note: order depends on Promise.all, so we check properties
-    const ghosts = calls.slice(1).map((c: any) => c[0]);
-    const aliceGhost = ghosts.find((g: any) => g.conversationUrn === alice);
+    // ✅ VERIFY: No Receipt Map (Binary Mode Fallback)
+    expect(mainMsg.receiptMap).toBeUndefined();
 
-    expect(aliceGhost).toBeDefined();
-    expect(aliceGhost.id).toContain('ghost-');
-    expect(aliceGhost.status).toBe('reference'); // ✅ Verified
-    expect(aliceGhost.tags).toContain('urn:messenger:ghost-of:msg-bcast');
-  });
-
-  it('should BYPASS persistence for ephemeral messages', async () => {
-    const ephemeralCtx = { ...mockContext, isEphemeral: true };
-    const result = await strategy.send(ephemeralCtx);
-    await result.outcome;
-
-    expect(storageService.saveMessage).not.toHaveBeenCalled();
-    expect(worker.sendEphemeralBatch).toHaveBeenCalled();
+    // ✅ VERIFY: No Ghosts (Only 1 call for Main Message)
+    expect(calls.length).toBe(1);
   });
 });

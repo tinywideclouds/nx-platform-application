@@ -19,16 +19,7 @@ import { SendContext } from './send-strategy.interface';
 import { DirectSendStrategy } from './strategies/direct-send.strategy';
 import { NetworkGroupStrategy } from './strategies/group-network.strategy';
 import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';
-
-export interface SendOptions {
-  isEphemeral?: boolean;
-  tags?: URN[];
-}
-
-export interface OutboundResult {
-  message: ChatMessage;
-  outcome: Promise<MessageDeliveryStatus>;
-}
+import { OutboundResult, SendOptions } from './send-strategy.interface';
 
 @Injectable({ providedIn: 'root' })
 export class OutboundService {

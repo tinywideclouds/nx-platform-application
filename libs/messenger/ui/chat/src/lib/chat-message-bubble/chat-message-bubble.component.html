@@ -1,5 +1,5 @@
 <div
-  class="rounded-lg p-3 shadow-sm animate-pop-in origin-center block w-fit max-w-full"
+  class="rounded-lg p-3 shadow-sm animate-pop-in origin-center block w-fit max-w-full relative"
   [ngClass]="{
     'bg-blue-600 text-white rounded-br-sm': direction() === 'outbound',
     'bg-white text-gray-800 border border-gray-100 rounded-bl-sm':
@@ -7,19 +7,30 @@
   }"
   data-testid="chat-bubble"
 >
-  <ng-content></ng-content>
+  <div class="bubble-content mb-1">
+    <ng-content></ng-content>
+  </div>
 
   @if (timestamp(); as ts) {
     <div
-      class="text-[10px] text-right mt-1 select-none"
+      class="flex items-center justify-end gap-1.5 text-[10px] select-none opacity-90 mt-1"
       [ngClass]="{
         'text-blue-100': direction() === 'outbound',
         'text-gray-400': direction() === 'inbound',
       }"
     >
+      @if (isBroadcast()) {
+        <mat-icon
+          class="!w-3 !h-3 text-[12px] leading-3 opacity-80"
+          [matTooltip]="'Broadcast Message'"
+          data-testid="broadcast-icon"
+          >campaign</mat-icon
+        >
+      }
+
       <span>{{ ts | date: 'shortTime' }}</span>
 
-      @if (direction() === 'outbound') {
+      @if (direction() === 'outbound' && status() !== 'reference') {
         @switch (status()) {
           @case ('pending') {
             <mat-icon class="!w-3 !h-3 text-[12px] leading-3 opacity-70"

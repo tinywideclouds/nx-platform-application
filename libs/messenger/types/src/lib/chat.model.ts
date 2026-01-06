@@ -20,6 +20,7 @@ export interface ChatMessage extends Message {
   payloadBytes?: Uint8Array;
   textContent?: string;
   status?: MessageDeliveryStatus;
+  receiptMap?: Record<string, MessageDeliveryStatus>;
 }
 
 export type MessageDeliveryStatus =
@@ -28,6 +29,7 @@ export type MessageDeliveryStatus =
   | 'received' // Inbound from Router
   | 'read' // Read Receipt confirmed
   | 'failed' // Timed out / Error
+  | 'delivered' // Delivery is a general signal - group messages do not necessarily track all receipts
   | 'reference'; // Message is a reference to another message (History only, no delivery tracking)
 
 // This will be the view model for the participant (contact or group)

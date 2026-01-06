@@ -111,15 +111,13 @@ export class IngestionService {
       await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
 
     // 1. SECURITY CHECK: Quarantine Gatekeeper
-    // Resolves Network Identity -> Local Contact Identity
-    // Returns null if Blocked or Untrusted
     const canonicalSenderUrn = await this.quarantineService.process(
       transport,
       blockedSet,
     );
 
     if (!canonicalSenderUrn) {
-      return; // Message Rejected
+      return;
     }
 
     await this.parseAndStore(
@@ -147,11 +145,8 @@ export class IngestionService {
             ? parsed.conversationId
             : canonicalSenderUrn;
 
-        // Side Effect for Group Consensus
-        // If this is a "Joined" message, we must update the Roster state immediately.
         if (parsed.payload.kind === 'group-system') {
-          const data = parsed.payload.data; // GroupJoinData
-
+          const data = parsed.payload.data;
           try {
             const groupUrn = URN.parse(data.groupUrn);
 
@@ -161,7 +156,7 @@ export class IngestionService {
               );
               await this.groupStorage.updateGroupMemberStatus(
                 groupUrn,
-                canonicalSenderUrn, // The trusted sender
+                canonicalSenderUrn,
                 'joined',
               );
             } else if (data.status === 'declined') {
@@ -171,7 +166,7 @@ export class IngestionService {
               await this.groupStorage.updateGroupMemberStatus(
                 groupUrn,
                 canonicalSenderUrn,
-                'declined', // Assumes ContactsTypes supports 'declined'
+                'declined',
               );
             }
           } catch (e) {
@@ -202,7 +197,6 @@ export class IngestionService {
 
       case 'signal': {
         if (typeStr === MESSAGE_TYPE_TYPING) {
-          // ✅ FIX: Use Canonical (Contact) URN so the UI can map it to the active conversation
           accumulator.typingIndicators.push(canonicalSenderUrn);
         } else if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
           const rr = parsed.payload.data as ReadReceiptData;
@@ -210,11 +204,18 @@ export class IngestionService {
 
           if (ids.length > 0) {
             this.logger.info(
-              `[Ingestion] Applying Read Receipt for ${ids.length} msgs`,
+              `[Ingestion] Applying Read Receipt from ${canonicalSenderUrn}`,
             );
 
-            const newStatus: MessageDeliveryStatus = 'read';
-            await this.storageService.updateMessageStatus(ids, newStatus);
+            // ✅ UPDATE: Apply individually to trigger Quorum logic
+            // This enables the "Hybrid Mode" in storage service
+            for (const msgId of ids) {
+              await this.storageService.applyReceipt(
+                msgId,
+                canonicalSenderUrn,
+                'read',
+              );
+            }
 
             accumulator.readReceipts.push(...ids);
           }

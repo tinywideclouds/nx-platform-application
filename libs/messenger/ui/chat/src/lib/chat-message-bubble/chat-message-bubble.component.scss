@@ -1,4 +1,14 @@
 :host {
   display: block;
-  max-width: 100%; /* Ensure it respects the parent 'max-w-[85%]' wrapper */
+  max-width: 100%;
+}
+
+.bubble-content {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+// Ensures icons align perfectly with text
+mat-icon {
+  vertical-align: middle;
 }

@@ -10,7 +10,7 @@ import { IdentityResolver } from '@nx-platform-application/messenger-domain-iden
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
 import { SendStrategy, SendContext } from '../send-strategy.interface';
-import { OutboundResult } from '../outbound.service';
+import { OutboundResult } from '../send-strategy.interface';
 
 @Injectable({ providedIn: 'root' })
 export class DirectSendStrategy implements SendStrategy {

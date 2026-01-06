@@ -1,7 +1,9 @@
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { URN } from '@nx-platform-application/platform-types';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { OutboundResult } from '../outbound.service'; // Circular type ref fix below
+import {
+  ChatMessage,
+  MessageDeliveryStatus,
+} from '@nx-platform-application/messenger-types';
 
 export interface SendContext {
   myKeys: PrivateKeys;
@@ -9,6 +11,16 @@ export interface SendContext {
   recipientUrn: URN; // The Group or User URN
   optimisticMsg: ChatMessage;
   isEphemeral: boolean;
+}
+
+export interface SendOptions {
+  isEphemeral?: boolean;
+  tags?: URN[];
+}
+
+export interface OutboundResult {
+  message: ChatMessage;
+  outcome: Promise<MessageDeliveryStatus>;
 }
 
 /**
