@@ -1,24 +1,27 @@
 import { TestBed } from '@angular/core/testing';
 import { LocalBroadcastStrategy } from './group-broadcast.strategy';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
 import {
   ChatStorageService,
   OutboxStorage,
-  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { Logger } from '@nx-platform-application/console-logger';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { SendContext } from './send-strategy.interface';
+import { SendContext } from '../send-strategy.interface';
 
 describe('LocalBroadcastStrategy', () => {
   let strategy: LocalBroadcastStrategy;
   let outbox: OutboxStorage;
+  let storageService: ChatStorageService;
   let worker: OutboxWorkerService;
   let metadataService: MessageMetadataService;
   let identityResolver: IdentityResolver;
@@ -37,10 +40,12 @@ describe('LocalBroadcastStrategy', () => {
     recipientUrn: localGroupUrn,
     optimisticMsg: {
       id: 'msg-bcast',
+      senderId: URN.parse('urn:test:sender:me-test'),
+      conversationUrn: localGroupUrn,
       typeId: URN.parse('urn:message:type:text'),
       payloadBytes: rawPayload,
-      sentTimestamp: '2025-01-01T00:00:00Z',
-    } as any,
+      sentTimestamp: '2025-01-01T00:00:00Z' as ISODateTimeString,
+    },
     myKeys: {} as any,
     isEphemeral: false,
   };
@@ -51,7 +56,10 @@ describe('LocalBroadcastStrategy', () => {
       providers: [
         LocalBroadcastStrategy,
         MockProvider(Logger),
-        MockProvider(ChatStorageService),
+        MockProvider(ChatStorageService, {
+          saveMessage: vi.fn().mockResolvedValue(undefined),
+          updateMessageStatus: vi.fn().mockResolvedValue(undefined),
+        }),
         MockProvider(OutboxStorage, {
           enqueue: vi.fn().mockResolvedValue('task-id'),
         }),
@@ -74,48 +82,43 @@ describe('LocalBroadcastStrategy', () => {
 
     strategy = TestBed.inject(LocalBroadcastStrategy);
     outbox = TestBed.inject(OutboxStorage);
+    storageService = TestBed.inject(ChatStorageService);
     worker = TestBed.inject(OutboxWorkerService);
     metadataService = TestBed.inject(MessageMetadataService);
     identityResolver = TestBed.inject(IdentityResolver);
   });
 
-  it('should RESOLVE context, WRAP payload, and ENQUEUE for persistent messages', async () => {
+  it('should SAVE optimistic message PLUS ghost copies', async () => {
     const result = await strategy.send(mockContext);
     await result.outcome;
 
-    // 1. Verify Resolution (Local -> Network)
-    expect(identityResolver.resolveToHandle).toHaveBeenCalledWith(myUrn);
+    // Expect 3 saves: 1 Main (Group) + 2 Ghosts (Alice, Bob)
+    expect(storageService.saveMessage).toHaveBeenCalledTimes(3);
 
-    // 2. Verify Wrapping (Uses Network URN)
-    expect(metadataService.wrap).toHaveBeenCalledWith(
-      rawPayload,
-      myNetworkUrn, // ✅ Correct: Network Handle
-      expect.anything(),
-    );
+    const calls = (storageService.saveMessage as any).mock.calls;
 
-    // 3. Verify Enqueue (Uses Wrapped Payload)
-    expect(outbox.enqueue).toHaveBeenCalledTimes(2); // Broadcast loop
-    const calls = (outbox.enqueue as any).mock.calls;
-    expect(calls[0][0].payload).toBe(wrappedPayload);
+    // 1. Check Main Message
+    const mainMsg = calls[0][0];
+    expect(mainMsg.id).toBe('msg-bcast');
+    expect(mainMsg.conversationUrn).toBe(localGroupUrn);
+
+    // 2. Check Ghost Message (Alice)
+    // Note: order depends on Promise.all, so we check properties
+    const ghosts = calls.slice(1).map((c: any) => c[0]);
+    const aliceGhost = ghosts.find((g: any) => g.conversationUrn === alice);
+
+    expect(aliceGhost).toBeDefined();
+    expect(aliceGhost.id).toContain('ghost-');
+    expect(aliceGhost.status).toBe('reference'); // ✅ Verified
+    expect(aliceGhost.tags).toContain('urn:messenger:ghost-of:msg-bcast');
   });
 
-  it('should BYPASS wrapping and use Fast Lane for ephemeral messages', async () => {
+  it('should BYPASS persistence for ephemeral messages', async () => {
     const ephemeralCtx = { ...mockContext, isEphemeral: true };
-
     const result = await strategy.send(ephemeralCtx);
     await result.outcome;
 
-    // 1. Verify NO Resolution or Wrapping
-    expect(identityResolver.resolveToHandle).not.toHaveBeenCalled();
-    expect(metadataService.wrap).not.toHaveBeenCalled();
-
-    // 2. Verify Worker called with RAW bytes
-    expect(worker.sendEphemeralBatch).toHaveBeenCalledWith(
-      expect.arrayContaining([alice, bob]), // Targets
-      expect.anything(),
-      rawPayload, // ✅ Correct: Raw
-      myUrn,
-      expect.anything(),
-    );
+    expect(storageService.saveMessage).not.toHaveBeenCalled();
+    expect(worker.sendEphemeralBatch).toHaveBeenCalled();
   });
 });

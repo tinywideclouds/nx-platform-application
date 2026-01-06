@@ -44,11 +44,6 @@ export class OutboxWorkerService {
     }
   }
 
-  /**
-   * FAST LANE: Handles ephemeral signals.
-   * Contract: 'payloadBytes' is the final Wire Format (Raw or Wrapped).
-   * The Worker does NOT inspect or modify the payload.
-   */
   async sendEphemeralBatch(
     recipients: URN[],
     typeId: URN,
@@ -90,15 +85,16 @@ export class OutboxWorkerService {
       if (recipient.status === 'sent') continue;
 
       try {
-        // The Strategy has already formatted the payload (Resolved & Wrapped).
-        // We deliver it opaquely.
         await this.coreDelivery(
           recipient.urn,
           task.payload,
           task.typeId,
           senderUrn,
           myKeys,
-          task.messageId,
+          // ✅ Pass the ID we want the client to track.
+          // If parentMessageId exists (Broadcast), use it.
+          // Otherwise use the task's messageId.
+          task.parentMessageId || task.messageId,
         );
 
         recipient.status = 'sent';
@@ -127,14 +123,13 @@ export class OutboxWorkerService {
     messageId?: string,
     isEphemeral = false,
   ): Promise<void> {
-    // 1. Resolve Envelope Identities (Local -> Network)
-    // This is for ROUTING, not for the payload context.
+    // 1. Resolve Routing
     const targetRoutingUrn =
       await this.identityResolver.resolveToHandle(recipientContactUrn);
     const payloadSenderUrn =
       await this.identityResolver.resolveToHandle(senderContactUrn);
 
-    // 2. Fetch Recipient Keys
+    // 2. Fetch Keys
     const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
 
     // 3. Create Transport Envelope
@@ -143,6 +138,8 @@ export class OutboxWorkerService {
       sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
       typeId: typeId,
       payloadBytes: finalPayloadBytes,
+
+      // ✅ This is what the Recipient sees (and sends back in receipts)
       clientRecordId: messageId,
     };
 

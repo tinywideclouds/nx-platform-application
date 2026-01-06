@@ -157,3 +157,10 @@ nx g @nx/workspace:move --project=messenger-cloud-sync --destination=libs/messen
 nx g @nx/workspace:move --project=chat-state --destination=libs/messenger/state/chat-session --importPath=@nx-platform-application/messenger-state-chat-session
 
 nx g @nx/workspace:move --project=messenger-settings-ui --destination=libs/messenger/ui/settings --importPath=@nx-platform-application/messenger-settings-ui
+
+
+nx g @nx/angular:library --name=messenger-domain-group-protocol --directory=libs/messenger/domain/group-protocol --tags="scope:messenger" 
+
+
+nx g @nx/angular:library --name=contacts-persistence --directory=libs/contacts/persistence --tags="scope:contacts" 
+

@@ -21,6 +21,8 @@ export class OutboxMapper {
         ...r,
         urn: r.urn.toString(),
       })),
+      // ✅ Pass through optional field
+      parentMessageId: domain.parentMessageId,
     };
   }
 
@@ -35,6 +37,8 @@ export class OutboxMapper {
         ...r,
         urn: URN.parse(r.urn),
       })) as RecipientProgress[],
+      // ✅ Pass through optional field
+      parentMessageId: record.parentMessageId,
     };
   }
 }

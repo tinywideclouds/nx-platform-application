@@ -7,6 +7,7 @@ import { URN } from '@nx-platform-application/platform-types';
 
 export interface OutboundMessageRequest {
   conversationUrn: URN;
+  parentMessageId?: string;
   typeId: URN;
   payload: Uint8Array;
 

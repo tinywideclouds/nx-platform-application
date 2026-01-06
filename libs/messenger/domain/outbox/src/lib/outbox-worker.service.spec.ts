@@ -97,14 +97,15 @@ describe('OutboxWorkerService', () => {
   });
 
   describe('processTask (Slow Lane)', () => {
-    it('should pass stored payload directly to crypto', async () => {
+    it('should pass parentMessageId to coreDelivery if present', async () => {
       const task = {
         id: 'task-1',
         typeId: URN.parse('urn:message:type:text'),
-        payload: rawPayload, // Already wrapped by Strategy
+        payload: rawPayload,
         recipients: [{ urn: recipientUrn, status: 'pending' }],
         conversationUrn: recipientUrn,
-        messageId: 'msg-1',
+        messageId: 'task-uuid',
+        parentMessageId: 'group-msg-123', // ✅ Present
       } as any;
 
       const storage = TestBed.inject(OutboxStorage);
@@ -112,9 +113,10 @@ describe('OutboxWorkerService', () => {
 
       await service.processQueue(myUrn, myKeys);
 
+      // Verify crypto encrypts the transport message with the CORRECT ID
       expect(crypto.encryptAndSign).toHaveBeenCalledWith(
         expect.objectContaining({
-          payloadBytes: rawPayload, // Passthrough verification
+          clientRecordId: 'group-msg-123', // ✅ Maps to parentMessageId
         }),
         expect.anything(),
         expect.anything(),

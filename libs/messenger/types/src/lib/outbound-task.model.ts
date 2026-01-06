@@ -17,6 +17,7 @@ export interface OutboundTask {
   id: string;
   messageId: string;
   conversationUrn: URN; // ✅ Group or User URN
+  parentMessageId?: string;
   typeId: URN;
   payload: Uint8Array;
   tags: URN[]; // ✅ Hierarchical URNs

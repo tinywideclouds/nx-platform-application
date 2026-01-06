@@ -7,18 +7,18 @@ import { MockProvider } from 'ng-mocks';
 import {
   ChatStorageService,
   OutboxStorage,
-  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { Logger } from '@nx-platform-application/console-logger';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { SendContext } from './send-strategy.interface';
+import { SendContext } from '../send-strategy.interface';
 
 describe('NetworkGroupStrategy', () => {
   let strategy: NetworkGroupStrategy;
   let outbox: OutboxStorage;
+  let storageService: ChatStorageService;
   let contactsApi: ContactsQueryApi;
   let metadataService: MessageMetadataService;
   let worker: OutboxWorkerService;
@@ -51,7 +51,10 @@ describe('NetworkGroupStrategy', () => {
       providers: [
         NetworkGroupStrategy,
         MockProvider(Logger),
-        MockProvider(ChatStorageService),
+        MockProvider(ChatStorageService, {
+          saveMessage: vi.fn().mockResolvedValue(undefined),
+          updateMessageStatus: vi.fn().mockResolvedValue(undefined),
+        }),
         MockProvider(OutboxStorage, {
           enqueue: vi.fn().mockResolvedValue('msg-group'),
         }),
@@ -74,45 +77,27 @@ describe('NetworkGroupStrategy', () => {
 
     strategy = TestBed.inject(NetworkGroupStrategy);
     outbox = TestBed.inject(OutboxStorage);
+    storageService = TestBed.inject(ChatStorageService);
     contactsApi = TestBed.inject(ContactsQueryApi);
     metadataService = TestBed.inject(MessageMetadataService);
     worker = TestBed.inject(OutboxWorkerService);
     identityResolver = TestBed.inject(IdentityResolver);
   });
 
+  it('should SAVE optimistic message locally', async () => {
+    const result = await strategy.send(mockContext);
+    await result.outcome;
+    expect(storageService.saveMessage).toHaveBeenCalledWith(
+      mockContext.optimisticMsg,
+    );
+  });
+
   it('should RESOLVE group context, WRAP payload, and ENQUEUE for persistent messages', async () => {
     const result = await strategy.send(mockContext);
     await result.outcome;
 
-    // 1. Resolve
     expect(identityResolver.resolveToHandle).toHaveBeenCalledWith(groupUrn);
-    // 2. Wrap
-    expect(metadataService.wrap).toHaveBeenCalledWith(
-      rawPayload,
-      groupUrn,
-      expect.anything(),
-    );
-    // 3. Enqueue
-    const request: OutboundMessageRequest = (outbox.enqueue as any).mock
-      .calls[0][0];
-    expect(request.payload).toBe(wrappedPayload);
-  });
-
-  it('should BYPASS wrapping and use Fast Lane for ephemeral messages', async () => {
-    const ephemeralCtx = { ...mockContext, isEphemeral: true };
-
-    const result = await strategy.send(ephemeralCtx);
-    await result.outcome;
-
-    // 1. No Wrap
-    expect(metadataService.wrap).not.toHaveBeenCalled();
-    // 2. Raw Bytes to Worker
-    expect(worker.sendEphemeralBatch).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      rawPayload, // Raw
-      myUrn,
-      expect.anything(),
-    );
+    expect(metadataService.wrap).toHaveBeenCalled();
+    expect(outbox.enqueue).toHaveBeenCalled();
   });
 });

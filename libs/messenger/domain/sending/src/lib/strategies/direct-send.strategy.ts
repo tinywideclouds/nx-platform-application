@@ -9,7 +9,7 @@ import { MessageMetadataService } from '@nx-platform-application/messenger-domai
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
-import { SendStrategy, SendContext } from './send-strategy.interface';
+import { SendStrategy, SendContext } from '../send-strategy.interface';
 import { OutboundResult } from '../outbound.service';
 
 @Injectable({ providedIn: 'root' })
@@ -24,24 +24,23 @@ export class DirectSendStrategy implements SendStrategy {
   async send(ctx: SendContext): Promise<OutboundResult> {
     const { optimisticMsg, isEphemeral, recipientUrn, myUrn, myKeys } = ctx;
 
+    // === 0. Optimistic Persistence (Strategy Owned) ===
+    if (!isEphemeral) {
+      // Direct Strategy: 1 Message -> 1 Record
+      await this.storageService.saveMessage(optimisticMsg);
+    }
+
     const outcomePromise = (async (): Promise<MessageDeliveryStatus> => {
       try {
-        // === 1. Prepare Wire Format (Formatter Responsibility) ===
+        // === 1. Prepare Wire Format ===
         let wirePayload: Uint8Array;
 
         if (isEphemeral) {
-          // SIGNALS (Typing, Receipts):
-          // Pass opaque RAW bytes. Do not wrap. Do not resolve context.
-          // The parser expects a flat structure.
           wirePayload = optimisticMsg.payloadBytes || new Uint8Array([]);
         } else {
-          // CONTENT (Text, Rich):
-          // 1. Resolve Context: In 1:1, the context is the Sender.
-          //    We must map Local URN ("me") -> Network Handle.
           const networkContextUrn =
             await this.identityResolver.resolveToHandle(myUrn);
 
-          // 2. Wrap: The envelope ensures the recipient knows the context.
           wirePayload = this.metadataService.wrap(
             optimisticMsg.payloadBytes || new Uint8Array([]),
             networkContextUrn,
@@ -52,22 +51,20 @@ export class DirectSendStrategy implements SendStrategy {
         // === 2. Transport Execution ===
 
         if (isEphemeral) {
-          // FAST LANE: Hand off to Courier
           this.worker.sendEphemeralBatch(
             [recipientUrn],
             optimisticMsg.typeId,
-            wirePayload, // Raw
+            wirePayload,
             myUrn,
             myKeys,
           );
           return 'sent';
         }
 
-        // SLOW LANE: Enqueue to DB
         const request: OutboundMessageRequest = {
           conversationUrn: recipientUrn,
           typeId: optimisticMsg.typeId,
-          payload: wirePayload, // Wrapped & Resolved
+          payload: wirePayload,
           tags: optimisticMsg.tags || [],
           messageId: optimisticMsg.id,
         };

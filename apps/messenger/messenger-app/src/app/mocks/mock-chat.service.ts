@@ -181,7 +181,7 @@ export class MockChatService {
       id: `mock-msg-${crypto.randomUUID()}`,
       conversationUrn: recipientUrn,
       senderId: MOCK_USER,
-      sentTimestamp: Temporal.Instant.toString() as ISODateTimeString,
+      sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
       textContent: plaintext,
       typeId: textType,
     };

@@ -11,6 +11,7 @@ export interface OutboxRecord {
   id: string;
   messageId: string;
   conversationUrn: string; // Indexed
+  parentMessageId?: string;
   typeId: string;
   payload: Uint8Array;
   tags: string[];

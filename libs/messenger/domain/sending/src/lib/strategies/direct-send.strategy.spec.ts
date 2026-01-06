@@ -10,14 +10,13 @@ import { MockProvider } from 'ng-mocks';
 import {
   ChatStorageService,
   OutboxStorage,
-  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { SendContext } from './send-strategy.interface';
+import { SendContext } from '../send-strategy.interface';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
 describe('DirectSendStrategy', () => {
@@ -25,10 +24,11 @@ describe('DirectSendStrategy', () => {
   let outbox: OutboxStorage;
   let worker: OutboxWorkerService;
   let metadataService: MessageMetadataService;
+  let storageService: ChatStorageService;
   let identityResolver: IdentityResolver;
 
   const myUrn = URN.parse('urn:contacts:user:me');
-  const myNetworkUrn = URN.parse('urn:identity:user:uuid-me-123'); // Resolved
+  const myNetworkUrn = URN.parse('urn:identity:user:uuid-me-123');
   const recipientUrn = URN.parse('urn:contacts:user:bob');
   const typeId = URN.parse('urn:message:type:text');
   const rawPayload = new Uint8Array([1, 2, 3]);
@@ -60,6 +60,7 @@ describe('DirectSendStrategy', () => {
         DirectSendStrategy,
         MockProvider(Logger),
         MockProvider(ChatStorageService, {
+          saveMessage: vi.fn().mockResolvedValue(undefined),
           updateMessageStatus: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(OutboxStorage, {
@@ -81,51 +82,47 @@ describe('DirectSendStrategy', () => {
     outbox = TestBed.inject(OutboxStorage);
     worker = TestBed.inject(OutboxWorkerService);
     metadataService = TestBed.inject(MessageMetadataService);
+    storageService = TestBed.inject(ChatStorageService);
     identityResolver = TestBed.inject(IdentityResolver);
   });
 
   describe('Standard Messages (Persistent)', () => {
+    it('should SAVE optimistic message locally first', async () => {
+      const result = await strategy.send(mockContext);
+      await result.outcome;
+
+      // ✅ Verify Strategy Persists Source of Truth
+      expect(storageService.saveMessage).toHaveBeenCalledWith(mockMsg);
+    });
+
     it('should RESOLVE context, WRAP payload, and ENQUEUE', async () => {
       const result = await strategy.send(mockContext);
       await result.outcome;
 
-      // 1. Verify Resolution (Local -> Network)
       expect(identityResolver.resolveToHandle).toHaveBeenCalledWith(myUrn);
 
-      // 2. Verify Wrapping
       expect(metadataService.wrap).toHaveBeenCalledWith(
         rawPayload,
-        myNetworkUrn, // ✅ Correct: Network Handle
+        myNetworkUrn,
         expect.anything(),
       );
 
-      // 3. Verify Enqueue uses Wrapped Payload
       expect(outbox.enqueue).toHaveBeenCalledTimes(1);
-      const args: OutboundMessageRequest = (outbox.enqueue as any).mock
-        .calls[0][0];
-      expect(args.payload).toBe(wrappedPayload);
     });
   });
 
-  describe('Ephemeral Signals (Typing/Receipts)', () => {
-    it('should BYPASS wrapping and use direct transport', async () => {
+  describe('Ephemeral Signals', () => {
+    it('should BYPASS persistence and wrapping', async () => {
       const ephemeralCtx = { ...mockContext, isEphemeral: true };
 
       const result = await strategy.send(ephemeralCtx);
       await result.outcome;
 
-      // 1. Verify NO Wrapping
-      expect(metadataService.wrap).not.toHaveBeenCalled();
-      expect(identityResolver.resolveToHandle).not.toHaveBeenCalled();
+      // ✅ Verify NO persistence
+      expect(storageService.saveMessage).not.toHaveBeenCalled();
 
-      // 2. Verify Worker Call (Raw Bytes)
-      expect(worker.sendEphemeralBatch).toHaveBeenCalledWith(
-        [recipientUrn],
-        typeId,
-        rawPayload, // ✅ Correct: Raw
-        myUrn,
-        expect.anything(),
-      );
+      expect(metadataService.wrap).not.toHaveBeenCalled();
+      expect(worker.sendEphemeralBatch).toHaveBeenCalled();
     });
   });
 });

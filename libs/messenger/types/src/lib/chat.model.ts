@@ -27,7 +27,8 @@ export type MessageDeliveryStatus =
   | 'sent' // Ack'd by Router
   | 'received' // Inbound from Router
   | 'read' // Read Receipt confirmed
-  | 'failed'; // Timed out / Error
+  | 'failed' // Timed out / Error
+  | 'reference'; // Message is a reference to another message (History only, no delivery tracking)
 
 // This will be the view model for the participant (contact or group)
 export interface ChatParticipant {

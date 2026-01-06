@@ -179,7 +179,7 @@ describe('Firestore Service (Unit)', () => {
       const expectedDocId = 'urn:auth:google:12345';
 
       // 4. Mock the result of the .set call
-      mockDocSet.mockResolvedValue(new WriteResult());
+      // mockDocSet.mockResolvedValue(new WriteResult());
 
       // 5. Act
       await addAuthorizedUser(db, testUser);

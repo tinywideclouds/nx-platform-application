@@ -10,7 +10,7 @@ import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
-import { SendStrategy, SendContext } from './send-strategy.interface';
+import { SendStrategy, SendContext } from '../send-strategy.interface';
 import { OutboundResult } from '../outbound.service';
 
 const MAX_EPHEMERAL_FANOUT = 5;
@@ -28,6 +28,12 @@ export class NetworkGroupStrategy implements SendStrategy {
   async send(ctx: SendContext): Promise<OutboundResult> {
     const { recipientUrn, optimisticMsg, isEphemeral, myUrn, myKeys } = ctx;
 
+    // === 0. Optimistic Persistence (Strategy Owned) ===
+    if (!isEphemeral) {
+      // Network Group: 1 Message (to Group) -> 1 Record
+      await this.storageService.saveMessage(optimisticMsg);
+    }
+
     const outcomePromise = (async (): Promise<MessageDeliveryStatus> => {
       try {
         const participants =
@@ -37,12 +43,8 @@ export class NetworkGroupStrategy implements SendStrategy {
         let wirePayload: Uint8Array;
 
         if (isEphemeral) {
-          // SIGNALS: Raw Bytes (No Wrapper)
           wirePayload = optimisticMsg.payloadBytes || new Uint8Array([]);
         } else {
-          // CONTENT: Resolve Context & Wrap
-          // Even though recipientUrn is likely already a Network Group URN,
-          // we enforce the protocol: Resolve -> Wrap.
           const networkGroupUrn =
             await this.identityResolver.resolveToHandle(recipientUrn);
 
@@ -55,28 +57,24 @@ export class NetworkGroupStrategy implements SendStrategy {
 
         // === 2. Execution ===
         if (isEphemeral) {
-          // Optimization: Only use Fast Lane for small groups to avoid
-          // choking the network thread with massive fan-out.
           if (participants.length <= MAX_EPHEMERAL_FANOUT) {
             const recipientUrns = participants.map((p) => p.id);
 
             this.worker.sendEphemeralBatch(
               recipientUrns,
               optimisticMsg.typeId,
-              wirePayload, // Raw
+              wirePayload,
               myUrn,
               myKeys,
             );
           }
-          // If group is too large, we drop the ephemeral signal (Performance Decision)
           return 'sent';
         }
 
-        // SLOW LANE: Enqueue to DB
         const request: OutboundMessageRequest = {
           conversationUrn: recipientUrn,
           typeId: optimisticMsg.typeId,
-          payload: wirePayload, // Wrapped
+          payload: wirePayload,
           tags: optimisticMsg.tags || [],
           messageId: optimisticMsg.id,
           recipients: participants.map((p) => p.id),

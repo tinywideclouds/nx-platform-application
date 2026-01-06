@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import {
@@ -16,7 +15,7 @@ import {
 import { MESSAGE_TYPE_TEXT } from '@nx-platform-application/messenger-domain-message-content';
 
 // Strategies
-import { SendContext } from './strategies/send-strategy.interface';
+import { SendContext } from './send-strategy.interface';
 import { DirectSendStrategy } from './strategies/direct-send.strategy';
 import { NetworkGroupStrategy } from './strategies/group-network.strategy';
 import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';
@@ -34,7 +33,6 @@ export interface OutboundResult {
 @Injectable({ providedIn: 'root' })
 export class OutboundService {
   private logger = inject(Logger);
-  private storageService = inject(ChatStorageService);
   private identityResolver = inject(IdentityResolver);
   private outboxWorker = inject(OutboxWorkerService);
 
@@ -58,12 +56,9 @@ export class OutboundService {
     const tags = options?.tags || [];
 
     try {
-      const isNetworkGroup = recipientUrn
-        .toString()
-        .startsWith('urn:messenger:group:');
-      const isLocalGroup = recipientUrn
-        .toString()
-        .startsWith('urn:contacts:group:');
+      const isGroup = recipientUrn.entityType === 'group';
+      const isNetworkGroup = isGroup && recipientUrn.namespace === 'messenger';
+      const isLocalGroup = isGroup && recipientUrn.namespace === 'contacts';
 
       // Resolve Storage Location
       const storageUrn = isLocalGroup
@@ -89,10 +84,8 @@ export class OutboundService {
         status: 'pending',
       };
 
-      // Persist to UI storage immediately (unless ephemeral)
-      if (!isEphemeral) {
-        await this.storageService.saveMessage(optimisticMsg);
-      }
+      // ❌ REMOVED: Global save logic.
+      // Persistence is now the responsibility of the selected strategy.
 
       const context: SendContext = {
         myKeys,
@@ -102,11 +95,9 @@ export class OutboundService {
         isEphemeral,
       };
 
-      // 1. Execute Strategy (Enqueue or Bypass)
       let result: OutboundResult;
 
-      console.log('decide strategy');
-
+      // 1. Execute Strategy (Includes Persistence)
       if (isNetworkGroup) {
         result = await this.networkStrategy.send(context);
       } else if (isLocalGroup) {
@@ -115,10 +106,10 @@ export class OutboundService {
         result = await this.directStrategy.send(context);
       }
 
-      // 2. Trigger Worker (Standard Persistent Messages Only)
-      // The strategy only queues the task. We must wake up the worker to process it.
+      // 2. Trigger Worker
       if (!isEphemeral) {
-        // Note: For Groups, we use 'myUrn' as the Sender context for key retrieval
+        // Await persistence confirmation before processing
+        await result.outcome;
         this.outboxWorker.processQueue(myUrn, myKeys);
       }
 

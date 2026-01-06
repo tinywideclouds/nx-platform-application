@@ -34,8 +34,17 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-storag
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
 import { MESSENGER_MOCK_USERS } from './mocks/users';
 
-// --- Domain Services (Directly Provided) ---
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
+// --- Contacts Infrastructure & API ---
+import {
+  ContactsFacadeService,
+  ContactsQueryApi,
+  AddressBookApi,
+  AddressBookManagementApi,
+  GatekeeperApi,
+  GroupNetworkStorageApi,
+} from '@nx-platform-application/contacts-api';
+
+import { GroupNetworkStorage } from '@nx-platform-application/contacts-storage';
 
 // --- Service Tokens ---
 import { ROUTING_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-chat-access';
@@ -55,7 +64,6 @@ import {
 } from '@nx-platform-application/console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
-import { MockCloudProvider } from '@nx-platform-application/contacts-cloud-access';
 import {
   PLATFORM_CLOUD_CONFIG,
   CLOUD_PROVIDERS,
@@ -68,7 +76,6 @@ import {
   ChatStorageService,
   DexieOutboxStorage,
   DexieQuarantineStorage,
-  // ✅ Ports are now imported from Infrastructure (The Contract Definition)
   HistoryReader,
   ConversationStorage,
   OutboxStorage,
@@ -128,9 +135,9 @@ const tokenProviders = environment.useMocks
       },
     ];
 
-const cloudProviders = environment.useMocks
-  ? [{ provide: CLOUD_PROVIDERS, useClass: MockCloudProvider, multi: true }]
-  : [{ provide: CLOUD_PROVIDERS, useClass: GoogleDriveService, multi: true }];
+const cloudProviders = [
+  { provide: CLOUD_PROVIDERS, useClass: GoogleDriveService, multi: true },
+];
 
 export function initializeAuthFactory(
   authService: IAuthService,
@@ -155,9 +162,17 @@ export const appConfig: ApplicationConfig = {
     ...authProviders,
     provideMessengerIdentity(),
 
-    // ✅ Wiring Domain Ports to Infrastructure Implementation
-    // Note: The Ports (Abstract Classes) and Implementations (Services)
-    // both live in 'messenger-infrastructure-chat-storage' now.
+    // ✅ Wiring Contacts API Ports
+    // 1. Facade takes roles for external access (Messenger Domain)
+    { provide: ContactsQueryApi, useExisting: ContactsFacadeService },
+    { provide: AddressBookApi, useExisting: ContactsFacadeService },
+    { provide: AddressBookManagementApi, useExisting: ContactsFacadeService },
+    { provide: GatekeeperApi, useExisting: ContactsFacadeService },
+
+    // 2. Protocol Storage (Bypasses State for atomic writes)
+    { provide: GroupNetworkStorageApi, useClass: GroupNetworkStorage },
+
+    // ✅ Wiring Chat Domain Ports
     { provide: HistoryReader, useExisting: ChatStorageService },
     { provide: ConversationStorage, useExisting: ChatStorageService },
     { provide: OutboxStorage, useClass: DexieOutboxStorage },

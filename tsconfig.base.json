@@ -29,6 +29,9 @@
       "@nx-platform-application/contacts-cloud-access": [
         "libs/contacts/cloud-access/src/index.ts"
       ],
+      "@nx-platform-application/contacts-persistence": [
+        "libs/contacts/persistence/src/index.ts"
+      ],
       "@nx-platform-application/contacts-state": [
         "libs/contacts/state/src/index.ts"
       ],
@@ -49,6 +52,9 @@
       ],
       "@nx-platform-application/messenger-domain-device-pairing": [
         "libs/messenger/domain/device-pairing/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-domain-group-protocol": [
+        "libs/messenger/domain/group-protocol/src/index.ts"
       ],
       "@nx-platform-application/messenger-domain-identity": [
         "libs/messenger/domain/identity/src/index.ts"
@@ -92,11 +98,11 @@
       "@nx-platform-application/messenger-infrastructure-key-cache": [
         "libs/messenger/infrastructure/key-cache/src/index.ts"
       ],
-      "@nx-platform-application/messenger-infrastructure-live-data": [
-        "libs/messenger/infrastructure/live-data/src/index.ts"
-      ],
       "@nx-platform-application/messenger-infrastructure-key-storage": [
         "libs/messenger/infrastructure/key-storage/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-live-data": [
+        "libs/messenger/infrastructure/live-data/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"

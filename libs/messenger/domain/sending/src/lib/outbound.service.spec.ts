@@ -17,17 +17,13 @@ describe('OutboundService', () => {
   let service: OutboundService;
   let outboxWorker: OutboxWorkerService;
   let directStrategy: DirectSendStrategy;
+  let storageService: ChatStorageService;
 
   const myUrn = URN.parse('urn:contacts:user:me');
   const recipientUrn = URN.parse('urn:contacts:user:bob');
   const typeId = URN.parse('urn:message:type:text');
   const payload = new Uint8Array([]);
   const keys = {} as any;
-
-  const mockResult: OutboundResult = {
-    message: {} as any,
-    outcome: Promise.resolve('pending'),
-  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,38 +40,65 @@ describe('OutboundService', () => {
         MockProvider(OutboxWorkerService, {
           processQueue: vi.fn(),
         }),
-        MockProvider(DirectSendStrategy, {
-          send: vi.fn().mockResolvedValue(mockResult),
-        }),
-        MockProvider(NetworkGroupStrategy),
-        MockProvider(LocalBroadcastStrategy),
+        MockProvider(DirectSendStrategy, { send: vi.fn() }),
+        MockProvider(NetworkGroupStrategy, { send: vi.fn() }),
+        MockProvider(LocalBroadcastStrategy, { send: vi.fn() }),
       ],
     });
 
     service = TestBed.inject(OutboundService);
     outboxWorker = TestBed.inject(OutboxWorkerService);
     directStrategy = TestBed.inject(DirectSendStrategy);
+    storageService = TestBed.inject(ChatStorageService);
   });
 
-  it('should delegate to strategy and then trigger worker for persistent messages', async () => {
-    await service.sendMessage(keys, myUrn, recipientUrn, typeId, payload, {
-      isEphemeral: false,
+  it('should delegate to strategy and then trigger worker only AFTER outcome resolves', async () => {
+    let outcomeResolved = false;
+
+    const outcomePromise = new Promise<any>((resolve) => {
+      setTimeout(() => {
+        outcomeResolved = true;
+        resolve('pending');
+      }, 50);
     });
 
-    // 1. Strategy Execution
-    expect(directStrategy.send).toHaveBeenCalled();
+    const mockResult: OutboundResult = {
+      message: {} as any,
+      outcome: outcomePromise,
+    };
 
-    // 2. Worker Trigger
-    // ✅ FIX: Expect 'myUrn' (Sender), not 'recipientUrn'
+    vi.spyOn(directStrategy, 'send').mockResolvedValue(mockResult);
+
+    const call = service.sendMessage(
+      keys,
+      myUrn,
+      recipientUrn,
+      typeId,
+      payload,
+      {
+        isEphemeral: false,
+      },
+    );
+
+    expect(outboxWorker.processQueue).not.toHaveBeenCalled();
+
+    await call;
+
+    expect(outcomeResolved).toBe(true);
     expect(outboxWorker.processQueue).toHaveBeenCalledWith(myUrn, keys);
   });
 
-  it('should NOT trigger worker for ephemeral messages', async () => {
-    await service.sendMessage(keys, myUrn, recipientUrn, typeId, payload, {
-      isEphemeral: true,
-    });
+  it('should NOT save locally in the service (Delegated to Strategy)', async () => {
+    const mockResult: OutboundResult = {
+      message: {} as any,
+      outcome: Promise.resolve('sent'),
+    };
 
-    expect(directStrategy.send).toHaveBeenCalled();
-    expect(outboxWorker.processQueue).not.toHaveBeenCalled();
+    vi.spyOn(directStrategy, 'send').mockResolvedValue(mockResult);
+
+    await service.sendMessage(keys, myUrn, recipientUrn, typeId, payload);
+
+    // ✅ Verified: Service no longer saves. Strategy owns this.
+    expect(storageService.saveMessage).not.toHaveBeenCalled();
   });
 });
