@@ -55,6 +55,17 @@ describe('ConversationService', () => {
     tags: [],
   };
 
+  const existingMessage: ChatMessage = {
+    id: 'msg-existing',
+    conversationUrn: groupUrn,
+    senderId: myUrn,
+    sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
+    status: 'read',
+    receiptMap: { 'user:1': 'read' }, // Mocking the fresh map
+    typeId: URN.parse('urn:message:type:text'),
+    payloadBytes: new Uint8Array([]),
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -71,6 +82,12 @@ describe('ConversationService', () => {
           markConversationAsRead: vi.fn().mockResolvedValue(undefined),
           getConversationIndex: vi.fn().mockResolvedValue({ unreadCount: 0 }),
           updateMessageStatus: vi.fn().mockResolvedValue(undefined),
+          getMessage: vi.fn().mockImplementation((id) =>
+            Promise.resolve({
+              ...existingMessage,
+              id: id,
+            }),
+          ),
         }),
         MockProvider(ChatSyncService, {
           isCloudEnabled: vi.fn().mockReturnValue(false),
@@ -132,6 +149,19 @@ describe('ConversationService', () => {
 
       setRawMessages([msgText, msgInvite]);
       expect(service.messages()).toHaveLength(2);
+    });
+  });
+
+  describe('Receipt Handling', () => {
+    it('should reload messages from storage when receipts arrive', async () => {
+      await service.applyIncomingReadReceipts(['msg-1']);
+
+      const msgs = service.messages();
+      const updated = msgs.find((m) => m.id === 'msg-1');
+
+      // Verify it loaded the mocked message with the map
+      expect(updated?.receiptMap).toBeDefined();
+      expect(updated?.receiptMap?.['user:1']).toBe('read');
     });
   });
 });

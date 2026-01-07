@@ -20,6 +20,8 @@ export class ChatMessageBubbleComponent {
   timestamp = input<ISODateTimeString | string | undefined>(undefined);
   status = input<MessageDeliveryStatus | undefined>(undefined);
 
-  // ✅ NEW: Signal for Broadcast State
+  // ✅ dumb inputs: Parent tells us what to show
   isBroadcast = input(false);
+  isGhost = input(false);
+  statusTooltip = input<string>('');
 }

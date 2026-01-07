@@ -1,5 +1,8 @@
 import { URN } from '@nx-platform-application/platform-types';
-import { ConversationSyncState } from '@nx-platform-application/messenger-types';
+import {
+  ConversationSyncState,
+  ChatMessage,
+} from '@nx-platform-application/messenger-types';
 
 /**
  * CONTRACT: Write/Update operations for conversations.
@@ -11,6 +14,8 @@ export abstract class ConversationStorage {
   abstract getConversationIndex(
     urn: URN,
   ): Promise<ConversationSyncState | undefined>;
+
+  abstract getMessage(id: string): Promise<ChatMessage | undefined>;
 
   abstract updateMessageStatus(ids: string[], status: string): Promise<void>;
 

@@ -1,5 +1,3 @@
-// libs/messenger/chat-ui/src/lib/chat-conversation/chat-conversation.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
@@ -20,7 +18,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 
-// DOMAIN STATE & LOGIC
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import {
   ChatMessage,
@@ -29,20 +26,19 @@ import {
 import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_GROUP_INVITE,
+  messageTagBroadcast,
 } from '@nx-platform-application/messenger-domain-message-content';
 
-// UI COMPONENTS
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
 import {
   ChatMessageBubbleComponent,
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
   MessageRendererComponent,
-  ChatInviteMessageComponent, // ✅ New Import
-  InviteViewModel, // ✅ New Import
+  ChatInviteMessageComponent,
+  InviteViewModel,
 } from '@nx-platform-application/messenger-ui-chat';
-import { ChatInputComponent } from '../chat-input/chat-input.component'; // ✅ New Import
-
+import { ChatInputComponent } from '../chat-input/chat-input.component';
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
 
 @Component({
@@ -72,12 +68,9 @@ export class ChatConversationComponent {
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
 
-  // --- SIGNALS ---
   autoScroll = viewChild.required<AutoScrollDirective>('autoScroll');
 
-  // We use the raw messages now to allow the @switch to see the real typeId
   chatMessages = this.chatService.messages;
-
   currentUserUrn = this.chatService.currentUserUrn;
   selectedConversation = this.chatService.selectedConversation;
   isLoading = this.chatService.isLoadingHistory;
@@ -87,12 +80,10 @@ export class ChatConversationComponent {
 
   showNewMessageIndicator = signal(false);
 
-  // Timer for Typing Indicators
   now = toSignal(interval(1000).pipe(map(() => Temporal.Now.instant())), {
     initialValue: Temporal.Now.instant(),
   });
 
-  // --- CONSTANTS FOR TEMPLATE ---
   readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
   readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
 
@@ -109,7 +100,7 @@ export class ChatConversationComponent {
     });
   }
 
-  // --- LOGIC ---
+  // --- VIEW HELPERS ---
 
   getReadCursorsForMessage(msgId: string): URN[] {
     const map = this.readCursors();
@@ -119,12 +110,9 @@ export class ChatConversationComponent {
   showTypingIndicator = computed(() => {
     const urn = this.selectedConversation();
     if (!urn) return false;
-
     const activityMap = this.typingActivity();
     const lastActive = activityMap.get(urn.toString());
-
     if (!lastActive) return false;
-
     try {
       const duration = this.now().since(lastActive);
       return duration.total({ unit: 'millisecond' }) < 5000;
@@ -141,14 +129,12 @@ export class ChatConversationComponent {
   shouldShowDateDivider(msg: ChatMessage, index: number): boolean {
     if (index === 0) return true;
     const prevMsg = this.chatMessages()[index - 1];
-
     const currDate = Temporal.Instant.from(msg.sentTimestamp)
       .toZonedDateTimeISO('UTC')
       .toPlainDate();
     const prevDate = Temporal.Instant.from(prevMsg.sentTimestamp)
       .toZonedDateTimeISO('UTC')
       .toPlainDate();
-
     return !currDate.equals(prevDate);
   }
 
@@ -156,10 +142,6 @@ export class ChatConversationComponent {
     return this.showNewMessageIndicator() && msg.id === this.firstUnreadId();
   }
 
-  /**
-   * Safe ViewModel Factory for Invites.
-   * Extracts group details from the payload for the Dumb Component.
-   */
   getInviteViewModel(msg: ChatMessage): InviteViewModel {
     if (!msg.payloadBytes) {
       return { groupName: 'Unknown Group', groupUrn: '' };
@@ -171,17 +153,55 @@ export class ChatConversationComponent {
         groupUrn: parsed.groupUrn || '',
       };
     } catch (e) {
-      console.warn('Failed to parse invite payload', e);
       return { groupName: 'Corrupted Invite', groupUrn: '' };
     }
   }
 
-  // --- ACTIONS ---
+  isBroadcast(msg: ChatMessage): boolean {
+    return (
+      msg.tags?.some((t) => t.toString() === messageTagBroadcast.toString()) ??
+      false
+    );
+  }
+
+  // ✅ NEW: Ghost Detection Helper
+  isGhost(msg: ChatMessage): boolean {
+    return msg.status === 'reference';
+  }
+
+  getReceiptSummary(msg: ChatMessage): string {
+    if (!this.isMyMessage(msg)) return '';
+
+    // If it's a ghost/reference, we technically don't show status,
+    // but if we ever did, it would be "Sent via Broadcast".
+    if (msg.status === 'reference') return 'Sent via Broadcast';
+
+    const map = msg.receiptMap;
+    if (map && Object.keys(map).length > 0) {
+      const total = Object.keys(map).length;
+      const readCount = Object.values(map).filter((s) => s === 'read').length;
+      return `Read by ${readCount} of ${total}`;
+    }
+
+    switch (msg.status) {
+      case 'read':
+        return 'Read';
+      case 'delivered':
+        return 'Delivered';
+      case 'sent':
+        return 'Sent to Server';
+      case 'pending':
+        return 'Sending...';
+      case 'failed':
+        return 'Failed to Send';
+      default:
+        return '';
+    }
+  }
 
   async onRetryMessage(msg: ChatMessage): Promise<void> {
     if (msg.status !== 'failed') return;
     const restoredText = await this.chatService.recoverFailedMessage(msg.id);
-    // TODO: Pass this text back to input if needed, or retry in place
     console.log('Retried message:', restoredText);
   }
 

@@ -4,6 +4,7 @@
     'bg-blue-600 text-white rounded-br-sm': direction() === 'outbound',
     'bg-white text-gray-800 border border-gray-100 rounded-bl-sm':
       direction() === 'inbound',
+    'opacity-80 saturate-80': isGhost(),
   }"
   data-testid="chat-bubble"
 >
@@ -31,26 +32,28 @@
       <span>{{ ts | date: 'shortTime' }}</span>
 
       @if (direction() === 'outbound' && status() !== 'reference') {
-        @switch (status()) {
-          @case ('pending') {
-            <mat-icon class="!w-3 !h-3 text-[12px] leading-3 opacity-70"
-              >schedule</mat-icon
-            >
+        <span [matTooltip]="statusTooltip()" matTooltipPosition="left">
+          @switch (status()) {
+            @case ('pending') {
+              <mat-icon class="!w-3 !h-3 text-[12px] leading-3 opacity-70"
+                >schedule</mat-icon
+              >
+            }
+            @case ('sent') {
+              <mat-icon class="!w-3 !h-3 text-[12px] leading-3">check</mat-icon>
+            }
+            @case ('read') {
+              <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-cyan-300"
+                >done_all</mat-icon
+              >
+            }
+            @case ('failed') {
+              <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-red-300"
+                >error</mat-icon
+              >
+            }
           }
-          @case ('sent') {
-            <mat-icon class="!w-3 !h-3 text-[12px] leading-3">check</mat-icon>
-          }
-          @case ('read') {
-            <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-cyan-300"
-              >done_all</mat-icon
-            >
-          }
-          @case ('failed') {
-            <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-red-300"
-              >error</mat-icon
-            >
-          }
-        }
+        </span>
       }
     </div>
   }

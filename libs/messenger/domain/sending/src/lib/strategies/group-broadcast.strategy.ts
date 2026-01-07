@@ -19,13 +19,13 @@ import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-o
 import { SendStrategy, SendContext } from '../send-strategy.interface';
 import { OutboundResult } from '../send-strategy.interface';
 
-// ✅ FORMAL DIVISION: Scaling Policies
+// Scaling Policies
 const SCALING_POLICY = {
-  // Tier 1: Full History (Ghosts) + Full Tracking
+  // Tier 1: Full History (Ghosts) + Full Tracking (< 10)
   MAX_GHOSTING: 10,
-  // Tier 2: Full Tracking (Receipt Map)
+  // Tier 2: Full Tracking (Receipt Map) (< 50)
   MAX_RECEIPT_TRACKING: 50,
-  // Tier 3: Binary Status Only
+  // Tier 3: Binary Status Only (> 50)
 };
 
 @Injectable({ providedIn: 'root' })
@@ -70,11 +70,13 @@ export class LocalBroadcastStrategy implements SendStrategy {
           const ghosts = participants.map((p) => {
             const ghostMsg: ChatMessage = {
               ...optimisticMsg,
+              // Ghost needs unique ID to coexist in DB with Main Message
               id: `ghost-${crypto.randomUUID()}`,
               conversationUrn: p.id,
-              status: 'reference',
+              status: 'reference', // "Ghost" status
               tags: [
                 ...tags,
+                // Link back to main ID if we ever need to trace it locally
                 `urn:messenger:ghost-of:${optimisticMsg.id}`,
               ] as any,
             };
@@ -129,15 +131,17 @@ export class LocalBroadcastStrategy implements SendStrategy {
           return 'sent';
         }
 
-        // SLOW LANE: Enqueue to DB
+        // SLOW LANE: Enqueue to DB (Reliable Delivery)
+        // We loop to create individual tasks per recipient.
         const loopPromises = participants.map(async (p) => {
           const request: OutboundMessageRequest = {
             conversationUrn: p.id,
             typeId: optimisticMsg.typeId,
             payload: wirePayload,
             tags: optimisticMsg.tags || [],
-            messageId: crypto.randomUUID(),
-            parentMessageId: optimisticMsg.id,
+            // ✅ FIX: Use Main Message ID on the wire.
+            // This ensures receipts from Alice map back to the Main Message.
+            messageId: optimisticMsg.id,
           };
 
           await this.outboxStorage.enqueue(request);

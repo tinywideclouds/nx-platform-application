@@ -52,6 +52,9 @@
                     [direction]="isMyMessage(msg) ? 'outbound' : 'inbound'"
                     [timestamp]="msg.sentTimestamp"
                     [status]="msg.status"
+                    [isBroadcast]="isBroadcast(msg)"
+                    [isGhost]="isGhost(msg)"
+                    [statusTooltip]="getReceiptSummary(msg)"
                     (retry)="onRetryMessage(msg)"
                   >
                     <chat-message-renderer

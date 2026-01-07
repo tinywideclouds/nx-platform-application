@@ -14,5 +14,6 @@ export interface MessageRecord {
   typeId: string;
   payloadBytes: Uint8Array;
   status: MessageDeliveryStatus;
+  receiptMap?: Record<string, MessageDeliveryStatus>;
   tags?: string[]; // Stored as array of strings for MultiEntry Index
 }

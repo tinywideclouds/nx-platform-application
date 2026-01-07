@@ -29,7 +29,7 @@ import { MessageViewMapper } from './message-view.mapper';
 import {
   MessageContentParser,
   MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
-  MESSAGE_TYPE_GROUP_INVITE, // ✅ Imported for filter fix
+  MESSAGE_TYPE_GROUP_INVITE,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -75,7 +75,7 @@ export class ConversationService {
     return raw.filter(
       (m) =>
         m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE_RESPONSE ||
-        m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE || // ✅ FIX: Allow Invites!
+        m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE ||
         (me && m.senderId.equals(me)), // My own messages
     );
   });
@@ -310,20 +310,28 @@ export class ConversationService {
     }
   }
 
-  applyIncomingReadReceipts(ids: string[]): void {
+  // ✅ REFACTOR: Now fetches from DB to ensure receiptMap is fresh.
+  async applyIncomingReadReceipts(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
-    const idSet = new Set(ids);
-    this._rawMessages.update((current) =>
-      current.map((msg) =>
-        idSet.has(msg.id) && msg.status !== 'read'
-          ? { ...msg, status: 'read' }
-          : msg,
-      ),
-    );
+
+    console.log('fresh message receipts');
+    // 1. Fetch fresh data (with updated receiptMap) from storage
+    const freshMessages: ChatMessage[] = [];
+    for (const id of ids) {
+      const msg = await this.storage.getMessage(id);
+      if (msg) freshMessages.push(msg);
+    }
+
+    if (freshMessages.length === 0) return;
+
+    // 2. Map and Upsert (this will trigger the UI update via Signals)
+    const viewMessages = freshMessages.map((m) => this.mapper.toView(m));
+    this.upsertMessages(viewMessages, null);
   }
 
   /**
-   * Called by ActionService to optimistically update UI
+   * Called by ActionService to optimistically update UI,
+   * OR by applyIncomingReadReceipts to update existing messages.
    */
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
@@ -341,14 +349,25 @@ export class ConversationService {
           this.logger.warn('Failed to process live receipts', err),
         );
       }
-      this._rawMessages.update((current) => [...current, ...viewed]);
+
+      // ✅ REFACTOR: Merging Logic (Upsert)
+      this._rawMessages.update((current) => {
+        const lookup = new Map(current.map((m) => [m.id, m]));
+
+        viewed.forEach((m) => {
+          lookup.set(m.id, m); // Replace or Add
+        });
+
+        // Re-sort by timestamp to ensure order (safe fallback)
+        return Array.from(lookup.values()).sort((a, b) =>
+          a.sentTimestamp.localeCompare(b.sentTimestamp),
+        );
+      });
+
       this.storage.markConversationAsRead(activeConvo);
     }
   }
 
-  /**
-   * Called by ActionService when network confirms delivery
-   */
   updateMessageStatusInSignal(id: string, status: MessageDeliveryStatus): void {
     this._rawMessages.update((current) =>
       current.map((msg) => (msg.id === id ? { ...msg, status } : msg)),

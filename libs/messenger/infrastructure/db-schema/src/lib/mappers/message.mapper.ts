@@ -13,6 +13,7 @@ export class MessageMapper {
       sentTimestamp: record.sentTimestamp,
       typeId: URN.parse(record.typeId),
       payloadBytes: new Uint8Array(record.payloadBytes),
+      receiptMap: record.receiptMap,
       tags: (record.tags || []).map((t) => URN.parse(t)),
       status: record.status,
       textContent: undefined,
@@ -29,6 +30,7 @@ export class MessageMapper {
       typeId: message.typeId.toString(),
       payloadBytes: message.payloadBytes || new Uint8Array([]),
       status: message.status || 'pending',
+      receiptMap: message.receiptMap,
       tags: (message.tags || []).map((t) => t.toString()),
     };
   }

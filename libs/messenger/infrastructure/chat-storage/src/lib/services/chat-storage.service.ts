@@ -75,6 +75,13 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     return records.map((r) => this.messageMapper.toDomain(r));
   }
 
+  // ✅ NEW: Ability to fetch a single message by ID
+  async getMessage(id: string): Promise<ChatMessage | undefined> {
+    const record = await this.db.messages.get(id);
+    if (!record) return undefined;
+    return this.messageMapper.toDomain(record);
+  }
+
   async loadConversationSummaries(): Promise<ConversationSummary[]> {
     const records = await this.db.conversations
       .orderBy('lastActivityTimestamp')
@@ -135,7 +142,6 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     return setting?.value ?? false;
   }
 
-  // ✅ NEW: Hybrid Receipt Logic
   async applyReceipt(
     messageId: string,
     readerUrn: URN,
@@ -149,6 +155,7 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
         if (!record) return;
 
         const domainMsg = this.messageMapper.toDomain(record);
+        let newGlobalStatus = domainMsg.status; // Track if status changes
 
         if (domainMsg.receiptMap) {
           // === MODE A: High Fidelity (Tier 1 & 2) ===
@@ -157,26 +164,38 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
           const values = Object.values(domainMsg.receiptMap);
           if (values.length > 0) {
             if (values.every((s) => s === 'read')) {
-              domainMsg.status = 'read';
+              newGlobalStatus = 'read';
             } else if (
               values.every(
                 (s) => s === 'read' || s === 'received' || s === 'delivered',
               )
             ) {
-              domainMsg.status = 'delivered';
+              newGlobalStatus = 'delivered';
             }
           }
         } else {
           // === MODE B: Low Fidelity (Tier 3) ===
-          // Binary "High Water Mark" Logic
           if (status === 'read') {
-            domainMsg.status = 'read';
+            newGlobalStatus = 'read';
           } else if (status === 'delivered' && domainMsg.status !== 'read') {
-            domainMsg.status = 'delivered';
+            newGlobalStatus = 'delivered';
           }
         }
 
+        // 1. Update the Main Record
+        domainMsg.status = newGlobalStatus;
         await this.saveInternal(domainMsg);
+
+        // ✅ FIX: Sync status to Ghosts (1:1 Chats)
+        // If this is the Main Message, find its ghosts and update them.
+        // We use the tag index for speed: *tags
+        if (newGlobalStatus) {
+          const ghostTag = `urn:messenger:ghost-of:${messageId}`;
+          await this.db.messages
+            .where('tags')
+            .equals(ghostTag)
+            .modify({ status: newGlobalStatus });
+        }
       },
     );
   }
