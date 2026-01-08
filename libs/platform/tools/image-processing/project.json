@@ -1,17 +1,18 @@
 {
-  "name": "messenger-infrastructure-db-schema",
+  "name": "platform-tools-image-processing",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/infrastructure/db-schema/src",
+  "sourceRoot": "libs/platform/tools/image-processing/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger", "layer:infrastructure"],
+  "tags": ["scope:platform"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/infrastructure/db-schema",
-        "configFile": "libs/messenger/infrastructure/db-schema/vite.config.mts"
+        "outputPath": "dist/libs/platform/tools/image-processing",
+        "configFile": "libs/platform/tools/image-processing/vite.config.mts"
       }
     },
     "lint": {

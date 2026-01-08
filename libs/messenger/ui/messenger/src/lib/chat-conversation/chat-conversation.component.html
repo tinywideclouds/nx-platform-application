@@ -47,45 +47,15 @@
           >
             @switch (msg.typeId.toString()) {
               @case (MSG_TYPE_TEXT) {
-                <div class="relative max-w-[85%] group">
-                  <chat-message-bubble
-                    [direction]="isMyMessage(msg) ? 'outbound' : 'inbound'"
-                    [timestamp]="msg.sentTimestamp"
-                    [status]="msg.status"
-                    [isBroadcast]="isBroadcast(msg)"
-                    [isGhost]="isGhost(msg)"
-                    [statusTooltip]="getReceiptSummary(msg)"
-                    (retry)="onRetryMessage(msg)"
-                  >
-                    <chat-message-renderer
-                      [payload]="{ kind: 'text', text: msg.textContent || '' }"
-                      (action)="onContentAction($event)"
-                    />
-                  </chat-message-bubble>
+                <ng-container
+                  *ngTemplateOutlet="contentBubble; context: { $implicit: msg }"
+                ></ng-container>
+              }
 
-                  @if (getReadCursorsForMessage(msg.id).length > 0) {
-                    <div
-                      class="absolute top-0 z-10 cursor-container flex flex-col space-y-1"
-                      [class.right-full]="isMyMessage(msg)"
-                      [class.mr-2]="isMyMessage(msg)"
-                      [class.left-full]="!isMyMessage(msg)"
-                      [class.ml-2]="!isMyMessage(msg)"
-                    >
-                      @for (
-                        urn of getReadCursorsForMessage(msg.id);
-                        track urn.toString()
-                      ) {
-                        <div
-                          class="cursor-avatar looking-right"
-                          [matTooltip]="'' + (urn | contactName)"
-                          matTooltipPosition="above"
-                        >
-                          👀
-                        </div>
-                      }
-                    </div>
-                  }
-                </div>
+              @case (MSG_TYPE_IMAGE) {
+                <ng-container
+                  *ngTemplateOutlet="contentBubble; context: { $implicit: msg }"
+                ></ng-container>
               }
 
               @case (MSG_TYPE_INVITE) {
@@ -116,6 +86,48 @@
         }
       }
 
+      <ng-template #contentBubble let-msg>
+        <div class="relative max-w-[85%] group">
+          <chat-message-bubble
+            [direction]="isMyMessage(msg) ? 'outbound' : 'inbound'"
+            [timestamp]="msg.sentTimestamp"
+            [status]="msg.status"
+            [isBroadcast]="isBroadcast(msg)"
+            [isGhost]="isGhost(msg)"
+            [statusTooltip]="getReceiptSummary(msg)"
+            (retry)="onRetryMessage(msg)"
+          >
+            <chat-message-renderer
+              [payload]="getContentPayload(msg)"
+              (action)="onContentAction($event)"
+            />
+          </chat-message-bubble>
+
+          @if (getReadCursorsForMessage(msg.id).length > 0) {
+            <div
+              class="absolute top-0 z-10 cursor-container flex flex-col space-y-1"
+              [class.right-full]="isMyMessage(msg)"
+              [class.mr-2]="isMyMessage(msg)"
+              [class.left-full]="!isMyMessage(msg)"
+              [class.ml-2]="!isMyMessage(msg)"
+            >
+              @for (
+                urn of getReadCursorsForMessage(msg.id);
+                track urn.toString()
+              ) {
+                <div
+                  class="cursor-avatar looking-right"
+                  [matTooltip]="'' + (urn | contactName)"
+                  matTooltipPosition="above"
+                >
+                  👀
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </ng-template>
+
       <div
         class="min-h-[2rem] py-2 flex flex-col justify-end transition-all duration-200"
       >
@@ -128,5 +140,9 @@
     </div>
   </main>
 
-  <messenger-chat-input (send)="onSendMessage($event)" (typing)="onTyping()" />
+  <messenger-chat-input
+    (send)="onSendMessage($event)"
+    (sendImage)="onSendImage($event)"
+    (typing)="onTyping()"
+  />
 </div>

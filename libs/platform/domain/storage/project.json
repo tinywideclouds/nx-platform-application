@@ -6,6 +6,15 @@
   "projectType": "library",
   "tags": ["scope:domain"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/platform/domain/storage",
+        "configFile": "libs/platform/domain/storage/vite.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

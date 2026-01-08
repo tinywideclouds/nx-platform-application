@@ -8,7 +8,6 @@ import {
 import {
   ChatMessage,
   TransportMessage,
-  MessageDeliveryStatus,
 } from '@nx-platform-application/messenger-types';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
@@ -21,8 +20,8 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   MessageContentParser,
   ReadReceiptData,
-  MESSAGE_TYPE_READ_RECEIPT,
   MESSAGE_TYPE_TYPING,
+  MESSAGE_TYPE_READ_RECEIPT,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 
@@ -180,12 +179,9 @@ export class IngestionService {
           sentTimestamp: transport.sentTimestamp as ISODateTimeString,
           typeId: transport.typeId,
           status: 'received',
-          conversationUrn: conversationUrn,
+          conversationUrn: conversationUrn!, // (! assertion safe via Guard logic)
           tags: parsed.tags,
-          payloadBytes:
-            parsed.payload.kind === 'text'
-              ? new TextEncoder().encode(parsed.payload.text)
-              : new TextEncoder().encode(JSON.stringify(parsed.payload.data)),
+          payloadBytes: this.parser.serialize(parsed.payload),
           textContent:
             parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
         };

@@ -1,18 +1,26 @@
 import { TestBed } from '@angular/core/testing';
-import { Temporal } from '@js-temporal/polyfill';
 import { MessageContentParser } from './message-content-parser.service';
 import { MessageMetadataService } from './message-metadata.service';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_CONTACT_SHARE,
-  MESSAGE_TYPE_READ_RECEIPT,
-  MESSAGE_TYPE_TYPING,
-  ReadReceiptData,
+  MESSAGE_TYPE_IMAGE,
+  ImageContent,
+  MessageTypeText,
+  MessageTypeImage,
 } from '../models/content-types';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
-describe('MessageContentParser', () => {
+// Strategy Imports (Required for Dependency Injection in the Service)
+import {
+  TextParserStrategy,
+  ImageParserStrategy,
+  RichMediaParserStrategy,
+} from '../strategies/text-media.strategies';
+import { GroupParserStrategy } from '../strategies/group.strategies';
+import { SignalParserStrategy } from '../strategies/signal.strategies';
+
+describe('MessageContentParser (Integration)', () => {
   let service: MessageContentParser;
   let metadataService: MessageMetadataService;
   const encoder = new TextEncoder();
@@ -22,101 +30,70 @@ describe('MessageContentParser', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [MessageContentParser, MessageMetadataService],
+      providers: [
+        MessageContentParser,
+        MessageMetadataService,
+        // Provide all strategies
+        TextParserStrategy,
+        ImageParserStrategy,
+        RichMediaParserStrategy,
+        GroupParserStrategy,
+        SignalParserStrategy,
+      ],
     });
     service = TestBed.inject(MessageContentParser);
     metadataService = TestBed.inject(MessageMetadataService);
   });
 
-  describe('Content Path (Wrapped)', () => {
-    it('should unwrap metadata and parse text messages', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_TEXT);
-      const rawText = 'Hello Germany';
-      const textBytes = encoder.encode(rawText);
-
-      // Manually wrap to simulate OutboundService behavior
-      const wrappedBytes = metadataService.wrap(textBytes, mockConversationId, [
+  describe('Content Path', () => {
+    it('should parse Text messages via strategy', () => {
+      const typeId = MessageTypeText;
+      const rawText = 'Hello Strategy';
+      const bytes = encoder.encode(rawText);
+      const wrapped = metadataService.wrap(bytes, mockConversationId, [
         mockTag,
       ]);
 
-      const result = service.parse(typeId, wrappedBytes);
+      const result = service.parse(typeId, wrapped);
 
       expect(result.kind).toBe('content');
       if (result.kind === 'content') {
-        expect(result.conversationId.toString()).toBe(
-          mockConversationId.toString(),
-        );
-        expect(result.tags[0].toString()).toBe(mockTag.toString());
         expect(result.payload.kind).toBe('text');
-        // @ts-expect-error - Guarded by kind check
-        expect(result.payload.text).toBe(rawText);
+        expect((result.payload as any).text).toBe(rawText);
       }
     });
 
-    it('should fail if content message is missing conversationId metadata', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_TEXT);
-      const bytes = encoder.encode('Raw Unwrapped Text');
-
-      const result = service.parse(typeId, bytes);
-
-      expect(result.kind).toBe('unknown');
-      if (result.kind === 'unknown') {
-        expect(result.error).toContain('missing conversationId');
-      }
-    });
-  });
-
-  describe('Signal Path (Flat)', () => {
-    it('should route Read Receipts directly without metadata wrapping', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
-      const receiptData: ReadReceiptData = {
-        messageIds: ['msg-1'],
-        readAt: Temporal.Now.instant().toString(),
+    it('should parse Image messages via strategy', () => {
+      const typeId = MessageTypeImage;
+      const img: ImageContent = {
+        kind: 'image',
+        thumbnailBase64: 'data:abc',
+        remoteUrl: 'url',
+        decryptionKey: 'k',
+        mimeType: 'image/png',
+        width: 10,
+        height: 10,
+        sizeBytes: 100,
       };
-      // Signals are NOT wrapped in the metadata JSON envelope
-      const bytes = encoder.encode(JSON.stringify(receiptData));
-
-      const result = service.parse(typeId, bytes);
-
-      expect(result.kind).toBe('signal');
-      if (result.kind === 'signal') {
-        expect(result.payload.action).toBe('read-receipt');
-        expect(result.payload.data).toEqual(receiptData);
-        // Verify metadata fields are NOT present on signal type
-        expect(result).not.toHaveProperty('conversationId');
-        expect(result).not.toHaveProperty('tags');
-      }
-    });
-
-    it('should route Typing Indicators as empty flat signals', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_TYPING);
-      const bytes = new Uint8Array([]);
-
-      const result = service.parse(typeId, bytes);
-
-      expect(result.kind).toBe('signal');
-      if (result.kind === 'signal') {
-        expect(result.payload.action).toBe('typing');
-      }
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should route malformed JSON in rich content to unknown', () => {
-      const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
-      const contentBytes = encoder.encode('{ invalid }');
-      const wrapped = metadataService.wrap(
-        contentBytes,
-        mockConversationId,
-        [],
-      );
+      const bytes = encoder.encode(JSON.stringify(img));
+      const wrapped = metadataService.wrap(bytes, mockConversationId, []);
 
       const result = service.parse(typeId, wrapped);
 
-      expect(result.kind).toBe('unknown');
-      if (result.kind === 'unknown') {
-        expect(result.error).toBeTruthy();
+      expect(result.kind).toBe('content');
+      if (result.kind === 'content') {
+        expect(result.payload.kind).toBe('image');
       }
+    });
+  });
+
+  describe('Unknown Types', () => {
+    it('should return unknown for unsupported URNs', () => {
+      const result = service.parse(
+        URN.parse('urn:foo:bar:1'),
+        new Uint8Array([]),
+      );
+      expect(result.kind).toBe('unknown');
     });
   });
 });

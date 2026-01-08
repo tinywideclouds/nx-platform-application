@@ -1,28 +1,65 @@
-<form
-  id="input form"
-  (submit)="$event.preventDefault(); sendMessage()"
-  class="flex items-start space-x-2 p-2 border-t"
+<footer
+  class="flex-shrink-0 border-t bg-white z-10 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
 >
-  <textarea
-    id="textarea"
-    name="input text"
-    [value]="messageText()"
-    (input)="onInput($event)"
-    (keydown)="onKeyDown($event)"
-    [disabled]="disabled()"
-    placeholder="Type a message..."
-    class="flex-1 resize-none border rounded-md p-2 disabled:bg-gray-100 disabled:text-gray-400"
-    rows="3"
-    data-testid="message-textarea"
-  ></textarea>
+  @if (pendingAttachment(); as img) {
+    <div class="px-4 pt-3 flex items-start animate-slide-up">
+      <div class="relative group">
+        <img
+          alt="thumbnail"
+          [src]="img.thumbnailBase64"
+          class="h-16 w-16 object-cover rounded-lg border border-gray-200 shadow-sm"
+        />
+        <button
+          (click)="onRemoveAttachment()"
+          class="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-0.5 shadow-md hover:bg-red-500 transition-colors"
+        >
+          <mat-icon class="!w-4 !h-4 text-[16px] leading-none">close</mat-icon>
+        </button>
+      </div>
+    </div>
+  }
 
-  <button
-    id="button"
-    type="submit"
-    [disabled]="!messageText() || disabled()"
-    class="bg-blue-600 text-white rounded-md p-2 h-full disabled:bg-gray-400 transition-colors"
-    data-testid="send-button"
-  >
-    Send
-  </button>
-</form>
+  <div class="p-3 flex items-end space-x-2">
+    <input
+      #fileInput
+      type="file"
+      hidden
+      accept="image/*"
+      (change)="onFileChange($event)"
+    />
+
+    <button
+      type="button"
+      matTooltip="Attach"
+      (click)="fileInput.click()"
+      [disabled]="disabled()"
+      class="p-3 text-gray-500 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50"
+    >
+      <mat-icon class="!w-6 !h-6 text-[24px]">attach_file</mat-icon>
+    </button>
+
+    <div class="flex-grow">
+      <textarea
+        id="textarea"
+        name="input text"
+        [value]="messageText()"
+        (input)="onInput($event)"
+        (keydown)="onKeyDown($event)"
+        [disabled]="disabled()"
+        placeholder="Type a message..."
+        class="flex-1 text-input-area resize-none border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400 max-h-32"
+        rows="1"
+        data-testid="message-textarea"
+      ></textarea>
+    </div>
+
+    <button
+      type="button"
+      (click)="onSend()"
+      [disabled]="(!messageText() && !pendingAttachment()) || disabled()"
+      class="p-3 bg-blue-600 text-white rounded-full shadow-sm disabled:bg-gray-300 disabled:shadow-none transition-all"
+    >
+      <mat-icon class="!w-6 !h-6 text-[24px]">send</mat-icon>
+    </button>
+  </div>
+</footer>

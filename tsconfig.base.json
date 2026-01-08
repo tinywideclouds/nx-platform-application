@@ -161,6 +161,9 @@
       "@nx-platform-application/platform-protos/*": [
         "libs/platform/protos/dist/ts/src/types/*"
       ],
+      "@nx-platform-application/platform-tools-image-processing": [
+        "libs/platform/tools/image-processing/src/index.ts"
+      ],
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
       ],

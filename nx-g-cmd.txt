@@ -181,3 +181,5 @@ nx g @nx/workspace:move --project=platform-ui-cloud-storage --destination=libs/p
 
 nx g @nx/angular:library --name=messenger-infrastructure-local-settings --directory=libs/messenger/infrastructure/local-settings --tags="scope:messenger" 
 
+nx g @nx/angular:library --name=platform-tools-image-processing --directory=libs/platform/tools/image-processing --tags="scope:platform" 
+

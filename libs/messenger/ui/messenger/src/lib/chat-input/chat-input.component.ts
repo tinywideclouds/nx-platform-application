@@ -1,70 +1,112 @@
 import {
   Component,
   ChangeDetectionStrategy,
-  signal,
   output,
+  inject,
+  signal,
+  computed,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
+import { ImageContent } from '@nx-platform-application/messenger-domain-message-content';
+import { ChatMessageInputComponent } from '@nx-platform-application/messenger-ui-chat';
+import { ImageProcessingService } from '@nx-platform-application/platform-tools-image-processing';
 
 @Component({
   selector: 'messenger-chat-input',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, ChatMessageInputComponent],
   template: `
-    <footer
-      class="flex-shrink-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t bg-white z-10"
-    >
-      <div class="flex items-center space-x-2">
-        <input
-          type="text"
-          [value]="messageText()"
-          (input)="onInput($event)"
-          (keydown.enter)="onSend()"
-          placeholder="Type a message..."
-          class="flex-grow p-3 border rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
-        />
-        <button
-          type="button"
-          title="Send"
-          (click)="onSend()"
-          [disabled]="!messageText().trim()"
-          class="flex-shrink-0 p-3 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <mat-icon class="!w-6 !h-6 text-[24px]">send</mat-icon>
-        </button>
-      </div>
-    </footer>
+    <chat-message-input
+      [disabled]="isProcessing()"
+      [pendingAttachment]="pendingAttachment()"
+      (messageSent)="onSendText($event)"
+      (typing)="typing.emit()"
+      (imageSelected)="onFileSelected($event)"
+      (attachmentRemoved)="onRemoveAttachment()"
+      (submit)="onSubmit()"
+    />
   `,
-  styles: [
-    `
-      :host {
-        display: block;
-      }
-    `,
-  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatInputComponent {
+  private imageProcessor = inject(ImageProcessingService);
+
   send = output<string>();
+  sendImage = output<ImageContent>();
   typing = output<void>();
 
-  messageText = signal('');
+  isProcessing = signal(false);
 
-  onInput(event: Event): void {
-    const val = (event.target as HTMLInputElement).value;
-    this.messageText.set(val);
-    if (val.length > 0) {
-      this.typing.emit();
+  // ✅ NEW: Hold the image in state, don't send yet
+  pendingAttachment = signal<ImageContent | null>(null);
+
+  /**
+   * 1. Handle Selection: Process & Store
+   */
+  async onFileSelected(file: File): Promise<void> {
+    this.isProcessing.set(true);
+    try {
+      const processed = await this.imageProcessor.process(file);
+
+      const payload: ImageContent = {
+        kind: 'image',
+        thumbnailBase64: processed.thumbnailBase64,
+        remoteUrl: 'pending',
+        decryptionKey: 'none',
+        mimeType: file.type,
+        width: processed.metadata.width,
+        height: processed.metadata.height,
+        sizeBytes: processed.metadata.previewSize,
+        fileName: file.name,
+      };
+
+      this.pendingAttachment.set(payload);
+    } catch (err) {
+      console.error('Image processing failed', err);
+    } finally {
+      this.isProcessing.set(false);
     }
   }
 
-  onSend(): void {
-    const text = this.messageText().trim();
-    if (text) {
+  /**
+   * 2. Handle Removal
+   */
+  onRemoveAttachment(): void {
+    this.pendingAttachment.set(null);
+  }
+
+  /**
+   * 3. Handle Text Send (Legacy/Direct)
+   */
+  onSendText(text: string): void {
+    // If we have an image, we handle it in onSubmit instead
+    if (!this.pendingAttachment()) {
       this.send.emit(text);
-      this.messageText.set('');
+    }
+  }
+
+  /**
+   * 4. Handle Final Submission
+   * Triggered when user clicks Send or hits Enter
+   */
+  onSubmit(text?: string): void {
+    const attachment = this.pendingAttachment();
+    const message = text?.trim();
+
+    // Strategy: Send as two separate messages for now (Atomicity)
+    // 1. Send Image
+    if (attachment) {
+      // If there is text, maybe attach it as caption?
+      // For now, let's keep it simple: Image first.
+      if (message) {
+        attachment.caption = message; // Attach text as caption to image
+      }
+      this.sendImage.emit(attachment);
+      this.pendingAttachment.set(null); // Clear state
+    }
+    // 2. Send Text (Only if no image, OR if we didn't use it as caption)
+    else if (message) {
+      this.send.emit(message);
     }
   }
 }

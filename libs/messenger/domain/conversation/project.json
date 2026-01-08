@@ -6,6 +6,15 @@
   "projectType": "library",
   "tags": ["scope:messenger", "layer:domain"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/domain/conversation",
+        "configFile": "libs/messenger/domain/conversation/vite.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

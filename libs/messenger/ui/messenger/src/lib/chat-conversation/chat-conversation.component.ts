@@ -19,13 +19,12 @@ import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
-import {
-  ChatMessage,
-  ChatParticipant,
-} from '@nx-platform-application/messenger-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_GROUP_INVITE,
+  MESSAGE_TYPE_IMAGE, // ✅ Import
+  ImageContent, // ✅ Import
   messageTagBroadcast,
 } from '@nx-platform-application/messenger-domain-message-content';
 
@@ -38,6 +37,7 @@ import {
   ChatInviteMessageComponent,
   InviteViewModel,
 } from '@nx-platform-application/messenger-ui-chat';
+// ✅ Import the Smart Wrapper we just fixed
 import { ChatInputComponent } from '../chat-input/chat-input.component';
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
 
@@ -86,6 +86,7 @@ export class ChatConversationComponent {
 
   readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
   readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
+  readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE; // ✅ Exposed for template
 
   constructor() {
     effect((onCleanup) => {
@@ -157,6 +158,25 @@ export class ChatConversationComponent {
     }
   }
 
+  // ✅ NEW: Helper to hydrate content for the renderer
+  getContentPayload(msg: ChatMessage): any {
+    if (!msg.payloadBytes) return null;
+    try {
+      // Fast decode for view layer
+      if (msg.typeId.toString() === MESSAGE_TYPE_TEXT) {
+        return {
+          kind: 'text',
+          text: new TextDecoder().decode(msg.payloadBytes),
+        };
+      }
+
+      // JSON based types (Image, Contact)
+      return JSON.parse(new TextDecoder().decode(msg.payloadBytes));
+    } catch {
+      return null;
+    }
+  }
+
   isBroadcast(msg: ChatMessage): boolean {
     return (
       msg.tags?.some((t) => t.toString() === messageTagBroadcast.toString()) ??
@@ -164,16 +184,12 @@ export class ChatConversationComponent {
     );
   }
 
-  // ✅ NEW: Ghost Detection Helper
   isGhost(msg: ChatMessage): boolean {
     return msg.status === 'reference';
   }
 
   getReceiptSummary(msg: ChatMessage): string {
     if (!this.isMyMessage(msg)) return '';
-
-    // If it's a ghost/reference, we technically don't show status,
-    // but if we ever did, it would be "Sent via Broadcast".
     if (msg.status === 'reference') return 'Sent via Broadcast';
 
     const map = msg.receiptMap;
@@ -217,6 +233,14 @@ export class ChatConversationComponent {
     const recipient = this.selectedConversation();
     if (text && recipient) {
       this.chatService.sendMessage(recipient, text);
+    }
+  }
+
+  // ✅ NEW: Handle Image Send
+  onSendImage(content: ImageContent): void {
+    const recipient = this.selectedConversation();
+    if (recipient) {
+      this.chatService.sendImage(recipient, content);
     }
   }
 

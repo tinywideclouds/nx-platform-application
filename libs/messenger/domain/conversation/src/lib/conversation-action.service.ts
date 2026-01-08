@@ -1,18 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import {
-  ChatMessage,
-  MessageDeliveryStatus,
-} from '@nx-platform-application/messenger-types';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import {
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_CONTACT_SHARE,
-  MESSAGE_TYPE_READ_RECEIPT,
-  MESSAGE_TYPE_TYPING,
+  MessageTypeContactShare,
+  MessageTypingIndicator,
   ReadReceiptData,
   ContactShareData,
+  ImageContent,
+  MessageTypeText,
+  MessageTypeImage,
+  MessageTypeReadReceipt, // ✅ NEW
 } from '@nx-platform-application/messenger-domain-message-content';
 
 // Dependency on State to perform optimistic updates
@@ -33,7 +31,23 @@ export class ConversationActionService {
     myUrn: URN,
   ): Promise<void> {
     const bytes = new TextEncoder().encode(text);
-    const typeId = URN.parse(MESSAGE_TYPE_TEXT);
+    const typeId = MessageTypeText;
+    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+  }
+
+  // ✅ NEW: Image Support
+  // The UI is responsible for processing the blob and creating the ImageContent structure.
+  // This service simply serializes it and puts it on the wire.
+  async sendImage(
+    recipientUrn: URN,
+    data: ImageContent,
+    myKeys: PrivateKeys,
+    myUrn: URN,
+  ): Promise<void> {
+    const json = JSON.stringify(data);
+    const bytes = new TextEncoder().encode(json);
+    const typeId = MessageTypeImage;
+
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
@@ -45,7 +59,7 @@ export class ConversationActionService {
   ): Promise<void> {
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
-    const typeId = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
+    const typeId = MessageTypeContactShare;
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
@@ -60,7 +74,7 @@ export class ConversationActionService {
       myKeys,
       myUrn,
       recipientUrn,
-      URN.parse(MESSAGE_TYPE_READ_RECEIPT),
+      MessageTypeReadReceipt,
       bytes,
       { isEphemeral: true },
     );
@@ -74,7 +88,7 @@ export class ConversationActionService {
       myKeys,
       myUrn,
       recipient,
-      URN.parse(MESSAGE_TYPE_TYPING),
+      MessageTypingIndicator,
       new Uint8Array([]),
       { isEphemeral: true },
     );

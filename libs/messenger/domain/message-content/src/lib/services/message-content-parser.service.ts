@@ -1,111 +1,49 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import {
-  ParsedMessage,
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_CONTACT_SHARE,
-  MESSAGE_TYPE_READ_RECEIPT,
-  MESSAGE_TYPE_TYPING,
-  ContactShareData,
-  ReadReceiptData,
-} from '../models/content-types';
-import {
-  MESSAGE_TYPE_GROUP_INVITE,
-  MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
-  GroupInvitePayload,
-  GroupJoinData,
-} from '../models/group-protocol-types';
+import { ParsedMessage, ContentPayload } from '../models/content-types'; // ✅ Import ContentPayload
 import { MessageMetadataService } from './message-metadata.service';
+
+// Strategies
+import { ContentParserStrategy } from '../strategies/content-parser.strategy';
+import {
+  TextParserStrategy,
+  ImageParserStrategy,
+  RichMediaParserStrategy,
+} from '../strategies/text-media.strategies';
+import { GroupParserStrategy } from '../strategies/group.strategies';
+import { SignalParserStrategy } from '../strategies/signal.strategies';
 
 @Injectable({ providedIn: 'root' })
 export class MessageContentParser {
   private metadataService = inject(MessageMetadataService);
-  private decoder = new TextDecoder();
+  private encoder = new TextEncoder(); // ✅ Add Encoder
 
+  // Registry of Strategies
+  private strategies: ContentParserStrategy[] = [
+    inject(TextParserStrategy),
+    inject(ImageParserStrategy),
+    inject(GroupParserStrategy),
+    inject(RichMediaParserStrategy),
+    inject(SignalParserStrategy),
+  ];
+
+  /**
+   * READ: Bytes -> Domain Object
+   */
   parse(typeId: URN, rawBytes: Uint8Array): ParsedMessage {
     const typeStr = typeId.toString();
 
     try {
-      // =========================================================
-      // 1. CONTENT PATH (Persisted & Metadata Wrapped)
-      // =========================================================
-      if (
-        typeStr === MESSAGE_TYPE_TEXT ||
-        typeStr === MESSAGE_TYPE_CONTACT_SHARE ||
-        typeStr === MESSAGE_TYPE_GROUP_INVITE ||
-        typeStr === MESSAGE_TYPE_GROUP_INVITE_RESPONSE
-      ) {
-        const { conversationId, tags, content } =
-          this.metadataService.unwrap(rawBytes);
+      const { conversationId, tags, content } =
+        this.metadataService.unwrap(rawBytes);
 
-        if (!conversationId) {
-          throw new Error('Content message missing conversationId metadata');
-        }
+      const strategy = this.strategies.find((s) => s.supports(typeId));
 
-        const tagsArray = tags || [];
-
-        // TEXT
-        if (typeStr === MESSAGE_TYPE_TEXT) {
-          return {
-            kind: 'content',
-            conversationId,
-            tags: tagsArray,
-            payload: { kind: 'text', text: this.decoder.decode(content) },
-          };
-        }
-
-        // GROUP INVITE (JSON)
-        if (typeStr === MESSAGE_TYPE_GROUP_INVITE) {
-          const data = JSON.parse(
-            this.decoder.decode(content),
-          ) as GroupInvitePayload;
-          return {
-            kind: 'content',
-            conversationId,
-            tags: tagsArray,
-            payload: { kind: 'group-invite', data },
-          };
-        }
-
-        if (typeStr === MESSAGE_TYPE_GROUP_INVITE_RESPONSE) {
-          const data = JSON.parse(
-            this.decoder.decode(content),
-          ) as GroupJoinData;
-          return {
-            kind: 'content',
-            conversationId,
-            tags: tagsArray,
-            payload: { kind: 'group-system', data },
-          };
-        }
-
-        // RICH CONTENT (Fallback/Contact Share)
-        const data = JSON.parse(
-          this.decoder.decode(content),
-        ) as ContactShareData;
-        return {
-          kind: 'content',
+      if (strategy) {
+        return strategy.parse(typeId, content, {
           conversationId,
-          tags: tagsArray,
-          payload: { kind: 'rich', subType: typeStr, data },
-        };
-      }
-
-      // =========================================================
-      // 2. SIGNAL PATH (Ephemeral & Flat)
-      // =========================================================
-
-      // READ RECEIPT
-      if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
-        const data = JSON.parse(
-          this.decoder.decode(rawBytes),
-        ) as ReadReceiptData;
-        return { kind: 'signal', payload: { action: 'read-receipt', data } };
-      }
-
-      // TYPING (Empty)
-      if (typeStr === MESSAGE_TYPE_TYPING) {
-        return { kind: 'signal', payload: { action: 'typing', data: null } };
+          tags: tags || [],
+        });
       }
 
       return { kind: 'unknown', rawType: typeStr };
@@ -115,6 +53,31 @@ export class MessageContentParser {
         rawType: typeStr,
         error: error instanceof Error ? error.message : 'Parse Failed',
       };
+    }
+  }
+
+  /**
+   * WRITE: Domain Object -> Bytes
+   * This is the inverse of the strategies above.
+   * Kept simple here to avoid updating 5 strategy files for now.
+   */
+  serialize(payload: ContentPayload): Uint8Array {
+    switch (payload.kind) {
+      case 'text':
+        return this.encoder.encode(payload.text);
+
+      case 'image':
+        // Images are stored as the full JSON object
+        return this.encoder.encode(JSON.stringify(payload));
+
+      case 'group-invite':
+      case 'group-system':
+      case 'rich':
+        // Wrapper types: We only persist the inner 'data' property
+        return this.encoder.encode(JSON.stringify(payload.data));
+
+      default:
+        return new Uint8Array([]);
     }
   }
 }

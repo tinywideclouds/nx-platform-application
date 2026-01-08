@@ -68,6 +68,7 @@ import {
   MessageContentParser,
   ReadReceiptData,
   ContactShareData,
+  ImageContent,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 export type OnboardingState =
@@ -641,6 +642,16 @@ export class ChatService {
     this.refreshActiveConversations();
   }
 
+  // ✅ NEW: Image Sending
+  public async sendImage(recipientUrn: URN, data: ImageContent): Promise<void> {
+    const keys = this.myKeys();
+    const sender = this.currentUserUrn();
+    if (!keys || !sender) return;
+
+    await this.conversationActions.sendImage(recipientUrn, data, keys, sender);
+    this.refreshActiveConversations();
+  }
+
   public async sendContactShare(
     recipientUrn: URN,
     data: ContactShareData,
@@ -767,10 +778,8 @@ export class ChatService {
             status: 'received',
             conversationUrn: targetConversationUrn || parsed.conversationId,
             tags: parsed.tags,
-            payloadBytes:
-              parsed.payload.kind === 'text'
-                ? new TextEncoder().encode(parsed.payload.text)
-                : new TextEncoder().encode(JSON.stringify(parsed.payload.data)),
+            // ✅ REFACTOR: Use Parser.serialize() here too
+            payloadBytes: this.parser.serialize(parsed.payload),
             textContent:
               parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
           });
