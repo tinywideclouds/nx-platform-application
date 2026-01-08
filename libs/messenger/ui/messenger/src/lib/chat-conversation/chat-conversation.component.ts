@@ -23,9 +23,10 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   MESSAGE_TYPE_TEXT,
   MESSAGE_TYPE_GROUP_INVITE,
-  MESSAGE_TYPE_IMAGE, // ✅ Import
-  ImageContent, // ✅ Import
+  MESSAGE_TYPE_IMAGE,
+  ImageContent,
   messageTagBroadcast,
+  ContentPayload, // ✅ Import
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
@@ -37,7 +38,6 @@ import {
   ChatInviteMessageComponent,
   InviteViewModel,
 } from '@nx-platform-application/messenger-ui-chat';
-// ✅ Import the Smart Wrapper we just fixed
 import { ChatInputComponent } from '../chat-input/chat-input.component';
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
 
@@ -84,9 +84,10 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
+  // Expose Constants to Template
   readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
   readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
-  readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE; // ✅ Exposed for template
+  readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE;
 
   constructor() {
     effect((onCleanup) => {
@@ -102,6 +103,14 @@ export class ChatConversationComponent {
   }
 
   // --- VIEW HELPERS ---
+
+  /**
+   * Safe Accessor for Switch Case
+   * Ensures we compare strings to strings
+   */
+  getTypeId(msg: ChatMessage): string {
+    return msg.typeId.toString();
+  }
 
   getReadCursorsForMessage(msgId: string): URN[] {
     const map = this.readCursors();
@@ -158,21 +167,44 @@ export class ChatConversationComponent {
     }
   }
 
-  // ✅ NEW: Helper to hydrate content for the renderer
-  getContentPayload(msg: ChatMessage): any {
-    if (!msg.payloadBytes) return null;
+  /**
+   * ✅ FIXED: Robust Payload Hydration
+   * 1. Prefers pre-decoded text (fixes broken text messages).
+   * 2. Safely handles Byte Arrays (fixes crashes on image decode).
+   */
+  getContentPayload(msg: ChatMessage): ContentPayload | null {
+    // A. Fast Path: Text (Pre-decoded by Mapper)
+    if (this.getTypeId(msg) === MESSAGE_TYPE_TEXT && msg.textContent) {
+      return { kind: 'text', text: msg.textContent };
+    }
+
+    // B. Safety Check
+    if (!msg.payloadBytes || (msg.payloadBytes as any).length === 0) {
+      return null;
+    }
+
     try {
-      // Fast decode for view layer
-      if (msg.typeId.toString() === MESSAGE_TYPE_TEXT) {
-        return {
-          kind: 'text',
-          text: new TextDecoder().decode(msg.payloadBytes),
-        };
+      // C. Normalization: Ensure Uint8Array (IndexedDB can return regular Arrays)
+      // This is often the cause of "Unsupported" or crash errors in decoders.
+      const bytes =
+        msg.payloadBytes instanceof Uint8Array
+          ? msg.payloadBytes
+          : new Uint8Array(Object.values(msg.payloadBytes));
+
+      const decoded = new TextDecoder().decode(bytes);
+
+      // Text Fallback (if bytes existed but textContent was null)
+      if (this.getTypeId(msg) === MESSAGE_TYPE_TEXT) {
+        return { kind: 'text', text: decoded };
       }
 
-      // JSON based types (Image, Contact)
-      return JSON.parse(new TextDecoder().decode(msg.payloadBytes));
-    } catch {
+      // JSON Content (Image, Contact, etc)
+      return JSON.parse(decoded);
+    } catch (e) {
+      console.warn(
+        `[ChatConversation] Failed to hydrate payload for ${msg.id}`,
+        e,
+      );
       return null;
     }
   }
@@ -236,7 +268,6 @@ export class ChatConversationComponent {
     }
   }
 
-  // ✅ NEW: Handle Image Send
   onSendImage(content: ImageContent): void {
     const recipient = this.selectedConversation();
     if (recipient) {

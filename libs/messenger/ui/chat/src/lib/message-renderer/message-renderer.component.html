@@ -9,6 +9,22 @@
         {{ $any(payload()).text }}
       </p>
     }
+    @case ('image') {
+      <div
+        class="relative group cursor-pointer overflow-hidden rounded-md mt-1"
+      >
+        <img
+          alt="thumbnail"
+          [src]="$any(payload()).thumbnailBase64"
+          alt="Image Attachment"
+          class="render-image max-w-full h-auto object-cover min-w-[120px] min-h-[120px] rounded-md border border-gray-200/20"
+        />
+
+        @if ($any(payload()).caption; as caption) {
+          <p class="mt-2 text-sm">{{ caption }}</p>
+        }
+      </div>
+    }
     @case ('rich') {
       @switch ($any(payload()).subType) {
         @case ('urn:message:type:contact-share') {
@@ -23,7 +39,7 @@
       <div
         class="p-2 bg-gray-100 rounded border border-gray-200 text-xs text-gray-500 italic"
       >
-        Unsupported message type
+        Unsupported message type {{ payload()!.kind }}
       </div>
     }
   }
