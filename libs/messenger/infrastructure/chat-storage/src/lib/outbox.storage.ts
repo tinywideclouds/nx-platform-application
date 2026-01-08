@@ -1,26 +1,10 @@
 import {
   OutboundTask,
+  OutboundMessageRequest,
   DeliveryStatus,
   RecipientProgress,
 } from '@nx-platform-application/messenger-types';
-import { URN } from '@nx-platform-application/platform-types';
 
-export interface OutboundMessageRequest {
-  conversationUrn: URN;
-  parentMessageId?: string;
-  typeId: URN;
-  payload: Uint8Array;
-
-  // ✅ ADDED: Explicit Recipients support (as discussed for Fan-Out)
-  // If undefined, implies 1:1 delivery to conversationUrn
-  recipients?: URN[];
-
-  textContent?: string;
-  tags?: URN[];
-
-  // Optional: Allow pre-minting ID if the domain needs to track it immediately
-  messageId?: string;
-}
 /**
  * CONTRACT: Outbox Storage
  * Defined in Infrastructure (Layer 1).

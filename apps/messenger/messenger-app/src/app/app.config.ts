@@ -31,7 +31,6 @@ import { MockContactsStorageService } from './mocks/mock-contacts-storage.servic
 
 // --- Contacts Infrastructure & API ---
 import {
-  ContactsFacadeService,
   ContactsQueryApi,
   AddressBookApi,
   AddressBookManagementApi,
@@ -40,6 +39,7 @@ import {
 } from '@nx-platform-application/contacts-api';
 
 import { GroupNetworkStorage } from '@nx-platform-application/contacts-storage';
+import { ContactsFacadeService } from '@nx-platform-application/contacts-state';
 
 // --- Service Tokens ---
 import { ROUTING_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-chat-access';

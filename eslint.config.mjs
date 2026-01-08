@@ -126,8 +126,7 @@ export default [
               sourceTag: 'layer:domain',
               onlyDependOnLibsWithTags: [
                 'layer:domain',
-                'layer:infrastructure', // Pragmatic: Domain imports Contracts from Infra
-                'layer:state', // Pragmatic: Domain imports Contacts State
+                'layer:infrastructure',
                 // Allow Types
                 'scope:types-messenger',
                 'scope:types-platform',
@@ -138,7 +137,6 @@ export default [
               sourceTag: 'layer:infrastructure',
               onlyDependOnLibsWithTags: [
                 'layer:infrastructure',
-                'layer:domain', // Pragmatic: Infra imports Domain Models
                 // Allow Types
                 'scope:types-messenger',
                 'scope:types-platform',

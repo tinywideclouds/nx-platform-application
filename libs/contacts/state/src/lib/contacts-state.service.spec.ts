@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ContactsStateService } from './contacts-state.service';
 import {
   ContactsStorageService,
-  DexieGatekeeperStorage,
+  GatekeeperStorage,
 } from '@nx-platform-application/contacts-storage';
 import {
   Contact,
@@ -17,7 +17,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 describe('ContactsStateService', () => {
   let service: ContactsStateService;
   let storage: ContactsStorageService;
-  let gatekeeper: DexieGatekeeperStorage;
+  let gatekeeper: GatekeeperStorage;
 
   const mockUserUrn = URN.parse('urn:contacts:user:alice');
   const mockBlockedUrn = URN.parse('urn:contacts:user:bob');
@@ -68,7 +68,7 @@ describe('ContactsStateService', () => {
           saveGroup: vi.fn().mockResolvedValue(undefined),
           getGroupsByParent: vi.fn().mockResolvedValue([]),
         }),
-        MockProvider(DexieGatekeeperStorage, {
+        MockProvider(GatekeeperStorage, {
           blocked$: of([mockBlockedEntry]),
           pending$: of([mockPendingEntry]),
           blockIdentity: vi.fn().mockResolvedValue(undefined),
@@ -82,7 +82,7 @@ describe('ContactsStateService', () => {
 
     service = TestBed.inject(ContactsStateService);
     storage = TestBed.inject(ContactsStorageService);
-    gatekeeper = TestBed.inject(DexieGatekeeperStorage);
+    gatekeeper = TestBed.inject(GatekeeperStorage);
 
     TestBed.flushEffects();
   });

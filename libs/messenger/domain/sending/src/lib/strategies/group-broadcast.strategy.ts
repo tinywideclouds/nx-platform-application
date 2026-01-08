@@ -3,7 +3,6 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   ChatStorageService,
   OutboxStorage,
-  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   MessageMetadataService,
@@ -14,6 +13,7 @@ import { IdentityResolver } from '@nx-platform-application/messenger-domain-iden
 import {
   MessageDeliveryStatus,
   ChatMessage,
+  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-types';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { SendStrategy, SendContext } from '../send-strategy.interface';

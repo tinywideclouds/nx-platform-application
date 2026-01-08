@@ -4,7 +4,7 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { OutboundTask } from '@nx-platform-application/messenger-domain-outbox';
+import { OutboundTask } from '@nx-platform-application/messenger-types';
 import { OutboxRecord } from '../records/outbox.record';
 
 describe('OutboxMapper', () => {

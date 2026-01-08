@@ -7,6 +7,7 @@ import {
   OutboundTask,
   DeliveryStatus,
   RecipientProgress,
+  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-types';
 import {
   MessengerDatabase,
@@ -15,7 +16,7 @@ import {
 import { Temporal } from '@js-temporal/polyfill';
 
 // ✅ UPDATED: Import the new Request type
-import { OutboxStorage, OutboundMessageRequest } from '../outbox.storage';
+import { OutboxStorage } from '../outbox.storage';
 
 @Injectable()
 export class DexieOutboxStorage implements OutboxStorage {

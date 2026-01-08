@@ -3,12 +3,14 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   ChatStorageService,
   OutboxStorage,
-  OutboundMessageRequest,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { MessageDeliveryStatus } from '@nx-platform-application/messenger-types';
+import {
+  MessageDeliveryStatus,
+  OutboundMessageRequest,
+} from '@nx-platform-application/messenger-types';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import {
   SendStrategy,

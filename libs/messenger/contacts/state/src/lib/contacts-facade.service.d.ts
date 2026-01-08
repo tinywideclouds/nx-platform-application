@@ -1,0 +1,34 @@
+import { Observable } from 'rxjs';
+import { URN } from '@nx-platform-application/platform-types';
+import { Contact, ContactGroup, BlockedIdentity, PendingIdentity } from '@nx-platform-application/contacts-types';
+import { ContactsQueryApi, ContactSummary } from '../../../api/src/lib/contacts.query.api';
+import { AddressBookApi } from '../../../api/src/lib/address-book.api';
+import { AddressBookManagementApi } from '../../../api/src/lib/address-book-management.api';
+import { GatekeeperApi } from '../../../api/src/lib/gatekeeper.api';
+import * as i0 from "@angular/core";
+export declare class ContactsFacadeService implements ContactsQueryApi, AddressBookApi, AddressBookManagementApi, GatekeeperApi {
+    private state;
+    readonly contacts$: Observable<Contact[]>;
+    readonly groups$: Observable<ContactGroup[]>;
+    getContact(id: URN): Promise<Contact | undefined>;
+    getGroup(id: URN): Promise<ContactGroup | undefined>;
+    getGroupsByParent(parentId: URN): Promise<ContactGroup[]>;
+    saveContact(contact: Contact): Promise<void>;
+    saveGroup(group: ContactGroup): Promise<void>;
+    createContact(alias: string, networkId?: URN): Promise<URN>;
+    clearData(): Promise<void>;
+    readonly blocked$: Observable<BlockedIdentity[]>;
+    readonly pending$: Observable<PendingIdentity[]>;
+    blockIdentity(urn: URN, scopes: string[], reason?: string): Promise<void>;
+    unblockIdentity(urn: URN): Promise<void>;
+    getAllBlockedIdentities(): Promise<BlockedIdentity[]>;
+    addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void>;
+    getPendingIdentity(urn: URN): Promise<PendingIdentity | null>;
+    deletePending(urn: URN): Promise<void>;
+    getGroupParticipants(groupUrn: URN): Promise<ContactSummary[]>;
+    isBlocked(urn: URN, scope: string): Promise<boolean>;
+    resolveIdentity(urn: URN): Promise<ContactSummary | null>;
+    private toSummary;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ContactsFacadeService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<ContactsFacadeService>;
+}
