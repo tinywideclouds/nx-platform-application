@@ -2,8 +2,8 @@ import { Routes } from '@angular/router';
 // Import the components from the auth-ui library [cite: 21]
 import {
   LoginSuccessComponent,
-  LoginComponent as RealLoginComponent
-} from '@nx-platform-application/platform-auth-ui';
+  LoginComponent as RealLoginComponent,
+} from '@nx-platform-application/platform-ui-auth';
 
 // 1. Import the new ContactsComponent
 import { ContactsComponent } from '@nx-platform-application/contacts-ui'; //
@@ -11,21 +11,23 @@ import { ContactsComponent } from '@nx-platform-application/contacts-ui'; //
 // Import the new guard
 import { authGuard } from './auth/auth.guard'; // [cite: 24]
 import { environment } from '../environments/environment';
-import { MockLoginComponent } from "./auth/mocks/mock-login.component";
-import { nonAuthGuard } from "./auth/non-auth.guard";
+import { MockLoginComponent } from './auth/mocks/mock-login.component';
+import { nonAuthGuard } from './auth/non-auth.guard';
 
 // Conditionally choose which component to use for the '/login' path
-const loginComponent = environment.useMocks ? MockLoginComponent : RealLoginComponent;
+const loginComponent = environment.useMocks
+  ? MockLoginComponent
+  : RealLoginComponent;
 
 export const appRoutes: Routes = [
   {
     path: 'login',
     component: loginComponent,
-    canActivate: [nonAuthGuard], 
+    canActivate: [nonAuthGuard],
   },
   {
     path: 'login-success',
-    component: LoginSuccessComponent, 
+    component: LoginSuccessComponent,
   },
   {
     path: 'messaging',
@@ -39,7 +41,7 @@ export const appRoutes: Routes = [
   {
     path: 'contacts',
     component: ContactsComponent,
-    canActivate: [authGuard] //
+    canActivate: [authGuard], //
   },
 
   {

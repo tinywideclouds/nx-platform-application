@@ -53,7 +53,7 @@ import { BlockedIdentity } from '@nx-platform-application/contacts-types';
 // Domain Services
 import {
   ConversationService,
-  ConversationActionService, // ✅ NEW
+  ConversationActionService,
 } from '@nx-platform-application/messenger-domain-conversation';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
@@ -62,6 +62,7 @@ import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-o
 import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
 
 import {
   MessageContentParser,
@@ -94,7 +95,7 @@ export class ChatService {
 
   // Domain Services
   private readonly conversationService = inject(ConversationService);
-  private readonly conversationActions = inject(ConversationActionService); // ✅ NEW
+  private readonly conversationActions = inject(ConversationActionService);
   private readonly syncService = inject(ChatSyncService);
   private readonly ingestionService = inject(IngestionService);
   private readonly keyWorker = inject(ChatKeyService);
@@ -103,11 +104,15 @@ export class ChatService {
   private readonly quarantineService = inject(QuarantineService);
   private readonly groupProtocol = inject(GroupProtocolService);
 
+  private readonly settingsService = inject(LocalSettingsService);
+
   private readonly destroyRef = inject(DestroyRef);
 
   private myKeys = signal<PrivateKeys | null>(null);
 
   private operationLock = Promise.resolve();
+
+  public readonly showWizard = signal<boolean>(false);
 
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
@@ -175,6 +180,32 @@ export class ChatService {
     });
   }
 
+  // --- UI State Management (Stub) ---
+  public setWizardActive(active: boolean): void {
+    this.showWizard.set(active);
+    // Persist the INVERSE (If active=true, seen=false. If active=false, seen=true)
+    // Actually, "Active" usually means "Show it".
+    // If the user manually toggles it ON, we don't necessarily change "seen",
+    // but if they close it, we mark "seen" as true.
+
+    // Logic: If we are hiding it, we assume the user is "done" with it.
+    if (!active) {
+      this.settingsService.setWizardSeen(true);
+    } else {
+      // If they explicitly open it via settings, we can leave "seen" alone or reset it.
+    }
+  }
+
+  private async loadUiSettings(): Promise<void> {
+    try {
+      const seen = await this.settingsService.getWizardSeen();
+      // If NOT seen, show the wizard
+      this.showWizard.set(!seen);
+    } catch (e) {
+      this.logger.warn('[ChatService] Failed to load UI settings', e);
+    }
+  }
+
   public notifyTyping(): void {
     this.conversationService.notifyTyping();
   }
@@ -186,6 +217,8 @@ export class ChatService {
 
       const currentUser = this.authService.currentUser();
       if (!currentUser) throw new Error('Authentication failed.');
+
+      this.loadUiSettings();
 
       const senderUrn = this.currentUserUrn();
       if (!senderUrn) throw new Error('No user URN found');

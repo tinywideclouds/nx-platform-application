@@ -1,123 +1,128 @@
-import { Injectable, inject, signal } from '@angular/core';
+// libs/messenger/state/cloud-sync/src/lib/cloud-sync.service.ts
+
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';
-import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
-import { CLOUD_PROVIDERS } from '@nx-platform-application/platform-cloud-access';
-import { SyncOptions, SyncResult } from './models/sync-options.interface';
 
-const GOOGLE_SCOPES = {
-  DRIVE: 'https://www.googleapis.com/auth/drive.file',
-};
+import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
+import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
+import { StorageService } from '@nx-platform-application/platform-domain-storage';
+
+import { SyncOptions, SyncResult } from './models/sync-options.interface';
 
 @Injectable({ providedIn: 'root' })
 export class CloudSyncService {
   private logger = inject(Logger);
-  private contactsCloud = inject(ContactsCloudService);
+  private storage = inject(StorageService);
+  private contactsSync = inject(ContactsSyncService);
   private chatSync = inject(ChatSyncService);
-  private providers = inject(CLOUD_PROVIDERS, { optional: true }) || [];
 
+  // --- STATE ---
   public readonly isSyncing = signal<boolean>(false);
   public readonly lastSyncResult = signal<SyncResult | null>(null);
 
-  async connect(
-    providerId: string,
-    options?: { syncContacts?: boolean; syncMessages?: boolean },
-  ): Promise<boolean> {
-    const provider = this.providers.find((p) => p.providerId === providerId);
-    if (!provider) return false;
+  // Expose the underlying storage connection state as a signal
+  // Assumes StorageService.isConnected is a signal (based on your specs)
+  public readonly isConnected = this.storage.isConnected;
 
-    const scopes: string[] = [];
-    if (!options || options.syncMessages) {
-      scopes.push(GOOGLE_SCOPES.DRIVE);
+  async connect(providerId: string): Promise<boolean> {
+    return await this.storage.connect(providerId);
+  }
+
+  /**
+   * Disconnects the storage provider.
+   * Prevents execution if a sync is currently active.
+   */
+  async revokePermission(): Promise<void> {
+    if (this.isSyncing()) {
+      this.logger.warn(
+        '[CloudSync] Cannot revoke permission: Sync in progress.',
+      );
+      return;
     }
-    return await provider.requestAccess(scopes);
+
+    try {
+      this.logger.info('[CloudSync] Revoking storage permissions...');
+      // Use true to ensure the driver unlinks/revokes tokens
+      await this.storage.disconnect();
+      this.lastSyncResult.set(null);
+    } catch (e: any) {
+      this.logger.error('[CloudSync] Revoke failed', e);
+      throw e;
+    }
   }
 
   hasPermission(providerId: string): boolean {
-    const provider = this.providers.find((p) => p.providerId === providerId);
-    return provider ? provider.hasPermission() : false;
+    return this.storage.isConnected();
   }
 
   async syncNow(options: SyncOptions): Promise<SyncResult> {
     if (this.isSyncing()) throw new Error('Sync already in progress');
 
-    const result: SyncResult = {
+    const result = this.initResult();
+
+    if (!this.storage.isConnected()) {
+      return this.fail(result, 'Auth: No storage connected');
+    }
+
+    this.isSyncing.set(true);
+
+    try {
+      // 1. Contacts Sync
+      if (options.syncContacts) {
+        try {
+          await this.contactsSync.restore();
+          await this.contactsSync.backup();
+          result.contactsProcessed = true;
+        } catch (e: any) {
+          this.logger.error('[CloudSync] Contacts failed', e);
+          result.errors.push(`Contacts: ${e.message || 'Unknown Error'}`);
+        }
+      }
+
+      // 2. Messenger Sync
+      if (options.syncMessages) {
+        try {
+          const success = await this.chatSync.syncMessages();
+          result.messagesProcessed = success;
+          if (!success) {
+            result.errors.push('Messenger: Sync returned false');
+          }
+        } catch (e: any) {
+          this.logger.error('[CloudSync] Messenger failed', e);
+          result.errors.push(`Messenger: ${e.message || 'Unknown Error'}`);
+        }
+      }
+
+      // 3. Determine Overall Success (Relaxed Logic)
+      // Success = Clean Run OR At least one domain succeeded
+      const cleanRun = result.errors.length === 0;
+      const partialSuccess =
+        result.contactsProcessed || result.messagesProcessed;
+
+      result.success = cleanRun || partialSuccess;
+    } finally {
+      this.isSyncing.set(false);
+      this.lastSyncResult.set(result);
+    }
+
+    return result;
+  }
+
+  private initResult(): SyncResult {
+    return {
       success: true,
       contactsProcessed: false,
       messagesProcessed: false,
       errors: [],
       timestamp: Temporal.Now.instant().toString(),
     };
+  }
 
-    if (!this.hasPermission(options.providerId)) {
-      try {
-        const granted = await this.connect(options.providerId, {
-          syncContacts: options.syncContacts,
-          syncMessages: options.syncMessages,
-        });
-        if (!granted) throw new Error('User denied cloud access.');
-      } catch (e: any) {
-        this.logger.error('[CloudSync] Auth failed', e);
-        result.success = false;
-        result.errors.push(`Auth: ${e.message}`);
-        this.lastSyncResult.set(result);
-        return result;
-      }
-    }
-
-    this.isSyncing.set(true);
-
-    try {
-      this.logger.info(`[CloudSync] Syncing with ${options.providerId}...`);
-
-      // --- CONTACTS PHASE ---
-      if (options.syncContacts) {
-        try {
-          const backups = await this.contactsCloud.listBackups(
-            options.providerId,
-          );
-          if (backups.length > 0) {
-            const latest = backups.sort((a, b) =>
-              b.createdAt.localeCompare(a.createdAt),
-            )[0];
-            await this.contactsCloud.restoreFromCloud(
-              options.providerId,
-              latest.name,
-            );
-          }
-          await this.contactsCloud.backupToCloud(options.providerId);
-          result.contactsProcessed = true;
-        } catch (e: any) {
-          this.logger.error('[CloudSync] Contacts Sync Failed', e);
-          result.errors.push(`Contacts: ${e.message}`);
-        }
-      }
-
-      // --- MESSENGER PHASE ---
-      if (options.syncMessages) {
-        try {
-          const success = await this.chatSync.syncMessages(options.providerId);
-
-          if (success) {
-            result.messagesProcessed = true;
-          } else {
-            throw new Error('Messenger Sync returned failure status.');
-          }
-        } catch (e: any) {
-          this.logger.error('[CloudSync] Messenger Sync Failed', e);
-          result.errors.push(`Messenger: ${e.message}`);
-        }
-      }
-    } catch (e: any) {
-      this.logger.error('[CloudSync] Critical Failure', e);
-      result.success = false;
-      result.errors.push(`Critical: ${e.message}`);
-    } finally {
-      this.isSyncing.set(false);
-      this.lastSyncResult.set(result);
-    }
-
+  private fail(result: SyncResult, msg: string): SyncResult {
+    result.success = false;
+    result.errors.push(msg);
+    this.lastSyncResult.set(result);
     return result;
   }
 }

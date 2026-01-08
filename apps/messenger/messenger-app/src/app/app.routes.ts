@@ -1,45 +1,42 @@
 // apps/messenger/messenger-app/src/app/app.routes.ts
 
 import { Routes } from '@angular/router';
-import {
-  messengerRoutes,
-} from '@nx-platform-application/messenger-ui';
+import { messengerRoutes } from '@nx-platform-application/messenger-ui';
 
 import {
   LoginSuccessComponent,
-  LoginComponent as RealLoginComponent
-} from '@nx-platform-application/platform-auth-ui';
+  LoginComponent as RealLoginComponent,
+} from '@nx-platform-application/platform-ui-auth';
 
 import { authGuard } from './auth/auth.guard';
 import { nonAuthGuard } from './auth/non-auth.guard';
 import { environment } from './environments/environment';
-import { MockLoginComponent } from '@nx-platform-application/platform-auth-ui/mocks';
 
-const loginComponent = environment.useMocks ? MockLoginComponent : RealLoginComponent;
+const loginComponent = RealLoginComponent;
 
 export const appRoutes: Routes = [
   {
     path: 'login',
     component: loginComponent,
-    canActivate: [nonAuthGuard], 
+    canActivate: [nonAuthGuard],
   },
   {
     path: 'login-success',
-    component: LoginSuccessComponent, 
+    component: LoginSuccessComponent,
   },
-  
+
   // === FIX STARTS HERE ===
   // 1. Redirect root to /messenger
   {
     path: '',
     redirectTo: 'messenger',
-    pathMatch: 'full'
+    pathMatch: 'full',
   },
   // 2. Mount the library under the 'messenger' path
   {
-    path: 'messenger', 
+    path: 'messenger',
     canActivate: [authGuard],
-    children: messengerRoutes 
+    children: messengerRoutes,
   },
   // === FIX ENDS HERE ===
 

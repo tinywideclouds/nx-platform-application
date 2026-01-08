@@ -54,6 +54,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
+import { StickyWizardComponent } from '@nx-platform-application/messenger-settings-ui';
+
 @Component({
   selector: 'messenger-chat-page',
   standalone: true,
@@ -71,6 +73,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     ContactsSidebarComponent,
     ListFilterComponent,
     MessageRequestReviewComponent,
+    StickyWizardComponent,
   ],
   templateUrl: './messenger-chat-page.component.html',
   styleUrl: './messenger-chat-page.component.scss',
@@ -81,13 +84,17 @@ export class MessengerChatPageComponent {
   private route = inject(ActivatedRoute);
   private chatService = inject(ChatService);
 
-  // ✅ REFACTOR: Inject New APIs
   private addressBook = inject(AddressBookApi);
   private addressBookManager = inject(AddressBookManagementApi);
   private gatekeeper = inject(GatekeeperApi);
 
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+
+  showDetail = computed(() => !!this.selectedConversationUrn());
+  hasConversations = computed(() => this.conversationsList().length > 0);
+
+  showWizard = this.chatService.showWizard;
 
   // --- STATE SIGNALS ---
   /**
@@ -330,14 +337,12 @@ export class MessengerChatPageComponent {
       };
 
       // 3. Save Contact
-      // ✅ REFACTOR: Use AddressBookManagementApi for Write
       await this.addressBookManager.saveContact(newContact);
 
       // 4. Promote Messages (Data Move + Index Update)
       await this.chatService.promoteQuarantinedMessages(urn, newContactId);
 
       // 5. Cleanup Pending
-      // ✅ REFACTOR: Use GatekeeperApi
       await this.gatekeeper.deletePending(urn);
 
       // 6. Redirect to "Edit Contact" Page
@@ -437,6 +442,7 @@ export class MessengerChatPageComponent {
     });
   }
 
-  showDetail = computed(() => !!this.selectedConversationUrn());
-  hasConversations = computed(() => this.conversationsList().length > 0);
+  onCloseWizard() {
+    this.chatService.setWizardActive(false);
+  }
 }

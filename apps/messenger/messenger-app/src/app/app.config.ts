@@ -22,17 +22,12 @@ import {
   AuthService,
   AUTH_API_URL,
 } from '@nx-platform-application/platform-auth-access';
-import {
-  MOCK_USERS_TOKEN,
-  MockAuthService,
-} from '@nx-platform-application/platform-auth-ui/mocks';
 
 // --- Mock Providers ---
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 import { MockChatService } from './mocks/mock-chat.service';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
-import { MESSENGER_MOCK_USERS } from './mocks/users';
 
 // --- Contacts Infrastructure & API ---
 import {
@@ -64,11 +59,7 @@ import {
 } from '@nx-platform-application/console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
-import {
-  PLATFORM_CLOUD_CONFIG,
-  CLOUD_PROVIDERS,
-  GoogleDriveService,
-} from '@nx-platform-application/platform-cloud-access';
+
 import { provideMessengerIdentity } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 // --- Infrastructure: Implementation & Ports ---
@@ -82,10 +73,15 @@ import {
   QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
+// ✅ NEW: Platform Infrastructure Storage
+import {
+  VaultDrivers,
+  PlatformStorageConfig,
+  GoogleDriveDriver,
+} from '@nx-platform-application/platform-infrastructure-storage';
+
 // --- Conditional Mock Providers ---
-const authProviders = environment.useMocks
-  ? [MockAuthService, { provide: IAuthService, useExisting: MockAuthService }]
-  : [{ provide: IAuthService, useExisting: AuthService }];
+const authProviders = [{ provide: IAuthService, useExisting: AuthService }];
 
 const chatProvider = environment.useMocks
   ? { provide: ChatService, useClass: MockChatService }
@@ -93,10 +89,6 @@ const chatProvider = environment.useMocks
 
 const contactsProvider = environment.useMocks
   ? { provide: ContactsStorageService, useClass: MockContactsStorageService }
-  : [];
-
-const mockUserProvider = environment.useMocks
-  ? { provide: MOCK_USERS_TOKEN, useValue: MESSENGER_MOCK_USERS }
   : [];
 
 // --- Token Providers ---
@@ -127,16 +119,22 @@ const tokenProviders = environment.useMocks
         provide: VAPID_PUBLIC_KEY,
         useValue: environment.vapidPublicKey,
       },
-      {
-        provide: PLATFORM_CLOUD_CONFIG,
-        useValue: {
-          googleClientId: environment.googleClientId,
-        },
-      },
     ];
 
+// ✅ NEW: Cloud Providers (Storage + Config)
 const cloudProviders = [
-  { provide: CLOUD_PROVIDERS, useClass: GoogleDriveService, multi: true },
+  {
+    provide: PlatformStorageConfig,
+    useValue: {
+      googleClientId: environment.googleClientId,
+      // Add googleApiKey here if environment supports it and GAPI needs it
+    } as PlatformStorageConfig,
+  },
+  {
+    provide: VaultDrivers, // The "Menu" of drivers
+    useClass: GoogleDriveDriver, // The implementation
+    multi: true,
+  },
 ];
 
 export function initializeAuthFactory(
@@ -162,17 +160,14 @@ export const appConfig: ApplicationConfig = {
     ...authProviders,
     provideMessengerIdentity(),
 
-    // ✅ Wiring Contacts API Ports
-    // 1. Facade takes roles for external access (Messenger Domain)
+    // --- Contacts API Ports ---
     { provide: ContactsQueryApi, useExisting: ContactsFacadeService },
     { provide: AddressBookApi, useExisting: ContactsFacadeService },
     { provide: AddressBookManagementApi, useExisting: ContactsFacadeService },
     { provide: GatekeeperApi, useExisting: ContactsFacadeService },
-
-    // 2. Protocol Storage (Bypasses State for atomic writes)
     { provide: GroupNetworkStorageApi, useClass: GroupNetworkStorage },
 
-    // ✅ Wiring Chat Domain Ports
+    // --- Chat Domain Ports ---
     { provide: HistoryReader, useExisting: ChatStorageService },
     { provide: ConversationStorage, useExisting: ChatStorageService },
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
@@ -181,8 +176,8 @@ export const appConfig: ApplicationConfig = {
     chatProvider,
     contactsProvider,
     ...tokenProviders,
-    mockUserProvider,
-    ...cloudProviders,
+    ...cloudProviders, // ✅ Wired
+
     {
       provide: LOGGER_CONFIG,
       useValue: {

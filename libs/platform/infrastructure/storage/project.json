@@ -1,0 +1,13 @@
+{
+  "name": "platform-infrastructure-storage",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/infrastructure/storage/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

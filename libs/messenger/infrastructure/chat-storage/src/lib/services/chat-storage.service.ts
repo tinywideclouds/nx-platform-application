@@ -1,3 +1,5 @@
+// libs/messenger/infrastructure/chat-storage/src/lib/services/chat-storage.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import { Dexie } from 'dexie';
 import { Temporal } from '@js-temporal/polyfill';
@@ -18,6 +20,7 @@ import {
   MessageMapper,
   ConversationMapper,
   ConversationIndexRecord,
+  DeletedMessageRecord,
   generateSnippet,
   getPreviewType,
 } from '@nx-platform-application/messenger-infrastructure-db-schema';
@@ -37,6 +40,8 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
   private readonly messageMapper = inject(MessageMapper);
   private readonly conversationMapper = inject(ConversationMapper);
 
+  // --- HISTORY READER IMPLEMENTATION ---
+
   async getMessages(query: HistoryQuery): Promise<HistoryResult> {
     const messages = await this.loadHistorySegment(
       query.conversationUrn,
@@ -53,6 +58,8 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
   async getConversationSummaries(): Promise<ConversationSummary[]> {
     return this.loadConversationSummaries();
   }
+
+  // --- CORE LOADERS ---
 
   async loadHistorySegment(
     conversationUrn: URN,
@@ -75,7 +82,6 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     return records.map((r) => this.messageMapper.toDomain(r));
   }
 
-  // ✅ NEW: Ability to fetch a single message by ID
   async getMessage(id: string): Promise<ChatMessage | undefined> {
     const record = await this.db.messages.get(id);
     if (!record) return undefined;
@@ -91,11 +97,56 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     return records.map((r) => this.conversationMapper.toDomain(r));
   }
 
+  // --- METADATA & GENESIS ---
+
   async setGenesisTimestamp(
     urn: URN,
     timestamp: ISODateTimeString,
   ): Promise<void> {
     await this.updateConversation(urn, { genesisTimestamp: timestamp });
+  }
+
+  async getDataRange(): Promise<{ min: string; max: string } | null> {
+    const first = await this.db.messages.orderBy('sentTimestamp').first();
+    const last = await this.db.messages.orderBy('sentTimestamp').last();
+
+    if (!first || !last) return null;
+    return {
+      min: first.sentTimestamp,
+      max: last.sentTimestamp,
+    };
+  }
+
+  // --- CLOUD SYNC HELPERS ---
+
+  async getMessagesAfter(isoDate: string): Promise<ChatMessage[]> {
+    const records = await this.db.messages
+      .where('sentTimestamp')
+      .above(isoDate)
+      .toArray();
+
+    return records.map((r) => this.messageMapper.toDomain(r));
+  }
+
+  async getTombstonesAfter(isoDate: string): Promise<MessageTombstone[]> {
+    const records = await this.db.tombstones
+      .where('deletedAt')
+      .above(isoDate)
+      .toArray();
+
+    return records.map((r) => ({
+      messageId: r.messageId,
+      conversationUrn: URN.parse(r.conversationUrn),
+      deletedAt: r.deletedAt,
+    }));
+  }
+
+  async getMessagesInRange(start: string, end: string): Promise<ChatMessage[]> {
+    const records = await this.db.messages
+      .where('sentTimestamp')
+      .between(start, end)
+      .toArray();
+    return records.map((r) => this.messageMapper.toDomain(r));
   }
 
   async getTombstonesInRange(
@@ -114,24 +165,7 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     }));
   }
 
-  async getDataRange(): Promise<{ min: string; max: string } | null> {
-    const first = await this.db.messages.orderBy('sentTimestamp').first();
-    const last = await this.db.messages.orderBy('sentTimestamp').last();
-
-    if (!first || !last) return null;
-    return {
-      min: first.sentTimestamp,
-      max: last.sentTimestamp,
-    };
-  }
-
-  async getMessagesInRange(start: string, end: string): Promise<ChatMessage[]> {
-    const records = await this.db.messages
-      .where('sentTimestamp')
-      .between(start, end)
-      .toArray();
-    return records.map((r) => this.messageMapper.toDomain(r));
-  }
+  // --- SETTINGS ---
 
   async setCloudEnabled(enabled: boolean): Promise<void> {
     await this.db.settings.put({ key: 'cloud_enabled', value: enabled });
@@ -141,6 +175,8 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     const setting = await this.db.settings.get('cloud_enabled');
     return setting?.value ?? false;
   }
+
+  // --- RECEIPTS & STATUS ---
 
   async applyReceipt(
     messageId: string,
@@ -155,10 +191,10 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
         if (!record) return;
 
         const domainMsg = this.messageMapper.toDomain(record);
-        let newGlobalStatus = domainMsg.status; // Track if status changes
+        let newGlobalStatus = domainMsg.status;
 
         if (domainMsg.receiptMap) {
-          // === MODE A: High Fidelity (Tier 1 & 2) ===
+          // MODE A: High Fidelity
           domainMsg.receiptMap[readerUrn.toString()] = status;
 
           const values = Object.values(domainMsg.receiptMap);
@@ -174,7 +210,7 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
             }
           }
         } else {
-          // === MODE B: Low Fidelity (Tier 3) ===
+          // MODE B: Low Fidelity
           if (status === 'read') {
             newGlobalStatus = 'read';
           } else if (status === 'delivered' && domainMsg.status !== 'read') {
@@ -182,13 +218,11 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
           }
         }
 
-        // 1. Update the Main Record
+        // Update Main Record
         domainMsg.status = newGlobalStatus;
         await this.saveInternal(domainMsg);
 
-        // ✅ FIX: Sync status to Ghosts (1:1 Chats)
-        // If this is the Main Message, find its ghosts and update them.
-        // We use the tag index for speed: *tags
+        // Sync to Ghosts (Fan-out copies)
         if (newGlobalStatus) {
           const ghostTag = `urn:messenger:ghost-of:${messageId}`;
           await this.db.messages
@@ -199,6 +233,8 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
       },
     );
   }
+
+  // --- BULK OPERATIONS ---
 
   async bulkSaveMessages(messages: ChatMessage[]): Promise<void> {
     for (let i = 0; i < messages.length; i += BULK_SAVE_CHUNK_SIZE) {
@@ -214,6 +250,26 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
         },
       );
     }
+  }
+
+  async bulkSaveTombstones(tombstones: MessageTombstone[]): Promise<void> {
+    if (tombstones.length === 0) return;
+
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.tombstones],
+      async () => {
+        const records: DeletedMessageRecord[] = tombstones.map((t) => ({
+          messageId: t.messageId,
+          conversationUrn: t.conversationUrn.toString(),
+          deletedAt: t.deletedAt as ISODateTimeString,
+        }));
+        await this.db.tombstones.bulkPut(records);
+
+        const ids = tombstones.map((t) => t.messageId);
+        await this.db.messages.bulkDelete(ids);
+      },
+    );
   }
 
   async bulkSaveConversations(
@@ -243,6 +299,8 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
       lastModified: r.lastModified,
     }));
   }
+
+  // --- CORE WRITE (ConversationStorage Contract) ---
 
   async saveMessage(message: ChatMessage): Promise<void> {
     await this.db.transaction(
@@ -297,6 +355,8 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
     await this.db.conversations.put(update);
   }
 
+  // --- CONVERSATION STORAGE CONTRACT (Updates) ---
+
   async getConversationIndex(
     conversationUrn: URN,
   ): Promise<ConversationSyncState | undefined> {
@@ -349,6 +409,17 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
         await this.db.tombstones.clear();
       },
     );
+  }
+
+  /**
+   * MAINTENANCE: Prune old tombstones.
+   * Prevents DB bloat from years of deletion records.
+   */
+  async pruneTombstones(olderThan: ISODateTimeString): Promise<number> {
+    return await this.db.tombstones
+      .where('deletedAt')
+      .below(olderThan)
+      .delete();
   }
 
   async clearDatabase(): Promise<void> {

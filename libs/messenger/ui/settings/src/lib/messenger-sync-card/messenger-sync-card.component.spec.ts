@@ -1,37 +1,49 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MessengerSyncCardComponent } from './messenger-sync-card.component';
-import {
-  CloudSyncService,
-  SyncResult,
-} from '@nx-platform-application/messenger-state-cloud-sync';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { MockProvider } from 'ng-mocks';
+import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
+import { StorageService } from '@nx-platform-application/platform-domain-storage';
+import { MatDialog } from '@angular/material/dialog';
+import { of } from 'rxjs';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
-import { vi } from 'vitest';
 
 describe('MessengerSyncCardComponent', () => {
   let component: MessengerSyncCardComponent;
   let fixture: ComponentFixture<MessengerSyncCardComponent>;
 
-  // Mock Service State
-  let mockSyncService: {
-    isSyncing: any;
-    lastSyncResult: any;
-    syncNow: any;
+  const mockChatService = {
+    clearLocalMessages: vi.fn(),
+    fullDeviceWipe: vi.fn(),
+  };
+
+  const mockCloudSync = {
+    isSyncing: signal(false),
+    lastSyncResult: signal(null),
+    connect: vi.fn().mockResolvedValue(true),
+    syncNow: vi.fn(),
+  };
+
+  // Mock StorageService with the Signal confirmed by cloud-sync.service.spec.ts
+  const mockStorageService = {
+    isConnected: signal(true),
+    disconnect: vi.fn().mockResolvedValue(true),
+  };
+
+  const mockDialog = {
+    open: vi.fn().mockReturnValue({
+      afterClosed: () => of(true),
+    }),
   };
 
   beforeEach(async () => {
-    mockSyncService = {
-      isSyncing: signal(false),
-      lastSyncResult: signal<SyncResult | null>(null),
-      syncNow: vi.fn().mockResolvedValue({ success: true, errors: [] }),
-    };
-
     await TestBed.configureTestingModule({
       imports: [MessengerSyncCardComponent],
       providers: [
-        { provide: CloudSyncService, useValue: mockSyncService },
-        MockProvider(MatSnackBar),
+        { provide: ChatService, useValue: mockChatService },
+        { provide: CloudSyncService, useValue: mockCloudSync },
+        { provide: StorageService, useValue: mockStorageService },
+        { provide: MatDialog, useValue: mockDialog },
       ],
     }).compileComponents();
 
@@ -44,40 +56,46 @@ describe('MessengerSyncCardComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should default to syncing both Contacts and Messages', () => {
-    expect(component.syncContacts()).toBe(true);
-    expect(component.syncMessages()).toBe(true);
+  it('should bind connection state to StorageService', () => {
+    expect(component.isCloudEnabled()).toBe(true);
+    mockStorageService.isConnected.set(false);
+    fixture.detectChanges();
+    expect(component.isCloudEnabled()).toBe(false);
   });
 
-  it('should trigger sync service with correct options', async () => {
-    // 1. Arrange: User unchecks messages
-    component.syncMessages.set(false);
+  describe('Actions', () => {
+    it('should call connect and sync when toggled ON', async () => {
+      await component.toggleCloudSync(true);
+      expect(mockCloudSync.connect).toHaveBeenCalledWith('google');
+      expect(mockCloudSync.syncNow).toHaveBeenCalled();
+    });
 
-    // 2. Act
-    await component.triggerSync();
+    it('should call disconnect when toggled OFF', async () => {
+      await component.toggleCloudSync(false);
+      expect(mockStorageService.disconnect).toHaveBeenCalled();
+    });
 
-    // 3. Assert
-    expect(mockSyncService.syncNow).toHaveBeenCalledWith({
-      providerId: 'google',
-      syncContacts: true,
-      syncMessages: false,
+    it('should trigger secure logout', () => {
+      component.onSecureLogout();
+      expect(mockDialog.open).toHaveBeenCalled();
+      expect(mockChatService.fullDeviceWipe).toHaveBeenCalled();
     });
   });
 
-  it('should disable button when syncing', () => {
-    mockSyncService.isSyncing.set(true);
-    fixture.detectChanges();
+  describe('Wizard Mode', () => {
+    beforeEach(() => {
+      fixture.componentRef.setInput('mode', 'wizard');
+      fixture.detectChanges();
+    });
 
-    const btn = fixture.nativeElement.querySelector('button');
-    expect(btn.disabled).toBe(true);
-  });
+    it('should hide Header', () => {
+      const header = fixture.nativeElement.querySelector('header');
+      expect(header).toBeNull();
+    });
 
-  it('should disable button when no options selected', () => {
-    component.syncContacts.set(false);
-    component.syncMessages.set(false);
-    fixture.detectChanges();
-
-    const btn = fixture.nativeElement.querySelector('button');
-    expect(btn.disabled).toBe(true);
+    it('should show Local First Annotation', () => {
+      const text = fixture.nativeElement.textContent;
+      expect(text).toContain('Local-First Architecture');
+    });
   });
 });

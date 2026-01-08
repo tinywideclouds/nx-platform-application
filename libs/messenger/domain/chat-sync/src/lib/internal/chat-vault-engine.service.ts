@@ -1,374 +1,262 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
   ChatMessage,
-  ConversationSyncState,
   MessageTombstone,
 } from '@nx-platform-application/messenger-types';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import {
-  CLOUD_PROVIDERS,
-  CloudStorageProvider,
-} from '@nx-platform-application/platform-cloud-access';
-import { ChatVault, VaultManifest } from './models/chat-vault.interface';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
+import { StorageService } from '@nx-platform-application/platform-domain-storage';
 
-const VAULT_SCHEMA_VERSION = 1;
+const CURSOR_KEY = 'tinywide_sync_cursor';
 const BASE_PATH = 'tinywide/messaging';
+const COMPACTION_THRESHOLD = 10; // Compact if > 10 deltas found
 
 @Injectable({ providedIn: 'root' })
 export class ChatVaultEngine {
   private logger = inject(Logger);
   private storage = inject(ChatStorageService);
-  private providers = inject(CLOUD_PROVIDERS, { optional: true }) || [];
+  private cloudStorage = inject(StorageService);
 
   // --- State ---
-  private _isCloudEnabled = signal<boolean>(false);
-  public readonly isCloudEnabled = this._isCloudEnabled.asReadonly();
-
-  // Note: 'isBackingUp' is now managed by the Facade (ChatSyncService)
-  // or the Orchestrator, but the Engine tracks its own operational state if needed.
-
-  constructor() {
-    this.initCloudState();
-  }
-
-  // --- Initialization & Connection ---
-  private async initCloudState(): Promise<void> {
-    try {
-      const enabled = await this.storage.isCloudEnabled();
-      this._isCloudEnabled.set(enabled);
-      if (enabled) {
-        this.logger.info('[ChatVaultEngine] Restored "Online" state.');
-      }
-    } catch (e) {
-      this.logger.error('[ChatVaultEngine] Failed to restore cloud state', e);
-    }
-  }
-
-  async connect(providerId: string): Promise<boolean> {
-    const provider = this.getProvider(providerId);
-    // The Orchestrator handles the popup/auth, but we verify we have access here
-    const granted = await provider.requestAccess();
-    if (granted) {
-      await this.setCloudEnabled(true);
-      return true;
-    }
-    return false;
-  }
-
-  async disconnect(): Promise<void> {
-    await this.setCloudEnabled(false);
-  }
-
-  // --- GLOBAL INDEX (Sidebar Sync) ---
-
-  async syncIndex(): Promise<void> {
-    if (!this.isCloudEnabled()) return;
-    const provider = this.providers.find((p) => p.hasPermission());
-    if (!provider) return;
-
-    try {
-      // Returns ConversationSyncState[]
-      const allConversations = await this.storage.getAllConversations();
-      if (allConversations.length === 0) return;
-
-      const path = `${BASE_PATH}/chat_index.json`;
-
-      // JSON.stringify handles URN.toString() automatically
-      await provider.uploadFile(allConversations, path);
-      this.logger.info(`[ChatVaultEngine] Synced Global Index to ${path}`);
-    } catch (e) {
-      this.logger.error('[ChatVaultEngine] Failed to sync Global Index', e);
-    }
-  }
-
-  async restoreIndex(): Promise<boolean> {
-    if (!this.isCloudEnabled()) return false;
-    const provider = this.providers.find((p) => p.hasPermission());
-    if (!provider) return false;
-
-    try {
-      const path = `${BASE_PATH}/chat_index.json`;
-      this.logger.info(`[ChatVaultEngine] Restoring Index from ${path}...`);
-
-      const rawIndex = await provider.downloadFile<any[]>(path);
-
-      if (rawIndex && Array.isArray(rawIndex) && rawIndex.length > 0) {
-        // HYDRATION: Convert JSON strings back to URN objects
-        const hydratedIndex: ConversationSyncState[] = rawIndex.map((r) => ({
-          ...r,
-          conversationUrn: URN.parse(r.conversationUrn),
-        }));
-
-        await this.storage.bulkSaveConversations(hydratedIndex);
-        this.logger.info(
-          `[ChatVaultEngine] Restored ${hydratedIndex.length} chats.`,
-        );
-        return true;
-      }
-    } catch (e) {
-      this.logger.warn(
-        '[ChatVaultEngine] Global Index not found (Fresh Install?)',
-      );
-    }
-    return false;
-  }
-
-  // --- RESTORE (Smart & Lazy) ---
-
-  async restoreVaultForDate(date: string, filterUrn?: URN): Promise<number> {
-    if (!this.isCloudEnabled()) return 0;
-
-    const provider = this.providers.find((p) => p.hasPermission());
-    if (!provider) return 0;
-
-    const vaultId = this.getVaultIdFromDate(date);
-    const year = vaultId.split('_')[0];
-
-    const vaultPath = `${BASE_PATH}/${year}/chat_vault_${vaultId}.json`;
-    const manifestPath = `${BASE_PATH}/${year}/chat_manifest_${vaultId}.json`;
-
-    // 1. GATEKEEPER CHECK (Manifest)
-    if (filterUrn) {
-      const shouldDownload = await this.checkManifest(
-        provider,
-        manifestPath,
-        filterUrn,
-      );
-      if (!shouldDownload) {
-        return 0; // Optimization: Skipped
-      }
-    }
-
-    // 2. HEAVY LIFT (Download Vault)
-    try {
-      const vault = await provider.downloadFile<ChatVault>(vaultPath);
-
-      if (vault && vault.messages && vault.messages.length > 0) {
-        // HYDRATION: Ensure JSON strings are converted to URNs
-        const hydratedMessages = vault.messages.map(this.hydrateMessage);
-
-        await this.storage.bulkSaveMessages(hydratedMessages);
-        return vault.messages.length;
-      }
-    } catch (e) {
-      this.logger.warn(`[ChatVaultEngine] Vault not found at ${vaultPath}`);
-    }
-
-    return 0;
-  }
-
-  private async checkManifest(
-    provider: CloudStorageProvider,
-    manifestPath: string,
-    filterUrn: URN,
-  ): Promise<boolean> {
-    try {
-      const manifest = await provider.downloadFile<VaultManifest>(manifestPath);
-      if (!manifest) return true;
-
-      return manifest.participants.includes(filterUrn.toString());
-    } catch (e) {
-      return true;
-    }
-  }
-
-  // --- BACKUP (Twin-File & Merge Strategy) ---
-
-  private async processVault(
-    provider: CloudStorageProvider,
-    vaultId: string,
-    month: Temporal.PlainYearMonth,
-  ): Promise<void> {
-    const year = String(month.year);
-    const vaultPath = `${BASE_PATH}/${year}/chat_vault_${vaultId}.json`;
-    const manifestPath = `${BASE_PATH}/${year}/chat_manifest_${vaultId}.json`;
-
-    // 1. GET LOCAL DATA
-    const daysInMonth = month.daysInMonth;
-    const start = (month.toPlainDate({ day: 1 }).toString() +
-      'T00:00:00Z') as ISODateTimeString;
-    const end = (month.toPlainDate({ day: daysInMonth }).toString() +
-      'T23:59:59Z') as ISODateTimeString;
-
-    const localMessages = await this.storage.getMessagesInRange(start, end);
-    const localTombstones = await this.storage.getTombstonesInRange(start, end);
-
-    // 2. FETCH REMOTE
-    let remoteVault: ChatVault | null = null;
-    try {
-      remoteVault = await provider.downloadFile<ChatVault>(vaultPath);
-    } catch (e) {
-      // It's okay if it doesn't exist yet
-    }
-
-    // 3. MERGE LOGIC
-    const combinedMessages = new Map<string, ChatMessage>();
-    const combinedTombstones = new Map<string, MessageTombstone>();
-
-    // A. Load Remote (Hydrating types)
-    if (remoteVault) {
-      remoteVault.messages.forEach((m) =>
-        combinedMessages.set(m.id, this.hydrateMessage(m)),
-      );
-      remoteVault.tombstones?.forEach((t) =>
-        combinedTombstones.set(t.messageId, this.hydrateTombstone(t)),
-      );
-    }
-
-    // B. Overlay Local (Local is fresher)
-    // Note: Local messages are already ChatMessage objects
-    localMessages.forEach((m) => combinedMessages.set(m.id, m));
-    localTombstones.forEach((t) => combinedTombstones.set(t.messageId, t));
-
-    // C. Apply Tombstones (The Pruning)
-    for (const [deadId] of combinedTombstones) {
-      combinedMessages.delete(deadId);
-    }
-
-    const finalMessages = Array.from(combinedMessages.values()).sort((a, b) =>
-      a.sentTimestamp.localeCompare(b.sentTimestamp),
-    );
-
-    const finalTombstones: MessageTombstone[] = Array.from(
-      combinedTombstones.values(),
-    );
-
-    // 4. CHECK: Do we actually need to upload?
-    if (
-      finalMessages.length === 0 &&
-      (!remoteVault || remoteVault.messageCount === 0)
-    ) {
-      return;
-    }
-
-    // 5. CREATE PAYLOADS
-    const participants = Array.from(
-      new Set(finalMessages.map((m) => m.conversationUrn.toString())),
-    );
-
-    const vault: ChatVault = {
-      version: VAULT_SCHEMA_VERSION,
-      vaultId,
-      rangeStart: finalMessages[0]?.sentTimestamp || start,
-      rangeEnd: finalMessages[finalMessages.length - 1]?.sentTimestamp || end,
-      messageCount: finalMessages.length,
-      messages: finalMessages,
-      tombstones: finalTombstones,
-    };
-
-    const manifest: VaultManifest = {
-      version: VAULT_SCHEMA_VERSION,
-      vaultId,
-      participants,
-      messageCount: finalMessages.length,
-      rangeStart: vault.rangeStart,
-      rangeEnd: vault.rangeEnd,
-    };
-
-    // 6. UPLOAD
-    await Promise.all([
-      provider.uploadFile(manifest, manifestPath),
-      provider.uploadFile(vault, vaultPath),
-    ]);
-
-    this.logger.info(
-      `[ChatVaultEngine] Merged & Uploaded ${vaultPath} (${finalMessages.length} msgs, ${finalTombstones.length} tombstones)`,
-    );
-  }
-
-  async backup(providerId: string): Promise<void> {
-    if (!this.isCloudEnabled()) return;
-
-    const provider = this.getProvider(providerId);
-    if (!provider.hasPermission()) {
-      await this.disconnect();
-      return;
-    }
-
-    try {
-      const range = await this.storage.getDataRange();
-
-      if (range && range.min && range.max) {
-        const startObj = Temporal.PlainDate.from(range.min.substring(0, 10));
-        const endObj = Temporal.PlainDate.from(range.max.substring(0, 10));
-        let cursor = startObj.toPlainYearMonth();
-        const endMonth = endObj.toPlainYearMonth();
-
-        while (Temporal.PlainYearMonth.compare(cursor, endMonth) <= 0) {
-          const vaultId = `${cursor.year}_${String(cursor.month).padStart(
-            2,
-            '0',
-          )}`;
-          // Using type assertion for private method call
-          await (this as any).processVault(provider, vaultId, cursor);
-
-          cursor = cursor.add({ months: 1 });
-        }
-      }
-
-      await this.syncIndex();
-    } catch (e) {
-      this.logger.error('[ChatVaultEngine] Backup failed', e);
-      throw e; // Propagate to Facade
-    }
-  }
-
-  // --- Helpers ---
+  public readonly isCloudEnabled = this.cloudStorage.isConnected;
 
   /**
-   * Hydrates a JSON object (where IDs are strings) into a Domain Object (URNs)
+   * SYNC UP (Backup)
+   * Finds all local messages newer than the last sync cursor and writes them
+   * to a new "Delta" file in the cloud.
+   */
+  async backup(): Promise<void> {
+    const driver = this.cloudStorage.getActiveDriver();
+    if (!driver) return;
+
+    try {
+      // 1. Identify "New" Data using the Storage Primitives
+      const lastSync = this.getSyncCursor();
+      const now = Temporal.Now.instant().toString();
+
+      // Fetch messages sent AFTER the last sync
+      const newMessages = await this.storage.getMessagesAfter(lastSync);
+      // Fetch deletions performed AFTER the last sync
+      const newTombstones = await this.storage.getTombstonesAfter(lastSync);
+
+      if (newMessages.length === 0 && newTombstones.length === 0) {
+        this.logger.info('[ChatSync] No new data to backup.');
+        return;
+      }
+
+      // 2. Create Payload (Delta)
+      const payload = {
+        version: 1,
+        vaultId: crypto.randomUUID(),
+        rangeStart: lastSync,
+        rangeEnd: now,
+        messageCount: newMessages.length,
+        messages: newMessages,
+        tombstones: newTombstones,
+      };
+
+      // 3. Write Delta (Blind Write for speed/safety)
+      const path = this.generateDeltaPath();
+      await driver.writeJson(path, payload, { blindCreate: true });
+
+      // 4. Update Cursor
+      this.setSyncCursor(now);
+      this.logger.info(
+        `[ChatSync] Backup success: ${newMessages.length} msgs, ${newTombstones.length} dels`,
+      );
+    } catch (e) {
+      this.logger.error('[ChatSync] Backup failed', e);
+      throw e;
+    }
+  }
+
+  /**
+   * SYNC DOWN (Restore)
+   * Reads the current month's Snapshot + Deltas and merges them.
+   * Triggers Compaction if too many deltas are found.
+   */
+  async restore(): Promise<void> {
+    const driver = this.cloudStorage.getActiveDriver();
+    if (!driver) return;
+
+    try {
+      const { year, month } = this.getCurrentMonth();
+      const vaultPath = this.generateVaultPath(year, month);
+      const deltaPath = `${BASE_PATH}/${year}/${month}/deltas`;
+
+      // 1. Fetch Snapshot (Base State)
+      const snapshot = (await driver.readJson<any>(vaultPath)) || {
+        messages: [],
+        tombstones: [],
+      };
+
+      // 2. Fetch Deltas (Incremental State)
+      const deltaFiles = await driver.listFiles(deltaPath);
+      const deltas: any[] = [];
+
+      for (const file of deltaFiles) {
+        // Skip system files or hidden files
+        if (!file.endsWith('.json')) continue;
+        const delta = await driver.readJson(`${deltaPath}/${file}`);
+        if (delta) deltas.push(delta);
+      }
+
+      // 3. Merge In-Memory (Last-Write-Wins)
+      const mergedMessages = this.mergeMessages(snapshot, deltas);
+      const allTombstones = [
+        ...(snapshot.tombstones || []),
+        ...deltas.flatMap((d) => d.tombstones || []),
+      ];
+
+      // 4. Hydrate & Save to Local DB
+      if (mergedMessages.length > 0) {
+        const domainMessages = mergedMessages.map((m) =>
+          this.hydrateMessage(m),
+        );
+        await this.storage.bulkSaveMessages(domainMessages);
+      }
+
+      if (allTombstones.length > 0) {
+        // Hydrate tombstones (ensure URNs are parsed if needed, though they are simple structs)
+        const domainTombstones = allTombstones.map((t) => ({
+          ...t,
+          conversationUrn: URN.parse(t.conversationUrn),
+        }));
+        await this.storage.bulkSaveTombstones(domainTombstones);
+      }
+
+      this.logger.info(
+        `[ChatSync] Restore complete. Merged ${deltas.length} deltas.`,
+      );
+
+      // 5. Compaction Check (Maintenance)
+      if (deltas.length > COMPACTION_THRESHOLD) {
+        this.logger.info(
+          '[ChatSync] Compaction threshold reached. Compacting...',
+        );
+        await this.compact(driver, vaultPath, mergedMessages, allTombstones);
+      }
+    } catch (e) {
+      this.logger.error('[ChatSync] Restore failed', e);
+    }
+  }
+
+  // --- COMPACTION LOGIC (LSM) ---
+
+  /**
+   * Writes the merged state as a new Snapshot.
+   * Does NOT delete old deltas yet (Safe Compaction).
+   */
+  private async compact(
+    driver: any,
+    vaultPath: string,
+    messages: any[],
+    tombstones: any[],
+  ): Promise<void> {
+    const now = Temporal.Now.instant().toString();
+
+    const newSnapshot = {
+      version: 1,
+      vaultId: crypto.randomUUID(),
+      compactedAt: now,
+      rangeStart: 'GENESIS', // Simplification
+      rangeEnd: now,
+      messageCount: messages.length,
+      messages: messages,
+      tombstones: tombstones,
+    };
+
+    // Overwrite the main snapshot file
+    // Note: In a true immutable system, we might write snapshot_v2.json,
+    // but overwriting the "Read Pointer" (snapshot.json) is standard for simple LSM.
+    await driver.writeJson(vaultPath, newSnapshot);
+
+    this.logger.info('[ChatSync] Compaction successful. Snapshot updated.');
+  }
+
+  // --- HELPERS ---
+
+  private getSyncCursor(): string {
+    return localStorage.getItem(CURSOR_KEY) || '1970-01-01T00:00:00Z';
+  }
+
+  private setSyncCursor(timestamp: string): void {
+    localStorage.setItem(CURSOR_KEY, timestamp);
+  }
+
+  private generateVaultPath(year: string, month: string): string {
+    return `${BASE_PATH}/${year}/${month}/chat_vault_${year}_${month}.json`;
+  }
+
+  private generateDeltaPath(): string {
+    const now = Temporal.Now.plainDateISO('utc');
+    const year = now.year.toString();
+    const month = now.month.toString().padStart(2, '0');
+    const timestamp = Temporal.Now.instant().toString().replace(/[:.]/g, '-');
+
+    return `${BASE_PATH}/${year}/${month}/deltas/${timestamp}_delta.json`;
+  }
+
+  private getCurrentMonth() {
+    const now = Temporal.Now.plainDateISO('utc');
+    return {
+      year: now.year.toString(),
+      month: now.month.toString().padStart(2, '0'),
+    };
+  }
+
+  /**
+   * Hydrates a JSON object back into a Domain Entity.
+   * Handles Uint8Array reconstruction and URN parsing.
    */
   private hydrateMessage(raw: any): ChatMessage {
     let payload: Uint8Array | undefined;
+
+    // Handle Uint8Array serialization (often becomes {0: x, 1: y...} in JSON)
     if (raw.payloadBytes) {
-      payload = new Uint8Array(Object.values(raw.payloadBytes));
+      if (
+        typeof raw.payloadBytes === 'object' &&
+        !Array.isArray(raw.payloadBytes)
+      ) {
+        payload = new Uint8Array(Object.values(raw.payloadBytes));
+      } else if (Array.isArray(raw.payloadBytes)) {
+        payload = new Uint8Array(raw.payloadBytes);
+      }
     }
 
     return {
       ...raw,
-      id: raw.id || raw.messageId,
+      id: raw.id || raw.messageId, // Handle legacy field names if needed
+      // Ensure URNs are real URN instances
+      conversationUrn: URN.parse(raw.conversationUrn),
       senderId: URN.parse(raw.senderId),
-      conversationUrn: URN.parse(raw.conversationUrn),
       typeId: URN.parse(raw.typeId),
-      payloadBytes: payload,
+      // Ensure timestamps are preserved
+      sentTimestamp: raw.sentTimestamp,
+      // Restore the binary payload
+      payloadBytes: payload || raw.payloadBytes,
+      // Map tags back to URNs
+      tags: raw.tags?.map((t: string) => URN.parse(t)) || [],
     };
   }
 
-  private hydrateTombstone(raw: any): MessageTombstone {
-    return {
-      ...raw,
-      conversationUrn: URN.parse(raw.conversationUrn),
-    };
-  }
+  private mergeMessages(snapshot: any, deltas: any[]): any[] {
+    const msgMap = new Map<string, any>();
 
-  private async setCloudEnabled(enabled: boolean): Promise<void> {
-    this._isCloudEnabled.set(enabled);
-    await this.storage.setCloudEnabled(enabled);
-  }
-
-  private getProvider(id: string): CloudStorageProvider {
-    const p = this.providers.find((prov) => prov.providerId === id);
-    if (!p) throw new Error(`Provider ${id} not found`);
-    return p;
-  }
-
-  private getCurrentMonthId(): string {
-    const now = Temporal.Now.plainDateISO();
-    return `${now.year}_${String(now.month).padStart(2, '0')}`;
-  }
-
-  private getVaultIdFromDate(isoDate: string): string {
-    try {
-      const d = Temporal.PlainDate.from(isoDate.substring(0, 10));
-      return `${d.year}_${String(d.month).padStart(2, '0')}`;
-    } catch {
-      return this.getCurrentMonthId();
+    // 1. Load Snapshot
+    if (snapshot.messages && Array.isArray(snapshot.messages)) {
+      snapshot.messages.forEach((m: any) => msgMap.set(m.id || m.messageId, m));
     }
+
+    // 2. Apply Deltas (Newer overwrites older)
+    deltas.forEach((d) => {
+      if (d.messages && Array.isArray(d.messages)) {
+        d.messages.forEach((m: any) => msgMap.set(m.id || m.messageId, m));
+      }
+    });
+
+    return Array.from(msgMap.values());
   }
 }

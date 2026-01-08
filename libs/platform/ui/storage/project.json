@@ -1,0 +1,13 @@
+{
+  "name": "platform-ui-cloud-storage",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ui/storage/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

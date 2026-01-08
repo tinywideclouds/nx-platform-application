@@ -1,48 +1,23 @@
+/* libs/messenger/settings-ui/src/lib/messenger-sync-card/messenger-sync-card.component.scss */
 :host {
   display: block;
 }
 
-.sync-card {
-  max-width: 500px;
-  // Let the parent container control margins if needed,
-  // or keep internal spacing
-  margin-bottom: 1.5rem;
+mat-icon {
+  overflow: visible;
 }
 
-.options-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 1rem 0;
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
 }
 
-.status-box {
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background: #f5f5f5;
-  border-radius: 4px;
-  font-size: 0.9rem;
-
-  &.error {
-    background: #ffebee; // Light red background for errors
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
   }
-}
-
-.success-row,
-.error-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-}
-
-.error-list {
-  margin: 0.5rem 0 0 1.5rem;
-  color: #d32f2f;
-  font-size: 0.85rem;
-  line-height: 1.4;
-}
-
-mat-progress-bar {
-  margin-top: 1rem;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -18,14 +18,14 @@
       </div>
     </div>
 
-    @if (isBackingUp() || isRestoring()) {
-    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    @if (isBusy()) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
     }
 
     <div class="p-6">
       <p class="text-sm text-gray-600 mb-4">
-        Sync your address book to the cloud. This allows you to restore them on
-        other devices.
+        Sync your address book to the cloud. You can backup your current state
+        or restore from a previous snapshot.
       </p>
 
       <div class="flex gap-3 mb-6">
@@ -33,9 +33,19 @@
           mat-flat-button
           color="primary"
           (click)="backupToCloud()"
-          [disabled]="isBackingUp()"
+          [disabled]="isBusy()"
         >
-          <mat-icon>backup</mat-icon> Backup Now
+          <mat-icon>cloud_upload</mat-icon> Backup Now
+        </button>
+
+        <button
+          type="button"
+          mat-stroked-button
+          color="accent"
+          (click)="restoreFromCloud()"
+          [disabled]="isBusy()"
+        >
+          <mat-icon>cloud_download</mat-icon> Restore
         </button>
       </div>
     </div>

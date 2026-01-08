@@ -42,19 +42,24 @@ export class GatekeeperStorage implements GatekeeperApi {
     reason?: string,
   ): Promise<void> {
     if (!urn) return;
-    const existing = await this.db.blocked
-      .where('urn')
-      .equals(urn.toString())
-      .first();
+    const urnStr = urn.toString();
 
-    await this.db.blocked.put({
-      id: existing?.id,
-      urn: urn.toString(),
-      blockedAt:
-        existing?.blockedAt ??
-        (Temporal.Now.instant().toString() as ISODateTimeString),
-      scopes: scopes,
-      reason: reason ?? existing?.reason,
+    // Fix: Atomic upsert for blocking
+    await this.db.transaction('rw', this.db.blocked, async () => {
+      const existing = await this.db.blocked
+        .where('urn')
+        .equals(urnStr)
+        .first();
+
+      await this.db.blocked.put({
+        id: existing?.id,
+        urn: urnStr,
+        blockedAt:
+          existing?.blockedAt ??
+          (Temporal.Now.instant().toString() as ISODateTimeString),
+        scopes: scopes,
+        reason: reason ?? existing?.reason,
+      });
     });
   }
 
@@ -83,19 +88,24 @@ export class GatekeeperStorage implements GatekeeperApi {
 
   async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
     if (!urn) return;
-    const existing = await this.db.pending
-      .where('urn')
-      .equals(urn.toString())
-      .first();
+    const urnStr = urn.toString();
 
-    await this.db.pending.put({
-      id: existing?.id,
-      urn: urn.toString(),
-      firstSeenAt:
-        existing?.firstSeenAt ??
-        (Temporal.Now.instant().toString() as ISODateTimeString),
-      vouchedBy: vouchedBy ? vouchedBy.toString() : existing?.vouchedBy,
-      note: note ?? existing?.note,
+    // Fix: Transaction to prevent overwriting vouchedBy/note in race conditions
+    await this.db.transaction('rw', this.db.pending, async () => {
+      const existing = await this.db.pending
+        .where('urn')
+        .equals(urnStr)
+        .first();
+
+      await this.db.pending.put({
+        id: existing?.id, // Preserve Dexie Key
+        urn: urnStr,
+        firstSeenAt:
+          existing?.firstSeenAt ??
+          (Temporal.Now.instant().toString() as ISODateTimeString),
+        vouchedBy: vouchedBy ? vouchedBy.toString() : existing?.vouchedBy,
+        note: note ?? existing?.note,
+      });
     });
   }
 

@@ -1,4 +1,7 @@
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import {
   ConversationSyncState,
   ChatMessage,
@@ -22,4 +25,10 @@ export abstract class ConversationStorage {
   abstract deleteMessage(id: string): Promise<void>;
 
   abstract clearMessageHistory(): Promise<void>;
+
+  /**
+   * MAINTENANCE: Removes deletion records older than a specific date.
+   * Call this periodically (e.g., on app init) to prevent DB bloat.
+   */
+  abstract pruneTombstones(olderThan: ISODateTimeString): Promise<number>;
 }

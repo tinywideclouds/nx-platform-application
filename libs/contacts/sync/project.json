@@ -1,0 +1,34 @@
+{
+  "name": "contacts-sync",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contacts/sync/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:contacts"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/contacts/sync",
+        "configFile": "libs/contacts/sync/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/contacts/sync",
+        "htmlReportDirectory": "dist/test-reports/libs/contacts/sync",
+        "configFile": "libs/contacts/sync/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

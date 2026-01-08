@@ -117,27 +117,40 @@
       <router-outlet />
 
       @if (!showDetail()) {
-        @if (hasConversations()) {
-          <lib-feature-placeholder
-            icon="forum"
-            title="Your Conversations"
-            message="Select a conversation from the list to view messages."
-          />
+        @if (showWizard()) {
+          <div class="h-full w-full flex flex-col">
+            <lib-sticky-wizard
+              [displayMode]="'inline'"
+              (close)="onCloseWizard()"
+            />
+          </div>
         } @else {
-          <lib-feature-placeholder
-            icon="chat_bubble_outline"
-            title="No Chats Yet"
-            message="You haven't started any conversations yet."
-            actionLabel="Start New Chat"
-            (action)="setSidebarMode('new')"
-          />
+          @if (hasConversations()) {
+            <lib-feature-placeholder
+              icon="forum"
+              title="Your Conversations"
+              message="Select a conversation from the list to view messages."
+            />
+          } @else {
+            <lib-feature-placeholder
+              icon="chat_bubble_outline"
+              title="No Chats Yet"
+              message="You haven't started any conversations yet."
+              actionLabel="Start New Chat"
+              (action)="setSidebarMode('new')"
+            />
+          }
         }
+
         @if (pendingRequests().length > 0) {
-          <div class="flex justify-center -mt-10 pb-10 relative z-10">
+          <div
+            class="absolute bottom-10 left-0 right-0 flex justify-center z-10 pointer-events-none"
+          >
             <button
               type="button"
               mat-stroked-button
               color="warn"
+              class="pointer-events-auto bg-white/90 shadow-sm backdrop-blur-sm"
               (click)="toggleRequestsPane()"
             >
               You have {{ pendingRequests().length }} message request(s)

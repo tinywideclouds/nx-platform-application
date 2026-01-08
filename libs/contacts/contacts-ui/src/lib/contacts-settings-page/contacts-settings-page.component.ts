@@ -9,10 +9,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSnackBar } from '@angular/material/snack-bar';
 
-// ✅ UPDATE: Service remains here, but metadata type comes from Platform
-import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
-import { BackupFile } from '@nx-platform-application/platform-cloud-access';
+// ✅ UPDATE: Use the new Sync Service (Snapshot API)
+import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
 
 import { ContactsSecurityComponent } from '../contacts-security/contacts-security.component';
 
@@ -31,50 +31,52 @@ import { ContactsSecurityComponent } from '../contacts-security/contacts-securit
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactsSettingsPageComponent {
-  private cloudService = inject(ContactsCloudService);
+  private syncService = inject(ContactsSyncService);
+  private snackBar = inject(MatSnackBar);
 
   // --- CLOUD STATE ---
-  isBackingUp = signal(false);
-  isRestoring = signal(false);
-  cloudBackups = signal<BackupFile[]>([]);
-
-  constructor() {
-    if (this.cloudService.hasPermission('google')) {
-      this.refreshBackups();
-    }
-  }
-
-  async refreshBackups() {
-    try {
-      const backups = await this.cloudService.listBackups('google');
-      this.cloudBackups.set(backups);
-    } catch (err) {
-      console.error('Failed to list backups', err);
-    }
-  }
+  isBusy = signal(false);
 
   async backupToCloud() {
-    if (this.isBackingUp()) return;
-    this.isBackingUp.set(true);
+    if (this.isBusy()) return;
+    this.isBusy.set(true);
+
     try {
-      await this.cloudService.backupToCloud('google');
-      await this.refreshBackups();
+      await this.syncService.backup();
+      this.showSnack('Backup successful');
     } catch (e) {
       console.error('Backup failed', e);
+      this.showSnack('Backup failed', true);
     } finally {
-      this.isBackingUp.set(false);
+      this.isBusy.set(false);
     }
   }
 
-  async restoreBackup(fileId: string) {
-    if (this.isRestoring()) return;
-    this.isRestoring.set(true);
+  async restoreFromCloud() {
+    if (this.isBusy()) return;
+    if (
+      !confirm(
+        'This will merge cloud contacts into your local device. Continue?',
+      )
+    )
+      return;
+
+    this.isBusy.set(true);
     try {
-      await this.cloudService.restoreFromCloud('google', fileId);
+      await this.syncService.restore();
+      this.showSnack('Restore complete');
     } catch (e) {
       console.error('Restore failed', e);
+      this.showSnack('Restore failed', true);
     } finally {
-      this.isRestoring.set(false);
+      this.isBusy.set(false);
     }
+  }
+
+  private showSnack(msg: string, isError = false) {
+    this.snackBar.open(msg, 'Close', {
+      duration: 3000,
+      panelClass: isError ? 'warn-snack' : undefined,
+    });
   }
 }

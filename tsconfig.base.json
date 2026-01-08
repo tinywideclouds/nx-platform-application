@@ -26,9 +26,6 @@
       "@nx-platform-application/contacts-api": [
         "libs/contacts/api/src/index.ts"
       ],
-      "@nx-platform-application/contacts-cloud-access": [
-        "libs/contacts/cloud-access/src/index.ts"
-      ],
       "@nx-platform-application/contacts-persistence": [
         "libs/contacts/persistence/src/index.ts"
       ],
@@ -37,6 +34,9 @@
       ],
       "@nx-platform-application/contacts-storage": [
         "libs/contacts/contacts-storage/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-sync": [
+        "libs/contacts/sync/src/index.ts"
       ],
       "@nx-platform-application/contacts-types": [
         "libs/contacts/types/src/index.ts"
@@ -104,6 +104,9 @@
       "@nx-platform-application/messenger-infrastructure-live-data": [
         "libs/messenger/infrastructure/live-data/src/index.ts"
       ],
+      "@nx-platform-application/messenger-infrastructure-local-settings": [
+        "libs/messenger/infrastructure/local-settings/src/index.ts"
+      ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"
       ],
@@ -140,17 +143,14 @@
       "@nx-platform-application/platform-auth-access/testing": [
         "libs/platform/ng/auth-access/src/testing.ts"
       ],
-      "@nx-platform-application/platform-auth-ui": [
-        "libs/platform/ng/auth-ui/src/index.ts"
-      ],
-      "@nx-platform-application/platform-auth-ui/mocks": [
-        "libs/platform/ng/auth-ui/src/mocking.ts"
-      ],
-      "@nx-platform-application/platform-cloud-access": [
-        "libs/platform/ng/cloud-access/src/index.ts"
-      ],
       "@nx-platform-application/platform-dexie-storage": [
         "libs/platform/ng/dexie-storage/src/index.ts"
+      ],
+      "@nx-platform-application/platform-domain-storage": [
+        "libs/platform/domain/storage/src/index.ts"
+      ],
+      "@nx-platform-application/platform-infrastructure-storage": [
+        "libs/platform/infrastructure/storage/src/index.ts"
       ],
       "@nx-platform-application/platform-lifecycle": [
         "libs/platform/ng/lifecycle/src/index.ts"
@@ -164,8 +164,14 @@
       "@nx-platform-application/platform-types": [
         "libs/platform/types/src/index.ts"
       ],
+      "@nx-platform-application/platform-ui-auth": [
+        "libs/platform/ui/auth/src/index.ts"
+      ],
+      "@nx-platform-application/platform-ui-storage": [
+        "libs/platform/ui/storage/src/index.ts"
+      ],
       "@nx-platform-application/platform-ui-toolkit": [
-        "libs/platform/ng/ui-toolkit/src/index.ts"
+        "libs/platform/ui/toolkit/src/index.ts"
       ],
       "@nx-platform-application/platform-web-key-storage": [
         "libs/platform/ng/web-key-storage/src/index.ts"

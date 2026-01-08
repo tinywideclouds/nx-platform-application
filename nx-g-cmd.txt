@@ -158,9 +158,26 @@ nx g @nx/workspace:move --project=chat-state --destination=libs/messenger/state/
 
 nx g @nx/workspace:move --project=messenger-settings-ui --destination=libs/messenger/ui/settings --importPath=@nx-platform-application/messenger-settings-ui
 
-
 nx g @nx/angular:library --name=messenger-domain-group-protocol --directory=libs/messenger/domain/group-protocol --tags="scope:messenger" 
 
-
 nx g @nx/angular:library --name=contacts-persistence --directory=libs/contacts/persistence --tags="scope:contacts" 
+
+nx g @nx/workspace:move --project=contacts-cloud-access --destination=libs/contacts/sync --importPath=@nx-platform-application/contacts-sync
+
+
+nx g @nx/angular:library --name=platform-infrastructure-storage --directory=libs/platform/infrastructure/storage --tags="scope:platform" 
+
+nx g @nx/angular:library --name=platform-domain-storage --directory=libs/platform/domain/storage --tags="scope:domain" 
+
+
+nx g @nx/workspace:move --project=platform-ui-toolkit --destination=libs/platform/ui/toolkit
+
+nx g @nx/workspace:move --project=platform-auth-ui --destination=libs/platform/ui/auth --importPath=@nx-platform-application/platform-ui-auth
+
+
+nx g @nx/angular:library --name=platform-ui-cloud-storage --directory=libs/platform/ui/cloud-storage --tags="scope:platform" 
+
+nx g @nx/workspace:move --project=platform-ui-cloud-storage --destination=libs/platform/ui/storage --importPath=@nx-platform-application/platform-ui-storage
+
+nx g @nx/angular:library --name=messenger-infrastructure-local-settings --directory=libs/messenger/infrastructure/local-settings --tags="scope:messenger" 
 

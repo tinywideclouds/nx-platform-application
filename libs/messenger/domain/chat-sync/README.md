@@ -1,54 +1,73 @@
 # 🔄 @nx-platform-application/messenger-domain-chat-sync
 
-This library implements the **Cloud Synchronization Engine** for the Messenger application. It is responsible for securely backing up and restoring chat history across devices using a user-owned cloud provider (e.g., Google Drive).
+**Type:** Domain Library
+**Scope:** Messenger Domain
 
-## 🏛️ Architecture: The "Vault" System
+This library implements the **Synchronization Engine** for the Messenger application. It orchestrates the secure backup and restoration of chat history using a **Generational Delta (LSM-Lite)** strategy.
 
-Unlike traditional chat apps that store a single database file, we use a **Partitioned Vault Strategy** to ensure scalability and performance.
+## 🏛️ Architecture: Log-Structured Merge (LSM)
 
-### 1. Monthly Partitioning
+Unlike traditional architectures that overwrite a single database file, this engine uses an **Append-Only** strategy optimized for multi-device concurrency and cloud performance.
 
-Data is split into immutable JSON files by month:
-`tinywide/messaging/2024/chat_vault_2024_01.json`
+### 1. The Write Path (Deltas)
 
-This ensures that:
+When a backup occurs, the engine **does not** read or rewrite the existing cloud state.
 
-- Backups are incremental.
-- Restoring "last week's messages" doesn't require downloading the entire 5-year history.
-- Sync conflicts are scoped to a single month.
+- **Mechanism:** It identifies all local changes (messages & deletions) since the last sync cursor.
+- **Action:** It writes a new, immutable JSON file to the `deltas/` folder.
+- **Filename:** `tinywide/messaging/deltas/{timestamp}_delta.json`
+- **Concurrency:** Uses `blindCreate: true` to avoid "Check-then-Act" race conditions.
 
-### 2. Twin-File Strategy (Manifest + Vault)
+### 2. The Read Path (Merge)
 
-For every Vault file, there is a corresponding **Manifest file**:
-`chat_manifest_2024_01.json`
+Restoration is a "Reduce" operation.
 
-- **Vault:** Contains the heavy encrypted message payloads.
-- **Manifest:** Contains metadata (e.g., "This vault contains messages for User A and User B").
+1.  **Fetch Snapshot:** Downloads the base state (if available).
+2.  **Fetch Deltas:** Lists and downloads all delta files created after the snapshot.
+3.  **In-Memory Merge:** Applies deltas in chronological order using a **Last-Write-Wins** policy.
+4.  **Hydration:** Converts raw JSON into Domain Objects (hydrating `Uint8Array` payloads).
 
-**Benefit:** When you open a conversation with "User A", the engine checks the lightweight Manifests first. It only downloads the heavy Vaults that actually contain relevant data ("Lazy Loading").
+### 3. Compaction (Maintenance)
 
-### 3. Tombstone Merging
+To prevent the "Infinite File Problem," the engine periodically performs **Compaction**:
 
-Deletions are handled via **Tombstones**. When a message is deleted locally:
+- **Trigger:** When the number of loose delta files exceeds a threshold (e.g., 10).
+- **Action:** It merges the Snapshot + Deltas into a _new_ Snapshot and uploads it.
+- **Safety:** Old deltas are eventually pruned (or ignored based on timestamp) to maintain hygiene without risking data loss during active syncs.
 
-1.  A tombstone record is created.
-2.  During sync, the Engine downloads the remote vault.
-3.  It applies the local tombstones to the remote messages (pruning them).
-4.  It re-uploads the cleaned vault.
+---
 
-## 📦 Services
+## 📦 Data Model
+
+### `ChatVault` (The Payload)
+
+Both Snapshots and Deltas use the same schema. A Delta is simply a "Sparse Vault."
+
+```typescript
+export interface ChatVault {
+  version: number; // Schema Version
+  vaultId: string; // UUID or Timestamp
+  rangeStart: string; // Min Timestamp in this batch
+  rangeEnd: string; // Max Timestamp in this batch
+  messageCount: number; // Count
+  messages: ChatMessage[]; // Upserts (New or Edited)
+  tombstones: MessageTombstone[]; // Deletions
+}
+```
+
+## 🧩 Key Services
 
 ### `ChatSyncService` (Facade)
 
-The public entry point for the UI and Orchestrator.
+The public API consumed by the UI/App layer.
 
-- `syncMessages(providerId)`: Triggers the full backup/restore cycle.
-- `restoreVaultForDate(date)`: On-demand fetch for infinite scrolling.
+- **Role:** State container (`isSyncing` signal) and error handler.
+- **Method:** `syncMessages()` - Triggers the full `Restore -> Merge -> Backup` pipeline.
 
-### `ChatVaultEngine` (Internal)
+### `ChatVaultEngine` (The Brain)
 
-The core logic engine.
+The internal worker that handles the complexity of the file system.
 
-- Handles the Cloud Provider authentication.
-- Implements the "Merge & Prune" logic.
-- Manages the file system paths and JSON hydration.
+- **Dependency:** `ChatStorageService` (Infrastructure) for database primitives.
+- **Dependency:** `StorageService` (Platform) for cloud I/O.
+- **Logic:** Handles cursor tracking, delta generation, and payload hydration.

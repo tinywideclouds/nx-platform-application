@@ -1,63 +1,45 @@
-// libs/messenger/settings-ui/src/lib/identity-settings-page/identity-settings-page.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IdentitySettingsPageComponent } from './identity-settings-page.component';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { MockComponent, MockProvider } from 'ng-mocks';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
-import { vi } from 'vitest';
-import { URN } from '@nx-platform-application/platform-types';
-import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockProvider, MockComponent } from 'ng-mocks';
+import { IdentitySettingsContentComponent } from '../identity-settings-content/identity-settings-content.component';
 
 describe('IdentitySettingsPageComponent', () => {
   let component: IdentitySettingsPageComponent;
   let fixture: ComponentFixture<IdentitySettingsPageComponent>;
 
-  let dialogSpy: { open: any };
-  let chatServiceSpy: { logout: any };
-
   const mockUser = {
-    id: URN.parse('urn:contacts:user:test'),
-    alias: 'TestUser',
-    email: 'test@test.com',
+    id: 'urn:user:123',
+    alias: 'Alice',
+    email: 'alice@example.com',
+    profileUrl: null,
+  };
+  const mockAuthService = { currentUser: signal(mockUser) };
+
+  // Mock dependencies (though technically Content handles them, providers are needed if shallow render fails)
+  const mockChatService = {
+    showWizard: signal(true),
+    setWizardActive: vi.fn(),
   };
 
   beforeEach(async () => {
-    dialogSpy = {
-      open: vi.fn().mockReturnValue({
-        afterClosed: () => of(true),
-      }),
-    };
-
-    chatServiceSpy = {
-      logout: vi.fn(),
-    };
-
     await TestBed.configureTestingModule({
       imports: [IdentitySettingsPageComponent],
       providers: [
-        MockProvider(IAuthService, {
-          currentUser: signal(mockUser),
-        }),
-        { provide: ChatService, useValue: chatServiceSpy },
-        { provide: MatDialog, useValue: dialogSpy },
-        MockProvider(MatSnackBar),
+        { provide: IAuthService, useValue: mockAuthService },
+        { provide: ChatService, useValue: mockChatService },
+        MockProvider(MessengerCryptoService),
+        MockProvider(ChatLiveDataService),
       ],
     })
       .overrideComponent(IdentitySettingsPageComponent, {
-        remove: {
-          imports: [MatDialogModule, MessengerSyncCardComponent],
-        },
-        add: {
-          imports: [
-            // ✅ Mock the sync card so we don't need to provide CloudSyncService here
-            MockComponent(MessengerSyncCardComponent),
-          ],
-        },
+        remove: { imports: [IdentitySettingsContentComponent] },
+        add: { imports: [MockComponent(IdentitySettingsContentComponent)] },
       })
       .compileComponents();
 
@@ -70,15 +52,15 @@ describe('IdentitySettingsPageComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display user alias', () => {
-    const element = fixture.nativeElement as HTMLElement;
-    expect(element.textContent).toContain('TestUser');
+  it('should render the Page Header', () => {
+    const header = fixture.nativeElement.querySelector('header');
+    expect(header.textContent).toContain('Identity');
   });
 
-  it('should open dialog and logout on confirmation', () => {
-    component.onSecureLogout();
-
-    expect(dialogSpy.open).toHaveBeenCalled();
-    expect(chatServiceSpy.logout).toHaveBeenCalled();
+  it('should host the Content Component', () => {
+    const content = fixture.nativeElement.querySelector(
+      'lib-identity-settings-content',
+    );
+    expect(content).toBeTruthy();
   });
 });

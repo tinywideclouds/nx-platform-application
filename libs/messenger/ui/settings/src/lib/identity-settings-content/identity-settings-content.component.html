@@ -1,0 +1,190 @@
+<div class="space-y-6">
+  @if (!isWizard()) {
+    <div
+      class="bg-indigo-50 rounded-xl border border-indigo-100 p-4 flex items-center justify-between"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center"
+        >
+          <mat-icon class="scale-90">help_outline</mat-icon>
+        </div>
+        <div>
+          <h3 class="font-bold text-indigo-900 text-sm m-0">
+            System Status Wizard
+          </h3>
+          <p class="text-xs text-indigo-700 m-0 mt-0.5">
+            Show the floating setup guide and health check.
+          </p>
+        </div>
+      </div>
+      <mat-slide-toggle
+        color="primary"
+        [checked]="wizardActive()"
+        (change)="onToggleWizard($event.checked)"
+      >
+      </mat-slide-toggle>
+    </div>
+  }
+
+  @if (isWizard()) {
+    <div
+      class="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 flex gap-3 animate-fade-in"
+    >
+      <mat-icon class="text-blue-500 shrink-0 text-base w-5 h-5 mt-0.5"
+        >info</mat-icon
+      >
+      <div class="text-xs text-blue-900 leading-relaxed">
+        <strong>Identity Established:</strong> You are signed in via Google
+        Auth. The <strong>URN</strong> below is your unique address on the
+        network.
+      </div>
+    </div>
+  }
+
+  @if (currentUser(); as user) {
+    <div
+      class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+    >
+      <div
+        class="h-24 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100"
+      ></div>
+
+      <div class="px-6 pb-6 relative">
+        <div class="absolute -top-12 left-6">
+          <div class="h-24 w-24 rounded-full bg-white p-1 shadow-md">
+            <div
+              class="h-full w-full rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-600 overflow-hidden"
+            >
+              @if (user.profileUrl) {
+                <img
+                  alt="user profile picture"
+                  [src]="user.profileUrl"
+                  [alt]="user.alias"
+                  class="w-full h-full object-cover"
+                />
+              } @else {
+                {{ initials() }}
+              }
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="pt-14 sm:pl-28 sm:pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        >
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">{{ user.alias }}</h2>
+            <div class="flex items-center text-gray-500 text-sm mt-0.5">
+              <mat-icon class="text-base h-4 w-4 mr-1.5 align-middle"
+                >email</mat-icon
+              >
+              {{ user.email }}
+            </div>
+          </div>
+
+          <span
+            class="px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 w-fit"
+            [class.bg-green-50]="connectionStatus() === 'connected'"
+            [class.text-green-700]="connectionStatus() === 'connected'"
+            [class.border-green-200]="connectionStatus() === 'connected'"
+            [class.bg-gray-50]="connectionStatus() !== 'connected'"
+            [class.text-gray-600]="connectionStatus() !== 'connected'"
+          >
+            <div
+              class="w-2 h-2 rounded-full"
+              [class.bg-green-500]="connectionStatus() === 'connected'"
+              [class.bg-gray-400]="connectionStatus() !== 'connected'"
+            ></div>
+            {{ connectionStatus() | uppercase }}
+          </span>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-gray-100">
+          <label
+            class="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2"
+          >
+            Identity URN
+          </label>
+          <div
+            class="flex items-center bg-gray-50 rounded-md border border-gray-200 px-3 py-2"
+          >
+            <code
+              class="text-xs text-gray-600 font-mono flex-grow truncate select-all"
+            >
+              {{ user.id.toString() }}
+            </code>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (isWizard()) {
+    @if (fingerprintState().success) {
+      <div
+        class="bg-green-50 border border-green-100 rounded-lg p-3 mt-6 mb-4 flex gap-3 animate-fade-in"
+      >
+        <mat-icon class="text-green-600 shrink-0 text-base w-5 h-5 mt-0.5"
+          >vpn_key</mat-icon
+        >
+        <div class="text-xs text-green-900 leading-relaxed">
+          <strong>Crypto Active:</strong> We have verified your
+          <strong>Public Keys</strong> on the server. Other users use these to
+          start an encrypted session with you.
+        </div>
+      </div>
+    } @else if (!fingerprintState().isLoading) {
+      <div
+        class="bg-orange-50 border border-orange-100 rounded-lg p-3 mt-6 mb-4 flex gap-3 animate-fade-in"
+      >
+        <mat-icon class="text-orange-600 shrink-0 text-base w-5 h-5 mt-0.5"
+          >warning</mat-icon
+        >
+        <div class="text-xs text-orange-900 leading-relaxed">
+          <strong>Encryption Pending:</strong> We could not confirm your
+          identity keys. Please use the "Keys & Routing" page to regenerate
+          them.
+        </div>
+      </div>
+    }
+  }
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div
+        class="h-10 w-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"
+      >
+        <mat-icon>verified_user</mat-icon>
+      </div>
+      <div>
+        <h3 class="font-bold text-gray-900 m-0">End-to-End Encryption</h3>
+        <p class="text-xs text-gray-500 m-0">OMEMO / Signal Protocol</p>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label
+            class="text-xs font-semibold text-gray-500 uppercase tracking-wider"
+            >Public Fingerprint</label
+          >
+          @if (fingerprintState().isLoading) {
+            <span class="text-xs text-blue-600">Verifying...</span>
+          }
+        </div>
+
+        <div
+          class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded-lg break-all leading-relaxed select-all shadow-inner"
+        >
+          {{ fingerprintState().value }}
+        </div>
+        <p class="text-xs text-gray-400 mt-2">
+          This fingerprint uniquely identifies your device. Compare this with
+          your contacts to verify safety numbers.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

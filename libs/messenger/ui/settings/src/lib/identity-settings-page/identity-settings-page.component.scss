@@ -2,3 +2,8 @@
 :host {
   display: block;
 }
+
+// Utility for centering icons in small badges
+mat-icon {
+  overflow: visible; // Allow icon to render fully in small containers
+}

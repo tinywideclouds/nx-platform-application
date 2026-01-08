@@ -1,0 +1,59 @@
+lib-master-detail-layout {
+  display: block;
+  height: 100%;
+  width: 100%;
+  container-type: inline-size;
+  container-name: layout;
+}
+
+.md-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: white;
+}
+
+.md-sidebar,
+.md-main {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  display: flex; /* Ensure flex column so header sits atop content */
+  flex-direction: column;
+}
+
+.hidden-on-narrow {
+  display: none;
+}
+
+/* === MOBILE HEADER DEFAULT === */
+.md-mobile-header {
+  display: block;
+  flex-shrink: 0; /* Don't shrink the header */
+}
+
+/* === WIDE BEHAVIOR === */
+@container layout (min-width: 700px) {
+  .md-container {
+    flex-direction: row;
+  }
+
+  .md-sidebar {
+    display: block !important;
+    width: 350px;
+    border-right: 1px solid #e0e0e0;
+    flex-shrink: 0;
+  }
+
+  .md-main {
+    display: block !important;
+    flex: 1;
+    width: auto;
+  }
+
+  /* HIDE MOBILE HEADER IN SPLIT VIEW */
+  .md-mobile-header {
+    display: none;
+  }
+}

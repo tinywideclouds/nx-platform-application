@@ -1,95 +1,58 @@
 // libs/messenger/settings-ui/src/lib/messenger-sync-card/messenger-sync-card.component.ts
 
-import {
-  Component,
-  ChangeDetectionStrategy,
-  inject,
-  signal,
-} from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatButtonModule } from '@angular/material/button';
 
-// Domain Imports
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
 
 @Component({
   selector: 'lib-messenger-sync-card',
   standalone: true,
   imports: [
     CommonModule,
-    MatCardModule,
-    MatButtonModule,
-    MatCheckboxModule,
     MatIconModule,
+    MatSlideToggleModule,
     MatProgressBarModule,
-    MatSnackBarModule,
+    MatButtonModule,
   ],
   templateUrl: './messenger-sync-card.component.html',
   styleUrl: './messenger-sync-card.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessengerSyncCardComponent {
-  // 1. Inject Orchestrator for ACTIONS (Sync + Refresh)
-  private chatService = inject(ChatService);
+  private cloudSync = inject(CloudSyncService);
 
-  // 2. Inject Coordinator for STATE (Progress + Results)
-  private syncService = inject(CloudSyncService);
+  // --- STATE ---
+  isSyncing = this.cloudSync.isSyncing;
+  lastResult = this.cloudSync.lastSyncResult;
 
-  private snackBar = inject(MatSnackBar);
+  // REACTIVITY FIX: Use the signal directly instead of a static method call
+  isCloudEnabled = this.cloudSync.isConnected;
 
-  // --- Local UI State ---
-  syncContacts = signal(true);
-  syncMessages = signal(true);
+  // --- ACTIONS ---
+  async toggleCloudSync(checked: boolean) {
+    if (this.isSyncing()) return; // Prevent interaction during sync
 
-  // --- Delegated Service State (Read from Sync Service) ---
-  isSyncing = this.syncService.isSyncing;
-  lastResult = this.syncService.lastSyncResult;
+    if (checked) {
+      await this.onReconnect();
+    } else {
+      await this.cloudSync.revokePermission();
+    }
+  }
 
-  async triggerSync(): Promise<void> {
-    const providerId = 'google';
-
-    try {
-      // AUTH CHECK: We still check permissions via the Sync Service
-      // because ChatService doesn't expose auth methods.
-      if (!this.syncService.hasPermission(providerId)) {
-        const authorized = await this.syncService.connect(providerId, {
-          syncContacts: this.syncContacts(),
-          syncMessages: this.syncMessages(),
-        });
-
-        if (!authorized) return;
-      }
-
-      // ACTION: We call the ChatService Orchestrator
-      // This ensures that when the sync finishes, the Inbox and Contacts
-      // are immediately refreshed in the UI.
-      await this.chatService.sync({
+  async onReconnect() {
+    // connect() returns boolean promise, but the signal will update automatically
+    const success = await this.cloudSync.connect('google');
+    if (success) {
+      this.cloudSync.syncNow({
         providerId: 'google',
-        syncContacts: this.syncContacts(),
-        syncMessages: this.syncMessages(),
+        syncContacts: true,
+        syncMessages: true,
       });
-
-      // The ChatService.sync() awaits the result internally, so we can check
-      // the result signal immediately after.
-      const result = this.lastResult();
-
-      if (result?.success) {
-        this.snackBar.open('Sync completed successfully', 'Close', {
-          duration: 3000,
-        });
-      } else {
-        this.snackBar.open('Sync encountered errors', 'Close', {
-          duration: 5000,
-        });
-      }
-    } catch (e) {
-      this.snackBar.open('Unexpected error during sync', 'Close');
     }
   }
 }

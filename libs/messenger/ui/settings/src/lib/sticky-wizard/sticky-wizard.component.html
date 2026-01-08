@@ -1,0 +1,74 @@
+<div
+  [class]="
+    displayMode() === 'overlay'
+      ? 'fixed bottom-4 right-4 w-[480px] max-w-[90vw] max-h-[85vh] rounded-2xl shadow-2xl border border-indigo-100 z-40'
+      : 'w-full h-full rounded-none border-none shadow-none bg-gray-50'
+  "
+  class="flex flex-col bg-white font-sans animate-slide-up overflow-hidden"
+>
+  <div
+    class="flex items-center justify-between p-4 bg-indigo-600 text-white rounded-t-2xl shrink-0"
+  >
+    <div class="flex items-center gap-3">
+      <div class="bg-white/20 p-2 rounded-full">
+        <mat-icon class="scale-90">assistant</mat-icon>
+      </div>
+      <div>
+        <h2 class="text-base font-bold m-0 leading-tight">System Status</h2>
+        <p class="text-xs text-indigo-100 m-0 opacity-90">
+          Setup & Health Check
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      mat-icon-button
+      (click)="close.emit()"
+      class="text-white/80 hover:text-white hover:bg-white/10 rounded-full"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div
+    class="bg-indigo-50 px-4 py-2 border-b border-indigo-100 flex gap-2 items-start"
+  >
+    <mat-icon class="text-indigo-400 text-sm h-4 w-4 mt-0.5">info</mat-icon>
+    <p class="text-xs text-indigo-800 m-0 leading-snug">
+      These choices are optional. You can change them anytime by clicking your
+      <strong>User Profile</strong> in the top menu.
+    </p>
+  </div>
+
+  <div class="overflow-y-auto p-2 custom-scrollbar flex-1 bg-gray-50/50">
+    <section class="p-4">
+      <div class="flex items-center gap-2 mb-3 text-indigo-900/60 px-1">
+        <span class="text-xs font-bold uppercase tracking-wider"
+          >1. Identity</span
+        >
+        <div class="h-px bg-indigo-100 flex-1"></div>
+      </div>
+      <lib-identity-settings-content [isWizard]="true" />
+    </section>
+
+    <section class="p-4 pt-0">
+      <div class="flex items-center gap-2 mb-3 text-indigo-900/60 px-1">
+        <span class="text-xs font-bold uppercase tracking-wider"
+          >2. Keys & Routing</span
+        >
+        <div class="h-px bg-indigo-100 flex-1"></div>
+      </div>
+      <lib-key-settings-content [isWizard]="true" />
+    </section>
+
+    <section class="p-4 pt-0">
+      <div class="flex items-center gap-2 mb-3 text-indigo-900/60 px-1">
+        <span class="text-xs font-bold uppercase tracking-wider"
+          >3. Data & Storage</span
+        >
+        <div class="h-px bg-indigo-100 flex-1"></div>
+      </div>
+      <lib-data-settings-content [isWizard]="true" />
+    </section>
+  </div>
+</div>

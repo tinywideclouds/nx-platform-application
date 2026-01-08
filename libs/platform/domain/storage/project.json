@@ -1,0 +1,13 @@
+{
+  "name": "platform-domain-storage",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/domain/storage/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:domain"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

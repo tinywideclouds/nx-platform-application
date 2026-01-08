@@ -1,65 +1,73 @@
-<mat-card class="sync-card">
-  <mat-card-header>
-    <mat-card-title>Cloud Backup & Restore</mat-card-title>
-    <mat-card-subtitle> Sync your data with Google Drive </mat-card-subtitle>
-  </mat-card-header>
+<div
+  class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+>
+  <div class="p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div
+          class="h-10 w-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"
+        >
+          <mat-icon>backup</mat-icon>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-900 m-0">Cloud Backup & Sync</h3>
+          <p class="text-xs text-gray-500 m-0">Google Drive</p>
+        </div>
+      </div>
 
-  <mat-card-content>
-    <div class="options-grid">
-      <mat-checkbox
-        [checked]="syncContacts()"
-        (change)="syncContacts.set($event.checked)"
+      <mat-slide-toggle
+        color="primary"
         [disabled]="isSyncing()"
+        [checked]="isCloudEnabled"
+        (change)="toggleCloudSync($event.checked)"
       >
-        Sync Contacts
-      </mat-checkbox>
-
-      <mat-checkbox
-        [checked]="syncMessages()"
-        (change)="syncMessages.set($event.checked)"
-        [disabled]="isSyncing()"
-      >
-        Sync Messages
-      </mat-checkbox>
+      </mat-slide-toggle>
     </div>
 
-    @if (lastResult(); as res) {
-      <div class="status-box" [class.error]="!res.success">
-        @if (res.success) {
-          <div class="success-row">
-            <mat-icon color="primary">check_circle</mat-icon>
-            <span>Sync Complete ({{ res.timestamp | date: 'shortTime' }})</span>
-          </div>
-        }
-        @if (!res.success) {
-          <div class="error-row">
-            <mat-icon color="warn">error</mat-icon>
-            <span>Sync Failed</span>
-          </div>
-        }
-        @if (res.errors.length > 0) {
-          <ul class="error-list">
-            @for (err of res.errors; track err) {
-              <li>{{ err }}</li>
-            }
-          </ul>
-        }
-      </div>
-    }
-    @if (isSyncing()) {
-      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-    }
-  </mat-card-content>
+    @if (isCloudEnabled()) {
+      <p class="text-sm text-gray-600 mb-4 leading-relaxed">
+        Your encrypted contacts and conversation history are synced across your
+        devices.
+      </p>
 
-  <mat-card-actions align="end">
-    <button
-      mat-flat-button
-      color="primary"
-      (click)="triggerSync()"
-      [disabled]="isSyncing() || (!syncContacts() && !syncMessages())"
-    >
-      <mat-icon>{{ isSyncing() ? 'sync' : 'cloud_upload' }}</mat-icon>
-      {{ isSyncing() ? 'Syncing...' : 'Sync Now' }}
-    </button>
-  </mat-card-actions>
-</mat-card>
+      @if (isSyncing()) {
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs text-blue-600 font-medium">
+            <span>Syncing...</span>
+            <mat-icon class="text-[14px] w-[14px] h-[14px] animate-spin"
+              >refresh</mat-icon
+            >
+          </div>
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        </div>
+      } @else {
+        <div class="flex items-center gap-2 text-xs text-gray-400">
+          <mat-icon class="text-[16px] w-[16px] h-[16px]"
+            >check_circle</mat-icon
+          >
+          <span>
+            Last synced:
+            @if (lastResult(); as res) {
+              {{ res.timestamp | date: 'shortTime' }}
+            } @else {
+              Never
+            }
+          </span>
+        </div>
+      }
+    } @else {
+      <p class="text-sm text-gray-400 mb-4 italic">
+        Cloud sync is disabled. Your data is only stored locally on this device.
+      </p>
+      <button
+        mat-flat-button
+        color="primary"
+        class="w-full sm:w-auto"
+        (click)="onReconnect()"
+      >
+        <mat-icon>cloud_queue</mat-icon>
+        Connect Google Drive
+      </button>
+    }
+  </div>
+</div>

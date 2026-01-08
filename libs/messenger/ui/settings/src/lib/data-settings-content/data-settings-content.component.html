@@ -1,0 +1,86 @@
+<div class="space-y-6">
+  @if (isWizard()) {
+    <div
+      class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 mb-4 flex gap-3 animate-fade-in"
+    >
+      <mat-icon class="text-indigo-500 shrink-0 text-base w-5 h-5 mt-0.5"
+        >sd_storage</mat-icon
+      >
+      <div class="text-xs text-indigo-900 leading-relaxed">
+        <strong>Local-First Architecture:</strong> Your messages are stored
+        encrypted on this device. We do not keep a copy on our servers. Use
+        <strong>Cloud Backup</strong> below to sync across devices.
+      </div>
+    </div>
+  }
+
+  <lib-messenger-sync-card />
+
+  <div
+    class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+  >
+    <div
+      class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center"
+    >
+      <h3 class="font-bold text-gray-700 text-sm m-0">
+        Local Storage Management
+      </h3>
+    </div>
+
+    <mat-nav-list>
+      <a
+        mat-list-item
+        (click)="onClearHistory()"
+        class="cursor-pointer hover:bg-red-50 group"
+      >
+        <mat-icon matListItemIcon class="text-gray-400 group-hover:text-red-500"
+          >delete_sweep</mat-icon
+        >
+        <span
+          matListItemTitle
+          class="font-medium text-sm text-gray-900 group-hover:text-red-700"
+          >Clear Message History</span
+        >
+        <span
+          matListItemLine
+          class="text-xs text-gray-500 group-hover:text-red-400"
+          >Permanently delete messages from this device</span
+        >
+      </a>
+
+      <a
+        mat-list-item
+        (click)="onClearContacts()"
+        class="cursor-pointer hover:bg-red-50 group"
+      >
+        <mat-icon matListItemIcon class="text-gray-400 group-hover:text-red-500"
+          >contact_page</mat-icon
+        >
+        <span
+          matListItemTitle
+          class="font-medium text-sm text-gray-900 group-hover:text-red-700"
+          >Clear Cached Contacts</span
+        >
+        <span
+          matListItemLine
+          class="text-xs text-gray-500 group-hover:text-red-400"
+          >Removes local address book cache</span
+        >
+      </a>
+
+      <a
+        mat-list-item
+        (click)="onSecureLogout()"
+        class="cursor-pointer hover:bg-red-50 group"
+      >
+        <mat-icon matListItemIcon class="text-red-500">logout</mat-icon>
+        <span matListItemTitle class="font-bold text-sm text-red-600"
+          >Secure Logout & Wipe</span
+        >
+        <span matListItemLine class="text-xs text-red-400"
+          >Delete all keys and reset application state</span
+        >
+      </a>
+    </mat-nav-list>
+  </div>
+</div>

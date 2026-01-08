@@ -19,37 +19,40 @@ import {
 // --- Contacts Storage ---
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
-// --- Cloud Access ---
+// --- Infrastructure: Cloud Drivers ---
+// ✅ NEW: Use the shared Platform Infrastructure
 import {
-  CONTACTS_CLOUD_CONFIG,
-  MockCloudProvider,
-} from '@nx-platform-application/contacts-cloud-access';
+  VaultDrivers,
+  PlatformStorageConfig,
+  GoogleDriveDriver,
+} from '@nx-platform-application/platform-infrastructure-storage';
 
-import {
-  CLOUD_PROVIDERS,
-  GoogleDriveService,
-} from '@nx-platform-application/platform-cloud-access';
-
-// --- Mock Providers (if needed for storage/auth in harness) ---
-// Assuming you have a mock for ContactsStorageService similar to messenger-app,
-// otherwise use the real one for the 'real' harness mode.
-
-const cloudConfigProvider = {
-  provide: CONTACTS_CLOUD_CONFIG,
-  useValue: { googleClientId: environment.googleClientId },
-};
-
-// Choose Cloud Provider based on environment
-const cloudProviders = environment.useMocks
-  ? [{ provide: CLOUD_PROVIDERS, useClass: MockCloudProvider, multi: true }]
-  : [{ provide: CLOUD_PROVIDERS, useClass: GoogleDriveService, multi: true }];
+// --- Cloud Configuration ---
+const cloudProviders = [
+  {
+    provide: PlatformStorageConfig,
+    useValue: {
+      googleClientId: environment.googleClientId,
+    } as PlatformStorageConfig,
+  },
+  {
+    provide: VaultDrivers,
+    // Note: If you need a Mock Driver for 'useMocks', create a MockVaultDriver class
+    // that implements VaultProvider and swap it here.
+    // For now, we wire the real driver or an empty array if mocks are strict.
+    useClass: environment.useMocks
+      ? class MockVaultDriver {}
+      : GoogleDriveDriver,
+    multi: true,
+  },
+];
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
     provideRouter(appRoutes, withComponentInputBinding()),
     provideAnimations(),
-    provideHttpClient(), // Required for GoogleDriveService fetch/REST calls
+    provideHttpClient(), // Required for GoogleDriveDriver
 
     // 1. Logger Config
     {
@@ -57,11 +60,10 @@ export const appConfig: ApplicationConfig = {
       useValue: { level: isDevMode() ? LogLevel.DEBUG : LogLevel.INFO },
     },
 
-    // 2. Contacts Storage (Real or Mock could go here depending on harness needs)
+    // 2. Contacts Storage
     ContactsStorageService,
 
-    // 3. Cloud Access Configuration
-    cloudConfigProvider,
+    // 3. Cloud Infrastructure (Replacing old CONTACTS_CLOUD_CONFIG)
     ...cloudProviders,
   ],
 };

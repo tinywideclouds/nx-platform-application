@@ -1,0 +1,44 @@
+<div
+  class="flex items-center justify-end overflow-hidden transition-all duration-300 ease-in-out h-10"
+  [class.w-full]="isOpen()"
+  [class.w-10]="!isOpen()"
+>
+  @if (isOpen()) {
+    <div
+      class="flex-1 flex items-center bg-gray-100 rounded-full px-3 py-1 mr-2 animate-fade-in"
+    >
+      <mat-icon class="text-gray-400 text-sm scale-75 h-5 w-5 mr-1"
+        >search</mat-icon
+      >
+      <input
+        #filterInput
+        aria-label="filter list"
+        type="text"
+        [ngModel]="query()"
+        (ngModelChange)="onQueryChange($event)"
+        (keydown.escape)="close()"
+        class="w-full bg-transparent border-none text-sm focus:outline-none text-gray-700 placeholder-gray-400"
+        [placeholder]="placeholder()"
+      />
+      @if (query()) {
+        <button
+          mat-icon-button
+          class="scale-75 w-6 h-6 flex items-center justify-center"
+          (click)="clear()"
+          matTooltip="Clear"
+        >
+          <mat-icon class="text-sm">close</mat-icon>
+        </button>
+      }
+    </div>
+  }
+
+  <button
+    mat-icon-button
+    (click)="toggle()"
+    [color]="isOpen() ? 'primary' : ''"
+    [matTooltip]="isOpen() ? 'Close Search' : 'Search'"
+  >
+    <mat-icon>{{ isOpen() ? 'search_off' : 'search' }}</mat-icon>
+  </button>
+</div>

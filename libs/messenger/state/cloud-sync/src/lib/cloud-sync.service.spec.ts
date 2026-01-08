@@ -1,31 +1,18 @@
 import { TestBed } from '@angular/core/testing';
 import { CloudSyncService } from './cloud-sync.service';
-import { ContactsCloudService } from '@nx-platform-application/contacts-cloud-access';
+import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
-import {
-  CLOUD_PROVIDERS,
-  CloudStorageProvider,
-} from '@nx-platform-application/platform-cloud-access';
+import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { signal } from '@angular/core';
 
 describe('CloudSyncService (Orchestrator)', () => {
   let service: CloudSyncService;
+  let contactsSync: ContactsSyncService;
   let chatSync: ChatSyncService;
-
-  const mockProvider: CloudStorageProvider = {
-    providerId: 'google',
-    displayName: 'Google Drive',
-    requestAccess: vi.fn(),
-    hasPermission: vi.fn(),
-    revokeAccess: vi.fn(),
-    listBackups: vi.fn(),
-    uploadBackup: vi.fn(),
-    downloadBackup: vi.fn(),
-    uploadFile: vi.fn(),
-    downloadFile: vi.fn(),
-  };
+  let storage: StorageService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,21 +20,25 @@ describe('CloudSyncService (Orchestrator)', () => {
     TestBed.configureTestingModule({
       providers: [
         CloudSyncService,
-        MockProvider(ContactsCloudService, {
-          listBackups: vi.fn().mockResolvedValue([]),
-          restoreFromCloud: vi.fn().mockResolvedValue(undefined),
-          backupToCloud: vi.fn().mockResolvedValue(undefined),
+        MockProvider(ContactsSyncService, {
+          restore: vi.fn().mockResolvedValue(undefined),
+          backup: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(ChatSyncService, {
           syncMessages: vi.fn().mockResolvedValue(true),
         }),
+        MockProvider(StorageService, {
+          connect: vi.fn().mockResolvedValue(true),
+          isConnected: signal(true),
+        }),
         MockProvider(Logger),
-        { provide: CLOUD_PROVIDERS, useValue: [mockProvider] },
       ],
     });
 
     service = TestBed.inject(CloudSyncService);
+    contactsSync = TestBed.inject(ContactsSyncService);
     chatSync = TestBed.inject(ChatSyncService);
+    storage = TestBed.inject(StorageService);
   });
 
   afterEach(() => {
@@ -55,9 +46,8 @@ describe('CloudSyncService (Orchestrator)', () => {
   });
 
   describe('syncNow', () => {
-    it('should Authenticate ONCE and run BOTH syncs', async () => {
-      vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(false);
-      vi.spyOn(mockProvider, 'requestAccess').mockResolvedValue(true);
+    it('should fail immediately if Storage is not connected', async () => {
+      (storage.isConnected as any).set(false);
 
       const result = await service.syncNow({
         providerId: 'google',
@@ -65,12 +55,51 @@ describe('CloudSyncService (Orchestrator)', () => {
         syncMessages: true,
       });
 
-      // Assert Auth
-      expect(mockProvider.requestAccess).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(result.errors[0]).toContain('No storage connected');
+      expect(contactsSync.restore).not.toHaveBeenCalled();
+    });
 
-      // Assert Messenger Flow
-      expect(chatSync.syncMessages).toHaveBeenCalledWith('google');
+    it('should run BOTH syncs if connected', async () => {
+      const result = await service.syncNow({
+        providerId: 'google',
+        syncContacts: true,
+        syncMessages: true,
+      });
 
+      // Contacts Flow
+      expect(contactsSync.restore).toHaveBeenCalled();
+      expect(contactsSync.backup).toHaveBeenCalled();
+
+      // Messenger Flow
+      expect(chatSync.syncMessages).toHaveBeenCalled();
+
+      expect(result.success).toBe(true);
+      expect(result.contactsProcessed).toBe(true);
+      expect(result.messagesProcessed).toBe(true);
+    });
+
+    it('should handle partial failures', async () => {
+      // Contacts Fails
+      vi.spyOn(contactsSync, 'restore').mockRejectedValue(
+        new Error('Network Error'),
+      );
+
+      const result = await service.syncNow({
+        providerId: 'google',
+        syncContacts: true,
+        syncMessages: true,
+      });
+
+      // Contacts processed = false
+      expect(result.contactsProcessed).toBe(false);
+      expect(result.errors[0]).toContain('Contacts: Network Error');
+
+      // Messenger processed = true (should still run)
+      expect(chatSync.syncMessages).toHaveBeenCalled();
+      expect(result.messagesProcessed).toBe(true);
+
+      // Overall success is true (we don't crash on partials)
       expect(result.success).toBe(true);
     });
   });

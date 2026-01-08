@@ -1,129 +1,81 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatVaultEngine } from './chat-vault-engine.service';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import {
-  CLOUD_PROVIDERS,
-  CloudStorageProvider,
-} from '@nx-platform-application/platform-cloud-access';
+import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { Logger } from '@nx-platform-application/console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { signal } from '@angular/core';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 import {
-  MessageTombstone,
   ChatMessage,
-  ConversationSyncState,
+  MessageTombstone,
 } from '@nx-platform-application/messenger-types';
 
-// --- Temporal Mock (Preserved from legacy test) ---
+// --- Temporal Mock ---
 vi.mock('@js-temporal/polyfill', () => {
   return {
     Temporal: {
       Now: {
         plainDateISO: vi.fn(() => ({
-          year: 2023,
-          month: 11,
-          day: 15,
-          toString: () => '2023-11-15',
+          year: 2026,
+          month: 1,
+          day: 7,
+          toString: () => '2026-01-07',
         })),
-      },
-      PlainDate: {
-        from: vi.fn((str) => {
-          const [y, m, d] = str.split('-').map(Number);
-          return {
-            year: y,
-            month: m,
-            day: d,
-            toPlainYearMonth: () => ({
-              year: y,
-              month: m,
-              daysInMonth: 30,
-              compare: (a: any, b: any) =>
-                a.year * 12 + a.month - (b.year * 12 + b.month),
-              add: (duration: any) => {
-                let nextM = m + duration.months;
-                let nextY = y;
-                if (nextM > 12) {
-                  nextM = 1;
-                  nextY++;
-                }
-                return {
-                  year: nextY,
-                  month: nextM,
-                  daysInMonth: 30,
-                  toPlainDate: (opts: any) => ({
-                    toString: () =>
-                      `${nextY}-${String(nextM).padStart(2, '0')}-${String(
-                        opts.day,
-                      ).padStart(2, '0')}`,
-                  }),
-                };
-              },
-              toPlainDate: (opts: any) => ({
-                toString: () =>
-                  `${y}-${String(m).padStart(2, '0')}-${String(
-                    opts.day,
-                  ).padStart(2, '0')}`,
-              }),
-            }),
-          };
-        }),
-      },
-      PlainYearMonth: {
-        compare: (a: any, b: any) =>
-          a.year * 12 + a.month - (b.year * 12 + b.month),
+        instant: vi.fn(() => ({
+          toString: () => '2026-01-07T10:00:00Z',
+        })),
       },
     },
   };
 });
 
-describe('ChatVaultEngine (Internal)', () => {
+describe('ChatVaultEngine', () => {
   let service: ChatVaultEngine;
   let storage: ChatStorageService;
+  let cloudStorage: StorageService;
 
-  // Mock Provider (Google Drive)
-  const mockProvider: CloudStorageProvider = {
+  // Mock Driver (The "File System")
+  const mockDriver = {
     providerId: 'google',
     displayName: 'Google Drive',
-    revokeAccess: vi.fn(),
-    requestAccess: vi.fn(),
-    hasPermission: vi.fn(),
-    listBackups: vi.fn(),
-    uploadBackup: vi.fn(),
-    downloadBackup: vi.fn(),
-    uploadFile: vi.fn(),
-    downloadFile: vi.fn(),
+    writeJson: vi.fn(),
+    readJson: vi.fn(),
+    listFiles: vi.fn(),
+    isAuthenticated: vi.fn(),
+    link: vi.fn(),
+    unlink: vi.fn(),
   };
 
-  // Test Data
+  // Test Data URNs
   const bobUrn = URN.parse('urn:contacts:user:bob');
+  const meUrn = URN.parse('urn:contacts:user:me');
 
-  const mockMessages: ChatMessage[] = [
-    {
-      id: 'msg-1',
-      sentTimestamp: '2023-11-01T10:00:00Z',
-      conversationUrn: bobUrn,
-      senderId: URN.parse('urn:contacts:user:me'),
-      typeId: URN.parse('urn:message:type:text'),
-      status: 'sent',
-      tags: [],
-    } as any,
-  ];
+  // FIX: Return a Domain Object for "Storage" mocks, but we will manually flatten it for "Cloud" mocks
+  const createMsg = (id: string, text: string): ChatMessage => ({
+    id,
+    sentTimestamp: '2026-01-07T10:00:00Z' as ISODateTimeString,
+    conversationUrn: bobUrn,
+    senderId: meUrn,
+    typeId: URN.parse('urn:message:type:text'),
+    status: 'sent',
+    tags: [],
+    textContent: text,
+    payloadBytes: new TextEncoder().encode(text),
+  });
 
-  const mockIndex: ConversationSyncState[] = [
-    {
-      conversationUrn: bobUrn,
-      lastActivityTimestamp: '2023-11-01T10:00:00Z' as ISODateTimeString,
-      snippet: 'Hi',
-      unreadCount: 0,
-      previewType: 'text',
-      genesisTimestamp: null,
-      lastModified: '2023-11-01T10:00:00Z' as ISODateTimeString,
-    },
-  ];
+  // Helper to simulate Raw JSON from Cloud (Stringifies URNs)
+  const toRawJson = (msg: ChatMessage) => ({
+    ...msg,
+    conversationUrn: msg.conversationUrn.toString(),
+    senderId: msg.senderId.toString(),
+    typeId: msg.typeId.toString(),
+    tags: msg.tags ? msg.tags.map((t) => t.toString()) : [],
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,110 +84,169 @@ describe('ChatVaultEngine (Internal)', () => {
       providers: [
         ChatVaultEngine,
         MockProvider(ChatStorageService, {
-          isCloudEnabled: vi.fn().mockResolvedValue(false),
-          setCloudEnabled: vi.fn().mockResolvedValue(undefined),
-          getDataRange: vi.fn(),
-          getMessagesInRange: vi.fn(),
-          getTombstonesInRange: vi.fn().mockResolvedValue([]),
+          getMessagesAfter: vi.fn().mockResolvedValue([]),
+          getTombstonesAfter: vi.fn().mockResolvedValue([]),
           bulkSaveMessages: vi.fn().mockResolvedValue(undefined),
-          getAllConversations: vi.fn().mockResolvedValue([]),
-          bulkSaveConversations: vi.fn().mockResolvedValue(undefined),
+          bulkSaveTombstones: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(StorageService, {
+          getActiveDriver: vi.fn().mockReturnValue(mockDriver),
+          isConnected: signal(true),
         }),
         MockProvider(Logger),
-        { provide: CLOUD_PROVIDERS, useValue: [mockProvider] },
       ],
     });
 
     service = TestBed.inject(ChatVaultEngine);
     storage = TestBed.inject(ChatStorageService);
+    cloudStorage = TestBed.inject(StorageService);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  describe('Backup (Hierarchy & Twin-Files)', () => {
-    beforeEach(() => {
-      // Force enabled state
-      (service as any)._isCloudEnabled.set(true);
-      vi.spyOn(mockProvider, 'hasPermission').mockReturnValue(true);
+  describe('backup()', () => {
+    it('should write a Delta file if new messages exist', async () => {
+      // 1. Setup: Local storage has 1 new message (Domain Object)
+      const newMsg = createMsg('m1', 'Hello Cloud');
+      vi.spyOn(storage, 'getMessagesAfter').mockResolvedValue([newMsg]);
 
-      vi.spyOn(storage, 'getDataRange').mockResolvedValue({
-        min: '2023-11-01T00:00:00Z' as ISODateTimeString,
-        max: '2023-11-30T00:00:00Z' as ISODateTimeString,
-      });
-      vi.spyOn(storage, 'getMessagesInRange').mockResolvedValue(mockMessages);
-      vi.spyOn(storage, 'getAllConversations').mockResolvedValue(mockIndex);
+      // 2. Action
+      await service.backup();
+
+      // 3. Verify
+      expect(mockDriver.writeJson).toHaveBeenCalledTimes(1);
+      const [path, payload, options] = mockDriver.writeJson.mock.calls[0];
+
+      expect(path).toContain('tinywide/messaging/2026/01/deltas');
+      expect(path).toContain('_delta.json');
+      expect(options).toEqual({ blindCreate: true });
+      expect(payload.messages).toHaveLength(1);
+      expect(payload.messages[0].id).toBe('m1');
     });
 
-    it('should upload Manifest, Vault, and Global Index to correct PATHS', async () => {
-      await service.backup('google');
-      // 1. Manifest, 2. Vault, 3. Global Index
-      expect(mockProvider.uploadFile).toHaveBeenCalledTimes(3);
-      expect(mockProvider.uploadFile).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.stringContaining('chat_index.json'),
-      );
+    it('should NOT write anything if no new data exists', async () => {
+      vi.spyOn(storage, 'getMessagesAfter').mockResolvedValue([]);
+      vi.spyOn(storage, 'getTombstonesAfter').mockResolvedValue([]);
+
+      await service.backup();
+
+      expect(mockDriver.writeJson).not.toHaveBeenCalled();
+    });
+
+    it('should include tombstones in the payload', async () => {
+      const tombstone: MessageTombstone = {
+        messageId: 'del-1',
+        conversationUrn: bobUrn,
+        deletedAt: '2026-01-07T10:00:00Z' as ISODateTimeString,
+      };
+      vi.spyOn(storage, 'getTombstonesAfter').mockResolvedValue([tombstone]);
+
+      await service.backup();
+
+      const [_, payload] = mockDriver.writeJson.mock.calls[0];
+      expect(payload.tombstones).toHaveLength(1);
+      expect(payload.tombstones[0].messageId).toBe('del-1');
     });
   });
 
-  describe('Merge Logic (Tombstones)', () => {
-    it('should REMOVE message from Vault if Local Tombstone exists', async () => {
-      const msgId = 'msg-delete-me';
+  describe('restore()', () => {
+    it('should download, hydrate, and save messages to local storage', async () => {
+      // 1. Setup: Cloud has 1 delta file
+      mockDriver.readJson.mockImplementation((path: string) => {
+        if (path.includes('chat_vault')) return Promise.resolve(null);
+        if (path.includes('delta_1.json')) {
+          // FIX: Use toRawJson to flatten URNs to strings
+          return Promise.resolve({
+            messages: [
+              {
+                ...toRawJson(createMsg('remote-1', 'Hydrate Me')),
+                payloadBytes: { 0: 72, 1: 105 }, // "Hi"
+              },
+            ],
+            tombstones: [],
+          });
+        }
+        return Promise.resolve(null);
+      });
 
-      const deletedRecord: MessageTombstone = {
-        messageId: msgId,
-        deletedAt: '2023-11-15T12:00:00Z' as ISODateTimeString,
-        conversationUrn: bobUrn,
-      };
+      mockDriver.listFiles.mockResolvedValue(['delta_1.json']);
 
-      const mockNovember2023 = {
-        year: 2023,
-        month: 11,
-        daysInMonth: 30,
-        toPlainDate: ({ day }: { day: number }) => ({
-          toString: () => `2023-11-${String(day).padStart(2, '0')}`,
-        }),
-      } as any;
+      // 2. Action
+      await service.restore();
 
-      // Remote has the message (Ghost)
-      const remoteMsg = {
-        ...mockMessages[0],
-        id: msgId,
-        conversationUrn: bobUrn.toString(), // JSON format
-        senderId: 'urn:contacts:user:me',
-        typeId: 'urn:message:type:text',
-      };
+      // 3. Verify Storage Save
+      expect(storage.bulkSaveMessages).toHaveBeenCalledTimes(1);
+      const savedMessages = (storage.bulkSaveMessages as any).mock.calls[0][0];
 
-      const remoteVault = {
-        version: 1,
-        vaultId: '2023_11',
-        messages: [remoteMsg],
-        tombstones: [],
-      };
+      expect(savedMessages).toHaveLength(1);
+      const msg = savedMessages[0];
 
-      vi.spyOn(storage, 'getMessagesInRange').mockResolvedValue([]);
-      vi.spyOn(storage, 'getTombstonesInRange').mockResolvedValue([
-        deletedRecord,
-      ]);
+      expect(msg.payloadBytes).toBeInstanceOf(Uint8Array);
+      expect(msg.id).toBe('remote-1');
+    });
 
-      vi.spyOn(mockProvider, 'downloadFile').mockResolvedValue(remoteVault);
+    it('should apply remote deletions (tombstones)', async () => {
+      mockDriver.listFiles.mockResolvedValue(['delta_del.json']);
+      mockDriver.readJson.mockResolvedValue({
+        messages: [],
+        tombstones: [
+          {
+            messageId: 'del-remote',
+            conversationUrn: bobUrn.toString(), // Stringified
+            deletedAt: '2026-01-07T09:00:00Z',
+          },
+        ],
+      });
 
-      // Act: Accessing private method for unit testing the complex merge logic
-      await (service as any).processVault(
-        mockProvider,
-        '2023_11',
-        mockNovember2023,
+      await service.restore();
+
+      expect(storage.bulkSaveTombstones).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ messageId: 'del-remote' }),
+        ]),
       );
+    });
 
-      // Assert
-      expect(mockProvider.uploadFile).toHaveBeenCalledWith(
+    it('should do nothing if no files exist', async () => {
+      mockDriver.listFiles.mockResolvedValue([]);
+      mockDriver.readJson.mockResolvedValue(null);
+
+      await service.restore();
+
+      expect(storage.bulkSaveMessages).not.toHaveBeenCalled();
+    });
+
+    it('should trigger compaction if delta count > 10', async () => {
+      // 1. Setup: Simulate 11 delta files
+      const deltaFiles = Array.from(
+        { length: 11 },
+        (_, i) => `delta_${i}.json`,
+      );
+      mockDriver.listFiles.mockResolvedValue(deltaFiles);
+
+      // Return a dummy payload for any delta read
+      mockDriver.readJson.mockImplementation((path: string) => {
+        if (path.includes('chat_vault')) return Promise.resolve(null);
+
+        // FIX: Use toRawJson to prevent URN parse errors
+        const rawMsg = toRawJson(createMsg('m', 'content'));
+        return Promise.resolve({
+          messages: [{ ...rawMsg, id: `msg_${path}` }],
+          tombstones: [],
+        });
+      });
+
+      // 2. Action
+      await service.restore();
+
+      // 3. Verify Compaction
+      expect(mockDriver.writeJson).toHaveBeenCalledWith(
+        expect.stringContaining('chat_vault_2026_01.json'),
         expect.objectContaining({
-          messages: [], // Ghost exorcised
-          tombstones: [deletedRecord],
-          messageCount: 0,
+          messageCount: 11,
         }),
-        expect.stringContaining('chat_vault_2023_11.json'),
       );
     });
   });
