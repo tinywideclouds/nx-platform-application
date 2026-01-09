@@ -1,0 +1,40 @@
+:host {
+  display: block;
+}
+
+.image-container {
+  transition: opacity 0.3s ease;
+
+  &.uploading {
+    opacity: 0.8;
+
+    .image-content {
+      filter: grayscale(0.3);
+    }
+  }
+}
+
+.image-content {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  // Ensure minimum touch target size and prevent layout shift
+  min-width: 120px;
+  min-height: 120px;
+  object-fit: cover;
+  border-radius: 0.375rem; // rounded-md
+  transition: filter 0.3s ease;
+}
+
+.pending-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.caption {
+  word-wrap: break-word;
+}

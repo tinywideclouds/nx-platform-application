@@ -1,0 +1,22 @@
+<div
+  class="image-container relative group cursor-pointer overflow-hidden rounded-md mt-1 border border-gray-200/20"
+  [class.uploading]="isPending()"
+>
+  <img
+    alt="image"
+    [src]="displaySrc()"
+    [alt]="altText()"
+    class="image-content"
+    loading="lazy"
+  />
+
+  @if (isPending()) {
+    <div class="pending-overlay">
+      <mat-icon class="text-white drop-shadow-md animate-spin">sync</mat-icon>
+    </div>
+  }
+
+  @if (content().caption; as caption) {
+    <p class="caption mt-2 text-sm px-1">{{ caption }}</p>
+  }
+</div>

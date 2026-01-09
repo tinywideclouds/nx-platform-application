@@ -412,6 +412,16 @@ export class ChatStorageService implements HistoryReader, ConversationStorage {
   }
 
   /**
+   * RAW UPDATE: Replaces the payload bytes for a specific message.
+   * The caller (Domain Layer) is responsible for serialization/validity.
+   */
+  async updateMessagePayload(
+    messageId: string,
+    newBytes: Uint8Array,
+  ): Promise<void> {
+    await this.db.messages.update(messageId, { payloadBytes: newBytes });
+  }
+  /**
    * MAINTENANCE: Prune old tombstones.
    * Prevents DB bloat from years of deletion records.
    */

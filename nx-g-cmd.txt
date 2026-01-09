@@ -183,3 +183,11 @@ nx g @nx/angular:library --name=messenger-infrastructure-local-settings --direct
 
 nx g @nx/angular:library --name=platform-tools-image-processing --directory=libs/platform/tools/image-processing --tags="scope:platform" 
 
+nx g @nx/angular:library --name=messenger-infrastructure-asset-storage --directory=libs/messenger/infrastructure/asset-storage --tags="scope:messenger" 
+
+nx g @nx/angular:library --name=messenger-state-identity --directory=libs/messenger/state/identity --tags="scope:messenger" 
+
+nx g @nx/angular:library --name=messenger-state-moderation --directory=libs/messenger/state/moderation --tags="scope:messenger" 
+
+nx g @nx/angular:library --name=messenger-state-media --directory=libs/messenger/state/media --tags="scope:messenger" 
+

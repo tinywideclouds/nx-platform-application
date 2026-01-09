@@ -1,3 +1,5 @@
+// libs/messenger/domain/ingestion/src/lib/ingestion.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -20,6 +22,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   MessageContentParser,
   ReadReceiptData,
+  AssetRevealData, // ✅ Import
   MESSAGE_TYPE_TYPING,
   MESSAGE_TYPE_READ_RECEIPT,
 } from '@nx-platform-application/messenger-domain-message-content';
@@ -192,10 +195,10 @@ export class IngestionService {
       }
 
       case 'signal': {
-        if (typeStr === MESSAGE_TYPE_TYPING) {
-          accumulator.typingIndicators.push(canonicalSenderUrn);
-        } else if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
-          const rr = parsed.payload.data as ReadReceiptData;
+        const payload = parsed.payload;
+
+        if (payload.action === 'read-receipt') {
+          const rr = payload.data as ReadReceiptData;
           const ids = rr?.messageIds || [];
 
           if (ids.length > 0) {
@@ -203,8 +206,6 @@ export class IngestionService {
               `[Ingestion] Applying Read Receipt from ${canonicalSenderUrn}`,
             );
 
-            // ✅ UPDATE: Apply individually to trigger Quorum logic
-            // This enables the "Hybrid Mode" in storage service
             for (const msgId of ids) {
               await this.storageService.applyReceipt(
                 msgId,
@@ -212,12 +213,54 @@ export class IngestionService {
                 'read',
               );
             }
-
             accumulator.readReceipts.push(...ids);
           }
+        } else if (typeStr === MESSAGE_TYPE_TYPING) {
+          accumulator.typingIndicators.push(canonicalSenderUrn);
+        }
+        // ✅ NEW: Asset Reveal (Smart Patching)
+        else if (payload.action === 'asset-reveal') {
+          const patch = payload.data as AssetRevealData;
+          await this.handleAssetReveal(patch);
         }
         break;
       }
+    }
+  }
+
+  /**
+   * Domain Logic: Read -> Parse -> Patch -> Serialize -> Write
+   */
+  private async handleAssetReveal(patch: AssetRevealData): Promise<void> {
+    const msg = await this.storageService.getMessage(patch.messageId);
+    if (!msg) return;
+
+    try {
+      if (!msg.payloadBytes) {
+        this.logger.warn(
+          `[Ingestion] Cannot patch ${patch.messageId}: Missing payload bytes`,
+        );
+        return;
+      }
+      // 1. Parse Existing
+      const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
+      if (parsed.kind !== 'content') return;
+
+      // 2. Patch
+      const newPayload = { ...parsed.payload, remoteUrl: patch.remoteUrl };
+
+      // 3. Serialize
+      const newBytes = this.parser.serialize(newPayload);
+
+      // 4. Save Raw Bytes
+      await this.storageService.updateMessagePayload(patch.messageId, newBytes);
+
+      this.logger.info(`[Ingestion] Patched remoteUrl for ${patch.messageId}`);
+    } catch (e) {
+      this.logger.error(
+        `[Ingestion] Failed to patch message ${patch.messageId}`,
+        e,
+      );
     }
   }
 }

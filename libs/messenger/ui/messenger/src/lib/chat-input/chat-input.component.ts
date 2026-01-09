@@ -30,24 +30,26 @@ export class ChatInputComponent {
   private imageProcessor = inject(ImageProcessingService);
 
   send = output<string>();
-  sendImage = output<ImageContent>();
+
+  // ✅ UPDATED: Emit BOTH file (for upload) and payload (for preview)
+  sendImage = output<{ file: File; payload: ImageContent }>();
+
   typing = output<void>();
 
   isProcessing = signal(false);
   pendingAttachment = signal<ImageContent | null>(null);
+  private rawFile: File | null = null;
 
-  /**
-   * 1. Handle Selection
-   */
   async onFileSelected(file: File): Promise<void> {
     this.isProcessing.set(true);
     try {
+      this.rawFile = file;
       const processed = await this.imageProcessor.process(file);
 
       const payload: ImageContent = {
         kind: 'image',
         thumbnailBase64: processed.thumbnailBase64,
-        remoteUrl: 'pending',
+        remoteUrl: 'pending', // Pending initially
         decryptionKey: 'none',
         mimeType: file.type,
         width: processed.metadata.width,
@@ -64,31 +66,32 @@ export class ChatInputComponent {
     }
   }
 
-  /**
-   * 2. Handle Removal
-   */
   onRemoveAttachment(): void {
     this.pendingAttachment.set(null);
+    this.rawFile = null;
   }
 
   /**
-   * 3. Handle Final Submission
-   * Triggered when user clicks Send or hits Enter
+   * 3. Handle Final Submission (Fire and Forget)
    */
-  onSubmit(text?: string): void {
+  async onSubmit(text?: string): Promise<void> {
     const attachment = this.pendingAttachment();
     const message = text?.trim();
 
-    // 1. Send Image
-    if (attachment) {
-      if (message) {
-        attachment.caption = message;
-      }
-      this.sendImage.emit(attachment);
+    if (attachment && this.rawFile) {
+      // ✅ Attach caption if present
+      const finalPayload: ImageContent = {
+        ...attachment,
+        caption: message || undefined,
+      };
+
+      // ✅ EMIT: Hand off to smart service immediately
+      this.sendImage.emit({ file: this.rawFile, payload: finalPayload });
+
+      // Reset Input immediately (Optimistic UI)
       this.pendingAttachment.set(null);
-    }
-    // 2. Send Text (Only if no image, or if separate logic needed)
-    else if (message) {
+      this.rawFile = null;
+    } else if (message) {
       this.send.emit(message);
     }
   }

@@ -66,7 +66,7 @@ export class MessengerToolbarComponent {
 
   // Since isCloudEnabled is a getter on the service, we compute it once or wrap it.
   // Assuming configuration doesn't change runtime without reload, this is safe.
-  private isCloudEnabled = computed(() => this.chatService.isCloudEnabled());
+  private isCloudEnabled = computed(() => this.chatService.isCloudConnected);
 
   // --- Priority Logic ---
   connectionStatus = computed<ConnectionStatus>(() => {

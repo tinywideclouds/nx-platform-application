@@ -10,7 +10,9 @@ import {
   ImageContent,
   MessageTypeText,
   MessageTypeImage,
-  MessageTypeReadReceipt, // ✅ NEW
+  MessageTypeReadReceipt,
+  AssetRevealData,
+  MessageTypeAssetReveal, // ✅ Import
 } from '@nx-platform-application/messenger-domain-message-content';
 
 // Dependency on State to perform optimistic updates
@@ -35,20 +37,19 @@ export class ConversationActionService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  // ✅ NEW: Image Support
-  // The UI is responsible for processing the blob and creating the ImageContent structure.
-  // This service simply serializes it and puts it on the wire.
+  // ✅ UPDATED: Image Support
+  // Returns the messageId so ChatService can patch it later
   async sendImage(
     recipientUrn: URN,
     data: ImageContent,
     myKeys: PrivateKeys,
     myUrn: URN,
-  ): Promise<void> {
+  ): Promise<string> {
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
     const typeId = MessageTypeImage;
 
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+    return this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
   async sendContactShare(
@@ -63,27 +64,11 @@ export class ConversationActionService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  async sendReadReceiptSignal(
-    recipientUrn: URN,
-    data: ReadReceiptData,
+  async sendTypingIndicator(
+    recipient: URN,
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<void> {
-    const bytes = new TextEncoder().encode(JSON.stringify(data));
-    await this.outbound.sendMessage(
-      myKeys,
-      myUrn,
-      recipientUrn,
-      MessageTypeReadReceipt,
-      bytes,
-      { isEphemeral: true },
-    );
-  }
-
-  async sendTypingIndicator(myKeys: PrivateKeys, myUrn: URN): Promise<void> {
-    const recipient = this.conversationState.selectedConversation();
-    if (!recipient) return;
-
     await this.outbound.sendMessage(
       myKeys,
       myUrn,
@@ -94,8 +79,50 @@ export class ConversationActionService {
     );
   }
 
+  // ✅ UPDATED: Read Receipt (Now Durable)
+  async sendReadReceiptSignal(
+    recipientUrn: URN,
+    messageIds: string[],
+    myKeys: PrivateKeys,
+    myUrn: URN,
+  ): Promise<void> {
+    const data: ReadReceiptData = {
+      messageIds,
+      readAt: new Date().toISOString(),
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+
+    // Durable send
+    await this.sendGeneric(
+      recipientUrn,
+      MessageTypeReadReceipt,
+      bytes,
+      myKeys,
+      myUrn,
+    );
+  }
+
+  // ✅ NEW: Asset Reveal (Durable Patch)
+  async sendAssetReveal(
+    recipientUrn: URN,
+    data: AssetRevealData,
+    myKeys: PrivateKeys,
+    myUrn: URN,
+  ): Promise<void> {
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+
+    await this.sendGeneric(
+      recipientUrn,
+      MessageTypeAssetReveal,
+      bytes,
+      myKeys,
+      myUrn,
+    );
+  }
+
   /**
    * Generic sender that handles Optimistic UI updates via the State service.
+   * Returns the Message ID.
    */
   private async sendGeneric(
     recipientUrn: URN,
@@ -103,7 +130,7 @@ export class ConversationActionService {
     bytes: Uint8Array,
     myKeys: PrivateKeys,
     myUrn: URN,
-  ): Promise<void> {
+  ): Promise<string> {
     return this.runExclusive(async () => {
       const result = await this.outbound.sendMessage(
         myKeys,
@@ -127,7 +154,10 @@ export class ConversationActionService {
             );
           }
         });
+
+        return message.id;
       }
+      throw new Error('Send failed');
     });
   }
 

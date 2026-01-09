@@ -77,6 +77,9 @@
       "@nx-platform-application/messenger-domain-sending": [
         "libs/messenger/domain/sending/src/index.ts"
       ],
+      "@nx-platform-application/messenger-infrastructure-asset-storage": [
+        "libs/messenger/infrastructure/asset-storage/src/index.ts"
+      ],
       "@nx-platform-application/messenger-infrastructure-chat-access": [
         "libs/messenger/infrastructure/chat-access/src/index.ts"
       ],
@@ -121,6 +124,15 @@
       ],
       "@nx-platform-application/messenger-state-cloud-sync": [
         "libs/messenger/state/cloud-sync/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-state-identity": [
+        "libs/messenger/state/identity/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-state-media": [
+        "libs/messenger/state/media/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-state-moderation": [
+        "libs/messenger/state/moderation/src/index.ts"
       ],
       "@nx-platform-application/messenger-types": [
         "libs/messenger/types/src/index.ts"

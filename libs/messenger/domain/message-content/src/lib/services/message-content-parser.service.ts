@@ -1,6 +1,13 @@
+// libs/messenger/domain/message-content/src/lib/services/message-content-parser.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { ParsedMessage, ContentPayload } from '../models/content-types'; // ✅ Import ContentPayload
+import {
+  ParsedMessage,
+  ContentPayload,
+  MESSAGE_TYPE_ASSET_REVEAL, // ✅ Import
+  AssetRevealData, // ✅ Import
+} from '../models/content-types';
 import { MessageMetadataService } from './message-metadata.service';
 
 // Strategies
@@ -16,7 +23,8 @@ import { SignalParserStrategy } from '../strategies/signal.strategies';
 @Injectable({ providedIn: 'root' })
 export class MessageContentParser {
   private metadataService = inject(MessageMetadataService);
-  private encoder = new TextEncoder(); // ✅ Add Encoder
+  private encoder = new TextEncoder();
+  private decoder = new TextDecoder(); // ✅ FIXED: Added Decoder
 
   // Registry of Strategies
   private strategies: ContentParserStrategy[] = [
@@ -34,6 +42,18 @@ export class MessageContentParser {
     const typeStr = typeId.toString();
 
     try {
+      // ✅ 1. Signal Path: Asset Reveal
+      if (typeStr === MESSAGE_TYPE_ASSET_REVEAL) {
+        const data = JSON.parse(
+          this.decoder.decode(rawBytes),
+        ) as AssetRevealData;
+        return {
+          kind: 'signal',
+          payload: { action: 'asset-reveal', data },
+        };
+      }
+
+      // 2. Content Path (Wrapped)
       const { conversationId, tags, content } =
         this.metadataService.unwrap(rawBytes);
 
@@ -58,8 +78,6 @@ export class MessageContentParser {
 
   /**
    * WRITE: Domain Object -> Bytes
-   * This is the inverse of the strategies above.
-   * Kept simple here to avoid updating 5 strategy files for now.
    */
   serialize(payload: ContentPayload): Uint8Array {
     switch (payload.kind) {
@@ -67,13 +85,11 @@ export class MessageContentParser {
         return this.encoder.encode(payload.text);
 
       case 'image':
-        // Images are stored as the full JSON object
         return this.encoder.encode(JSON.stringify(payload));
 
       case 'group-invite':
       case 'group-system':
       case 'rich':
-        // Wrapper types: We only persist the inner 'data' property
         return this.encoder.encode(JSON.stringify(payload.data));
 
       default:

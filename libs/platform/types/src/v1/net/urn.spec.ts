@@ -37,70 +37,76 @@ describe('URN Logic and Mappers', () => {
 
     it('should throw an error on invalid URN string (parse)', () => {
       expect(() => URN.parse('not-a-urn')).toThrow(
-        'Invalid URN format: expected 4 parts'
+        'Invalid URN format: expected 4 parts',
       );
       expect(() => URN.parse('http:app:user:id')).toThrow(
-        "Invalid URN format: invalid scheme 'http'"
+        "Invalid URN format: invalid scheme 'http'",
       );
     });
 
     it('should throw an error on empty fields (create)', () => {
       expect(() => URN.create('', 'id')).toThrow(
-        'Invalid URN format: entityType cannot be empty'
+        'Invalid URN format: entityType cannot be empty',
       );
       expect(() => URN.create('user', '')).toThrow(
-        'Invalid URN format: entityId cannot be empty'
+        'Invalid URN format: entityId cannot be empty',
       );
+    });
+
+    // ✅ NEW: Structural Equality Tests
+    describe('Equality', () => {
+      it('should return true for identical URNs', () => {
+        const u1 = URN.parse('urn:app:user:1');
+        const u2 = URN.parse('urn:app:user:1');
+        expect(u1.equals(u2)).toBe(true);
+      });
+
+      it('should return false for different IDs', () => {
+        const u1 = URN.parse('urn:app:user:1');
+        const u2 = URN.parse('urn:app:user:2');
+        expect(u1.equals(u2)).toBe(false);
+      });
+
+      it('should return false for different Types', () => {
+        const u1 = URN.parse('urn:app:user:1');
+        const u2 = URN.parse('urn:app:group:1');
+        expect(u1.equals(u2)).toBe(false);
+      });
+
+      it('should handle null/undefined gracefully', () => {
+        const u1 = URN.parse('urn:app:user:1');
+        expect(u1.equals(null)).toBe(false);
+        expect(u1.equals(undefined)).toBe(false);
+      });
     });
   });
 
   // --- 2. Proto Mappers (Testing the "Buddy System" logic) ---
   describe('Proto Mappers', () => {
-    /**
-     * Test 1: Round Trip
-     * Verifies that a TS object can be converted to a Proto object and back
-     * to the original TS object without data loss.
-     */
     it('should perform a round trip conversion successfully', () => {
-      // 1. TS -> Proto
       const protoPb = urnToPb(mockUrn);
-      // 2. Proto -> TS
       const roundTripTs = urnFromPb(protoPb);
-
-      // 3. Verify
       expect(roundTripTs).toEqual(mockUrn);
       expect(roundTripTs.toString()).toBe(mockUrnString);
     });
 
-    /**
-     * Test 2: Typical Usage (TS to Proto)
-     * Verifies the 'urnToPb' mapper works as expected.
-     */
     it('should correctly map URN (TS) to UrnPb (Proto)', () => {
       const protoPb = urnToPb(mockUrn);
-
       expect(protoPb).toBeDefined();
       expect(protoPb.namespace).toBe(mockUrn.namespace);
       expect(protoPb.entityType).toBe(mockUrn.entityType);
       expect(protoPb.entityId).toBe(mockUrn.entityId);
     });
 
-    /**
-     * Test 3: Typical Usage (Proto to TS)
-     * Verifies the 'urnFromPb' mapper works as expected.
-     */
     it('should correctly map UrnPb (Proto) to URN (TS)', () => {
-      // Use 'create' to simulate a real Proto object
       const mockProtoPb = create(UrnPbSchema, {
         namespace: 'app',
         entityType: 'message',
         entityId: 'msg-456',
       });
-
       const tsUrn = urnFromPb(mockProtoPb);
-
       expect(tsUrn).toBeInstanceOf(URN);
-      expect(tsUrn.namespace).toBe('app'); // URN.create ensures this
+      expect(tsUrn.namespace).toBe('app');
       expect(tsUrn.entityType).toBe(mockProtoPb.entityType);
       expect(tsUrn.entityId).toBe(mockProtoPb.entityId);
     });

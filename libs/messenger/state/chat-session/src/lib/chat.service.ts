@@ -2,637 +2,135 @@ import {
   Injectable,
   WritableSignal,
   DestroyRef,
-  effect,
   signal,
   inject,
   computed,
 } from '@angular/core';
-import { throttleTime, filter, take, skip } from 'rxjs/operators';
-import {
-  takeUntilDestroyed,
-  toObservable,
-  toSignal,
-} from '@angular/core/rxjs-interop';
-import {
-  firstValueFrom,
-  combineLatest,
-  interval,
-  switchMap,
-  EMPTY,
-} from 'rxjs';
-import { Temporal } from '@js-temporal/polyfill';
-import {
-  URN,
-  PublicKeys,
-  KeyNotFoundError,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { URN } from '@nx-platform-application/platform-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   ConversationSummary,
-  ChatMessage,
   DevicePairingSession,
 } from '@nx-platform-application/messenger-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { Logger } from '@nx-platform-application/console-logger';
-import {
-  MessengerCryptoService,
-  PrivateKeys,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { SyncOptions } from '@nx-platform-application/messenger-state-cloud-sync';
+import { Temporal } from '@js-temporal/polyfill';
 
-// APIs
-import {
-  GatekeeperApi,
-  AddressBookManagementApi,
-} from '@nx-platform-application/contacts-api';
-import { BlockedIdentity } from '@nx-platform-application/contacts-types';
+// --- FACADES ---
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
+import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
+import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
+import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 
-// Domain Services
+// --- DOMAIN SERVICES ---
 import {
   ConversationService,
   ConversationActionService,
 } from '@nx-platform-application/messenger-domain-conversation';
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
-import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
-import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
-import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
-
 import {
-  MessageContentParser,
-  ReadReceiptData,
   ContactShareData,
   ImageContent,
 } from '@nx-platform-application/messenger-domain-message-content';
-
-export type OnboardingState =
-  | 'CHECKING'
-  | 'READY'
-  | 'OFFLINE_READY'
-  | 'REQUIRES_LINKING'
-  | 'GENERATING';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ChatService {
   private readonly logger = inject(Logger);
-  private readonly authService = inject(IAuthService);
-  private readonly cryptoService = inject(MessengerCryptoService);
-  private readonly liveService = inject(ChatLiveDataService);
-  private readonly storageService = inject(ChatStorageService);
-  private readonly keyService = inject(KeyCacheService);
-  private readonly parser = inject(MessageContentParser);
-
-  // APIs
-  private readonly gatekeeper = inject(GatekeeperApi);
-  private readonly addressBookManager = inject(AddressBookManagementApi);
-
-  // Domain Services
-  private readonly conversationService = inject(ConversationService);
-  private readonly conversationActions = inject(ConversationActionService);
-  private readonly syncService = inject(ChatSyncService);
-  private readonly ingestionService = inject(IngestionService);
-  private readonly keyWorker = inject(ChatKeyService);
-  private readonly outboxWorker = inject(OutboxWorkerService);
-  private readonly pairingService = inject(DevicePairingService);
-  private readonly quarantineService = inject(QuarantineService);
-  private readonly groupProtocol = inject(GroupProtocolService);
-
-  private readonly settingsService = inject(LocalSettingsService);
-
   private readonly destroyRef = inject(DestroyRef);
 
-  private myKeys = signal<PrivateKeys | null>(null);
+  // --- INJECTIONS ---
+  private readonly identity = inject(ChatIdentityFacade);
+  private readonly moderation = inject(ChatModerationFacade);
+  private readonly media = inject(ChatMediaFacade);
+  private readonly sync = inject(CloudSyncService);
 
-  private operationLock = Promise.resolve();
+  private readonly conversationService = inject(ConversationService);
+  private readonly conversationActions = inject(ConversationActionService);
+  private readonly ingestionService = inject(IngestionService);
+  private readonly outboxWorker = inject(OutboxWorkerService);
+  private readonly groupProtocol = inject(GroupProtocolService);
+  private readonly liveService = inject(ChatLiveDataService);
+  private readonly settingsService = inject(LocalSettingsService);
+  private readonly authService = inject(IAuthService);
+  private readonly addressBookManager = inject(AddressBookManagementApi);
+  private readonly storageService = inject(ChatStorageService);
+  private readonly cryptoService = inject(MessengerCryptoService);
+  private readonly keyService = inject(KeyCacheService);
+
+  // --- 1. IDENTITY & ONBOARDING (Delegated to IdentityFacade) ---
+  public readonly onboardingState = this.identity.onboardingState;
+  public readonly isCeremonyActive = this.identity.isCeremonyActive;
+  public readonly myKeys = this.identity.myKeys;
+
+  public readonly isCloudConnected = this.sync.isConnected;
+
+  public readonly currentUserUrn = computed(() => {
+    return this.authService.currentUser()?.id || null;
+  });
 
   public readonly showWizard = signal<boolean>(false);
 
+  // --- 2. MESSAGING STATE (Delegated to ConversationService) ---
   public readonly activeConversations: WritableSignal<ConversationSummary[]> =
     signal([]);
-  public readonly onboardingState = signal<OnboardingState>('CHECKING');
-  public readonly isCeremonyActive = signal<boolean>(false);
-
-  // Delegation to Conversation Domain
   public readonly messages = this.conversationService.messages;
   public readonly selectedConversation =
     this.conversationService.selectedConversation;
-  public readonly genesisReached = this.conversationService.genesisReached;
-  public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
+  public readonly isLoadingHistory = this.conversationService.isLoadingHistory; // [Restored]
+  public readonly firstUnreadId = this.conversationService.firstUnreadId; // [Restored]
+  public readonly readCursors = this.conversationService.readCursors; // [Restored]
   public readonly isRecipientKeyMissing =
-    this.conversationService.isRecipientKeyMissing;
-  public readonly firstUnreadId = this.conversationService.firstUnreadId;
+    this.conversationService.isRecipientKeyMissing; // [Restored]
+
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
     new Map(),
   );
-  public readonly readCursors = this.conversationService.readCursors;
 
-  // FIX: Signal conversion for Computed Blocked Set
-  private readonly blockedIdentities = toSignal(this.gatekeeper.blocked$, {
-    initialValue: [] as BlockedIdentity[],
-  });
+  // --- 3. MODERATION STATE (Delegated to ModerationFacade) ---
+  public readonly blockedSet = this.moderation.blockedSet;
 
-  private readonly messengerBlockedSet = computed(() => {
-    const all = this.blockedIdentities();
-    const set = new Set<string>();
-    for (const b of all) {
-      if (b.scopes.includes('messenger') || b.scopes.includes('all')) {
-        set.add(b.urn.toString());
-      }
-    }
-    return set;
-  });
-
-  public readonly blockedSet = signal(new Set<string>()); // Derived copy for ingestion
-
-  public readonly currentUserUrn = computed(() => {
-    const user = this.authService.currentUser();
-    return user?.id ? user.id : null;
-  });
-
-  public readonly isBackingUp = computed(() => this.syncService.isSyncing());
-
-  public isCloudEnabled(): boolean {
-    return this.syncService.isCloudEnabled();
-  }
+  // --- 4. CLOUD SYNC STATE ---
+  public readonly isBackingUp = this.sync.isSyncing;
 
   constructor() {
-    this.logger.info('ChatService: Orchestrator initializing...');
-    this.init();
-    this.initResumptionTriggers();
-
-    effect(() => {
-      const newSet = this.messengerBlockedSet();
-      this.blockedSet.set(newSet);
-      this.logger.debug(
-        `[ChatService] Block list updated. Size: ${newSet.size}`,
-      );
-    });
-
-    this.destroyRef.onDestroy(() => {
-      this.liveService.disconnect();
-    });
-  }
-
-  // --- UI State Management (Stub) ---
-  public setWizardActive(active: boolean): void {
-    this.showWizard.set(active);
-    // Persist the INVERSE (If active=true, seen=false. If active=false, seen=true)
-    // Actually, "Active" usually means "Show it".
-    // If the user manually toggles it ON, we don't necessarily change "seen",
-    // but if they close it, we mark "seen" as true.
-
-    // Logic: If we are hiding it, we assume the user is "done" with it.
-    if (!active) {
-      this.settingsService.setWizardSeen(true);
-    } else {
-      // If they explicitly open it via settings, we can leave "seen" alone or reset it.
-    }
-  }
-
-  private async loadUiSettings(): Promise<void> {
-    try {
-      const seen = await this.settingsService.getWizardSeen();
-      // If NOT seen, show the wizard
-      this.showWizard.set(!seen);
-    } catch (e) {
-      this.logger.warn('[ChatService] Failed to load UI settings', e);
-    }
-  }
-
-  public notifyTyping(): void {
-    this.conversationService.notifyTyping();
-  }
-
-  private async init(): Promise<void> {
-    try {
-      this.onboardingState.set('CHECKING');
-      await firstValueFrom(this.authService.sessionLoaded$);
-
-      const currentUser = this.authService.currentUser();
-      if (!currentUser) throw new Error('Authentication failed.');
-
-      this.loadUiSettings();
-
-      const senderUrn = this.currentUserUrn();
-      if (!senderUrn) throw new Error('No user URN found');
-
-      const localKeys = await this.cryptoService.loadMyKeys(senderUrn);
-      let serverKeys: PublicKeys | null = null;
-      let isServerReachable = true;
-
-      try {
-        serverKeys = await this.keyService.getPublicKey(senderUrn);
-      } catch (error) {
-        if (error instanceof KeyNotFoundError) {
-          serverKeys = null;
-        } else {
-          this.logger.warn('ChatService: Key Service Unreachable', error);
-          isServerReachable = false;
-        }
-      }
-
-      if (localKeys && !isServerReachable) {
-        this.logger.warn('Booting in OFFLINE_READY mode.');
-        this.myKeys.set(localKeys);
-        this.onboardingState.set('OFFLINE_READY');
-        await this.completeBootSequence();
-        return;
-      }
-
-      if (!localKeys && !serverKeys && isServerReachable) {
-        this.onboardingState.set('GENERATING');
-        await this.performFirstTimeSetup(senderUrn, currentUser.email);
-        return;
-      }
-
-      const isConsistent = await this.checkIntegrity(
-        senderUrn,
-        localKeys,
-        serverKeys,
-      );
-
-      if (!isConsistent) {
-        this.logger.warn('Identity Conflict detected. Halting.');
-        this.onboardingState.set('REQUIRES_LINKING');
-        return;
-      }
-
-      if (localKeys) {
-        this.myKeys.set(localKeys);
-        this.completeBootSequence();
-      }
-    } catch (error) {
-      this.logger.error('ChatService: Failed initialization', error);
-    }
-  }
-
-  private initResumptionTriggers(): void {
-    this.authService.sessionLoaded$
-      .pipe(
-        filter((session) => !!session),
-        take(1),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe(async (session) => {
-        const urn = this.currentUserUrn();
-        const keys = this.myKeys();
-        if (urn && keys) {
-          await this.outboxWorker.processQueue(urn, keys);
-        }
-      });
-
-    this.liveService.status$
-      .pipe(
-        filter((status) => status === 'connected'),
-        skip(1),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe(async () => {
-        const urn = this.currentUserUrn();
-        const keys = this.myKeys();
-        if (urn && keys) {
-          await this.outboxWorker.processQueue(urn, keys);
-        }
-      });
-
-    combineLatest([
-      this.authService.sessionLoaded$.pipe(filter((s) => !!s)),
-      toObservable(this.myKeys).pipe(filter((k) => !!k)),
-    ])
-      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(async ([session, keys]) => {
-        const urn = this.currentUserUrn();
-        if (urn && keys) {
-          this.logger.info('[ChatService] Resuming outbound queue...');
-          await this.outboxWorker.processQueue(urn, keys);
-        }
-      });
-  }
-
-  private async checkIntegrity(
-    urn: URN,
-    local: PrivateKeys | null,
-    server: PublicKeys | null,
-  ): Promise<boolean> {
-    if (!local && server) return false;
-    if (local && server) {
-      const match = await this.cryptoService.verifyKeysMatch(urn, server);
-      if (!match) return false;
-    }
-    if (local && !server) return false;
-    return true;
-  }
-
-  public async recoverFailedMessage(
-    messageId: string,
-  ): Promise<string | undefined> {
-    return this.conversationService.recoverFailedMessage(messageId);
-  }
-
-  public cancelLinking(): void {
-    this.isCeremonyActive.set(false);
-  }
-
-  public async startTargetLinkSession(): Promise<DevicePairingSession> {
-    if (this.onboardingState() !== 'REQUIRES_LINKING') {
-      throw new Error(
-        'Device Linking is only available during onboarding halt.',
-      );
-    }
-
-    const token = this.authService.getJwtToken();
-    if (token) this.liveService.connect(token);
-
-    const session = await this.pairingService.startReceiverSession();
-
-    return {
-      sessionId: session.sessionId,
-      qrPayload: session.qrPayload,
-      publicKey: session.publicKey,
-      privateKey: session.privateKey,
-      mode: 'RECEIVER_HOSTED',
-    };
-  }
-
-  public async checkForSyncMessage(
-    sessionPrivateKey: CryptoKey,
-  ): Promise<boolean> {
-    const urn = this.currentUserUrn();
-    if (!urn || this.onboardingState() !== 'REQUIRES_LINKING') return false;
-
-    const keys = await this.pairingService.pollForReceiverSync(
-      sessionPrivateKey,
-      urn,
-    );
-
-    if (keys) {
-      await this.finalizeLinking(keys);
-      return true;
-    }
-    return false;
-  }
-
-  public async redeemSourceSession(qrCode: string): Promise<void> {
-    const urn = this.currentUserUrn();
-    const currentState = this.onboardingState();
-
-    if (!urn || currentState !== 'REQUIRES_LINKING') {
-      this.logger.error(
-        `[ChatService] Redeem Blocked. URN=${urn}, State=${currentState}`,
-      );
-      throw new Error('Invalid State for redeeming session');
-    }
-
-    const token = this.authService.getJwtToken();
-    if (token) this.liveService.connect(token);
-
-    const keys = await this.pairingService.redeemSenderSession(qrCode, urn);
-    this.logger.debug('got redeem keys', keys != undefined);
-
-    if (keys) {
-      await this.finalizeLinking(keys);
-    } else {
-      throw new Error('Sync message not found yet. Please try again.');
-    }
-  }
-
-  public async linkTargetDevice(qrCode: string): Promise<void> {
-    const urn = this.currentUserUrn();
-    const keys = this.myKeys();
-
-    if (!urn || !keys) {
-      throw new Error('Cannot link device: You are not authenticated.');
-    }
-
-    try {
-      this.isCeremonyActive.set(true);
-      this.logger.debug('Linking target device...');
-      await this.pairingService.linkTargetDevice(qrCode, keys, urn);
-    } finally {
-      this.isCeremonyActive.set(false);
-    }
-  }
-
-  public async startSourceLinkSession(): Promise<DevicePairingSession> {
-    const urn = this.currentUserUrn();
-    const keys = this.myKeys();
-    if (!urn || !keys) throw new Error('Not authenticated');
-
-    this.isCeremonyActive.set(true);
-
-    const session = await this.pairingService.startSenderSession(keys, urn);
-    this.logger.info('Started source link session', session);
-    return {
-      sessionId: session.sessionId,
-      qrPayload: session.qrPayload,
-      oneTimeKey: session.oneTimeKey,
-      mode: 'SENDER_HOSTED',
-    };
-  }
-
-  public async performIdentityReset(): Promise<void> {
-    const urn = this.currentUserUrn();
-    const user = this.authService.currentUser();
-    if (!urn || !user) return;
-
-    this.logger.warn('ChatService: Performing Identity Reset...');
-    this.onboardingState.set('GENERATING');
-
-    try {
-      const newKeys = await this.keyWorker.resetIdentityKeys(urn, user.email);
-      this.myKeys.set(newKeys);
-      await this.completeBootSequence();
-    } catch (e) {
-      this.logger.error('Identity Reset Failed', e);
-      this.onboardingState.set('REQUIRES_LINKING');
-    }
-  }
-
-  private async performFirstTimeSetup(urn: URN, email?: string): Promise<void> {
-    this.logger.info('New user detected. Generating keys...');
-    try {
-      const keys = await this.keyWorker.resetIdentityKeys(urn, email);
-      this.myKeys.set(keys);
-      await this.completeBootSequence();
-    } catch (genError) {
-      this.logger.error('Failed to generate initial keys', genError);
-      throw genError;
-    }
-  }
-
-  public async completeBootSequence(): Promise<void> {
-    this.logger.info('ChatService: Completing boot sequence...');
-
-    if (this.onboardingState() !== 'OFFLINE_READY') {
-      this.onboardingState.set('READY');
-    }
-
-    const authToken = this.authService.getJwtToken();
-    if (authToken) {
-      this.liveService.connect(authToken);
-      this.handleConnectionStatus();
-    }
-
-    const summaries =
-      await this.conversationService.loadConversationSummaries();
-    this.activeConversations.set(summaries);
-
+    this.logger.info('ChatService: Initializing...');
+    this.identity.initialize();
     this.initLiveSubscriptions();
-    this.initTypingOrchestration();
-    this.initReadReceiptOrchestration();
-    this.fetchAndProcessMessages();
+    this.loadUiSettings();
   }
 
-  public async finalizeLinking(restoredKeys: PrivateKeys): Promise<void> {
-    if (this.onboardingState() !== 'REQUIRES_LINKING') {
-      this.logger.warn(
-        'finalizeLinking called but state is not REQUIRES_LINKING',
-      );
-      return;
-    }
+  // ==================================================================================
+  // RESTORED ACTIONS (Fixing TS2339 Errors)
+  // ==================================================================================
 
-    const urn = this.currentUserUrn();
-    if (urn) {
-      await this.cryptoService.storeMyKeys(urn, restoredKeys);
-    }
+  // --- TYPING & READ RECEIPTS ---
+  public notifyTyping(): void {
+    const recipient = this.selectedConversation();
+    const keys = this.identity.myKeys();
+    const sender = this.currentUserUrn();
 
-    this.myKeys.set(restoredKeys);
-    await this.completeBootSequence();
-  }
-
-  private initTypingOrchestration(): void {
-    this.conversationService.typingTrigger$
-      .pipe(throttleTime(3000), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        const keys = this.myKeys();
-        const sender = this.currentUserUrn();
-        if (keys && sender) {
-          this.conversationActions
-            .sendTypingIndicator(keys, sender)
-            .catch((err) =>
-              this.logger.warn('Failed to send typing indicator', err),
-            );
-        }
-      });
-  }
-
-  private initReadReceiptOrchestration(): void {
-    this.conversationService.readReceiptTrigger$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((messageIds) => {
-        const keys = this.myKeys();
-        const sender = this.currentUserUrn();
-        const recipient = this.conversationService.selectedConversation();
-        if (keys && sender && recipient && messageIds.length > 0) {
-          const data: ReadReceiptData = {
-            messageIds,
-            readAt: Temporal.Now.instant().toString(),
-          };
-          this.conversationActions
-            .sendReadReceiptSignal(recipient, data, keys, sender)
-            .catch((err) =>
-              this.logger.warn('Failed to send read receipt', err),
-            );
-        }
-      });
-  }
-
-  public async sync(options: SyncOptions): Promise<void> {
-    if (this.onboardingState() !== 'READY') return;
-
-    const success = await this.syncService.performSync(options);
-
-    if (success) {
-      if (options.syncMessages) await this.refreshActiveConversations();
+    if (recipient && keys && sender) {
+      this.conversationActions.sendTypingIndicator(recipient, keys, sender);
     }
   }
 
-  public async resetIdentityKeys(): Promise<void> {
-    const userUrn = this.currentUserUrn();
-    const currentUser = this.authService.currentUser();
-    if (!userUrn || !currentUser) return;
-    this.myKeys.set(null);
-    const newKeys = await this.keyWorker.resetIdentityKeys(
-      userUrn,
-      currentUser.email,
-    );
-    this.myKeys.set(newKeys);
-  }
-
-  public async fetchAndProcessMessages(): Promise<void> {
-    // Note: Ingestion logic remains here as it's orchestrating global data flow
-    // not specific conversation actions
-    return this.runExclusive(async () => {
-      const state = this.onboardingState();
-      if (state !== 'READY' && state !== 'OFFLINE_READY') return;
-      if (this.isCeremonyActive()) return;
-
-      const myKeys = this.myKeys();
-      const myUrn = this.currentUserUrn();
-      if (!myKeys || !myUrn) return;
-
-      const result = await this.ingestionService.process(
-        myKeys,
-        myUrn,
-        this.blockedSet(),
-        50,
-      );
-
-      this.logger.info(
-        `[ChatService] Ingestion Complete. Messages: ${result.messages.length}`,
-      );
-
-      if (result.readReceipts.length > 0) {
-        this.conversationService.applyIncomingReadReceipts(result.readReceipts);
-      }
-
-      if (result.messages.length > 0) {
-        this.conversationService.upsertMessages(result.messages, myUrn);
-        this.refreshActiveConversations();
-        this.updateTypingActivity(result.typingIndicators, result.messages);
-      } else if (result.typingIndicators.length > 0) {
-        this.updateTypingActivity(result.typingIndicators, []);
-      }
-    });
-  }
-
-  private updateTypingActivity(indicators: URN[], realMessages: any[]): void {
-    this.typingActivity.update((map) => {
-      const newMap = new Map(map);
-      const now = Temporal.Now.instant();
-
-      indicators.forEach((urn) => newMap.set(urn.toString(), now));
-
-      realMessages.forEach((msg) => {
-        if (newMap.has(msg.senderId.toString()))
-          newMap.delete(msg.senderId.toString());
-      });
-      return newMap;
-    });
-  }
-
-  public async loadConversation(urn: URN | null): Promise<void> {
-    const myUrn = this.currentUserUrn();
-    await this.conversationService.loadConversation(urn, myUrn);
-    if (urn) this.handleReadStatusUpdate(urn);
-  }
-
-  public loadMoreMessages(): Promise<void> {
-    return this.conversationService.loadMoreMessages();
-  }
-
+  // --- MESSAGE ACTIONS ---
   public async sendMessage(recipientUrn: URN, text: string): Promise<void> {
-    const keys = this.myKeys();
+    const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
     if (!keys || !sender) return;
+
     await this.conversationActions.sendMessage(
       recipientUrn,
       text,
@@ -642,23 +140,42 @@ export class ChatService {
     this.refreshActiveConversations();
   }
 
-  // ✅ NEW: Image Sending
-  public async sendImage(recipientUrn: URN, data: ImageContent): Promise<void> {
-    const keys = this.myKeys();
+  public async sendImage(
+    recipientUrn: URN,
+    file: File,
+    previewPayload: ImageContent,
+  ): Promise<void> {
+    const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
     if (!keys || !sender) return;
 
-    await this.conversationActions.sendImage(recipientUrn, data, keys, sender);
+    // Fast Path
+    const messageId = await this.conversationActions.sendImage(
+      recipientUrn,
+      previewPayload,
+      keys,
+      sender,
+    );
     this.refreshActiveConversations();
+
+    // Slow Path
+    void this.media.processBackgroundUpload(
+      recipientUrn,
+      messageId,
+      file,
+      keys,
+      sender,
+    );
   }
 
   public async sendContactShare(
     recipientUrn: URN,
     data: ContactShareData,
   ): Promise<void> {
-    const keys = this.myKeys();
+    const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
     if (!keys || !sender) return;
+
     await this.conversationActions.sendContactShare(
       recipientUrn,
       data,
@@ -668,49 +185,101 @@ export class ChatService {
     this.refreshActiveConversations();
   }
 
-  private handleReadStatusUpdate(urn: URN): void {
-    this.activeConversations.update((list) =>
-      list.map((c) =>
-        c.conversationUrn.toString() === urn.toString()
-          ? { ...c, unreadCount: 0 }
-          : c,
-      ),
+  public async recoverFailedMessage(
+    messageId: string,
+  ): Promise<string | undefined> {
+    return this.conversationService.recoverFailedMessage(messageId);
+  }
+
+  // --- GROUP ACTIONS ---
+  public async acceptInvite(msg: ChatMessage): Promise<void> {
+    const keys = this.identity.myKeys();
+    const me = this.currentUserUrn();
+    if (keys && me) await this.groupProtocol.acceptInvite(msg, keys, me);
+  }
+
+  public async rejectInvite(msg: ChatMessage): Promise<void> {
+    const keys = this.identity.myKeys();
+    const me = this.currentUserUrn();
+    if (keys && me) await this.groupProtocol.rejectInvite(msg, keys, me);
+  }
+
+  // --- MODERATION ACTIONS ---
+  public async block(
+    urns: URN[],
+    scope: 'messenger' | 'all' = 'messenger',
+  ): Promise<void> {
+    await this.moderation.block(urns, scope);
+    this.refreshActiveConversations();
+  }
+
+  public async dismissPending(urns: URN[]): Promise<void> {
+    await this.moderation.dismissPending(urns);
+  }
+
+  // Fix: Argument mismatch (2 arguments required)
+  public async promoteQuarantinedMessages(
+    senderUrn: URN,
+    targetConversationUrn?: URN,
+  ): Promise<void> {
+    await this.moderation.promoteQuarantinedMessages(
+      senderUrn,
+      targetConversationUrn,
     );
+    this.refreshActiveConversations();
   }
 
-  private async refreshActiveConversations(): Promise<void> {
-    const summaries =
-      await this.conversationService.loadConversationSummaries();
-    this.activeConversations.set(summaries);
+  // --- IDENTITY & DEVICE PAIRING ACTIONS ---
+  public async startTargetLinkSession(): Promise<DevicePairingSession> {
+    return this.identity.startTargetLinkSession();
   }
 
-  private handleConnectionStatus(): void {
-    this.liveService.status$
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        switchMap((status) => {
-          if (status === 'connected') {
-            void this.fetchAndProcessMessages();
-            return EMPTY;
-          }
-          this.logger.warn(
-            `ChatService: Connection ${status}. Activating fallback polling.`,
-          );
-          return interval(15_000);
-        }),
-      )
-      .subscribe(() => {
-        this.logger.debug('ChatService: Fallback poll triggered');
-        void this.fetchAndProcessMessages();
-      });
+  public async startSourceLinkSession(): Promise<DevicePairingSession> {
+    return this.identity.startSourceLinkSession();
   }
 
-  private initLiveSubscriptions(): void {
-    this.liveService.incomingMessage$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.fetchAndProcessMessages());
+  public async checkForSyncMessage(key: CryptoKey): Promise<boolean> {
+    return this.identity.checkForSyncMessage(key);
   }
 
+  public async redeemSourceSession(qrCode: string): Promise<void> {
+    return this.identity.redeemSourceSession(qrCode);
+  }
+
+  public async linkTargetDevice(qrCode: string): Promise<void> {
+    return this.identity.linkTargetDevice(qrCode);
+  }
+
+  public cancelLinking(): void {
+    this.identity.cancelLinking();
+  }
+
+  // Fix: Aliasing resetIdentityKeys -> Facade's performIdentityReset
+  public async resetIdentityKeys(): Promise<void> {
+    return this.identity.performIdentityReset();
+  }
+
+  public async performIdentityReset(): Promise<void> {
+    return this.identity.performIdentityReset();
+  }
+
+  public async getQuarantinedMessages(urn: URN): Promise<ChatMessage[]> {
+    return this.moderation.getQuarantinedMessages(urn);
+  }
+
+  public setWizardActive(active: boolean): void {
+    this.showWizard.set(active);
+    if (!active) {
+      this.settingsService.setWizardSeen(true);
+    }
+  }
+
+  public async loadConversation(urn: URN | null): Promise<void> {
+    const myUrn = this.currentUserUrn();
+    await this.conversationService.loadConversation(urn, myUrn);
+  }
+
+  // --- SYSTEM CLEANUP / LOGOUT ---
   public async sessionLogout(): Promise<void> {
     this.liveService.disconnect();
     this.resetMemoryState();
@@ -734,91 +303,6 @@ export class ChatService {
     await this.authService.logout();
   }
 
-  public async logout(): Promise<void> {
-    return this.fullDeviceWipe();
-  }
-
-  private resetMemoryState(): void {
-    this.myKeys.set(null);
-    this.blockedSet.set(new Set());
-    this.activeConversations.set([]);
-    this.conversationService.loadConversation(null, null);
-    this.onboardingState.set('CHECKING');
-  }
-
-  // --- Quarantine & Blocking Ops ---
-
-  public async getQuarantinedMessages(urn: URN): Promise<ChatMessage[]> {
-    return this.quarantineService.retrieveForInspection(urn);
-  }
-
-  public async promoteQuarantinedMessages(
-    senderUrn: URN,
-    targetConversationUrn?: URN,
-  ): Promise<void> {
-    const messages =
-      await this.quarantineService.retrieveForInspection(senderUrn);
-
-    if (messages.length === 0) return;
-
-    const promotedMessages: ChatMessage[] = [];
-
-    for (const tm of messages) {
-      if (!tm.payloadBytes) continue;
-
-      try {
-        const parsed = this.parser.parse(tm.typeId, tm.payloadBytes);
-
-        if (parsed.kind === 'content') {
-          promotedMessages.push({
-            id: tm.id,
-            senderId: tm.senderId,
-            sentTimestamp: tm.sentTimestamp as ISODateTimeString,
-            typeId: tm.typeId,
-            status: 'received',
-            conversationUrn: targetConversationUrn || parsed.conversationId,
-            tags: parsed.tags,
-            // ✅ REFACTOR: Use Parser.serialize() here too
-            payloadBytes: this.parser.serialize(parsed.payload),
-            textContent:
-              parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
-          });
-        }
-      } catch (e) {
-        this.logger.error(
-          `Failed to parse quarantined message from ${senderUrn}`,
-          e,
-        );
-      }
-    }
-
-    if (promotedMessages.length > 0) {
-      await Promise.all(
-        promotedMessages.map((msg) => this.storageService.saveMessage(msg)),
-      );
-      this.refreshActiveConversations();
-    }
-
-    await this.quarantineService.reject(senderUrn);
-  }
-
-  public async block(
-    urns: URN[],
-    scope: 'messenger' | 'all' = 'messenger',
-  ): Promise<void> {
-    await Promise.all(
-      urns.map((urn) => this.gatekeeper.blockIdentity(urn, [scope])),
-    );
-    await Promise.all(urns.map((urn) => this.quarantineService.reject(urn)));
-  }
-
-  public async dismissPending(
-    urns: URN[],
-    scope: 'messenger' | 'all' = 'messenger',
-  ): Promise<void> {
-    await Promise.all(urns.map((urn) => this.quarantineService.reject(urn)));
-  }
-
   public async clearLocalMessages(): Promise<void> {
     await this.conversationService.performHistoryWipe();
     this.activeConversations.set([]);
@@ -829,50 +313,46 @@ export class ChatService {
     this.activeConversations.set([]);
   }
 
-  public triggerWorker(senderUrn: URN, keys: PrivateKeys): void {
-    this.outboxWorker.processQueue(senderUrn, keys);
+  // --- INTERNAL UTILS ---
+  private resetMemoryState(): void {
+    // We can't easily reset signals in Facades from here directly unless they expose resetters.
+    // For now, we rely on the app reload after logout.
+    this.activeConversations.set([]);
+    this.conversationService.loadConversation(null, null);
   }
 
-  async createNetworkGroup(localGroupUrn: URN): Promise<URN> {
-    const keys = this.myKeys();
-    const me = this.currentUserUrn();
-
-    if (!keys || !me) {
-      throw new Error('Cannot create group: No active session');
-    }
-
-    return this.groupProtocol.upgradeGroup(localGroupUrn, keys, me);
+  private async refreshActiveConversations(): Promise<void> {
+    const summaries =
+      await this.conversationService.loadConversationSummaries();
+    this.activeConversations.set(summaries);
   }
 
-  async acceptInvite(msg: ChatMessage): Promise<void> {
-    const keys = this.myKeys();
-    const me = this.currentUserUrn();
-    if (!keys || !me) {
-      this.logger.warn('[ChatService] Cannot accept invite: No active session');
-      return;
-    }
-    await this.groupProtocol.acceptInvite(msg, keys, me);
+  private initLiveSubscriptions(): void {
+    this.liveService.incomingMessage$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(async () => {
+        const myKeys = this.identity.myKeys();
+        const myUrn = this.currentUserUrn();
+        const blocked = this.moderation.blockedSet();
+
+        if (myKeys && myUrn) {
+          const result = await this.ingestionService.process(
+            myKeys,
+            myUrn,
+            blocked,
+            50,
+          );
+          if (result.messages.length > 0) {
+            this.conversationService.upsertMessages(result.messages, myUrn);
+            this.refreshActiveConversations();
+          }
+        }
+      });
   }
 
-  async rejectInvite(msg: ChatMessage): Promise<void> {
-    const keys = this.myKeys();
-    const me = this.currentUserUrn();
-    if (!keys || !me) return;
-
-    await this.groupProtocol.rejectInvite(msg, keys, me);
-  }
-
-  private async runExclusive<T>(task: () => Promise<T>): Promise<T> {
-    const previousLock = this.operationLock;
-    let releaseLock: () => void;
-    this.operationLock = new Promise((resolve) => {
-      releaseLock = resolve;
-    });
-    try {
-      await previousLock;
-      return await task();
-    } finally {
-      releaseLock!();
-    }
+  private loadUiSettings(): void {
+    this.settingsService
+      .getWizardSeen()
+      .then((seen) => this.showWizard.set(!seen));
   }
 }

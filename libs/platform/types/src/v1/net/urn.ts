@@ -28,7 +28,7 @@ export class URN {
   public static create(
     entityType: string,
     entityId: string,
-    namespace?: string
+    namespace?: string,
   ): URN {
     if (!entityType) {
       throw new Error('Invalid URN format: entityType cannot be empty');
@@ -50,13 +50,11 @@ export class URN {
     const parts = s.split(URN.DELIMITER);
 
     if (parts.length !== 4) {
-      throw new Error(
-        `Invalid URN format: expected 4 parts, but got ${parts.length}`
-      );
+      throw new Error('Invalid URN format: expected 4 parts, but got ' + parts);
     }
     if (parts[0] !== URN.SCHEME) {
       throw new Error(
-        `Invalid URN format: invalid scheme '${parts[0]}', expected '${URN.SCHEME}'`
+        `Invalid URN format: invalid scheme '${parts[0]}', expected '${URN.SCHEME}'`,
       );
     }
 
@@ -69,7 +67,7 @@ export class URN {
     }
     if (!entityType) {
       throw new Error(
-        'Invalid URN format: entityType (part 3) cannot be empty'
+        'Invalid URN format: entityType (part 3) cannot be empty',
       );
     }
     if (!entityId) {
@@ -91,7 +89,7 @@ export class URN {
    */
   public toString(): string {
     return [URN.SCHEME, this.namespace, this.entityType, this.entityId].join(
-      URN.DELIMITER
+      URN.DELIMITER,
     );
   }
 
@@ -102,8 +100,14 @@ export class URN {
     return this.toString();
   }
 
-  public equals(c: URN): boolean {
-    return c.toString() === this.toString();
+  public equals(c: URN | null | undefined): boolean {
+    if (!c) return false;
+    if (this === c) return true;
+    return (
+      this.entityId === c.entityId &&
+      this.entityType === c.entityType &&
+      this.namespace === c.namespace
+    );
   }
 }
 

@@ -26,7 +26,7 @@ import {
   MESSAGE_TYPE_IMAGE,
   ImageContent,
   messageTagBroadcast,
-  ContentPayload, // ✅ Import
+  ContentPayload,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
@@ -84,7 +84,7 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
-  // Expose Constants to Template
+  // Expose Constants for Template
   readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
   readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
   readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE;
@@ -104,10 +104,6 @@ export class ChatConversationComponent {
 
   // --- VIEW HELPERS ---
 
-  /**
-   * Safe Accessor for Switch Case
-   * Ensures we compare strings to strings
-   */
   getTypeId(msg: ChatMessage): string {
     return msg.typeId.toString();
   }
@@ -167,25 +163,16 @@ export class ChatConversationComponent {
     }
   }
 
-  /**
-   * ✅ FIXED: Robust Payload Hydration
-   * 1. Prefers pre-decoded text (fixes broken text messages).
-   * 2. Safely handles Byte Arrays (fixes crashes on image decode).
-   */
   getContentPayload(msg: ChatMessage): ContentPayload | null {
-    // A. Fast Path: Text (Pre-decoded by Mapper)
     if (this.getTypeId(msg) === MESSAGE_TYPE_TEXT && msg.textContent) {
       return { kind: 'text', text: msg.textContent };
     }
 
-    // B. Safety Check
     if (!msg.payloadBytes || (msg.payloadBytes as any).length === 0) {
       return null;
     }
 
     try {
-      // C. Normalization: Ensure Uint8Array (IndexedDB can return regular Arrays)
-      // This is often the cause of "Unsupported" or crash errors in decoders.
       const bytes =
         msg.payloadBytes instanceof Uint8Array
           ? msg.payloadBytes
@@ -193,12 +180,10 @@ export class ChatConversationComponent {
 
       const decoded = new TextDecoder().decode(bytes);
 
-      // Text Fallback (if bytes existed but textContent was null)
       if (this.getTypeId(msg) === MESSAGE_TYPE_TEXT) {
         return { kind: 'text', text: decoded };
       }
 
-      // JSON Content (Image, Contact, etc)
       return JSON.parse(decoded);
     } catch (e) {
       console.warn(
@@ -268,10 +253,11 @@ export class ChatConversationComponent {
     }
   }
 
-  onSendImage(content: ImageContent): void {
+  // ✅ FIXED: Handle new event signature { file, payload }
+  onSendImage(event: { file: File; payload: ImageContent }): void {
     const recipient = this.selectedConversation();
     if (recipient) {
-      this.chatService.sendImage(recipient, content);
+      this.chatService.sendImage(recipient, event.file, event.payload);
     }
   }
 

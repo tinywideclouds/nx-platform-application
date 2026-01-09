@@ -76,7 +76,7 @@ export class ConversationService {
       (m) =>
         m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE_RESPONSE ||
         m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE ||
-        (me && m.senderId.equals(me)), // My own messages
+        (me && m.senderId.equals(me)), // ✅ URN equality check
     );
   });
 
@@ -101,7 +101,8 @@ export class ConversationService {
     let cursorMessageId: string | null = null;
     for (let i = msgs.length - 1; i >= 0; i--) {
       const msg = msgs[i];
-      const isFromMe = msg.senderId.toString() === me.toString();
+      // ✅ URN equality check
+      const isFromMe = msg.senderId.equals(me);
       if (isFromMe && msg.status === 'read') {
         cursorMessageId = msg.id;
         break;
@@ -125,10 +126,10 @@ export class ConversationService {
     return this.runExclusive(async () => {
       this.myUrn.set(myUrn);
 
-      if (
-        this.selectedConversation()?.toString() === urn?.toString() &&
-        urn !== null
-      ) {
+      // ✅ URN equality check
+      // .equals() handles null/undefined arguments safely in our new implementation
+      const current = this.selectedConversation();
+      if (current?.equals(urn) && urn !== null) {
         await this.storage.markConversationAsRead(urn);
         return;
       }
@@ -148,6 +149,7 @@ export class ConversationService {
       if (urn.entityType === 'group') {
         const group = await this.addressBook.getGroup(urn);
         if (group && myUrn) {
+          // ✅ URN equality check
           const me = group.members.find((m) => m.contactId.equals(myUrn));
           if (me) {
             const s = me.status;
@@ -162,11 +164,9 @@ export class ConversationService {
             this.membershipStatus.set('unknown');
           }
         } else {
-          // Group not in address book yet -> Invited context
           this.membershipStatus.set('invited');
         }
       } else {
-        // 1:1 Chats are always 'joined'
         this.membershipStatus.set('joined');
       }
 
@@ -310,12 +310,9 @@ export class ConversationService {
     }
   }
 
-  // ✅ REFACTOR: Now fetches from DB to ensure receiptMap is fresh.
   async applyIncomingReadReceipts(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
 
-    console.log('fresh message receipts');
-    // 1. Fetch fresh data (with updated receiptMap) from storage
     const freshMessages: ChatMessage[] = [];
     for (const id of ids) {
       const msg = await this.storage.getMessage(id);
@@ -324,21 +321,17 @@ export class ConversationService {
 
     if (freshMessages.length === 0) return;
 
-    // 2. Map and Upsert (this will trigger the UI update via Signals)
     const viewMessages = freshMessages.map((m) => this.mapper.toView(m));
     this.upsertMessages(viewMessages, null);
   }
 
-  /**
-   * Called by ActionService to optimistically update UI,
-   * OR by applyIncomingReadReceipts to update existing messages.
-   */
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
-    const relevant = messages.filter(
-      (msg) => msg.conversationUrn.toString() === activeConvo.toString(),
+    // ✅ URN equality check
+    const relevant = messages.filter((msg) =>
+      msg.conversationUrn.equals(activeConvo),
     );
 
     if (relevant.length > 0) {
@@ -350,15 +343,13 @@ export class ConversationService {
         );
       }
 
-      // ✅ REFACTOR: Merging Logic (Upsert)
       this._rawMessages.update((current) => {
         const lookup = new Map(current.map((m) => [m.id, m]));
 
         viewed.forEach((m) => {
-          lookup.set(m.id, m); // Replace or Add
+          lookup.set(m.id, m);
         });
 
-        // Re-sort by timestamp to ensure order (safe fallback)
         return Array.from(lookup.values()).sort((a, b) =>
           a.sentTimestamp.localeCompare(b.sentTimestamp),
         );
@@ -411,9 +402,9 @@ export class ConversationService {
     messages: ChatMessage[],
     myUrn: URN,
   ): Promise<void> {
-    const myUrnStr = myUrn.toString();
     const unreadMessages = messages.filter(
-      (m) => m.senderId.toString() !== myUrnStr && m.status !== 'read',
+      // ✅ URN equality check
+      (m) => !m.senderId.equals(myUrn) && m.status !== 'read',
     );
 
     if (unreadMessages.length === 0) return;
