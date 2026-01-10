@@ -24,7 +24,7 @@ import {
 } from '@nx-platform-application/platform-auth-access';
 
 // --- Mock Providers ---
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { MockChatService } from './mocks/mock-chat.service';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
@@ -84,7 +84,7 @@ import {
 const authProviders = [{ provide: IAuthService, useExisting: AuthService }];
 
 const chatProvider = environment.useMocks
-  ? { provide: ChatService, useClass: MockChatService }
+  ? { provide: AppState, useClass: MockChatService }
   : [];
 
 const contactsProvider = environment.useMocks

@@ -1,5 +1,3 @@
-// libs/messenger/domain/ingestion/src/lib/ingestion.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -22,9 +20,8 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   MessageContentParser,
   ReadReceiptData,
-  AssetRevealData, // ✅ Import
-  MESSAGE_TYPE_TYPING,
-  MESSAGE_TYPE_READ_RECEIPT,
+  AssetRevealData,
+  MessageTypingIndicator,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 
@@ -32,6 +29,7 @@ export interface IngestionResult {
   messages: ChatMessage[];
   typingIndicators: URN[];
   readReceipts: string[];
+  patchedMessageIds: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -54,6 +52,7 @@ export class IngestionService {
       messages: [],
       typingIndicators: [],
       readReceipts: [],
+      patchedMessageIds: [],
     };
 
     const queue = await firstValueFrom(
@@ -97,6 +96,10 @@ export class IngestionService {
           ...nextBatch.typingIndicators,
         ],
         readReceipts: [...result.readReceipts, ...nextBatch.readReceipts],
+        patchedMessageIds: [
+          ...result.patchedMessageIds,
+          ...nextBatch.patchedMessageIds,
+        ],
       };
     }
 
@@ -112,7 +115,6 @@ export class IngestionService {
     const transport: TransportMessage =
       await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
 
-    // 1. SECURITY CHECK: Quarantine Gatekeeper
     const canonicalSenderUrn = await this.quarantineService.process(
       transport,
       blockedSet,
@@ -122,7 +124,7 @@ export class IngestionService {
       return;
     }
 
-    await this.parseAndStore(
+    await this.routeAndProcess(
       transport,
       item.id,
       canonicalSenderUrn,
@@ -130,137 +132,163 @@ export class IngestionService {
     );
   }
 
-  private async parseAndStore(
+  // ✅ REFACTOR: Clean, Type-Safe Routing
+  private async routeAndProcess(
     transport: TransportMessage,
     queueId: string,
     canonicalSenderUrn: URN,
     accumulator: IngestionResult,
   ): Promise<void> {
-    const typeStr = transport.typeId.toString();
-    const parsed = this.parser.parse(transport.typeId, transport.payloadBytes);
-    const canonicalId = transport.clientRecordId || queueId;
+    // 1. INTENT: Check Transport URN properties
+    const typeId = transport.typeId;
+    const isSignal =
+      typeId.namespace === 'message' && typeId.entityType === 'signal';
 
-    switch (parsed.kind) {
-      case 'content': {
-        const conversationUrn =
-          parsed.conversationId.entityType === 'group'
-            ? parsed.conversationId
-            : canonicalSenderUrn;
+    // 2. PARSE: Extract data
+    const parsed = this.parser.parse(typeId, transport.payloadBytes);
 
-        if (parsed.payload.kind === 'group-system') {
-          const data = parsed.payload.data;
-          try {
-            const groupUrn = URN.parse(data.groupUrn);
-
-            if (data.status === 'joined') {
-              this.logger.info(
-                `[Ingestion] Roster Update: ${canonicalSenderUrn} joined ${groupUrn}`,
-              );
-              await this.groupStorage.updateGroupMemberStatus(
-                groupUrn,
-                canonicalSenderUrn,
-                'joined',
-              );
-            } else if (data.status === 'declined') {
-              this.logger.info(
-                `[Ingestion] Roster Update: ${canonicalSenderUrn} declined ${groupUrn}`,
-              );
-              await this.groupStorage.updateGroupMemberStatus(
-                groupUrn,
-                canonicalSenderUrn,
-                'declined',
-              );
-            }
-          } catch (e) {
-            this.logger.error('[Ingestion] Failed to update group roster', e);
-          }
-        }
-
-        const chatMessage: ChatMessage = {
-          id: canonicalId,
-          senderId: canonicalSenderUrn,
-          sentTimestamp: transport.sentTimestamp as ISODateTimeString,
-          typeId: transport.typeId,
-          status: 'received',
-          conversationUrn: conversationUrn!, // (! assertion safe via Guard logic)
-          tags: parsed.tags,
-          payloadBytes: this.parser.serialize(parsed.payload),
-          textContent:
-            parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
-        };
-
-        await this.storageService.saveMessage(chatMessage);
-        accumulator.messages.push(chatMessage);
-        break;
+    // 3. ROUTE: Signal Path (High Priority)
+    // Strictly guards against saving "Ghost Messages" to the DB.
+    if (isSignal) {
+      if (parsed.kind === 'signal') {
+        await this.handleSignal(
+          parsed.payload,
+          canonicalSenderUrn,
+          accumulator,
+        );
+      } else {
+        this.logger.warn(
+          `[Ingestion] Signal Mismatch: Transport=Signal, Parser=${parsed.kind}`,
+        );
       }
+      return;
+    }
 
-      case 'signal': {
-        const payload = parsed.payload;
+    // 4. ROUTE: Content Path
+    // Only reachable if Transport says "Not a Signal".
+    if (parsed.kind === 'content') {
+      await this.handleContent(
+        parsed,
+        transport,
+        queueId,
+        canonicalSenderUrn,
+        accumulator,
+      );
+      return;
+    }
 
-        if (payload.action === 'read-receipt') {
-          const rr = payload.data as ReadReceiptData;
-          const ids = rr?.messageIds || [];
+    // 5. DEAD END: Unrecognized
+    this.logger.warn(
+      `[Ingestion] Dropped Unhandled: Transport=${typeId.toString()}, Parser=${
+        parsed.kind
+      }`,
+    );
+  }
 
-          if (ids.length > 0) {
-            this.logger.info(
-              `[Ingestion] Applying Read Receipt from ${canonicalSenderUrn}`,
-            );
+  private async handleContent(
+    parsed: any,
+    transport: TransportMessage,
+    queueId: string,
+    canonicalSenderUrn: URN,
+    accumulator: IngestionResult,
+  ): Promise<void> {
+    const canonicalId = transport.clientRecordId || queueId;
+    const conversationUrn =
+      parsed.conversationId.entityType === 'group'
+        ? parsed.conversationId
+        : canonicalSenderUrn;
 
-            for (const msgId of ids) {
-              await this.storageService.applyReceipt(
-                msgId,
-                canonicalSenderUrn,
-                'read',
-              );
-            }
-            accumulator.readReceipts.push(...ids);
-          }
-        } else if (typeStr === MESSAGE_TYPE_TYPING) {
-          accumulator.typingIndicators.push(canonicalSenderUrn);
+    if (parsed.payload.kind === 'group-system') {
+      const data = parsed.payload.data;
+      try {
+        const groupUrn = URN.parse(data.groupUrn);
+        if (data.status === 'joined') {
+          await this.groupStorage.updateGroupMemberStatus(
+            groupUrn,
+            canonicalSenderUrn,
+            'joined',
+          );
+        } else if (data.status === 'declined') {
+          await this.groupStorage.updateGroupMemberStatus(
+            groupUrn,
+            canonicalSenderUrn,
+            'declined',
+          );
         }
-        // ✅ NEW: Asset Reveal (Smart Patching)
-        else if (payload.action === 'asset-reveal') {
-          const patch = payload.data as AssetRevealData;
-          await this.handleAssetReveal(patch);
+      } catch (e) {
+        this.logger.error('[Ingestion] Failed to update group roster', e);
+      }
+    }
+
+    const chatMessage: ChatMessage = {
+      id: canonicalId,
+      senderId: canonicalSenderUrn,
+      sentTimestamp: transport.sentTimestamp as ISODateTimeString,
+      typeId: transport.typeId,
+      status: 'received',
+      conversationUrn: conversationUrn!,
+      tags: parsed.tags,
+      payloadBytes: this.parser.serialize(parsed.payload),
+      textContent:
+        parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
+    };
+
+    await this.storageService.saveMessage(chatMessage);
+    accumulator.messages.push(chatMessage);
+  }
+
+  private async handleSignal(
+    payload: any,
+    canonicalSenderUrn: URN,
+    accumulator: IngestionResult,
+  ): Promise<void> {
+    if (payload.action === 'read-receipt') {
+      const rr = payload.data as ReadReceiptData;
+      const ids = rr?.messageIds || [];
+      if (ids.length > 0) {
+        for (const msgId of ids) {
+          await this.storageService.applyReceipt(
+            msgId,
+            canonicalSenderUrn,
+            'read',
+          );
         }
-        break;
+        accumulator.readReceipts.push(...ids);
+      }
+    } else if (payload.action === 'typing') {
+      accumulator.typingIndicators.push(canonicalSenderUrn);
+    } else if (payload.action === 'asset-reveal') {
+      const patch = payload.data as AssetRevealData;
+      const patchedId = await this.handleAssetReveal(patch);
+      if (patchedId) {
+        accumulator.patchedMessageIds.push(patchedId);
       }
     }
   }
 
-  /**
-   * Domain Logic: Read -> Parse -> Patch -> Serialize -> Write
-   */
-  private async handleAssetReveal(patch: AssetRevealData): Promise<void> {
+  private async handleAssetReveal(
+    patch: AssetRevealData,
+  ): Promise<string | null> {
     const msg = await this.storageService.getMessage(patch.messageId);
-    if (!msg) return;
+    if (!msg) return null;
 
     try {
-      if (!msg.payloadBytes) {
-        this.logger.warn(
-          `[Ingestion] Cannot patch ${patch.messageId}: Missing payload bytes`,
-        );
-        return;
-      }
-      // 1. Parse Existing
+      if (!msg.payloadBytes) return null;
+
       const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-      if (parsed.kind !== 'content') return;
+      if (parsed.kind !== 'content') return null;
 
-      // 2. Patch
       const newPayload = { ...parsed.payload, remoteUrl: patch.remoteUrl };
-
-      // 3. Serialize
       const newBytes = this.parser.serialize(newPayload);
 
-      // 4. Save Raw Bytes
       await this.storageService.updateMessagePayload(patch.messageId, newBytes);
-
-      this.logger.info(`[Ingestion] Patched remoteUrl for ${patch.messageId}`);
+      return patch.messageId;
     } catch (e) {
       this.logger.error(
         `[Ingestion] Failed to patch message ${patch.messageId}`,
         e,
       );
+      return null;
     }
   }
 }

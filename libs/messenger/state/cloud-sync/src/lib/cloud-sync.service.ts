@@ -10,6 +10,13 @@ import { StorageService } from '@nx-platform-application/platform-domain-storage
 
 import { SyncOptions, SyncResult } from './models/sync-options.interface';
 
+// ✅ NEW: Explicit state for UI handling
+export type SyncConnectionState =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'auth_required';
+
 @Injectable({ providedIn: 'root' })
 export class CloudSyncService {
   private logger = inject(Logger);
@@ -21,12 +28,53 @@ export class CloudSyncService {
   public readonly isSyncing = signal<boolean>(false);
   public readonly lastSyncResult = signal<SyncResult | null>(null);
 
-  // Expose the underlying storage connection state as a signal
-  // Assumes StorageService.isConnected is a signal (based on your specs)
-  public readonly isConnected = this.storage.isConnected;
+  // ✅ NEW: Granular connection state
+  public readonly connectionState = signal<SyncConnectionState>('idle');
 
+  // ✅ UPDATE: Derived from local state for consistency
+  public readonly isConnected = computed(
+    () => this.connectionState() === 'connected',
+  );
+
+  // ✅ NEW: Exposed for UI "Reconnect" buttons
+  public readonly requiresUserInteraction = computed(
+    () => this.connectionState() === 'auth_required',
+  );
+
+  /**
+   * Attempts to connect to the cloud provider.
+   * Handles "Popup Blocked" errors gracefully by setting state to 'auth_required'.
+   */
   async connect(providerId: string): Promise<boolean> {
-    return await this.storage.connect(providerId);
+    // If already connected, skip
+    if (this.connectionState() === 'connected') return true;
+
+    this.connectionState.set('connecting');
+
+    try {
+      // Delegate to Infrastructure
+      const success = await this.storage.connect(providerId);
+
+      if (success) {
+        this.connectionState.set('connected');
+        return true;
+      } else {
+        // Soft fail (User cancelled, or silent login failed)
+        this.logger.info(
+          '[CloudSync] Silent connection failed. User interaction required.',
+        );
+        this.connectionState.set('auth_required');
+        return false;
+      }
+    } catch (e) {
+      // Hard fail (Popup blocked by browser, Network error)
+      this.logger.warn(
+        '[CloudSync] Connection error (Popup likely blocked). Waiting for user action.',
+        e,
+      );
+      this.connectionState.set('auth_required');
+      return false;
+    }
   }
 
   /**
@@ -45,6 +93,7 @@ export class CloudSyncService {
       this.logger.info('[CloudSync] Revoking storage permissions...');
       // Use true to ensure the driver unlinks/revokes tokens
       await this.storage.disconnect();
+      this.connectionState.set('idle');
       this.lastSyncResult.set(null);
     } catch (e: any) {
       this.logger.error('[CloudSync] Revoke failed', e);
@@ -53,7 +102,7 @@ export class CloudSyncService {
   }
 
   hasPermission(providerId: string): boolean {
-    return this.storage.isConnected();
+    return this.isConnected();
   }
 
   async syncNow(options: SyncOptions): Promise<SyncResult> {
@@ -61,8 +110,12 @@ export class CloudSyncService {
 
     const result = this.initResult();
 
-    if (!this.storage.isConnected()) {
-      return this.fail(result, 'Auth: No storage connected');
+    // ✅ UPDATE: Attempt connection if needed (using the new soft-auth flow)
+    if (!this.isConnected()) {
+      const connected = await this.connect(options.providerId);
+      if (!connected) {
+        return this.fail(result, 'Auth: No storage connected');
+      }
     }
 
     this.isSyncing.set(true);

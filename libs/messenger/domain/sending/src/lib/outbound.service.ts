@@ -12,7 +12,7 @@ import {
   MessageDeliveryStatus,
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
-import { MESSAGE_TYPE_TEXT } from '@nx-platform-application/messenger-domain-message-content';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 
 // Strategies
 import { SendContext } from './send-strategy.interface';
@@ -68,10 +68,9 @@ export class OutboundService {
         typeId: typeId,
         payloadBytes: originalPayloadBytes,
         tags: tags,
-        textContent:
-          typeId.toString() === MESSAGE_TYPE_TEXT
-            ? new TextDecoder().decode(originalPayloadBytes)
-            : undefined,
+        textContent: typeId.equals(MessageTypeText)
+          ? new TextDecoder().decode(originalPayloadBytes)
+          : undefined,
         status: 'pending',
       };
 

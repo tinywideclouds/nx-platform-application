@@ -10,7 +10,7 @@
           <mat-icon>backup</mat-icon>
         </div>
         <div>
-          <h3 class="font-bold text-gray-900 m-0">Cloud Backup & Sync</h3>
+          <h3 class="font-bold text-gray-900 m-0">Cloud Storage</h3>
           <p class="text-xs text-gray-500 m-0">Google Drive</p>
         </div>
       </div>
@@ -18,7 +18,7 @@
       <mat-slide-toggle
         color="primary"
         [disabled]="isSyncing()"
-        [checked]="isCloudEnabled"
+        [checked]="isCloudEnabled()"
         (change)="toggleCloudSync($event.checked)"
       >
       </mat-slide-toggle>
@@ -26,8 +26,8 @@
 
     @if (isCloudEnabled()) {
       <p class="text-sm text-gray-600 mb-4 leading-relaxed">
-        Your encrypted contacts and conversation history are synced across your
-        devices.
+        <strong>Active:</strong> Your encrypted contacts, chat history, and
+        <strong>media uploads</strong> are synced to your Google Drive.
       </p>
 
       @if (isSyncing()) {
@@ -57,7 +57,11 @@
       }
     } @else {
       <p class="text-sm text-gray-400 mb-4 italic">
-        Cloud sync is disabled. Your data is only stored locally on this device.
+        Cloud storage is disconnected.
+        <br />
+        • Messages are stored locally only.
+        <br />
+        • <strong>You cannot upload new images/files.</strong>
       </p>
       <button
         mat-flat-button
@@ -66,7 +70,7 @@
         (click)="onReconnect()"
       >
         <mat-icon>cloud_queue</mat-icon>
-        Connect Google Drive
+        Connect to Enable Media & Backup
       </button>
     }
   </div>

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MessengerSyncCardComponent } from './messenger-sync-card.component';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { MatDialog } from '@angular/material/dialog';

@@ -1,7 +1,7 @@
 import { URN } from '@nx-platform-application/platform-types';
 
 // --- Import ALL the services we've built ---
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import {
   ChatDataService,
   ChatSendService,

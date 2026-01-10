@@ -14,7 +14,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { Logger } from '@nx-platform-application/console-logger';
@@ -40,7 +40,7 @@ export class KeySettingsContentComponent {
   // Controlled by Parent (Page vs Sticky Wizard)
   isWizard = input(false);
 
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private keyCache = inject(KeyCacheService);
   private router = inject(Router);
   private dialog = inject(MatDialog);
@@ -77,7 +77,7 @@ export class KeySettingsContentComponent {
 
     if (await firstValueFrom(ref.afterClosed())) {
       try {
-        await this.chatService.resetIdentityKeys();
+        await this.appState.resetIdentityKeys();
         this.snackBar.open('Identity keys regenerated.', 'OK', {
           duration: 3000,
         });

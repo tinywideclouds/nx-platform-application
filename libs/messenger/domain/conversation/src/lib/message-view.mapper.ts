@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { MESSAGE_TYPE_TEXT } from '@nx-platform-application/messenger-domain-message-content';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 
 @Injectable({ providedIn: 'root' })
 export class MessageViewMapper {
@@ -20,7 +20,7 @@ export class MessageViewMapper {
 
     let textContent: string | undefined = undefined;
 
-    if (msg.typeId.toString() === MESSAGE_TYPE_TEXT) {
+    if (msg.typeId.equals(MessageTypeText)) {
       if (msg.payloadBytes && msg.payloadBytes.length > 0) {
         try {
           textContent = this.decoder.decode(msg.payloadBytes);

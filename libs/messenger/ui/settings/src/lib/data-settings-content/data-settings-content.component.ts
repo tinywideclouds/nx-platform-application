@@ -13,7 +13,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
@@ -37,13 +37,13 @@ import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-syn
 export class DataSettingsContentComponent {
   isWizard = input(false);
 
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private logger = inject(Logger);
 
   // Real connection to ChatService signals
-  messageCount = computed(() => this.chatService.messages().length);
+  messageCount = computed(() => this.appState.messages().length);
 
   async onClearHistory() {
     const ref = this.dialog.open(ConfirmationDialogComponent, {
@@ -58,7 +58,7 @@ export class DataSettingsContentComponent {
 
     if (await firstValueFrom(ref.afterClosed())) {
       try {
-        await this.chatService.clearLocalMessages();
+        await this.appState.clearLocalMessages();
         this.snackBar.open('Local message history cleared.', 'OK', {
           duration: 3000,
         });
@@ -81,7 +81,7 @@ export class DataSettingsContentComponent {
 
     if (await firstValueFrom(ref.afterClosed())) {
       try {
-        await this.chatService.clearLocalContacts();
+        await this.appState.clearLocalContacts();
         this.snackBar.open('Local contacts cleared.', 'OK', { duration: 3000 });
       } catch (e) {
         this.logger.error('Failed to clear contacts', e);
@@ -101,7 +101,7 @@ export class DataSettingsContentComponent {
     });
 
     if (await firstValueFrom(ref.afterClosed())) {
-      await this.chatService.fullDeviceWipe();
+      await this.appState.fullDeviceWipe();
     }
   }
 }

@@ -226,13 +226,24 @@ export class GoogleDriveDriver implements VaultProvider {
     return files.map((f) => f.name);
   }
 
-  async uploadPublicAsset(blob: Blob, filename: string): Promise<string> {
+  // ✅ UPDATE: Accepts contentType to fix binary uploads
+  async uploadPublicAsset(
+    blob: Blob,
+    filename: string,
+    contentType = 'application/octet-stream',
+  ): Promise<string> {
     this.ensureAuth();
     const parentId = await this.ensureFolderHierarchy(this.ASSET_FOLDER);
     const base64Content = await this.blobToBase64(blob);
 
     const metadata = { name: filename, parents: [parentId] };
-    const body = this.createMultipartBody(metadata, base64Content, true);
+    // Pass contentType to the body generator
+    const body = this.createMultipartBody(
+      metadata,
+      base64Content,
+      true,
+      contentType,
+    );
 
     const response = await gapi.client.request({
       path: '/upload/drive/v3/files?uploadType=multipart',
@@ -265,10 +276,7 @@ export class GoogleDriveDriver implements VaultProvider {
   private async checkExistingSession() {
     try {
       await Promise.all([this.gapiLoadedPromise, this.gisLoadedPromise]);
-      // Check if GAPI client has a token loaded (e.g. from previous session restore logic elsewhere)
-      // Note: Google Identity Services (GIS) does not auto-restore tokens like GAPI v1.
-      // We rely on the app initializing this or the token being present.
-      // For now, we just check if gapi has a token.
+      // Check if GAPI client has a token loaded
       const token = gapi.client.getToken();
       if (token) {
         this._isAuthenticated.set(true);
@@ -291,29 +299,23 @@ export class GoogleDriveDriver implements VaultProvider {
     return { filename, folderPath };
   }
 
-  /**
-   * Safe Folder Creation with Race Condition Handling
-   */
   private async ensureFolderHierarchy(path: string): Promise<string> {
     const parts = path.split('/').filter((p) => !!p);
     let currentId = 'root';
 
     for (const part of parts) {
-      // 1. Check if exists
       const existingId = await this.getFileIdByName(part, currentId, true);
       if (existingId) {
         currentId = existingId;
       } else {
         try {
-          // 2. Try create
           currentId = await this.createFolder(part, currentId);
         } catch (e) {
-          // 3. Race condition check: Did someone else create it while we were trying?
           const raceId = await this.getFileIdByName(part, currentId, true);
           if (raceId) {
             currentId = raceId;
           } else {
-            throw e; // Genuine error
+            throw e;
           }
         }
       }
@@ -394,10 +396,12 @@ export class GoogleDriveDriver implements VaultProvider {
     return response.result.id;
   }
 
+  // ✅ UPDATE: Correctly uses contentType for the file body part
   private createMultipartBody(
     metadata: any,
     content: string,
     isBase64 = false,
+    contentType = 'application/json',
   ): string {
     const delimiter = `\r\n--${this.BOUNDARY}\r\n`;
     const close_delim = `\r\n--${this.BOUNDARY}--`;
@@ -408,7 +412,7 @@ export class GoogleDriveDriver implements VaultProvider {
       JSON.stringify(metadata) +
       delimiter +
       (isBase64 ? 'Content-Transfer-Encoding: base64\r\n' : '') +
-      'Content-Type: application/json\r\n\r\n' +
+      `Content-Type: ${contentType}\r\n\r\n` + // <--- FIXED
       content +
       close_delim
     );
@@ -429,7 +433,7 @@ export class GoogleDriveDriver implements VaultProvider {
   // --- SCRIPT LOADING ---
 
   private loadGapiScript(): Promise<void> {
-    if (typeof window === 'undefined') return Promise.resolve(); // SSR safe
+    if (typeof window === 'undefined') return Promise.resolve();
 
     return new Promise((resolve) => {
       if (typeof gapi !== 'undefined') {
@@ -451,7 +455,7 @@ export class GoogleDriveDriver implements VaultProvider {
   }
 
   private loadGisScript(): Promise<void> {
-    if (typeof window === 'undefined') return Promise.resolve(); // SSR safe
+    if (typeof window === 'undefined') return Promise.resolve();
 
     return new Promise((resolve) => {
       if (typeof google !== 'undefined' && google.accounts) {

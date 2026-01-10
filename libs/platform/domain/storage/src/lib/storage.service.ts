@@ -50,24 +50,38 @@ export class StorageService {
 
     if (savedId) {
       this.logger.info(
-        `[StorageService] Attempting to restore '${savedId}'...`,
+        `[StorageService] Found saved session for '${savedId}'. Restoring...`,
       );
       const driver = this.getDriver(savedId);
 
       if (driver) {
-        // Attempt silent auth (persist = true)
-        const success = await driver.link(true);
-        if (success) {
-          this.activeProviderId.set(savedId);
-          this.logger.info(`[StorageService] Restored '${savedId}' session.`);
-        } else {
-          // If silent auth fails, clear the stale state
-          this.logger.warn(`[StorageService] Failed to restore '${savedId}'.`);
+        try {
+          // Attempt silent auth (persist = true)
+          const success = await driver.link(true);
+          if (success) {
+            this.activeProviderId.set(savedId);
+            this.logger.info(
+              `[StorageService] Session restored for '${savedId}'.`,
+            );
+          } else {
+            // If silent auth fails, clear the stale state
+            this.logger.warn(
+              `[StorageService] Silent restore failed for '${savedId}'. Driver returned false.`,
+            );
+            this.persistState(null);
+          }
+        } catch (e) {
+          this.logger.error(
+            `[StorageService] Error during restore for '${savedId}'`,
+            e,
+          );
           this.persistState(null);
         }
       } else {
         this.logger.warn(
-          `[StorageService] Driver '${savedId}' not found. Clearing session.`,
+          `[StorageService] Driver '${savedId}' not found in registry. Drivers available: [${this.drivers
+            .map((d) => d.providerId)
+            .join(', ')}]`,
         );
         this.persistState(null);
       }
@@ -129,8 +143,13 @@ export class StorageService {
   /**
    * BYOS FEATURE: Public Asset Upload
    * Delegates to the currently active driver.
+   * ✅ UPDATE: Now accepts optional contentType to fix MIME issues on S3/GCS.
    */
-  async uploadPublicAsset(blob: Blob, filename: string): Promise<string> {
+  async uploadPublicAsset(
+    blob: Blob,
+    filename: string,
+    contentType?: string,
+  ): Promise<string> {
     const driver = this.getActiveDriver();
 
     if (!driver) {
@@ -139,7 +158,12 @@ export class StorageService {
 
     try {
       const uniqueName = `${Date.now()}_${filename}`;
-      return await driver.uploadPublicAsset(blob, uniqueName);
+      // Cast to any to support the extra argument if the interface isn't updated yet
+      return await (driver as any).uploadPublicAsset(
+        blob,
+        uniqueName,
+        contentType,
+      );
     } catch (e) {
       this.logger.error('[StorageService] Asset upload failed', e);
       throw e;

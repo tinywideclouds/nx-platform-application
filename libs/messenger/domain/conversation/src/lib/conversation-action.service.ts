@@ -3,7 +3,6 @@ import { URN } from '@nx-platform-application/platform-types';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import {
-  MessageTypeContactShare,
   MessageTypingIndicator,
   ReadReceiptData,
   ContactShareData,
@@ -12,10 +11,10 @@ import {
   MessageTypeImage,
   MessageTypeReadReceipt,
   AssetRevealData,
-  MessageTypeAssetReveal, // ✅ Import
+  MessageTypeAssetReveal,
+  MessageTypeContactShare,
 } from '@nx-platform-application/messenger-domain-message-content';
 
-// Dependency on State to perform optimistic updates
 import { ConversationService } from './conversation.service';
 
 @Injectable({ providedIn: 'root' })
@@ -23,7 +22,6 @@ export class ConversationActionService {
   private outbound = inject(OutboundService);
   private conversationState = inject(ConversationService);
 
-  // Execution Lock to ensure message ordering
   private operationLock = Promise.resolve();
 
   async sendMessage(
@@ -37,19 +35,15 @@ export class ConversationActionService {
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  // ✅ UPDATED: Image Support
-  // Returns the messageId so ChatService can patch it later
   async sendImage(
     recipientUrn: URN,
-    data: ImageContent,
+    content: ImageContent,
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<string> {
-    const json = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(json);
+    const bytes = new TextEncoder().encode(JSON.stringify(content));
     const typeId = MessageTypeImage;
-
-    return this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+    return await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
   async sendContactShare(
@@ -58,28 +52,35 @@ export class ConversationActionService {
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<void> {
-    const json = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(json);
+    const payload = {
+      kind: 'rich',
+      subType: MessageTypeContactShare.toString(),
+      data: data,
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
     const typeId = MessageTypeContactShare;
     await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
   async sendTypingIndicator(
-    recipient: URN,
+    recipientUrn: URN,
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<void> {
-    await this.outbound.sendMessage(
-      myKeys,
-      myUrn,
-      recipient,
-      MessageTypingIndicator,
-      new Uint8Array([]),
-      { isEphemeral: true },
+    const typeId = MessageTypingIndicator;
+    const bytes = new Uint8Array([]);
+    await this.runExclusive(() =>
+      this.outbound.sendMessage(
+        myKeys,
+        myUrn,
+        recipientUrn,
+        typeId,
+        bytes,
+        { isEphemeral: true }, // ephemeral
+      ),
     );
   }
 
-  // ✅ UPDATED: Read Receipt (Now Durable)
   async sendReadReceiptSignal(
     recipientUrn: URN,
     messageIds: string[],
@@ -91,18 +92,10 @@ export class ConversationActionService {
       readAt: new Date().toISOString(),
     };
     const bytes = new TextEncoder().encode(JSON.stringify(data));
-
-    // Durable send
-    await this.sendGeneric(
-      recipientUrn,
-      MessageTypeReadReceipt,
-      bytes,
-      myKeys,
-      myUrn,
-    );
+    const typeId = MessageTypeReadReceipt;
+    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
-  // ✅ NEW: Asset Reveal (Durable Patch)
   async sendAssetReveal(
     recipientUrn: URN,
     data: AssetRevealData,
@@ -110,19 +103,13 @@ export class ConversationActionService {
     myUrn: URN,
   ): Promise<void> {
     const bytes = new TextEncoder().encode(JSON.stringify(data));
-
-    await this.sendGeneric(
-      recipientUrn,
-      MessageTypeAssetReveal,
-      bytes,
-      myKeys,
-      myUrn,
-    );
+    const typeId = MessageTypeAssetReveal;
+    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
   }
 
   /**
-   * Generic sender that handles Optimistic UI updates via the State service.
-   * Returns the Message ID.
+   * Generic sender.
+   * ✅ FIX: Filters out Signals from the UI state.
    */
   private async sendGeneric(
     recipientUrn: URN,
@@ -142,18 +129,29 @@ export class ConversationActionService {
 
       if (result) {
         const { message, outcome } = result;
-        // 1. Optimistic Update (Show 'pending')
-        this.conversationState.upsertMessages([message], myUrn);
 
-        // 2. Async Confirmation (Update to 'sent'/'failed')
-        outcome.then((finalStatus) => {
-          if (finalStatus !== 'pending') {
-            this.conversationState.updateMessageStatusInSignal(
-              message.id,
-              finalStatus,
-            );
-          }
-        });
+        // ✅ CHECK: Is this a Renderable Message or a System Signal?
+        // We use the URN structure (urn:message:signal:...) or specific equality checks.
+        const isSignal =
+          typeId.entityType === 'signal' ||
+          typeId.equals(MessageTypeReadReceipt) ||
+          typeId.equals(MessageTypeAssetReveal) ||
+          typeId.equals(MessageTypingIndicator);
+
+        if (!isSignal) {
+          // 1. Optimistic Update (Show 'pending' in Chat Window)
+          this.conversationState.upsertMessages([message], myUrn);
+
+          // 2. Async Confirmation (Update to 'sent'/'failed')
+          outcome.then((finalStatus) => {
+            if (finalStatus !== 'pending') {
+              this.conversationState.updateMessageStatusInSignal(
+                message.id,
+                finalStatus,
+              );
+            }
+          });
+        }
 
         return message.id;
       }

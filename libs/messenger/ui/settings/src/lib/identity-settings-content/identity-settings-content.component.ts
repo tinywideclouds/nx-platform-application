@@ -14,7 +14,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { from } from 'rxjs';
 
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 
@@ -43,16 +43,16 @@ export class IdentitySettingsContentComponent {
   isWizard = input(false);
 
   private authService = inject(IAuthService);
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private cryptoService = inject(MessengerCryptoService);
   private liveService = inject(ChatLiveDataService);
 
   // --- WIZARD TOGGLE ---
   // Connects directly to ChatService state
-  wizardActive = this.chatService.showWizard;
+  wizardActive = this.appState.showWizard;
 
   onToggleWizard(active: boolean): void {
-    this.chatService.setWizardActive(active);
+    this.appState.setWizardActive(active);
   }
 
   // --- IDENTITY STATE ---

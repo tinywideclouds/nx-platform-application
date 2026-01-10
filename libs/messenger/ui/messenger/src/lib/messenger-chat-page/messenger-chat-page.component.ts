@@ -26,7 +26,7 @@ import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 import { MessageRequestReviewComponent } from '../message-request-review/message-request-review.component';
 
 // SERVICES
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 
 // ✅ REFACTOR: Import API Tokens
 import {
@@ -82,7 +82,7 @@ import { StickyWizardComponent } from '@nx-platform-application/messenger-settin
 export class MessengerChatPageComponent {
   protected router = inject(Router);
   private route = inject(ActivatedRoute);
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
 
   private addressBook = inject(AddressBookApi);
   private addressBookManager = inject(AddressBookManagementApi);
@@ -94,7 +94,7 @@ export class MessengerChatPageComponent {
   showDetail = computed(() => !!this.selectedConversationUrn());
   hasConversations = computed(() => this.conversationsList().length > 0);
 
-  showWizard = this.chatService.showWizard;
+  showWizard = this.appState.showWizard;
 
   // --- STATE SIGNALS ---
   /**
@@ -144,8 +144,8 @@ export class MessengerChatPageComponent {
     initialValue: [] as PendingIdentity[],
   });
 
-  private activeConversations = this.chatService.activeConversations;
-  private selectedConversationUrn = this.chatService.selectedConversation;
+  private activeConversations = this.appState.activeConversations;
+  private selectedConversationUrn = this.appState.selectedConversation;
 
   // --- COMPUTED: Filtered Conversation List ---
   conversationsList = computed<ConversationViewItem[]>(() => {
@@ -233,7 +233,7 @@ export class MessengerChatPageComponent {
 
     // If opening requests, deselect active chat to avoid visual confusion
     if (this.showRequestsPane()) {
-      this.chatService.loadConversation(null);
+      this.appState.loadConversation(null);
     }
   }
 
@@ -272,7 +272,7 @@ export class MessengerChatPageComponent {
 
     try {
       // 1. Fetch
-      const messages = await this.chatService.getQuarantinedMessages(urn);
+      const messages = await this.appState.getQuarantinedMessages(urn);
 
       // 2. Map
       const viewMessages: ChatMessage[] = messages.map((m) => ({
@@ -340,7 +340,7 @@ export class MessengerChatPageComponent {
       await this.addressBookManager.saveContact(newContact);
 
       // 4. Promote Messages (Data Move + Index Update)
-      await this.chatService.promoteQuarantinedMessages(urn, newContactId);
+      await this.appState.promoteQuarantinedMessages(urn, newContactId);
 
       // 5. Cleanup Pending
       await this.gatekeeper.deletePending(urn);
@@ -378,7 +378,7 @@ export class MessengerChatPageComponent {
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
         try {
-          await this.chatService.block([event.urn], event.scope);
+          await this.appState.block([event.urn], event.scope);
           this.showFeedback(`Blocked sender`);
         } catch (e) {
           console.error('Block failed', e);
@@ -403,7 +403,7 @@ export class MessengerChatPageComponent {
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
         try {
-          await this.chatService.dismissPending([urn]);
+          await this.appState.dismissPending([urn]);
           this.showFeedback(`Dismissed request`);
         } catch (e) {
           console.error('Dismiss failed', e);
@@ -429,7 +429,7 @@ export class MessengerChatPageComponent {
 
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
-        await this.chatService.block(allUrns, 'messenger');
+        await this.appState.block(allUrns, 'messenger');
         this.showFeedback('Blocked all requests');
       }
     });
@@ -443,6 +443,6 @@ export class MessengerChatPageComponent {
   }
 
   onCloseWizard() {
-    this.chatService.setWizardActive(false);
+    this.appState.setWizardActive(false);
   }
 }

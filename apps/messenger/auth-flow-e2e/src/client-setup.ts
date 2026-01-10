@@ -9,7 +9,7 @@ import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 
 // --- Import ALL the services we've built ---
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import {
   AuthService,
   IAuthService,

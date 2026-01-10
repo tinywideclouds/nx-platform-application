@@ -1,9 +1,11 @@
 <mat-toolbar class="flex justify-between short-toolbar bg-secondary-400">
   <div class="relative inline-block">
-    <div
-      class="absolute -top-2 -right-2 z-0 pointer-events-none transform scale-75"
-    >
-      <messenger-network-status [status]="connectionStatus()" />
+    <div class="absolute -top-2 -right-2 z-0 transform scale-75">
+      <messenger-network-status
+        [status]="connectionStatus()"
+        [tooltipText]="statusTooltip()"
+        (action)="handleNetworkAction()"
+      />
     </div>
 
     <button

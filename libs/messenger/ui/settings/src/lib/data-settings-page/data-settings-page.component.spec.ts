@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DataSettingsPageComponent } from './data-settings-page.component';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MockComponent, MockProvider } from 'ng-mocks';

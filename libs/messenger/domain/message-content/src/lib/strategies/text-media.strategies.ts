@@ -2,11 +2,10 @@ import { Injectable } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ParsedMessage,
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_IMAGE,
-  MESSAGE_TYPE_CONTACT_SHARE,
   ImageContent,
   ContactShareData,
+  MessageTypeText,
+  MessageTypeContactShare,
 } from '../models/content-types';
 import {
   ContentParserStrategy,
@@ -18,7 +17,7 @@ export class TextParserStrategy implements ContentParserStrategy {
   private decoder = new TextDecoder();
 
   supports(typeId: URN): boolean {
-    return typeId.toString() === MESSAGE_TYPE_TEXT;
+    return typeId.equals(MessageTypeText);
   }
 
   parse(
@@ -72,7 +71,7 @@ export class RichMediaParserStrategy implements ContentParserStrategy {
   private decoder = new TextDecoder();
 
   supports(typeId: URN): boolean {
-    return typeId.toString() === MESSAGE_TYPE_CONTACT_SHARE;
+    return typeId.equals(MessageTypeContactShare);
   }
 
   parse(

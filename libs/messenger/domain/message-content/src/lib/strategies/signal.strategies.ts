@@ -2,9 +2,9 @@ import { Injectable } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ParsedMessage,
-  MESSAGE_TYPE_READ_RECEIPT,
-  MESSAGE_TYPE_TYPING,
+  MessageTypingIndicator,
   ReadReceiptData,
+  MessageTypeReadReceipt,
 } from '../models/content-types';
 import {
   ContentParserStrategy,
@@ -16,8 +16,10 @@ export class SignalParserStrategy implements ContentParserStrategy {
   private decoder = new TextDecoder();
 
   supports(typeId: URN): boolean {
-    const s = typeId.toString();
-    return s === MESSAGE_TYPE_READ_RECEIPT || s === MESSAGE_TYPE_TYPING;
+    return (
+      typeId.equals(MessageTypeReadReceipt) ||
+      typeId.equals(MessageTypingIndicator)
+    );
   }
 
   parse(
@@ -25,17 +27,15 @@ export class SignalParserStrategy implements ContentParserStrategy {
     content: Uint8Array,
     _context: ParsingContext,
   ): ParsedMessage {
-    const typeStr = typeId.toString();
-
-    if (typeStr === MESSAGE_TYPE_READ_RECEIPT) {
+    if (typeId.equals(MessageTypeReadReceipt)) {
       const data = JSON.parse(this.decoder.decode(content)) as ReadReceiptData;
       return { kind: 'signal', payload: { action: 'read-receipt', data } };
     }
 
-    if (typeStr === MESSAGE_TYPE_TYPING) {
+    if (typeId.equals(MessageTypingIndicator)) {
       return { kind: 'signal', payload: { action: 'typing', data: null } };
     }
 
-    throw new Error(`SignalStrategy cannot parse ${typeStr}`);
+    throw new Error(`SignalStrategy cannot parse ${typeId.toString()}`);
   }
 }

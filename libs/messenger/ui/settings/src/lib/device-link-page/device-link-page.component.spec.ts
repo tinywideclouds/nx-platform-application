@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DeviceLinkPageComponent } from './device-link-page.component';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { vi } from 'vitest';
 

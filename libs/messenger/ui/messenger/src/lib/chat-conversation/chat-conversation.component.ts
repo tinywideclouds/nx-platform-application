@@ -18,15 +18,16 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_GROUP_INVITE,
-  MESSAGE_TYPE_IMAGE,
   ImageContent,
   messageTagBroadcast,
   ContentPayload,
+  MessageTypeText,
+  MESSAGE_TYPE_TEXT,
+  MESSAGE_TYPE_IMAGE,
+  MESSAGE_TYPE_GROUP_INVITE,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
@@ -64,19 +65,19 @@ import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatConversationComponent {
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
 
   autoScroll = viewChild.required<AutoScrollDirective>('autoScroll');
 
-  chatMessages = this.chatService.messages;
-  currentUserUrn = this.chatService.currentUserUrn;
-  selectedConversation = this.chatService.selectedConversation;
-  isLoading = this.chatService.isLoadingHistory;
-  firstUnreadId = this.chatService.firstUnreadId;
-  typingActivity = this.chatService.typingActivity;
-  readCursors = this.chatService.readCursors;
+  chatMessages = this.appState.messages;
+  currentUserUrn = this.appState.currentUserUrn;
+  selectedConversation = this.appState.selectedConversation;
+  isLoading = this.appState.isLoadingHistory;
+  firstUnreadId = this.appState.firstUnreadId;
+  typingActivity = this.appState.typingActivity;
+  readCursors = this.appState.readCursors;
 
   showNewMessageIndicator = signal(false);
 
@@ -84,7 +85,6 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
-  // Expose Constants for Template
   readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
   readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
   readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE;
@@ -164,7 +164,7 @@ export class ChatConversationComponent {
   }
 
   getContentPayload(msg: ChatMessage): ContentPayload | null {
-    if (this.getTypeId(msg) === MESSAGE_TYPE_TEXT && msg.textContent) {
+    if (msg.typeId.equals(MessageTypeText) && msg.textContent) {
       return { kind: 'text', text: msg.textContent };
     }
 
@@ -180,7 +180,7 @@ export class ChatConversationComponent {
 
       const decoded = new TextDecoder().decode(bytes);
 
-      if (this.getTypeId(msg) === MESSAGE_TYPE_TEXT) {
+      if (msg.typeId.equals(MessageTypeText)) {
         return { kind: 'text', text: decoded };
       }
 
@@ -234,7 +234,7 @@ export class ChatConversationComponent {
 
   async onRetryMessage(msg: ChatMessage): Promise<void> {
     if (msg.status !== 'failed') return;
-    const restoredText = await this.chatService.recoverFailedMessage(msg.id);
+    const restoredText = await this.appState.recoverFailedMessage(msg.id);
     console.log('Retried message:', restoredText);
   }
 
@@ -243,13 +243,13 @@ export class ChatConversationComponent {
   }
 
   onTyping(): void {
-    this.chatService.notifyTyping();
+    this.appState.notifyTyping();
   }
 
   onSendMessage(text: string): void {
     const recipient = this.selectedConversation();
     if (text && recipient) {
-      this.chatService.sendMessage(recipient, text);
+      this.appState.sendMessage(recipient, text);
     }
   }
 
@@ -257,12 +257,12 @@ export class ChatConversationComponent {
   onSendImage(event: { file: File; payload: ImageContent }): void {
     const recipient = this.selectedConversation();
     if (recipient) {
-      this.chatService.sendImage(recipient, event.file, event.payload);
+      this.appState.sendImage(recipient, event.file, event.payload);
     }
   }
 
   async onAcceptInvite(msg: ChatMessage): Promise<void> {
-    await this.chatService.acceptInvite(msg);
+    await this.appState.acceptInvite(msg);
     const vm = this.getInviteViewModel(msg);
     if (vm.groupUrn) {
       this.router.navigate(['/messenger', 'conversations', vm.groupUrn]);
@@ -270,7 +270,7 @@ export class ChatConversationComponent {
   }
 
   async onRejectInvite(msg: ChatMessage): Promise<void> {
-    await this.chatService.rejectInvite(msg);
+    await this.appState.rejectInvite(msg);
   }
 
   onAlertVisibility(show: boolean): void {

@@ -1,12 +1,12 @@
-// libs/messenger/domain/message-content/src/lib/services/message-content-parser.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ParsedMessage,
   ContentPayload,
-  MESSAGE_TYPE_ASSET_REVEAL, // ✅ Import
-  AssetRevealData, // ✅ Import
+  MessageTypeAssetReveal,
+  AssetRevealData,
+  MessageTypeReadReceipt,
+  ReadReceiptData,
 } from '../models/content-types';
 import { MessageMetadataService } from './message-metadata.service';
 
@@ -24,7 +24,7 @@ import { SignalParserStrategy } from '../strategies/signal.strategies';
 export class MessageContentParser {
   private metadataService = inject(MessageMetadataService);
   private encoder = new TextEncoder();
-  private decoder = new TextDecoder(); // ✅ FIXED: Added Decoder
+  private decoder = new TextDecoder();
 
   // Registry of Strategies
   private strategies: ContentParserStrategy[] = [
@@ -42,10 +42,19 @@ export class MessageContentParser {
     const typeStr = typeId.toString();
 
     try {
-      // ✅ 1. Signal Path: Asset Reveal
-      if (typeStr === MESSAGE_TYPE_ASSET_REVEAL) {
+      // 1. Unwrap the Envelope (Sealed Sender)
+      // Durable signals (Asset Reveal, Receipts) are wrapped to protect metadata/payloads.
+      // We must unwrap before parsing the inner JSON.
+      const { conversationId, tags, content } =
+        this.metadataService.unwrap(rawBytes);
+
+      // ✅ 2. Intercept Durable Signals (Post-Unwrap)
+      // We explicitly classify these as 'signal' to prevent saving them as chat bubbles.
+      // Using URN.equals() for structural comparison.
+
+      if (typeId.equals(MessageTypeAssetReveal)) {
         const data = JSON.parse(
-          this.decoder.decode(rawBytes),
+          this.decoder.decode(content),
         ) as AssetRevealData;
         return {
           kind: 'signal',
@@ -53,10 +62,17 @@ export class MessageContentParser {
         };
       }
 
-      // 2. Content Path (Wrapped)
-      const { conversationId, tags, content } =
-        this.metadataService.unwrap(rawBytes);
+      if (typeId.equals(MessageTypeReadReceipt)) {
+        const data = JSON.parse(
+          this.decoder.decode(content),
+        ) as ReadReceiptData;
+        return {
+          kind: 'signal',
+          payload: { action: 'read-receipt', data },
+        };
+      }
 
+      // 3. Delegate Content Parsing to Strategies
       const strategy = this.strategies.find((s) => s.supports(typeId));
 
       if (strategy) {

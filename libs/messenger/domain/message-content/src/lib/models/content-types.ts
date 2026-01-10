@@ -14,14 +14,20 @@ export const MessageTypeImage = URN.parse(MESSAGE_TYPE_IMAGE);
 export const MESSAGE_TYPE_CONTACT_SHARE = 'urn:message:type:contact-share';
 export const MessageTypeContactShare = URN.parse(MESSAGE_TYPE_CONTACT_SHARE);
 
-export const MESSAGE_TYPE_TYPING = 'urn:message:type:typing-indicator';
+// --- SIGNAL TYPES (System Side-Effects) ---
+// Pattern: urn:message:signal:<action>
+
+// Ephemeral Signals
+export const MESSAGE_TYPE_TYPING = 'urn:message:signal:typing-indicator';
 export const MessageTypingIndicator = URN.parse(MESSAGE_TYPE_TYPING);
 
-export const MESSAGE_TYPE_DEVICE_SYNC = 'urn:message:type:device-sync';
-export const MESSAGE_TYPE_READ_RECEIPT = 'urn:message:type:read-receipt';
+export const MESSAGE_TYPE_DEVICE_SYNC = 'urn:message:signal:device-sync';
+
+// Durable Signals (Persisted until applied)
+const MESSAGE_TYPE_READ_RECEIPT = 'urn:message:signal:read-receipt';
 export const MessageTypeReadReceipt = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
 
-export const MESSAGE_TYPE_ASSET_REVEAL = 'urn:message:type:asset-reveal';
+const MESSAGE_TYPE_ASSET_REVEAL = 'urn:message:signal:asset-reveal';
 export const MessageTypeAssetReveal = URN.parse(MESSAGE_TYPE_ASSET_REVEAL);
 
 // --- 1. PAYLOAD DEFINITIONS (CONTENT) ---

@@ -55,5 +55,9 @@ export abstract class VaultProvider {
    * Uploads a raw blob (image/video) to a public-read location.
    * Returns a "Capability URL" (e.g. Google Drive WebViewLink).
    */
-  abstract uploadPublicAsset(blob: Blob, filename: string): Promise<string>;
+  abstract uploadPublicAsset(
+    blob: Blob,
+    filename: string,
+    type: string | undefined,
+  ): Promise<string>;
 }

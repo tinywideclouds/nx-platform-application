@@ -1,10 +1,9 @@
 import {
   Component,
   ChangeDetectionStrategy,
-  inject,
   input,
+  output,
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ConnectionStatus } from '@nx-platform-application/platform-types';
@@ -21,13 +20,14 @@ import { ConnectionStatus } from '@nx-platform-application/platform-types';
       [class.bg-yellow-50]="
         status() === 'connecting' || status() === 'reconnection'
       "
+      [class.bg-amber-50]="status() === 'attention'"
       [class.bg-red-50]="
         status() === 'disconnected' ||
         status() === 'offline' ||
         status() === 'error'
       "
       [matTooltip]="tooltipText()"
-      (click)="navigateToSettings()"
+      (click)="action.emit()"
     >
       @switch (status()) {
         @case ('syncing') {
@@ -60,6 +60,12 @@ import { ConnectionStatus } from '@nx-platform-application/platform-types';
           </mat-icon>
         }
 
+        @case ('attention') {
+          <mat-icon class="text-amber-600 !text-[18px] !w-[18px] !h-[18px]">
+            cloud_off
+          </mat-icon>
+        }
+
         @default {
           <mat-icon class="text-red-400 !text-[18px] !w-[18px] !h-[18px]">
             wifi_off
@@ -78,15 +84,12 @@ import { ConnectionStatus } from '@nx-platform-application/platform-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessengerNetworkStatusComponent {
-  private router = inject(Router);
+  // ✅ Typed Input
+  status = input.required<ConnectionStatus | 'attention'>();
 
-  // ✅ Typed Input: Receives the computed priority state from Toolbar
-  status = input.required<ConnectionStatus>();
-
-  // ✅ Tooltip Text: Computed by the parent to include Cloud details
+  // ✅ Tooltip Text
   tooltipText = input<string>('');
 
-  navigateToSettings(): void {
-    this.router.navigate(['/messenger', 'settings', 'identity']);
-  }
+  // ✅ Output: Let parent decide the action (Nav vs Reconnect)
+  action = output<void>();
 }

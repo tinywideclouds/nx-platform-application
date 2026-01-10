@@ -1,7 +1,7 @@
 import { Component, inject, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common'; // ✅ Need Common for @if
 import { URN } from '@nx-platform-application/platform-types';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
@@ -28,11 +28,11 @@ import { MatIconModule } from '@angular/material/icon';
 export class ChatContactDetailWrapperComponent {
   contactId = input.required<URN>();
 
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private contactsService = inject(ContactsStorageService);
   private logger = inject(Logger);
 
-  isKeyMissing = this.chatService.isRecipientKeyMissing;
+  isKeyMissing = this.appState.isRecipientKeyMissing;
 
   // ✅ Polymorphic Check
   isGroup = computed(() => this.contactId().entityType === 'group');
@@ -77,6 +77,6 @@ export class ChatContactDetailWrapperComponent {
       text: 'Shared via Messenger',
     };
 
-    await this.chatService.sendContactShare(recipientUrn, payload);
+    await this.appState.sendContactShare(recipientUrn, payload);
   }
 }

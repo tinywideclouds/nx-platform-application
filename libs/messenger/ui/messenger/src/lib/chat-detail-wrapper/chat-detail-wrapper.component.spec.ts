@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ChatContactDetailWrapperComponent } from './chat-detail-wrapper.component';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Contact } from '@nx-platform-application/contacts-types';
 import { Logger } from '@nx-platform-application/console-logger';

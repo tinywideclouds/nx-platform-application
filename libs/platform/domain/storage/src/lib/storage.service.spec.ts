@@ -45,7 +45,12 @@ class MockVaultDriver implements VaultProvider {
   async listFiles(directory: string): Promise<string[]> {
     return [];
   }
-  async uploadPublicAsset(blob: Blob, filename: string): Promise<string> {
+  // ✅ UPDATE: Signature match with new contentType argument
+  async uploadPublicAsset(
+    blob: Blob,
+    filename: string,
+    contentType?: string,
+  ): Promise<string> {
     return `https://mock.storage/${filename}`;
   }
 }
@@ -81,10 +86,7 @@ describe('StorageService', () => {
       providers: [
         StorageService,
         { provide: Logger, useValue: mockLogger },
-        // FIX: Removed 'multi: true' because 'useValue' is already the array [driver]
-        // This prevents Angular from injecting [[driver]] (double nested)
         { provide: VaultDrivers, useValue: [driver] },
-        // Simulate Browser Environment so restoreSession runs
         { provide: PLATFORM_ID, useValue: 'browser' },
       ],
     });
@@ -94,7 +96,6 @@ describe('StorageService', () => {
     vi.restoreAllMocks();
   });
 
-  // Helper to inject service (triggers constructor + restoreSession)
   const initService = () => TestBed.inject(StorageService);
 
   describe('Initialization (restoreSession)', () => {
@@ -105,13 +106,8 @@ describe('StorageService', () => {
     });
 
     it('should restore session if valid provider ID is saved', async () => {
-      // Setup: LocalStorage has 'mock_driver'
       getItemSpy.mockReturnValue('mock_driver');
-
       service = initService();
-
-      // restoreSession is async but called in constructor.
-      // We rely on the microtask queue to process the promise.
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(service.activeProviderId()).toBe('mock_driver');
@@ -122,14 +118,12 @@ describe('StorageService', () => {
     });
 
     it('should clear session if saved provider ID is invalid', async () => {
-      // Setup: LocalStorage has unknown driver
       getItemSpy.mockReturnValue('unknown_driver');
-
       service = initService();
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(service.activeProviderId()).toBeNull();
-      expect(removeItemSpy).toHaveBeenCalled(); // Should clear invalid state
+      expect(removeItemSpy).toHaveBeenCalled();
       expect(mockLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining('not found'),
       );
@@ -143,7 +137,6 @@ describe('StorageService', () => {
 
     it('should link driver and update state on success', async () => {
       const result = await service.connect('mock_driver');
-
       expect(result).toBe(true);
       expect(service.activeProviderId()).toBe('mock_driver');
       expect(driver.linked).toBe(true);
@@ -155,7 +148,6 @@ describe('StorageService', () => {
 
     it('should return false and log error for unknown driver', async () => {
       const result = await service.connect('missing_driver');
-
       expect(result).toBe(false);
       expect(service.activeProviderId()).toBeNull();
       expect(mockLogger.error).toHaveBeenCalled();
@@ -170,9 +162,8 @@ describe('StorageService', () => {
 
     it('should unlink driver and clear state', async () => {
       await service.disconnect();
-
       expect(service.activeProviderId()).toBeNull();
-      expect(driver.linked).toBe(false); // Verify driver.unlink() was called
+      expect(driver.linked).toBe(false);
       expect(removeItemSpy).toHaveBeenCalled();
     });
   });
@@ -197,20 +188,23 @@ describe('StorageService', () => {
       service = initService();
     });
 
-    it('should delegate to active driver', async () => {
+    it('should delegate to active driver with contentType', async () => {
+      const spy = vi.spyOn(driver, 'uploadPublicAsset');
       await service.connect('mock_driver');
-      const blob = new Blob(['test'], { type: 'text/plain' });
+      const blob = new Blob(['test'], { type: 'image/png' });
 
-      const url = await service.uploadPublicAsset(blob, 'pic.png');
+      const url = await service.uploadPublicAsset(blob, 'pic.png', 'image/png');
 
-      // FIX: Use regex to match the dynamic timestamp prefix
-      // Expected format: https://mock.storage/123456789_pic.png
       expect(url).toMatch(/https:\/\/mock\.storage\/\d+_pic\.png$/);
+      expect(spy).toHaveBeenCalledWith(
+        expect.any(Blob),
+        expect.stringContaining('_pic.png'),
+        'image/png',
+      );
     });
 
     it('should throw error if not connected', async () => {
       const blob = new Blob(['test'], { type: 'text/plain' });
-
       await expect(service.uploadPublicAsset(blob, 'pic.png')).rejects.toThrow(
         'No storage provider connected',
       );

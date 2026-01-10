@@ -16,7 +16,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 
 // ✅ Import Shared UI
 import {
@@ -46,7 +46,7 @@ export type LinkMode = 'SHOW' | 'SCAN' | 'REVIEW';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DeviceLinkWizardComponent implements OnInit {
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private logger = inject(Logger);
@@ -134,7 +134,7 @@ export class DeviceLinkWizardComponent implements OnInit {
     this.step.set('LINKING');
     this.mode.set('SHOW');
     try {
-      const session = await this.chatService.startTargetLinkSession();
+      const session = await this.appState.startTargetLinkSession();
       this.logger.info('Started linking session', session);
       this.session.set(session);
       if (session.privateKey) this.startPolling(session.privateKey);
@@ -168,7 +168,7 @@ export class DeviceLinkWizardComponent implements OnInit {
     if (!code) return;
     try {
       this.snackBar.open('Retrieving keys...', '', { duration: 2000 });
-      await this.chatService.redeemSourceSession(code);
+      await this.appState.redeemSourceSession(code);
       this.snackBar.open('Success! Device linked.', 'Close', {
         duration: 3000,
       });
@@ -179,13 +179,13 @@ export class DeviceLinkWizardComponent implements OnInit {
   }
 
   async confirmReset() {
-    await this.chatService.performIdentityReset();
+    await this.appState.performIdentityReset();
   }
 
   async onLogout() {
     try {
       // ✅ FIX: Ensure we wait for the logout observable/promise to complete
-      await this.chatService.sessionLogout();
+      await this.appState.sessionLogout();
     } catch (e) {
       console.error('Logout error', e);
     } finally {
@@ -198,8 +198,7 @@ export class DeviceLinkWizardComponent implements OnInit {
     this.stopPolling();
     this.pollInterval = setInterval(async () => {
       try {
-        const found =
-          await this.chatService.checkForSyncMessage(sessionPrivKey);
+        const found = await this.appState.checkForSyncMessage(sessionPrivKey);
         if (found) this.stopPolling();
       } catch (e) {
         console.error('Polling error', e);

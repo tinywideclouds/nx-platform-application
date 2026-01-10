@@ -10,7 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 // ✅ Import Shared UI
@@ -34,7 +34,7 @@ import { DeviceLinkScannerUiComponent } from '../device-link-ui/device-link-scan
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DeviceLinkPageComponent {
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
   private snackBar = inject(MatSnackBar);
 
   // State
@@ -47,7 +47,7 @@ export class DeviceLinkPageComponent {
   async handleScan(qrCode: string): Promise<void> {
     this.isLinking.set(true);
     try {
-      await this.chatService.linkTargetDevice(qrCode);
+      await this.appState.linkTargetDevice(qrCode);
       this.snackBar.open('Device successfully linked!', 'Close', {
         duration: 5000,
       });
@@ -64,7 +64,7 @@ export class DeviceLinkPageComponent {
   async enableShowMode(): Promise<void> {
     this.isShowingCode.set(true);
     try {
-      const session = await this.chatService.startSourceLinkSession();
+      const session = await this.appState.startSourceLinkSession();
       this.session.set(session);
     } catch (e) {
       this.snackBar.open('Could not generate secure code.', 'Close');

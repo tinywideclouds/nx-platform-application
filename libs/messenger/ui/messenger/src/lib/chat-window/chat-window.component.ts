@@ -18,9 +18,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
 
 // Services
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/console-logger';
 import { ChatParticipant } from '@nx-platform-application/messenger-types';
@@ -51,7 +50,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 export class ChatWindowComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  protected chatService = inject(ChatService);
+  protected appState = inject(AppState);
   private contactsService = inject(ContactsStorageService);
   private logger = inject(Logger);
 
@@ -88,8 +87,8 @@ export class ChatWindowComponent {
     }
   });
 
-  isKeyMissing = this.chatService.isRecipientKeyMissing;
-  messages = this.chatService.messages;
+  isKeyMissing = this.appState.isRecipientKeyMissing;
+  messages = this.appState.messages;
 
   private contacts = toSignal(this.contactsService.contacts$, {
     initialValue: [],
@@ -155,7 +154,7 @@ export class ChatWindowComponent {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
-      this.chatService.loadConversation(null);
+      this.appState.loadConversation(null);
     });
 
     // Reset local UI state when conversation changes
@@ -171,7 +170,7 @@ export class ChatWindowComponent {
         untracked(async () => {
           this.isLoading.set(true); // 1. Start Loading
           try {
-            await this.chatService.loadConversation(urn); // 2. Wait for data
+            await this.appState.loadConversation(urn); // 2. Wait for data
           } catch (e) {
             this.logger.error('Failed to load conversation', e);
           } finally {

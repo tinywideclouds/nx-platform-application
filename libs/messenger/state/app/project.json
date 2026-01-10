@@ -1,7 +1,7 @@
 {
-  "name": "messenger-state-chat-session",
+  "name": "messenger-state-app",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/state/chat-session/src",
+  "sourceRoot": "libs/messenger/state/app/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:messenger", "layer:state"],
@@ -11,16 +11,16 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/state/chat-session",
-        "configFile": "libs/messenger/state/chat-session/vite.config.mts"
+        "outputPath": "dist/libs/messenger/state/app",
+        "configFile": "libs/messenger/state/app/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/state/chat-session",
-        "configFile": "libs/messenger/state/chat-session/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/state/app",
+        "configFile": "libs/messenger/state/app/vitest.config.mts"
       }
     },
     "lint": {

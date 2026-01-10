@@ -7,11 +7,6 @@ export class AssetStorageService {
 
   /**
    * Uploads a media asset to the Cloud Storage.
-   *
-   * ARCHITECTURE NOTE:
-   * This is designed to be "Feed Ready".
-   * The returned URL is a public/accessible link that can be used inside
-   * the Chat UI now, but could be rendered in a "Social Feed" view later.
    */
   async upload(file: File): Promise<string> {
     // 1. Guard: Connect to the Vault
@@ -21,13 +16,19 @@ export class AssetStorageService {
       );
     }
 
-    // 2. Naming Strategy
-    // We might want to organize these better later (e.g., /assets/2024/01/...)
-    // For now, the Platform Storage handles the collision logic.
     const filename = file.name;
 
-    // 3. Delegate to Platform
-    // This utilizes the existing Auth/Session of the connected Drive.
-    return this.platformStorage.uploadPublicAsset(file, filename);
+    // 2. MIME Reinforcement (The "Garbage Text" Fix)
+    // Browsers can sometimes lose the 'type' or default to octet-stream during transfer.
+    // We strictly recreate the File object with the correct type.
+    const explicitFile = new File([file], filename, { type: file.type });
+
+    // 3. Upload with Explicit Type
+    // We pass the type as a 3rd argument (if supported) and use the reinforced object.
+    return this.platformStorage.uploadPublicAsset(
+      explicitFile,
+      filename,
+      file.type, // Explicit Content-Type
+    );
   }
 }

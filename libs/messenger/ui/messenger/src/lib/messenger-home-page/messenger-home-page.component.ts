@@ -20,7 +20,7 @@ import { DeviceLinkWizardComponent } from '../device-link-wizard/device-link-wiz
 
 // SERVICES
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 
 @Component({
   selector: 'messenger-home-page',
@@ -39,7 +39,7 @@ export class MessengerHomePageComponent {
   private router = inject(Router);
   private dialog = inject(MatDialog);
   private authService = inject(IAuthService);
-  private chatService = inject(ChatService);
+  private appState = inject(AppState);
 
   // --- STATE ---
   currentUser = this.authService.currentUser;
@@ -47,7 +47,7 @@ export class MessengerHomePageComponent {
   // ✅ New: Halt State Check
   // If true, the Wizard Overlay renders and blocks interaction.
   showDeviceLinkWizard = computed(
-    () => this.chatService.onboardingState() === 'REQUIRES_LINKING',
+    () => this.appState.onboardingState() === 'REQUIRES_LINKING',
   );
 
   /**

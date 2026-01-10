@@ -119,8 +119,11 @@
       "@nx-platform-application/messenger-settings-ui": [
         "libs/messenger/ui/settings/src/index.ts"
       ],
-      "@nx-platform-application/messenger-state-chat-session": [
-        "libs/messenger/state/chat-session/src/index.ts"
+      "@nx-platform-application/messenger-state-app": [
+        "libs/messenger/state/app/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-state-chat": [
+        "libs/messenger/state/chat/src/index.ts"
       ],
       "@nx-platform-application/messenger-state-cloud-sync": [
         "libs/messenger/state/cloud-sync/src/index.ts"

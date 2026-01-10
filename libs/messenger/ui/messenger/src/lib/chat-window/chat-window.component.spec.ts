@@ -8,7 +8,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 
 // Services
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import {
   ContactsStorageService,
   Contact,

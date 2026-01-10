@@ -5,7 +5,7 @@ import {
   WritableSignal,
   computed,
 } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Subject, throttleTime } from 'rxjs'; // ✅ Added throttleTime
 import { Logger } from '@nx-platform-application/console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
@@ -28,11 +28,12 @@ import { ChatKeyService } from '@nx-platform-application/messenger-domain-identi
 import { MessageViewMapper } from './message-view.mapper';
 import {
   MessageContentParser,
-  MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
-  MESSAGE_TYPE_GROUP_INVITE,
+  MessageGroupInvite,
+  MessageGroupInviteResponse,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 const DEFAULT_PAGE_SIZE = 50;
+const TYPING_DEBOUNCE_MS = 3000; // ✅ Domain Constant
 
 @Injectable({ providedIn: 'root' })
 export class ConversationService {
@@ -74,9 +75,9 @@ export class ConversationService {
     // 3. Lurker (Invited/Unknown): Shield Content
     return raw.filter(
       (m) =>
-        m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE_RESPONSE ||
-        m.typeId.toString() === MESSAGE_TYPE_GROUP_INVITE ||
-        (me && m.senderId.equals(me)), // ✅ URN equality check
+        m.typeId.equals(MessageGroupInviteResponse) ||
+        m.typeId.equals(MessageGroupInvite) ||
+        (me && m.senderId.equals(me)),
     );
   });
 
@@ -88,7 +89,12 @@ export class ConversationService {
     new Map(),
   );
 
-  public readonly typingTrigger$ = new Subject<void>();
+  // ✅ DOMAIN LOGIC: Throttled Typing Stream
+  private readonly _typingSubject = new Subject<void>();
+  public readonly typingTrigger$ = this._typingSubject
+    .asObservable()
+    .pipe(throttleTime(TYPING_DEBOUNCE_MS));
+
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
   public readonly readCursors = computed(() => {
@@ -101,7 +107,6 @@ export class ConversationService {
     let cursorMessageId: string | null = null;
     for (let i = msgs.length - 1; i >= 0; i--) {
       const msg = msgs[i];
-      // ✅ URN equality check
       const isFromMe = msg.senderId.equals(me);
       if (isFromMe && msg.status === 'read') {
         cursorMessageId = msg.id;
@@ -126,8 +131,6 @@ export class ConversationService {
     return this.runExclusive(async () => {
       this.myUrn.set(myUrn);
 
-      // ✅ URN equality check
-      // .equals() handles null/undefined arguments safely in our new implementation
       const current = this.selectedConversation();
       if (current?.equals(urn) && urn !== null) {
         await this.storage.markConversationAsRead(urn);
@@ -149,7 +152,6 @@ export class ConversationService {
       if (urn.entityType === 'group') {
         const group = await this.addressBook.getGroup(urn);
         if (group && myUrn) {
-          // ✅ URN equality check
           const me = group.members.find((m) => m.contactId.equals(myUrn));
           if (me) {
             const s = me.status;
@@ -306,11 +308,16 @@ export class ConversationService {
 
   notifyTyping(): void {
     if (this.selectedConversation()) {
-      this.typingTrigger$.next();
+      this._typingSubject.next(); // ✅ Pushes to throttled pipe
     }
   }
 
   async applyIncomingReadReceipts(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.reloadMessages(ids);
+  }
+
+  async reloadMessages(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
 
     const freshMessages: ChatMessage[] = [];
@@ -319,17 +326,18 @@ export class ConversationService {
       if (msg) freshMessages.push(msg);
     }
 
-    if (freshMessages.length === 0) return;
-
-    const viewMessages = freshMessages.map((m) => this.mapper.toView(m));
-    this.upsertMessages(viewMessages, null);
+    if (freshMessages.length > 0) {
+      const viewed = freshMessages.map((m) =>
+        this.mapper.toView({ ...m, textContent: undefined }),
+      );
+      this.upsertMessages(viewed, null);
+    }
   }
 
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
     const activeConvo = this.selectedConversation();
     if (!activeConvo) return;
 
-    // ✅ URN equality check
     const relevant = messages.filter((msg) =>
       msg.conversationUrn.equals(activeConvo),
     );
@@ -403,7 +411,6 @@ export class ConversationService {
     myUrn: URN,
   ): Promise<void> {
     const unreadMessages = messages.filter(
-      // ✅ URN equality check
       (m) => !m.senderId.equals(myUrn) && m.status !== 'read',
     );
 

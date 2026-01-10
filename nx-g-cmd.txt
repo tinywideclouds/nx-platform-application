@@ -191,3 +191,7 @@ nx g @nx/angular:library --name=messenger-state-moderation --directory=libs/mess
 
 nx g @nx/angular:library --name=messenger-state-media --directory=libs/messenger/state/media --tags="scope:messenger" 
 
+nx g @nx/angular:library --name=messenger-state-chat --directory=libs/messenger/state/chat --tags="scope:messenger" 
+
+
+nx g @nx/workspace:move --project=messenger-state-chat-session --destination=libs/messenger/state/app --importPath=@nx-platform-application/messenger-state-app

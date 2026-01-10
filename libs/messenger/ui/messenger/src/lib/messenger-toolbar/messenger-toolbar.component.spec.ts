@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 import { signal } from '@angular/core';
 
 // ✅ Import ChatService
-import { ChatService } from '@nx-platform-application/messenger-state-chat-session';
+import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { MockProvider } from 'ng-mocks';
 import { Subject } from 'rxjs';

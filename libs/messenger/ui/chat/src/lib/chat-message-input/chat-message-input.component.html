@@ -10,6 +10,7 @@
           class="h-16 w-16 object-cover rounded-lg border border-gray-200 shadow-sm"
         />
         <button
+          type="button"
           (click)="onRemoveAttachment()"
           class="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-0.5 shadow-md hover:bg-red-500 transition-colors"
         >
@@ -47,7 +48,7 @@
         (keydown)="onKeyDown($event)"
         [disabled]="disabled()"
         placeholder="Type a message..."
-        class="flex-1 text-input-area resize-none border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400 max-h-32"
+        class="w-full flex-1 text-input-area resize-none border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400 max-h-32"
         rows="1"
         data-testid="message-textarea"
       ></textarea>
