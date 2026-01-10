@@ -124,16 +124,53 @@ export class AppState {
     this.loadUiSettings();
   }
 
+  // ✅ REFACTORED: Parallel Boot Sequence
   private async bootDataLayer() {
-    this.logger.info(
-      '[ChatService] Identity Ready. Booting Data chatService...',
-    );
-    const token = this.authService.getJwtToken();
-    if (token) {
-      await this.chatService.startSyncSequence(token);
+    this.logger.info('🚀 [AppState] Identity Ready. Booting Data Layer...');
+    const user = this.authService.currentUser();
+    const keys = this.identity.myKeys();
+
+    if (!user || !user.id || !keys) {
+      this.logger.error('🛑 [AppState] Cannot boot: Missing credentials');
+      return;
     }
+    const token = this.authService.getJwtToken();
+    if (!token) {
+      this.logger.error('🛑 [AppState] Cannot boot: Missing auth token');
+      return;
+    }
+
+    // We run independent tasks in parallel to avoid blocking the UI
+    const promises: Promise<any>[] = [];
+
+    // Task 1: Start Chat Sync (WebSockets & Ingestion)
+    const chatTask = this.chatService
+      .startSyncSequence(token)
+      .then(() => this.logger.info('🟢 [AppState] Chat Sync Started'))
+      .catch((e) => this.logger.error('💥 [AppState] Chat Sync Failed', e));
+    promises.push(chatTask);
+
+    // Task 2: Check Cloud Status (The Passive Check)
+    // This asks the server: "Is this user linked?"
+    // It does NOT trigger a popup or a sync.
+    this.logger.info('☁️ [AppState] Triggering Cloud Session Resume...');
+    const cloudTask = this.syncService
+      .resumeSession()
+      .then(() => this.logger.info('🔵 [AppState] Cloud Check Complete'))
+      .catch((e) => this.logger.error('⚠️ [AppState] Cloud Check Failed', e));
+    promises.push(cloudTask);
+
+    // Initialize triggers immediately (don't need to wait for network)
     this.initOrchestration();
     this.initResumptionTriggers();
+
+    // Task 3: Flush Outbox (Resumption)
+    // We fire this and forget it, letting the worker handle the queue
+    void this.outboxWorker.processQueue(user.id, keys);
+
+    // Wait for critical network tasks only to ensure logs are clean,
+    // but the UI should already be responsive.
+    await Promise.allSettled(promises);
   }
 
   private initOrchestration() {

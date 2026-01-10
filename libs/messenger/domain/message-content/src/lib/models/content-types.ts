@@ -48,6 +48,7 @@ export interface ImageContent {
   kind: 'image';
   thumbnailBase64: string;
   remoteUrl: string;
+  originalUrl: string;
   decryptionKey: string;
   mimeType: string;
   caption?: string;
@@ -80,7 +81,8 @@ export interface ReadReceiptData {
 // ✅ NEW: Asset Reveal Data
 export interface AssetRevealData {
   messageId: string; // The ID of the message to patch
-  remoteUrl: string; // The new High-Res URL
+  remoteUrl: string; // The "Polite" URL for low res preview
+  originalUrl: string; // The original URL sent in the message
 }
 
 // ✅ UPDATE: Add asset-reveal to SignalPayload union
@@ -99,4 +101,4 @@ export type ParsedMessage =
       tags: URN[];
     }
   | { kind: 'signal'; payload: SignalPayload }
-  | { kind: 'unknown'; rawType: string; error?: string };
+  | { kind: 'unknown'; rawType: URN; error?: string };

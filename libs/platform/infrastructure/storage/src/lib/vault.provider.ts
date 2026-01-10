@@ -9,6 +9,13 @@ export interface WriteOptions {
   blindCreate?: boolean;
 }
 
+export interface AssetResult {
+  /** Optimized for chat bubbles (e.g., 1200px, JPEG for compatibility) */
+  inlineUrl: string;
+  /** Full resolution for Lightbox/Zoom (Original format) */
+  originalUrl: string;
+}
+
 export abstract class VaultProvider {
   abstract readonly providerId: string;
   abstract readonly displayName: string;
@@ -34,11 +41,10 @@ export abstract class VaultProvider {
    * STORAGE (Append-Only Primitives)
    */
 
+  // --- DATA PLANE (Structured) ---
   /**
-   * Writes a JSON object to the vault.
-   * @param path - e.g., '2026/01/deltas/msg_123.json'
-   * @param data - The JSON object to store.
-   * @param options - Configuration for write behavior (e.g., blind writes).
+   * Serializes and saves an object.
+   * Implementation should handle "Create vs Update" logic.
    */
   abstract writeJson(
     path: string,
@@ -46,18 +52,22 @@ export abstract class VaultProvider {
     options?: WriteOptions,
   ): Promise<void>;
 
-  abstract readJson<T>(path: string): Promise<T | null>;
-  abstract fileExists(path: string): Promise<boolean>;
-  abstract listFiles(directory: string): Promise<string[]>;
-
   /**
-   * SHARING (BYOS Rich Media)
-   * Uploads a raw blob (image/video) to a public-read location.
-   * Returns a "Capability URL" (e.g. Google Drive WebViewLink).
+   * Reads and parses a JSON object.
    */
-  abstract uploadPublicAsset(
+  abstract readJson<T>(path: string): Promise<T | null>;
+
+  // --- DATA PLANE (Binary) ---
+  /**
+   * [NEW] Uploads a raw binary asset (Image, Video).
+   * Returns the public/shareable URL of the asset.
+   */
+  abstract uploadAsset(
     blob: Blob,
     filename: string,
-    type: string | undefined,
-  ): Promise<string>;
+    mimeType: string | undefined,
+  ): Promise<AssetResult>;
+
+  abstract fileExists(path: string): Promise<boolean>;
+  abstract listFiles(directory: string): Promise<string[]>;
 }

@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
+import { AssetResult } from '@nx-platform-application/platform-infrastructure-storage';
 
 @Injectable({ providedIn: 'root' })
 export class AssetStorageService {
@@ -8,7 +9,7 @@ export class AssetStorageService {
   /**
    * Uploads a media asset to the Cloud Storage.
    */
-  async upload(file: File): Promise<string> {
+  async upload(file: File): Promise<AssetResult> {
     // 1. Guard: Connect to the Vault
     if (!this.platformStorage.isConnected()) {
       throw new Error(
@@ -23,6 +24,12 @@ export class AssetStorageService {
     // We strictly recreate the File object with the correct type.
     const explicitFile = new File([file], filename, { type: file.type });
 
+    console.log(
+      'uploading asset with explicit type:',
+      file.size,
+      filename,
+      file.type,
+    );
     // 3. Upload with Explicit Type
     // We pass the type as a 3rd argument (if supported) and use the reinforced object.
     return this.platformStorage.uploadPublicAsset(

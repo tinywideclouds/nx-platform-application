@@ -164,6 +164,9 @@
       "@nx-platform-application/platform-domain-storage": [
         "libs/platform/domain/storage/src/index.ts"
       ],
+      "@nx-platform-application/platform-infrastructure-drive-integrations": [
+        "libs/platform/infrastructure/drive-integrations/src/index.ts"
+      ],
       "@nx-platform-application/platform-infrastructure-storage": [
         "libs/platform/infrastructure/storage/src/index.ts"
       ],

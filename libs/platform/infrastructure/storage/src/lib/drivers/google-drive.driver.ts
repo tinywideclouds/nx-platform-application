@@ -1,34 +1,21 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import { VaultProvider, WriteOptions } from '../vault.provider';
+import { VaultProvider, WriteOptions, AssetResult } from '../vault.provider';
 import { PlatformStorageConfig } from '../vault.tokens';
+import { GOOGLE_TOKEN_STRATEGY } from './google-token.strategy';
 
-// --- STRICT GOOGLE TYPES ---
 interface GoogleFile {
   id: string;
   name: string;
   parents?: string[];
   mimeType?: string;
-  webViewLink?: string;
+  thumbnailLink?: string;
 }
 
 interface GoogleFileListResponse {
-  nextPageToken?: string;
   files: GoogleFile[];
 }
 
-interface GoogleTokenResponse {
-  access_token: string;
-  error?: string;
-  expires_in?: number;
-}
-
-interface GoogleTokenClient {
-  callback: (resp: GoogleTokenResponse) => void;
-  requestAccessToken: (opts: { prompt: string }) => void;
-}
-
-// Global scope declarations
 declare global {
   interface Window {
     gapi: any;
@@ -45,396 +32,305 @@ export class GoogleDriveDriver implements VaultProvider {
 
   private logger = inject(Logger);
   private config = inject(PlatformStorageConfig, { optional: true });
+  private strategy = inject(GOOGLE_TOKEN_STRATEGY);
 
-  // State
-  private _isAuthenticated = signal(false);
-  private tokenClient: GoogleTokenClient | null = null;
-
-  // Initialization Promises
-  private gapiLoadedPromise: Promise<void>;
-  private gisLoadedPromise: Promise<void>;
-
-  // Constants
-  private readonly DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   private readonly DISCOVERY_DOC =
     'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-  // REFACTOR: Renamed from 'Messenger_Public_Assets' to be generic
-  private readonly ASSET_FOLDER = 'Public_Assets';
-  private readonly BOUNDARY = 'foo_bar_baz';
 
-  constructor() {
-    // Initialize promises immediately to catch early load events
-    this.gapiLoadedPromise = this.loadGapiScript();
-    this.gisLoadedPromise = this.loadGisScript();
-
-    // NEW: Attempt to restore session once scripts are loaded
-    this.checkExistingSession();
+  public isAuthenticated(): boolean {
+    return this.strategy.isAuthenticated();
   }
 
-  // --- AUTHENTICATION ---
-
-  isAuthenticated(): boolean {
-    return this._isAuthenticated();
+  constructor() {
+    if (!this.config) {
+      this.logger.warn(
+        '[GoogleDriveDriver] No config provided. Driver disabled.',
+      );
+      return;
+    }
+    this.initializeScripts();
   }
 
   async link(persist: boolean): Promise<boolean> {
-    if (!this.config?.googleClientId) {
-      this.logger.error('[GoogleDrive] Missing googleClientId configuration.');
-      return false;
-    }
-
-    try {
-      // 1. Ensure scripts are loaded
-      await Promise.all([this.gapiLoadedPromise, this.gisLoadedPromise]);
-
-      // 2. Initialize Token Client if needed
-      if (!this.tokenClient) {
-        this.tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: this.config.googleClientId,
-          scope: this.DRIVE_SCOPE,
-          callback: () => {}, // Will be overridden below
-        });
-      }
-
-      // 3. Request Token
-      return new Promise((resolve) => {
-        if (!this.tokenClient) return resolve(false);
-
-        // Override callback to capture the result of this specific request
-        this.tokenClient.callback = (resp: GoogleTokenResponse) => {
-          if (resp.error) {
-            this.logger.error(`[GoogleDrive] Auth Error: ${resp.error}`);
-            resolve(false);
-            return;
-          }
-          this._isAuthenticated.set(true);
-          resolve(true);
-        };
-
-        // Trigger Popup
-        // If persist is requested, we might want to store a hint,
-        // but GIS mainly manages the token in memory/cookie.
-        this.tokenClient.requestAccessToken({ prompt: '' });
-      });
-    } catch (e) {
-      this.logger.error('[GoogleDrive] Link Failed', e);
-      return false;
-    }
+    return this.strategy.connect(persist);
   }
 
   async unlink(): Promise<void> {
-    if (typeof gapi !== 'undefined' && gapi.client) {
-      const token = gapi.client.getToken();
-      if (token) {
-        google.accounts.oauth2.revoke(token.access_token);
-        gapi.client.setToken(null);
-      }
-    }
-    this._isAuthenticated.set(false);
+    await this.strategy.disconnect();
   }
 
-  // --- STORAGE IMPLEMENTATION ---
+  // =================================================================
+  // 1. DATA PLANE: BINARY ASSETS (IMAGES/VIDEOS)
+  // =================================================================
 
-  async writeJson(
-    path: string,
-    data: unknown,
-    options?: WriteOptions,
-  ): Promise<void> {
-    this.ensureAuth();
-
-    const { filename, folderPath } = this.parsePath(path);
-    const parentId = await this.ensureFolderHierarchy(folderPath);
-    const content = JSON.stringify(data, null, 2);
-
-    let existingId: string | null = null;
-
-    // Optimization: Skip existence check if 'blindCreate' is true
-    if (!options?.blindCreate) {
-      existingId = await this.getFileIdByName(filename, parentId);
-    }
-
-    if (existingId) {
-      await this.updateFile(existingId, content);
-    } else {
-      await this.createFile(filename, parentId, content);
-    }
-  }
-
-  async readJson<T>(path: string): Promise<T | null> {
-    this.ensureAuth();
-
-    const { filename, folderPath } = this.parsePath(path);
-    const parentId = await this.findFolderId(folderPath);
-
-    if (!parentId) {
-      this.logger.warn(
-        `[GoogleDrive] Read failed: Parent folder not found for ${path}`,
-      );
-      return null;
-    }
-
-    const fileId = await this.getFileIdByName(filename, parentId);
-    if (!fileId) return null;
-
-    try {
-      const response = await gapi.client.drive.files.get({
-        fileId: fileId,
-        alt: 'media',
-      });
-      // UPDATE: Handle potential response structure variations
-      return (response.result || response.body) as T;
-    } catch (e) {
-      this.logger.error(`[GoogleDrive] Failed to read file: ${filename}`, e);
-      return null;
-    }
-  }
-
-  async fileExists(path: string): Promise<boolean> {
-    this.ensureAuth();
-    const { filename, folderPath } = this.parsePath(path);
-
-    const parentId = await this.findFolderId(folderPath);
-    if (!parentId) return false;
-
-    const fileId = await this.getFileIdByName(filename, parentId);
-    return !!fileId;
-  }
-
-  async listFiles(directory: string): Promise<string[]> {
-    this.ensureAuth();
-    const parentId = await this.findFolderId(directory);
-    if (!parentId) return [];
-
-    const q = `'${parentId}' in parents and trashed = false`;
-    let files: GoogleFile[] = [];
-    let pageToken: string | undefined = undefined;
-
-    do {
-      const res: { result: GoogleFileListResponse } =
-        await gapi.client.drive.files.list({
-          q,
-          fields: 'nextPageToken, files(name)',
-          pageToken,
-        });
-
-      if (res.result.files) {
-        files = files.concat(res.result.files);
-      }
-      pageToken = res.result.nextPageToken;
-    } while (pageToken);
-
-    return files.map((f) => f.name);
-  }
-
-  // ✅ UPDATE: Accepts contentType to fix binary uploads
-  async uploadPublicAsset(
+  async uploadAsset(
     blob: Blob,
     filename: string,
-    contentType = 'application/octet-stream',
-  ): Promise<string> {
-    this.ensureAuth();
-    const parentId = await this.ensureFolderHierarchy(this.ASSET_FOLDER);
-    const base64Content = await this.blobToBase64(blob);
+    mimeType: string,
+  ): Promise<AssetResult> {
+    await this.ensureReady();
 
-    const metadata = { name: filename, parents: [parentId] };
-    // Pass contentType to the body generator
-    const body = this.createMultipartBody(
-      metadata,
-      base64Content,
-      true,
-      contentType,
+    // 1. Upload the binary data
+    const assetsFolderId = await this.resolvePath('assets', true);
+    const fileId = await this.performResumableUpload(
+      blob,
+      filename,
+      mimeType,
+      assetsFolderId,
     );
 
-    const response = await gapi.client.request({
-      path: '/upload/drive/v3/files?uploadType=multipart',
-      method: 'POST',
-      body: body,
-      headers: {
-        'Content-Type': `multipart/related; boundary=${this.BOUNDARY}`,
-      },
-    });
-
-    const fileId = response.result.id;
-
-    // Set permission to "Public Reader"
+    // 2. Set Public Read Permission (Critical for the link to work)
     await gapi.client.drive.permissions.create({
       fileId: fileId,
       resource: { role: 'reader', type: 'anyone' },
     });
 
-    // Retrieve the Web View Link
-    const fileInfo = await gapi.client.drive.files.get({
-      fileId: fileId,
-      fields: 'webViewLink',
+    // 3. Get the Thumbnail Link
+    // We explicitly request 'thumbnailLink' because it's the only field
+    // that allows direct embedding via simple URL manipulation.
+    const result = await gapi.client.drive.files.get({
+      fileId,
+      fields: 'thumbnailLink',
     });
 
-    return fileInfo.result.webViewLink;
-  }
+    const baseLink = result.result.thumbnailLink;
 
-  // --- INTERNAL HELPERS ---
-
-  private async checkExistingSession() {
-    try {
-      await Promise.all([this.gapiLoadedPromise, this.gisLoadedPromise]);
-      // Check if GAPI client has a token loaded
-      const token = gapi.client.getToken();
-      if (token) {
-        this._isAuthenticated.set(true);
+    if (baseLink) {
+      // --- A. INLINE URL (The "Polite" & "Compatible" Link) ---
+      // 1200px limit + Force JPEG if it's WebP (for Edge support)
+      let inlineParams = '=s1200';
+      if (mimeType === 'image/webp') {
+        inlineParams += '-rj';
       }
-    } catch (e) {
-      // Silent fail on auto-login check
-    }
-  }
+      const inlineUrl = baseLink.replace(/=s\d+$/, inlineParams);
 
-  private ensureAuth() {
-    if (!this._isAuthenticated()) {
-      throw new Error('[GoogleDrive] Operation failed: Not authenticated');
-    }
-  }
+      // --- B. ORIGINAL URL (The "High-Res" Link) ---
+      // =s0 asks Google for the "Original Source Dimensions"
+      // We do NOT add -rj here; we want the exact original file format (transparency, etc.)
+      const originalUrl = baseLink.replace(/=s\d+$/, '=s0');
 
-  private parsePath(path: string) {
-    const parts = path.split('/');
-    const filename = parts.pop()!;
-    const folderPath = parts.join('/');
-    return { filename, folderPath };
-  }
-
-  private async ensureFolderHierarchy(path: string): Promise<string> {
-    const parts = path.split('/').filter((p) => !!p);
-    let currentId = 'root';
-
-    for (const part of parts) {
-      const existingId = await this.getFileIdByName(part, currentId, true);
-      if (existingId) {
-        currentId = existingId;
-      } else {
-        try {
-          currentId = await this.createFolder(part, currentId);
-        } catch (e) {
-          const raceId = await this.getFileIdByName(part, currentId, true);
-          if (raceId) {
-            currentId = raceId;
-          } else {
-            throw e;
-          }
-        }
-      }
-    }
-    return currentId;
-  }
-
-  private async findFolderId(path: string): Promise<string | null> {
-    if (!path) return 'root';
-    const parts = path.split('/').filter((p) => !!p);
-    let currentId = 'root';
-
-    for (const part of parts) {
-      const existingId = await this.getFileIdByName(part, currentId, true);
-      if (!existingId) return null;
-      currentId = existingId;
-    }
-    return currentId;
-  }
-
-  private async getFileIdByName(
-    name: string,
-    parentId: string,
-    isFolder = false,
-  ): Promise<string | null> {
-    let q = `name = '${name}' and '${parentId}' in parents and trashed = false`;
-    if (isFolder) {
-      q += ` and mimeType = 'application/vnd.google-apps.folder'`;
+      return {
+        inlineUrl,
+        originalUrl,
+      };
     }
 
-    const res = await gapi.client.drive.files.list({
-      q,
-      fields: 'files(id)',
-      pageSize: 1,
-    });
-
-    return res.result.files?.[0]?.id || null;
-  }
-
-  private async createFolder(name: string, parentId: string): Promise<string> {
-    const metadata = {
-      name: name,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentId],
+    // Fallback (Rare)
+    const fallback = `https://drive.google.com/thumbnail?id=${fileId}`;
+    return {
+      inlineUrl: `${fallback}&sz=w1200`,
+      originalUrl: `${fallback}&sz=w10000`, // Request max
     };
-
-    const res = await gapi.client.drive.files.create({
-      resource: metadata,
-      fields: 'id',
-    });
-    return res.result.id;
   }
 
-  private async updateFile(fileId: string, content: string): Promise<void> {
-    await gapi.client.request({
-      path: `/upload/drive/v3/files/${fileId}?uploadType=media`,
-      method: 'PATCH',
-      body: content,
-    });
-  }
+  // =================================================================
+  // 2. DATA PLANE: JSON STRUCTURES
+  // =================================================================
 
-  private async createFile(
-    name: string,
-    parentId: string,
-    content: string,
-  ): Promise<string> {
-    const metadata = { name: name, parents: [parentId] };
-    const body = this.createMultipartBody(metadata, content);
+  async writeJson(
+    path: string,
+    data: any,
+    options?: WriteOptions,
+  ): Promise<void> {
+    await this.ensureReady();
 
-    const response = await gapi.client.request({
-      path: '/upload/drive/v3/files?uploadType=multipart',
-      method: 'POST',
-      body: body,
-      headers: {
-        'Content-Type': `multipart/related; boundary=${this.BOUNDARY}`,
-      },
-    });
-    return response.result.id;
-  }
+    const fileName = path.split('/').pop() || 'data.json';
+    const folderName = path.split('/').slice(0, -1).join('/');
 
-  // ✅ UPDATE: Correctly uses contentType for the file body part
-  private createMultipartBody(
-    metadata: any,
-    content: string,
-    isBase64 = false,
-    contentType = 'application/json',
-  ): string {
-    const delimiter = `\r\n--${this.BOUNDARY}\r\n`;
-    const close_delim = `\r\n--${this.BOUNDARY}--`;
+    const parentId = await this.resolvePath(folderName, options?.blindCreate);
+    const existing = await this.findFile(fileName, parentId);
 
-    return (
-      delimiter +
-      'Content-Type: application/json\r\n\r\n' +
-      JSON.stringify(metadata) +
-      delimiter +
-      (isBase64 ? 'Content-Transfer-Encoding: base64\r\n' : '') +
-      `Content-Type: ${contentType}\r\n\r\n` + // <--- FIXED
-      content +
-      close_delim
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+
+    await this.performResumableUpload(
+      blob,
+      fileName,
+      'application/json',
+      parentId,
+      existing?.id,
     );
   }
 
-  private blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.split(',')[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+  async readJson<T>(path: string): Promise<T | null> {
+    await this.ensureReady();
+    const fileName = path.split('/').pop() || '';
+    const folderName = path.split('/').slice(0, -1).join('/');
+
+    try {
+      const parentId = await this.resolvePath(folderName, false);
+      if (!parentId && folderName) return null;
+
+      const file = await this.findFile(fileName, parentId);
+      if (!file) return null;
+
+      const response = await gapi.client.drive.files.get({
+        fileId: file.id,
+        alt: 'media',
+      });
+
+      return response.result as T;
+    } catch (e) {
+      this.logger.error('[Drive] Read failed', e);
+      return null;
+    }
   }
 
-  // --- SCRIPT LOADING ---
+  // =================================================================
+  // 3. CONTROL PLANE
+  // =================================================================
+
+  async fileExists(path: string): Promise<boolean> {
+    await this.ensureReady();
+    const fileName = path.split('/').pop() || '';
+    const folderName = path.split('/').slice(0, -1).join('/');
+    const parentId = await this.resolvePath(folderName, false);
+    if (!parentId && folderName) return false;
+
+    const file = await this.findFile(fileName, parentId);
+    return !!file;
+  }
+
+  async listFiles(path: string): Promise<string[]> {
+    await this.ensureReady();
+    try {
+      const folderId = await this.resolvePath(path, false);
+      if (!folderId && path) return [];
+
+      let query = `'${folderId || 'root'}' in parents and trashed = false`;
+      const response = await gapi.client.drive.files.list({
+        q: query,
+        fields: 'files(name)',
+        pageSize: 100,
+      });
+
+      return (response.result as GoogleFileListResponse).files.map(
+        (f) => f.name,
+      );
+    } catch (e) {
+      this.logger.error('[Drive] List failed', e);
+      return [];
+    }
+  }
+
+  // =================================================================
+  // 4. PRIVATE HELPERS
+  // =================================================================
+
+  private async performResumableUpload(
+    blob: Blob,
+    filename: string,
+    mimeType: string,
+    parentId?: string,
+    existingFileId?: string,
+  ): Promise<string> {
+    const accessToken = gapi.client.getToken().access_token;
+    const baseUrl = 'https://www.googleapis.com/upload/drive/v3/files';
+    const url = existingFileId
+      ? `${baseUrl}/${existingFileId}?uploadType=resumable`
+      : `${baseUrl}?uploadType=resumable`;
+    const method = existingFileId ? 'PATCH' : 'POST';
+
+    const metadata: any = { name: filename, mimeType: mimeType };
+    if (parentId && !existingFileId) metadata.parents = [parentId];
+
+    // 1. Init
+    const initResponse = await fetch(url, {
+      method: method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Upload-Content-Length': blob.size.toString(),
+        'X-Upload-Content-Type': mimeType,
+      },
+      body: JSON.stringify(metadata),
+    });
+
+    if (!initResponse.ok)
+      throw new Error(`[Drive] Init failed: ${initResponse.statusText}`);
+    const uploadUrl = initResponse.headers.get('Location');
+    if (!uploadUrl) throw new Error('[Drive] No upload location received');
+
+    // 2. Upload
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Length': blob.size.toString() },
+      body: blob,
+    });
+
+    if (!uploadResponse.ok)
+      throw new Error(`[Drive] Upload failed: ${uploadResponse.statusText}`);
+    const result = await uploadResponse.json();
+    return result.id;
+  }
+
+  private async ensureReady() {
+    if (!gapi?.client) await this.initializeScripts();
+    const token = await this.strategy.getAccessToken();
+    gapi.client.setToken({ access_token: token });
+  }
+
+  private async initializeScripts() {
+    await Promise.all([this.loadGapiScript(), this.loadGisScript()]);
+    if ((this.strategy as any).init) (this.strategy as any).init();
+  }
+
+  private async findFile(
+    name: string,
+    parentId?: string,
+  ): Promise<GoogleFile | null> {
+    const q = [
+      `name = '${name}'`,
+      `trashed = false`,
+      parentId ? `'${parentId}' in parents` : null,
+    ]
+      .filter(Boolean)
+      .join(' and ');
+
+    const resp = await gapi.client.drive.files.list({
+      q,
+      fields: 'files(id, name, thumbnailLink)',
+      pageSize: 1,
+    });
+    return resp.result.files[0] || null;
+  }
+
+  private async resolvePath(
+    path: string,
+    createIfMissing = false,
+  ): Promise<string | undefined> {
+    if (!path) return undefined;
+    const parts = path.split('/').filter((p) => !!p);
+    let currentParentId: string | undefined = undefined;
+
+    for (const part of parts) {
+      const existing = await this.findFile(part, currentParentId);
+      if (existing) {
+        currentParentId = existing.id;
+      } else if (createIfMissing) {
+        currentParentId = await this.createFolder(part, currentParentId);
+      } else {
+        return undefined;
+      }
+    }
+    return currentParentId;
+  }
+
+  private async createFolder(name: string, parentId?: string): Promise<string> {
+    const metadata: any = {
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+    };
+    if (parentId) metadata.parents = [parentId];
+    const resp = await gapi.client.drive.files.create({
+      resource: metadata,
+      fields: 'id',
+    });
+    return resp.result.id;
+  }
 
   private loadGapiScript(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
-
     return new Promise((resolve) => {
       if (typeof gapi !== 'undefined') {
         this.initGapiClient(resolve);
@@ -456,7 +352,6 @@ export class GoogleDriveDriver implements VaultProvider {
 
   private loadGisScript(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
-
     return new Promise((resolve) => {
       if (typeof google !== 'undefined' && google.accounts) {
         resolve();

@@ -2,7 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 // [CHANGED] Import jose for verification
 import * as jose from 'jose';
 import { generateToken, signOptions } from './jwt.service.js';
-import type { User } from '@nx-platform-application/platform-types';
+import { URN, type User } from '@nx-platform-application/platform-types';
 
 // --- Mocks ---
 vi.mock('../../config.js', async (importOriginal) => {
@@ -47,7 +47,7 @@ describe('JWT Service (jwt.service.ts)', () => {
   it('should generate a valid RS256 JWT verifiable with jose', async () => {
     // ARRANGE
     const testUser: User = {
-      id: 'test-user-123',
+      id: URN.parse('test:auth:user:123'),
       email: 'test@example.com',
       alias: 'Test User',
     };
@@ -71,7 +71,7 @@ describe('JWT Service (jwt.service.ts)', () => {
         algorithms: ['RS256'],
         audience: signOptions.audience,
         issuer: signOptions.issuer,
-      }
+      },
     );
 
     // Assert the payload

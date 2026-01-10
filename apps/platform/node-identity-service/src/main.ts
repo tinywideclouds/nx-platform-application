@@ -104,6 +104,9 @@ async function startServer() {
     app.set('trust proxy', true);
     logger.info('set trust proxy to: true');
 
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true })); // Optional, but good practice
+
     // --- CORE MIDDLEWARE ---
     app.use(pinoHttp({ logger }));
     app.use(helmet());

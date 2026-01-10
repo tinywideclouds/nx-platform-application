@@ -28,7 +28,6 @@ import { MessageRequestReviewComponent } from '../message-request-review/message
 // SERVICES
 import { AppState } from '@nx-platform-application/messenger-state-app';
 
-// ✅ REFACTOR: Import API Tokens
 import {
   AddressBookApi,
   AddressBookManagementApi,
@@ -129,7 +128,7 @@ export class MessengerChatPageComponent {
 
   // --- DATA SOURCES ---
 
-  // ✅ REFACTOR: Use AddressBookApi
+  // Use AddressBookApi
   private allContacts = toSignal(this.addressBook.contacts$, {
     initialValue: [] as Contact[],
   });
@@ -139,7 +138,7 @@ export class MessengerChatPageComponent {
   });
 
   // Source of Truth for Pending Requests (Gatekeeper)
-  // ✅ REFACTOR: Use GatekeeperApi
+  // Use GatekeeperApi
   pendingRequests = toSignal(this.gatekeeper.pending$, {
     initialValue: [] as PendingIdentity[],
   });

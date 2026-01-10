@@ -36,10 +36,15 @@ export class ChatMediaFacade {
 
       console.log('starting media upload');
       // 1. Upload
-      const publicUrl = await this.assetStorage.upload(file);
+      const storedAsset = await this.assetStorage.upload(file);
 
       // 2. Signal
-      const signalData: AssetRevealData = { messageId, remoteUrl: publicUrl };
+      const signalData: AssetRevealData & { originalUrl?: string } = {
+        messageId,
+        remoteUrl: storedAsset.inlineUrl, // The "Polite" URL
+        originalUrl: storedAsset.originalUrl, // The "Archival" URL
+      };
+
       await this.conversationActions.sendAssetReveal(
         recipient,
         signalData,
@@ -48,7 +53,10 @@ export class ChatMediaFacade {
       );
 
       // 3. Local Patch
-      await this.patchLocalMessage(messageId, { remoteUrl: publicUrl });
+      await this.patchLocalMessage(messageId, {
+        remoteUrl: storedAsset.inlineUrl,
+        originalUrl: storedAsset.originalUrl,
+      });
 
       // 4. ✅ NEW: Trigger UI Refresh
       // The local DB is updated, but the UI signal is stale. Force a reload.

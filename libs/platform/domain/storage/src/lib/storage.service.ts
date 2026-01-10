@@ -10,6 +10,7 @@ import { Logger } from '@nx-platform-application/console-logger';
 import {
   VaultProvider,
   VaultDrivers,
+  AssetResult,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
 const STORAGE_KEY_PROVIDER = 'tinywide_active_storage_provider';
@@ -113,6 +114,30 @@ export class StorageService {
   }
 
   /**
+   * SYSTEM ACTION: Resume
+   * Silently activates a driver. Used when the application boot sequence
+   * detects a valid server-side integration.
+   */
+  resume(providerId: string): boolean {
+    const driver = this.getDriver(providerId);
+
+    if (!driver) {
+      this.logger.warn(
+        `[StorageService] Cannot resume unknown provider: ${providerId}`,
+      );
+      return false;
+    }
+
+    // Just select it. The driver's internal strategy handles the token.
+    this.activeProviderId.set(providerId);
+    // We do NOT persist state here necessarily, as this is a server-driven resume,
+    // but persisting it keeps local state consistent for next reload.
+    this.persistState(providerId);
+    this.logger.info(`[StorageService] Resumed connection to ${providerId}`);
+    return true;
+  }
+
+  /**
    * USER ACTION: Disconnect
    * Signs out and clears local state.
    */
@@ -143,13 +168,12 @@ export class StorageService {
   /**
    * BYOS FEATURE: Public Asset Upload
    * Delegates to the currently active driver.
-   * ✅ UPDATE: Now accepts optional contentType to fix MIME issues on S3/GCS.
    */
   async uploadPublicAsset(
     blob: Blob,
     filename: string,
     contentType?: string,
-  ): Promise<string> {
+  ): Promise<AssetResult> {
     const driver = this.getActiveDriver();
 
     if (!driver) {
@@ -159,11 +183,7 @@ export class StorageService {
     try {
       const uniqueName = `${Date.now()}_${filename}`;
       // Cast to any to support the extra argument if the interface isn't updated yet
-      return await (driver as any).uploadPublicAsset(
-        blob,
-        uniqueName,
-        contentType,
-      );
+      return await driver.uploadAsset(blob, uniqueName, contentType);
     } catch (e) {
       this.logger.error('[StorageService] Asset upload failed', e);
       throw e;

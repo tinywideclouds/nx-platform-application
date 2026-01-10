@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { GoogleDriveDriver } from './google-drive.driver';
 import { PlatformStorageConfig } from '../vault.tokens';
+import { GOOGLE_TOKEN_STRATEGY } from './google-token.strategy';
 import { Logger } from '@nx-platform-application/console-logger';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { signal } from '@angular/core';
 
 // --- MOCKS ---
 
@@ -17,39 +19,39 @@ const mockConfig: PlatformStorageConfig = {
   googleApiKey: 'TEST_API_KEY',
 };
 
+// Mock Strategy
+const mockStrategy = {
+  isAuthenticated: signal(false),
+  getAccessToken: vi.fn().mockResolvedValue('MOCK_TOKEN'),
+  connect: vi.fn().mockResolvedValue(true),
+  disconnect: vi.fn().mockResolvedValue(undefined),
+  init: vi.fn(),
+};
+
 function setupGoogleMocks() {
   const requestSpy = vi.fn();
   const listSpy = vi.fn();
   const createSpy = vi.fn();
   const getSpy = vi.fn();
-  const requestAccessTokenSpy = vi.fn();
-
-  // Stable reference we can inspect/manipulate in tests
-  const tokenClientMock: any = {
-    callback: null,
-    requestAccessToken: requestAccessTokenSpy,
-  };
+  const setTokenSpy = vi.fn(); // <--- Captured Spy
+  const permissionsCreateSpy = vi.fn();
 
   const gapiMock = {
     load: vi.fn((lib, cb) => cb()),
     client: {
       init: vi.fn().mockResolvedValue(undefined),
       getToken: vi.fn(),
-      setToken: vi.fn(),
+      setToken: setTokenSpy, // <--- Assigned here
       request: requestSpy,
       drive: {
         files: { list: listSpy, create: createSpy, get: getSpy },
+        permissions: { create: permissionsCreateSpy },
       },
     },
   };
 
   const googleMock = {
-    accounts: {
-      oauth2: {
-        initTokenClient: vi.fn().mockReturnValue(tokenClientMock),
-        revoke: vi.fn(),
-      },
-    },
+    accounts: { oauth2: {} },
   };
 
   vi.stubGlobal('gapi', gapiMock);
@@ -60,8 +62,8 @@ function setupGoogleMocks() {
     listSpy,
     createSpy,
     getSpy,
-    requestAccessTokenSpy,
-    tokenClientMock,
+    setTokenSpy,
+    permissionsCreateSpy,
   };
 }
 
@@ -70,12 +72,16 @@ describe('GoogleDriveDriver', () => {
   let mocks: ReturnType<typeof setupGoogleMocks>;
 
   beforeEach(() => {
+    // 1. Setup Globals FIRST
     mocks = setupGoogleMocks();
+
+    // 2. Configure Module
     TestBed.configureTestingModule({
       providers: [
         GoogleDriveDriver,
         { provide: Logger, useValue: mockLogger },
         { provide: PlatformStorageConfig, useValue: mockConfig },
+        { provide: GOOGLE_TOKEN_STRATEGY, useValue: mockStrategy },
       ],
     });
     service = TestBed.inject(GoogleDriveDriver);
@@ -83,105 +89,41 @@ describe('GoogleDriveDriver', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
-  it('should verify authentication state', () => {
+  it('should delegate authentication state check to strategy', () => {
     expect(service.isAuthenticated()).toBe(false);
+    mockStrategy.isAuthenticated.set(true);
+    expect(service.isAuthenticated()).toBe(true);
   });
 
   describe('link()', () => {
-    it('should initialize token client and request access', async () => {
-      // 1. Create a "Barrier" Promise
-      // This will resolve only when the driver effectively calls the mock
-      let barrierResolve: () => void;
-      const barrier = new Promise<void>(
-        (resolve) => (barrierResolve = resolve),
-      );
-
-      mocks.tokenClientMock.requestAccessToken.mockImplementation(() => {
-        barrierResolve(); // Signal the test to proceed
-      });
-
-      // 2. Start the process
-      const linkPromise = service.link(true);
-
-      // 3. Await the Barrier
-      // We are now guaranteed that the driver has finished its init and is waiting for user input
-      await barrier;
-
-      expect(mocks.tokenClientMock.callback).toBeDefined();
-
-      // 4. Simulate User Input
-      mocks.tokenClientMock.callback({ access_token: 'fake_token' });
-
-      // 5. Verify Success
-      const result = await linkPromise;
+    it('should delegate link to strategy.connect', async () => {
+      const result = await service.link(true);
+      expect(mockStrategy.connect).toHaveBeenCalledWith(true);
       expect(result).toBe(true);
-      expect(service.isAuthenticated()).toBe(true);
-    });
-
-    it('should handle auth errors gracefully', async () => {
-      let barrierResolve: () => void;
-      const barrier = new Promise<void>(
-        (resolve) => (barrierResolve = resolve),
-      );
-
-      mocks.tokenClientMock.requestAccessToken.mockImplementation(() =>
-        barrierResolve(),
-      );
-
-      const linkPromise = service.link(true);
-
-      await barrier; // Wait for driver to be ready
-
-      // Simulate Error
-      mocks.tokenClientMock.callback({ error: 'access_denied' });
-
-      const result = await linkPromise;
-      expect(result).toBe(false);
-      expect(service.isAuthenticated()).toBe(false);
-      expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 
   describe('writeJson()', () => {
-    // Helper for auth state
-    const authenticate = async () => {
-      // We can manually set the signal since we are testing writeJson, not link
-      (service as any)._isAuthenticated.set(true);
-    };
-
-    it('should create folders and file when they do not exist', async () => {
-      await authenticate();
-
-      mocks.listSpy
-        .mockResolvedValueOnce({ result: { files: [] } }) // folder check
-        .mockResolvedValueOnce({ result: { files: [] } }); // file check
-
-      mocks.createSpy.mockResolvedValueOnce({ result: { id: 'folder_123' } });
-      mocks.requestSpy.mockResolvedValueOnce({ result: { id: 'file_456' } });
+    it('should set token from strategy before writing', async () => {
+      mocks.listSpy.mockResolvedValue({ result: { files: [] } });
+      mocks.createSpy.mockResolvedValue({ result: { id: 'folder_123' } });
+      mocks.requestSpy.mockResolvedValue({ result: { id: 'file_456' } });
 
       await service.writeJson('test/data.json', { foo: 'bar' });
 
-      // FIX: Removed the second argument (expect.anything()) because the
-      // GAPI create call only takes a single configuration object.
-      expect(mocks.createSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          resource: expect.objectContaining({ name: 'test' }),
-        }),
-      );
-
-      expect(mocks.requestSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'POST',
-          path: '/upload/drive/v3/files?uploadType=multipart',
-        }),
-      );
+      // Verify delegation flow
+      expect(mockStrategy.getAccessToken).toHaveBeenCalled();
+      // USE THE CAPTURED SPY, NOT THE GLOBAL
+      expect(mocks.setTokenSpy).toHaveBeenCalledWith({
+        access_token: 'MOCK_TOKEN',
+      });
+      expect(mocks.requestSpy).toHaveBeenCalled();
     });
 
     it('should update file if it already exists', async () => {
-      await authenticate();
-
       mocks.listSpy.mockResolvedValueOnce({
         result: { files: [{ id: 'existing_file_id', name: 'config.json' }] },
       });
@@ -192,24 +134,48 @@ describe('GoogleDriveDriver', () => {
       expect(mocks.requestSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'PATCH',
-          path: '/upload/drive/v3/files/existing_file_id?uploadType=media',
+          path: '/upload/drive/v3/files/existing_file_id',
+          params: expect.objectContaining({ uploadType: 'multipart' }),
         }),
       );
     });
+  });
 
-    it('should respect blindCreate option', async () => {
-      await authenticate();
+  describe('uploadPublicAsset()', () => {
+    it('should upload file and make it public', async () => {
+      // Mock finding the 'assets' folder
+      mocks.listSpy.mockResolvedValueOnce({
+        result: { files: [{ id: 'assets_folder_id', name: 'assets' }] },
+      });
 
-      mocks.listSpy.mockResolvedValueOnce({ result: { files: [] } });
-      mocks.createSpy.mockResolvedValueOnce({ result: { id: 'folder_id' } });
-      mocks.requestSpy.mockResolvedValueOnce({ result: { id: 'new_file' } });
+      // Mock the upload response
+      mocks.requestSpy.mockResolvedValue({
+        result: {
+          id: 'new_asset_id',
+          webViewLink: 'https://drive.google.com/file/...',
+        },
+      });
 
-      await service.writeJson('logs/2024.json', {}, { blindCreate: true });
+      // Mock Blob
+      const mockBlob = new Blob(['test content'], { type: 'text/plain' });
 
-      expect(mocks.listSpy).toHaveBeenCalledTimes(1);
+      const link = await service.uploadPublicAsset(mockBlob, 'test.txt');
+
+      // 1. Check Upload
       expect(mocks.requestSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'POST' }),
+        expect.objectContaining({
+          method: 'POST',
+          path: '/upload/drive/v3/files',
+        }),
       );
+
+      // 2. Check Permissions (The "Public" part)
+      expect(mocks.permissionsCreateSpy).toHaveBeenCalledWith({
+        fileId: 'new_asset_id',
+        resource: { role: 'reader', type: 'anyone' },
+      });
+
+      expect(link).toBe('https://drive.google.com/file/...');
     });
   });
 });

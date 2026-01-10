@@ -1,0 +1,22 @@
+{
+  "name": "platform-infrastructure-drive-integrations",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/infrastructure/drive-integrations/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/platform/infrastructure/drive-integrations",
+        "configFile": "libs/platform/infrastructure/drive-integrations/vite.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

@@ -4,7 +4,6 @@ import {
   provideZonelessChangeDetection,
   importProvidersFrom,
 } from '@angular/core';
-// This acts as a hint to the Nx Graph that this app explicitly depends on contacts-ui
 import '@nx-platform-application/contacts-ui';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
@@ -73,11 +72,14 @@ import {
   QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// ✅ NEW: Platform Infrastructure Storage
+// ✅ NEW: Platform Infrastructure Storage imports
 import {
   VaultDrivers,
   PlatformStorageConfig,
   GoogleDriveDriver,
+  // [NEW] Import the Token Strategy tokens
+  GOOGLE_TOKEN_STRATEGY,
+  IdentityServerStrategy,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
 // --- Conditional Mock Providers ---
@@ -127,8 +129,13 @@ const cloudProviders = [
     provide: PlatformStorageConfig,
     useValue: {
       googleClientId: environment.googleClientId,
-      // Add googleApiKey here if environment supports it and GAPI needs it
     } as PlatformStorageConfig,
+  },
+  // [NEW] Provide the Server-Side Strategy.
+  // This allows the Driver to delegate auth to your Node Identity Service.
+  {
+    provide: GOOGLE_TOKEN_STRATEGY,
+    useClass: IdentityServerStrategy,
   },
   {
     provide: VaultDrivers, // The "Menu" of drivers
@@ -176,7 +183,7 @@ export const appConfig: ApplicationConfig = {
     chatProvider,
     contactsProvider,
     ...tokenProviders,
-    ...cloudProviders, // ✅ Wired
+    ...cloudProviders, // ✅ Wired with Strategy
 
     {
       provide: LOGGER_CONFIG,

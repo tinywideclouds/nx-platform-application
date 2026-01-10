@@ -87,7 +87,7 @@ describe('ConversationActionService', () => {
   });
 
   it('should delegate typing indicator to OutboundService', async () => {
-    await service.sendTypingIndicator(mockKeys, mockUrn);
+    await service.sendTypingIndicator(recipientUrn, mockKeys, mockUrn);
 
     expect(outbound.sendMessage).toHaveBeenCalledWith(
       expect.anything(), // keys

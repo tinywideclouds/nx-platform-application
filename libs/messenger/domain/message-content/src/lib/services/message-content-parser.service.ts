@@ -39,8 +39,6 @@ export class MessageContentParser {
    * READ: Bytes -> Domain Object
    */
   parse(typeId: URN, rawBytes: Uint8Array): ParsedMessage {
-    const typeStr = typeId.toString();
-
     try {
       // 1. Unwrap the Envelope (Sealed Sender)
       // Durable signals (Asset Reveal, Receipts) are wrapped to protect metadata/payloads.
@@ -63,6 +61,7 @@ export class MessageContentParser {
       }
 
       if (typeId.equals(MessageTypeReadReceipt)) {
+        console.log('parsing read receipt signal');
         const data = JSON.parse(
           this.decoder.decode(content),
         ) as ReadReceiptData;
@@ -82,11 +81,11 @@ export class MessageContentParser {
         });
       }
 
-      return { kind: 'unknown', rawType: typeStr };
+      return { kind: 'unknown', rawType: typeId };
     } catch (error) {
       return {
         kind: 'unknown',
-        rawType: typeStr,
+        rawType: typeId,
         error: error instanceof Error ? error.message : 'Parse Failed',
       };
     }

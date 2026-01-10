@@ -50,6 +50,7 @@ export class ChatInputComponent {
         kind: 'image',
         thumbnailBase64: processed.thumbnailBase64,
         remoteUrl: 'pending', // Pending initially
+        originalUrl: 'pending', // Pending initially
         decryptionKey: 'none',
         mimeType: file.type,
         width: processed.metadata.width,

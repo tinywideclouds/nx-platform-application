@@ -46,11 +46,7 @@ export class ImageParserStrategy implements ContentParserStrategy {
     return typeId.toString() === 'urn:message:type:image';
   }
 
-  parse(
-    typeId: URN,
-    content: Uint8Array,
-    context: ParsingContext,
-  ): ParsedMessage {
+  parse(_: URN, content: Uint8Array, context: ParsingContext): ParsedMessage {
     const json = this.decoder.decode(content);
     const data = JSON.parse(json) as ImageContent;
 

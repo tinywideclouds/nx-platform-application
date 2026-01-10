@@ -161,6 +161,7 @@ export class IngestionService {
           `[Ingestion] Signal Mismatch: Transport=Signal, Parser=${parsed.kind}`,
         );
       }
+      console.log('handled signal: not saved, ', typeId.toString());
       return;
     }
 

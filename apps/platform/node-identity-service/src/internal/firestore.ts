@@ -1,10 +1,10 @@
 // apps/platform/node-identity-service/src/internal/firestore.ts
 
 import { Firestore, WriteResult } from '@google-cloud/firestore';
-// 1. Import URN
 import { User, URN } from '@nx-platform-application/platform-types';
 
-// This is the shape of the data in the 'authorized_users' collection
+// --- EXISTING TYPES ---
+
 interface AuthorizedUserDoc {
   email: string;
   alias: string;
@@ -17,24 +17,29 @@ export function UserToUserDoc(u: User): AuthorizedUserDoc {
   };
 }
 
-// 2. This is the object our internal services will return from lookups
 interface UserProfileData {
-  id: string; // The Firestore Document ID
+  id: string;
   email: string;
   alias: string;
 }
 
-/**
- * [MODIFIED] Finds an authorized user by their email address.
- *
- * This function is used by the MembershipPolicy and the GET /users/by-email API.
- * It returns the raw user data, not a "User" object.
- *
- * @returns A promise that resolves to the user's profile data if found, or null.
- */
+// --- NEW TYPES (Integration Isolation) ---
+
+export type IntegrationProvider = 'google' | 'dropbox' | 'apple';
+
+export interface IntegrationDoc {
+  provider: IntegrationProvider;
+  refreshToken: string; // Encrypted/Secure Token
+  linkedAt: string; // ISO Date
+  scope: string;
+  status: 'active' | 'revoked';
+}
+
+// --- CORE FUNCTIONS ---
+
 export async function findUserByEmail(
   db: Firestore,
-  email: string
+  email: string,
 ): Promise<UserProfileData | null> {
   const usersRef = db.collection('authorized_users');
   const q = usersRef.where('email', '==', email).limit(1);
@@ -43,42 +48,29 @@ export async function findUserByEmail(
   if (snapshot.empty) {
     return null;
   }
-  const userDoc = snapshot.docs[0];
-  if (userDoc == undefined) return null;
-  const userData = userDoc.data() as AuthorizedUserDoc;
 
-  // 3. FIX: Return the full profile data
+  const doc = snapshot.docs[0];
+  const data = doc.data() as AuthorizedUserDoc;
+
   return {
-    id: userDoc.id,
-    email: userData.email,
-    alias: userData.alias,
+    id: doc.id,
+    email: data.email,
+    alias: data.alias,
   };
 }
 
-/**
- * [NEW] Checks if a user's email is in the 'blocked_users' collection.
- */
 export async function isEmailBlocked(
   db: Firestore,
-  email: string
+  email: string,
 ): Promise<boolean> {
   const docRef = db.collection('blocked_users').doc(email);
   const doc = await docRef.get();
   return doc.exists;
 }
 
-/**
- * [MODIFIED] Fetches a user's profile by their Firestore document ID.
- *
- * This function is no longer used by the auth flow (passport)
- * but is kept for internal API routes.
- *
- * @param userId - The unique document ID (string) of the user.
- * @returns A promise that resolves to the URN-based User object.
- */
 export async function getUserProfile(
   db: Firestore,
-  userId: string // The ID from Firestore is a string
+  userId: string,
 ): Promise<User | null> {
   const userDoc = await db.collection('authorized_users').doc(userId).get();
   if (!userDoc.exists) {
@@ -87,23 +79,108 @@ export async function getUserProfile(
   const userData = userDoc.data() as AuthorizedUserDoc;
   if (!userData) return null;
 
-  // 4. This function MUST return the URN-based object
-  // to match the 'User' type, as it's not part of the auth flow.
-  // It is creating a 'urn:contacts:user' URN.
   return {
-    id: URN.parse(`urn:contacts:user:${userDoc.id}`), // <-- This is the platform ID
+    id: URN.parse(`urn:contacts:user:${userDoc.id}`),
     email: userData.email,
     alias: userData.alias,
   };
 }
 
+/**
+ * Adds or updates an authorized user in the database.
+ * Uses the User's URN string (e.g., "urn:auth:google:123") as the document key.
+ */
 export async function addAuthorizedUser(
   db: Firestore,
-  user: User
-): Promise<WriteResult | null> {
-  const key = user.id.toString();
-  const doc = UserToUserDoc(user);
+  user: User,
+): Promise<WriteResult> {
+  const docRef = db.collection('authorized_users').doc(user.id.toString());
+  return docRef.set(UserToUserDoc(user));
+}
 
-  const r = await db.collection('authorized_users').doc(key).set(doc);
-  return r;
+// --- NEW INTEGRATION FUNCTIONS (Sub-Collection) ---
+
+/**
+ * Saves a secure integration record for a specific user.
+ * Stores data in: authorized_users/{userId}/integrations/{provider}
+ */
+export async function saveIntegration(
+  db: Firestore,
+  userId: string,
+  provider: IntegrationProvider,
+  data: Omit<IntegrationDoc, 'provider'>,
+): Promise<WriteResult> {
+  const docRef = db
+    .collection('authorized_users')
+    .doc(userId)
+    .collection('integrations')
+    .doc(provider);
+
+  return docRef.set({
+    provider,
+    ...data,
+  });
+}
+
+/**
+ * Retrieves an integration record.
+ * Used to get the refreshToken for server-side operations.
+ */
+export async function getIntegration(
+  db: Firestore,
+  userId: string,
+  provider: IntegrationProvider,
+): Promise<IntegrationDoc | null> {
+  const docRef = db
+    .collection('authorized_users')
+    .doc(userId)
+    .collection('integrations')
+    .doc(provider);
+
+  const doc = await docRef.get();
+  if (!doc.exists) return null;
+
+  return doc.data() as IntegrationDoc;
+}
+
+/**
+ * Deletes an integration record.
+ * Used during disconnect/unlink.
+ */
+export async function deleteIntegration(
+  db: Firestore,
+  userId: string,
+  provider: IntegrationProvider,
+): Promise<WriteResult> {
+  const docRef = db
+    .collection('authorized_users')
+    .doc(userId)
+    .collection('integrations')
+    .doc(provider);
+
+  return docRef.delete();
+}
+
+/**
+ * Lists all active integrations for a user.
+ * Used for the "Status" check without exposing secrets.
+ */
+export async function listIntegrations(
+  db: Firestore,
+  userId: string,
+): Promise<Record<string, boolean>> {
+  const colRef = db
+    .collection('authorized_users')
+    .doc(userId)
+    .collection('integrations');
+
+  const snapshot = await colRef.get();
+  const result: Record<string, boolean> = {};
+
+  snapshot.forEach((doc) => {
+    // We simply return true/false map, e.g., { google: true }
+    result[doc.id] = true;
+  });
+
+  return result;
 }
