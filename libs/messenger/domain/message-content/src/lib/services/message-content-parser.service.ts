@@ -71,6 +71,7 @@ export class MessageContentParser {
         };
       }
 
+      console.log('searching for strategy to parse typeId:', typeId.toString());
       // 3. Delegate Content Parsing to Strategies
       const strategy = this.strategies.find((s) => s.supports(typeId));
 

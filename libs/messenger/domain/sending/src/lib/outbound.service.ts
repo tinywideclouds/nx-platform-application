@@ -43,16 +43,20 @@ export class OutboundService {
     originalPayloadBytes: Uint8Array,
     options?: SendOptions,
   ): Promise<OutboundResult | null> {
+    const isSignal = typeId.entityType === 'signal';
     const isEphemeral = options?.isEphemeral || false;
+    const shouldPersist = !isSignal;
     const tags = options?.tags || [];
+
+    console.log('send');
 
     try {
       const isGroup = recipientUrn.entityType === 'group';
       const isNetworkGroup = isGroup && recipientUrn.namespace === 'messenger';
       const isLocalGroup = isGroup && recipientUrn.namespace === 'contacts';
 
-      // Resolve Storage Location
-      const storageUrn = isLocalGroup
+      // the conversation/storage urn depends on whether it's a local group or not
+      const conversationUrn = isLocalGroup
         ? recipientUrn
         : await this.identityResolver.getStorageUrn(recipientUrn);
 
@@ -63,7 +67,7 @@ export class OutboundService {
       const optimisticMsg: ChatMessage = {
         id: localId,
         senderId: myUrn,
-        conversationUrn: storageUrn,
+        conversationUrn: conversationUrn,
         sentTimestamp: timestamp,
         typeId: typeId,
         payloadBytes: originalPayloadBytes,
@@ -74,7 +78,6 @@ export class OutboundService {
         status: 'pending',
       };
 
-      // ❌ REMOVED: Global save logic.
       // Persistence is now the responsibility of the selected strategy.
 
       const context: SendContext = {
@@ -83,6 +86,7 @@ export class OutboundService {
         recipientUrn,
         optimisticMsg,
         isEphemeral,
+        shouldPersist,
       };
 
       let result: OutboundResult;
@@ -98,6 +102,7 @@ export class OutboundService {
 
       // 2. Trigger Worker
       if (!isEphemeral) {
+        console.log('called worker');
         // Await persistence confirmation before processing
         await result.outcome;
         this.outboxWorker.processQueue(myUrn, myKeys);

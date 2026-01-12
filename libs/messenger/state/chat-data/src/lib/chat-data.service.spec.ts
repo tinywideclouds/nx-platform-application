@@ -1,5 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ChatService } from './chat.service';
+import { ChatDataService } from './chat-data.service';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -19,8 +19,8 @@ import { IngestionService } from '@nx-platform-application/messenger-domain-inge
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 
-describe('ChatService (Data Orchestrator)', () => {
-  let service: ChatService;
+describe('ChatDataService (Data Orchestrator)', () => {
+  let service: ChatDataService;
   let liveData: ChatLiveDataService;
   let ingestion: IngestionService;
   let conversation: ConversationService;
@@ -39,7 +39,7 @@ describe('ChatService (Data Orchestrator)', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        ChatService,
+        ChatDataService,
         MockProvider(Logger),
         MockProvider(IAuthService, {
           currentUser: signal({ id: mockUrn } as any),
@@ -73,7 +73,7 @@ describe('ChatService (Data Orchestrator)', () => {
       ],
     });
 
-    service = TestBed.inject(ChatService);
+    service = TestBed.inject(ChatDataService);
     liveData = TestBed.inject(ChatLiveDataService);
     ingestion = TestBed.inject(IngestionService);
     conversation = TestBed.inject(ConversationService);

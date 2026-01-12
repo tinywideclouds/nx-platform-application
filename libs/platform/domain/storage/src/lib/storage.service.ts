@@ -8,6 +8,7 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
+  Visibility,
   VaultProvider,
   VaultDrivers,
   AssetResult,
@@ -169,9 +170,10 @@ export class StorageService {
    * BYOS FEATURE: Public Asset Upload
    * Delegates to the currently active driver.
    */
-  async uploadPublicAsset(
+  async uploadAsset(
     blob: Blob,
     filename: string,
+    visibility: Visibility,
     contentType?: string,
   ): Promise<AssetResult> {
     const driver = this.getActiveDriver();
@@ -183,7 +185,12 @@ export class StorageService {
     try {
       const uniqueName = `${Date.now()}_${filename}`;
       // Cast to any to support the extra argument if the interface isn't updated yet
-      return await driver.uploadAsset(blob, uniqueName, contentType);
+      return await driver.uploadAsset(
+        blob,
+        uniqueName,
+        visibility,
+        contentType,
+      );
     } catch (e) {
       this.logger.error('[StorageService] Asset upload failed', e);
       throw e;

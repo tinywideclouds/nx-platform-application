@@ -9,11 +9,11 @@ export interface WriteOptions {
   blindCreate?: boolean;
 }
 
+export type Visibility = 'public' | 'private';
+
 export interface AssetResult {
-  /** Optimized for chat bubbles (e.g., 1200px, JPEG for compatibility) */
-  inlineUrl: string;
-  /** Full resolution for Lightbox/Zoom (Original format) */
-  originalUrl: string;
+  resourceId: string;
+  provider: 'google-drive' | 'dropbox' | 'microsoft-drive';
 }
 
 export abstract class VaultProvider {
@@ -57,16 +57,19 @@ export abstract class VaultProvider {
    */
   abstract readJson<T>(path: string): Promise<T | null>;
 
-  // --- DATA PLANE (Binary) ---
   /**
    * [NEW] Uploads a raw binary asset (Image, Video).
    * Returns the public/shareable URL of the asset.
    */
   abstract uploadAsset(
-    blob: Blob,
+    main: Blob,
     filename: string,
+    visibility: Visibility,
     mimeType: string | undefined,
   ): Promise<AssetResult>;
+
+  abstract getDriveLink(assetId: string, preview?: boolean): Promise<string>;
+  abstract downloadAsset(assetId: string): Promise<string>;
 
   abstract fileExists(path: string): Promise<boolean>;
   abstract listFiles(directory: string): Promise<string[]>;

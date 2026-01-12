@@ -1,7 +1,8 @@
 import { URN } from '@nx-platform-application/platform-types';
 
-export const MESSAGE_TYPE_GROUP_INVITE = 'urn:message:type:group-invite';
-export const MessageGroupInvite = URN.parse(MESSAGE_TYPE_GROUP_INVITE);
+export const GROUP_INVITE_TYPE = 'group-invite';
+const GROUP_INVITE_MESSAGE = 'urn:message:type:group-invite';
+export const MessageGroupInvite = URN.parse(GROUP_INVITE_MESSAGE);
 
 export const MESSAGE_TYPE_GROUP_INVITE_RESPONSE =
   'urn:message:type:group-invite-response';

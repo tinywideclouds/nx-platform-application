@@ -5,7 +5,7 @@ import {
   WritableSignal,
   computed,
 } from '@angular/core';
-import { Subject, throttleTime } from 'rxjs'; // ✅ Added throttleTime
+import { Subject } from 'rxjs';
 import { Logger } from '@nx-platform-application/console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
@@ -33,7 +33,6 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 
 const DEFAULT_PAGE_SIZE = 50;
-const TYPING_DEBOUNCE_MS = 3000; // ✅ Domain Constant
 
 @Injectable({ providedIn: 'root' })
 export class ConversationService {
@@ -88,12 +87,6 @@ export class ConversationService {
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
     new Map(),
   );
-
-  // ✅ DOMAIN LOGIC: Throttled Typing Stream
-  private readonly _typingSubject = new Subject<void>();
-  public readonly typingTrigger$ = this._typingSubject
-    .asObservable()
-    .pipe(throttleTime(TYPING_DEBOUNCE_MS));
 
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
@@ -304,12 +297,6 @@ export class ConversationService {
     }
 
     return result;
-  }
-
-  notifyTyping(): void {
-    if (this.selectedConversation()) {
-      this._typingSubject.next(); // ✅ Pushes to throttled pipe
-    }
   }
 
   async applyIncomingReadReceipts(ids: string[]): Promise<void> {

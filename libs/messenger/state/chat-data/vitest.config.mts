@@ -7,7 +7,7 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/chat',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/chat-data',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -15,7 +15,7 @@ export default defineConfig({
     nxViteTsPaths(),
   ],
   test: {
-    name: 'chat',
+    name: 'chat-data',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -25,11 +25,11 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/messenger/chat/index.html',
+        '../../../dist/test-reports/libs/messenger/chat-data/index.html',
       ),
     },
     coverage: {
-      reportsDirectory: '../../../coverage/libs/messenger/chat',
+      reportsDirectory: '../../../coverage/libs/messenger/chat-data',
       provider: 'v8' as const,
     },
   },

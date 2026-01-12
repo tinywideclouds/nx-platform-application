@@ -6,32 +6,31 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatBadgeModule } from '@angular/material/badge'; // <--- Add this
 import { ImageContent } from '@nx-platform-application/messenger-domain-message-content';
 
 @Component({
   selector: 'chat-image-message',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CommonModule, MatIconModule, MatBadgeModule], // <--- Add this
   templateUrl: './chat-image-message.component.html',
-  styleUrl: './chat-image-message.component.scss',
+  styleUrls: ['./chat-image-message.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatImageMessageComponent {
-  // Pure Input: The specific ImageContent payload
   content = input.required<ImageContent>();
 
-  // COMPUTED: Determine if we are in the "Optimistic/Uploading" state
-  isPending = computed(() => this.content().remoteUrl === 'pending');
+  // The inline image is always used for display
+  displaySrc = computed(() => this.content().inlineImage);
 
-  // COMPUTED: Determine which source to show
-  // If 'pending', we rely on the instant thumbnail.
-  // Once the parent updates the payload with a real URL, this computed updates automatically.
-  displaySrc = computed(() => {
-    const c = this.content();
-    // If pending, use thumbnail. Otherwise, use remote URL (with browser caching)
-    return c.remoteUrl === 'pending' ? c.thumbnailBase64 : c.remoteUrl;
+  // Checks if the 'original' asset exists in the record
+  // This will flip from FALSE -> TRUE when the background patch arrives
+  hasOriginal = computed(() => {
+    const assets = this.content().assets;
+    // Check for your specific key. We used 'original' in the discussion.
+    // Also ensuring 'assets' is not undefined/null
+    return !!(assets && assets['original']);
   });
 
-  altText = computed(() => this.content().fileName || 'Image attachment');
+  altText = computed(() => this.content().displayName || 'Image Attachment');
 }

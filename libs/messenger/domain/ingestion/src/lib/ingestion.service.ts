@@ -141,8 +141,7 @@ export class IngestionService {
   ): Promise<void> {
     // 1. INTENT: Check Transport URN properties
     const typeId = transport.typeId;
-    const isSignal =
-      typeId.namespace === 'message' && typeId.entityType === 'signal';
+    const isSignal = typeId.entityType === 'signal';
 
     // 2. PARSE: Extract data
     const parsed = this.parser.parse(typeId, transport.payloadBytes);
@@ -161,7 +160,11 @@ export class IngestionService {
           `[Ingestion] Signal Mismatch: Transport=Signal, Parser=${parsed.kind}`,
         );
       }
-      console.log('handled signal: not saved, ', typeId.toString());
+      console.warn(
+        '[TIME TRACE] handled signal: not saved, ',
+        typeId.toString(),
+        new Date().toISOString(),
+      );
       return;
     }
 
@@ -243,26 +246,40 @@ export class IngestionService {
     canonicalSenderUrn: URN,
     accumulator: IngestionResult,
   ): Promise<void> {
-    if (payload.action === 'read-receipt') {
-      const rr = payload.data as ReadReceiptData;
-      const ids = rr?.messageIds || [];
-      if (ids.length > 0) {
-        for (const msgId of ids) {
-          await this.storageService.applyReceipt(
-            msgId,
-            canonicalSenderUrn,
-            'read',
-          );
-        }
-        accumulator.readReceipts.push(...ids);
+    switch (payload.action) {
+      case 'typing': {
+        accumulator.typingIndicators.push(canonicalSenderUrn);
+        break;
       }
-    } else if (payload.action === 'typing') {
-      accumulator.typingIndicators.push(canonicalSenderUrn);
-    } else if (payload.action === 'asset-reveal') {
-      const patch = payload.data as AssetRevealData;
-      const patchedId = await this.handleAssetReveal(patch);
-      if (patchedId) {
-        accumulator.patchedMessageIds.push(patchedId);
+      case 'read-receipt': {
+        console.log('handling read receipt signal');
+        const rr = payload.data as ReadReceiptData;
+        const ids = rr?.messageIds || [];
+        if (ids.length > 0) {
+          for (const msgId of ids) {
+            await this.storageService.applyReceipt(
+              msgId,
+              canonicalSenderUrn,
+              'read',
+            );
+          }
+          accumulator.readReceipts.push(...ids);
+        }
+        break;
+      }
+      case 'asset-reveal': {
+        console.log('handling asset reveal signal');
+        const patch = payload.data as AssetRevealData;
+        const patchedId = await this.handleAssetReveal(patch);
+        if (patchedId) {
+          accumulator.patchedMessageIds.push(patchedId);
+        }
+        break;
+      }
+      default: {
+        this.logger.warn(
+          `[Ingestion] Unhandled Signal Action: ${payload.action}`,
+        );
       }
     }
   }
@@ -279,7 +296,11 @@ export class IngestionService {
       const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
       if (parsed.kind !== 'content') return null;
 
-      const newPayload = { ...parsed.payload, remoteUrl: patch.remoteUrl };
+      const newPayload = {
+        ...parsed.payload,
+        assets: patch.assets,
+      };
+
       const newBytes = this.parser.serialize(newPayload);
 
       await this.storageService.updateMessagePayload(patch.messageId, newBytes);

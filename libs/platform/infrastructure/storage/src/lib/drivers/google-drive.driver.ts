@@ -1,6 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
-import { VaultProvider, WriteOptions, AssetResult } from '../vault.provider';
+import {
+  VaultProvider,
+  WriteOptions,
+  AssetResult,
+  Visibility,
+} from '../vault.provider';
 import { PlatformStorageConfig } from '../vault.tokens';
 import { GOOGLE_TOKEN_STRATEGY } from './google-token.strategy';
 
@@ -66,61 +71,100 @@ export class GoogleDriveDriver implements VaultProvider {
   async uploadAsset(
     blob: Blob,
     filename: string,
-    mimeType: string,
+    visibility: Visibility = 'public',
+    mimeType: string | undefined,
   ): Promise<AssetResult> {
     await this.ensureReady();
 
-    // 1. Upload the binary data
+    // 1. Resolve folder
     const assetsFolderId = await this.resolvePath('assets', true);
-    const fileId = await this.performResumableUpload(
+
+    // Default to binary if no mimeType provided
+    const finalMimeType = mimeType || 'application/octet-stream';
+
+    const uploadId = await this.performResumableUpload(
       blob,
       filename,
-      mimeType,
+      finalMimeType,
       assetsFolderId,
     );
 
-    // 2. Set Public Read Permission (Critical for the link to work)
-    await gapi.client.drive.permissions.create({
-      fileId: fileId,
-      resource: { role: 'reader', type: 'anyone' },
-    });
+    this.logger.info('[Drive] Set got upload id:', filename, uploadId);
 
-    // 3. Get the Thumbnail Link
-    // We explicitly request 'thumbnailLink' because it's the only field
-    // that allows direct embedding via simple URL manipulation.
-    const result = await gapi.client.drive.files.get({
-      fileId,
-      fields: 'thumbnailLink',
-    });
-
-    const baseLink = result.result.thumbnailLink;
-
-    if (baseLink) {
-      // --- A. INLINE URL (The "Polite" & "Compatible" Link) ---
-      // 1200px limit + Force JPEG if it's WebP (for Edge support)
-      let inlineParams = '=s1200';
-      if (mimeType === 'image/webp') {
-        inlineParams += '-rj';
-      }
-      const inlineUrl = baseLink.replace(/=s\d+$/, inlineParams);
-
-      // --- B. ORIGINAL URL (The "High-Res" Link) ---
-      // =s0 asks Google for the "Original Source Dimensions"
-      // We do NOT add -rj here; we want the exact original file format (transparency, etc.)
-      const originalUrl = baseLink.replace(/=s\d+$/, '=s0');
-
-      return {
-        inlineUrl,
-        originalUrl,
-      };
+    if (visibility === 'public') {
+      // 2. Mark as Public (Required for API Key access later)
+      const permissions = await gapi.client.drive.permissions.create({
+        fileId: uploadId,
+        resource: { role: 'reader', type: 'anyone' },
+      });
+      this.logger.debug('[Drive] Set public read permissions:', permissions);
     }
 
-    // Fallback (Rare)
-    const fallback = `https://drive.google.com/thumbnail?id=${fileId}`;
+    // 3. Return standard result (IDs only)
     return {
-      inlineUrl: `${fallback}&sz=w1200`,
-      originalUrl: `${fallback}&sz=w10000`, // Request max
+      resourceId: uploadId,
+      provider: 'google-drive',
     };
+  }
+
+  /**
+   * Generates the interaction URL based on the requested mode.
+   * - Preview: Embeddable iframe URL
+   * - Standard: Full web viewer URL
+   */
+  async getDriveLink(assetId: string, preview?: boolean): Promise<string> {
+    if (!assetId) return '';
+    // /preview = Iframe-friendly "clean" viewer
+    // /view = Standard Google Drive UI
+    const mode = preview ? 'preview' : 'view';
+    return `https://drive.google.com/file/d/${assetId}/${mode}`;
+  }
+
+  /**
+   * Downloads the raw asset data using the API Key (No User Auth required).
+   * This bypasses 403s on "Hotlinking" by acting as an API fetch.
+   */
+  async downloadAsset(assetId: string): Promise<string> {
+    if (!assetId) return '';
+    const apiKey = this.config?.googleApiKey;
+
+    // 1. Check if we have a valid cache in the Browser's "Cache Storage"
+    const cacheName = 'drive-assets-v1';
+    const requestUrl = `https://www.googleapis.com/drive/v3/files/${assetId}?alt=media&key=${apiKey}`;
+
+    // Try cache first
+    try {
+      if ('caches' in window) {
+        const cache = await caches.open(cacheName);
+        const cachedResponse = await cache.match(requestUrl);
+
+        if (cachedResponse) {
+          // HIT: Serve instantly from disk.
+          const blob = await cachedResponse.blob();
+          return URL.createObjectURL(blob);
+        }
+      }
+    } catch (e) {
+      this.logger.warn('[Drive] Cache check failed', e);
+    }
+
+    // 2. MISS: Fetch from network
+    try {
+      const response = await fetch(requestUrl, { method: 'GET' });
+      if (!response.ok) throw new Error(response.statusText);
+
+      // 3. Clone and Store in Cache for next time
+      if ('caches' in window) {
+        const cache = await caches.open(cacheName);
+        cache.put(requestUrl, response.clone());
+      }
+
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      this.logger.error(`[Drive] Download failed`, e);
+      return '';
+    }
   }
 
   // =================================================================
@@ -224,6 +268,9 @@ export class GoogleDriveDriver implements VaultProvider {
     parentId?: string,
     existingFileId?: string,
   ): Promise<string> {
+    // console.log('Performing resumable upload to Google Drive:');
+    // Commented out to reduce noise, usually better to stick to logger
+
     const accessToken = gapi.client.getToken().access_token;
     const baseUrl = 'https://www.googleapis.com/upload/drive/v3/files';
     const url = existingFileId

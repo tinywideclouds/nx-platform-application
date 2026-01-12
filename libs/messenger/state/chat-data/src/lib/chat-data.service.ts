@@ -25,7 +25,7 @@ import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-ide
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 
 @Injectable({ providedIn: 'root' })
-export class ChatService {
+export class ChatDataService {
   private readonly logger = inject(Logger);
   private readonly destroyRef = inject(DestroyRef);
   private readonly authService = inject(IAuthService);
@@ -56,7 +56,9 @@ export class ChatService {
    */
   public async startSyncSequence(authToken: string): Promise<void> {
     this.logger.info('[ChatDataOrchestrator] Starting Sync Sequence...');
-    this.liveService.connect(authToken);
+
+    this.liveService.connect(() => this.authService.getJwtToken() ?? authToken);
+
     await this.refreshActiveConversations();
     await this.runIngestionCycle();
   }
@@ -74,6 +76,10 @@ export class ChatService {
    * Refreshes the Sidebar list.
    */
   public async refreshActiveConversations(): Promise<void> {
+    console.warn(
+      '[TIME TRACE] Refreshing Active Conversations:',
+      new Date().toISOString(),
+    );
     const summaries =
       await this.conversationService.loadConversationSummaries();
     this.activeConversations.set(summaries);
@@ -83,6 +89,7 @@ export class ChatService {
    * Manually triggers ingestion (e.g. after a refresh pull).
    */
   public async runIngestionCycle(): Promise<void> {
+    console.log('running ingestion cycle');
     return this.runExclusive(async () => {
       const keys = this.identity.myKeys();
       const user = this.authService.currentUser();
@@ -109,7 +116,7 @@ export class ChatService {
         }
 
         // 2. Process Typing Indicators (Signals)
-        // ✅ FIX: Run independently of message content
+        // Run independently of message content
         if (result.typingIndicators.length > 0 || result.messages.length > 0) {
           this.updateTypingActivity(result.typingIndicators, result.messages);
         }
@@ -123,6 +130,11 @@ export class ChatService {
 
         // 4. Process Patches (Signals)
         if (result.patchedMessageIds.length > 0) {
+          console.warn(
+            '[TIME TRACE] Patched Messages to reload:',
+            result.patchedMessageIds,
+            new Date().toISOString(),
+          );
           this.logger.info(
             `[DataOrchestrator] Reloading ${result.patchedMessageIds.length} patched messages.`,
           );

@@ -1,3 +1,5 @@
+// libs/messenger/feature-conversation/src/lib/chat-conversation.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
@@ -21,14 +23,16 @@ import { URN } from '@nx-platform-application/platform-types';
 import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
-  ImageContent,
   messageTagBroadcast,
   ContentPayload,
   MessageTypeText,
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_IMAGE,
-  MESSAGE_TYPE_GROUP_INVITE,
+  TEXT_MESSAGE_TYPE,
+  IMAGE_MESSAGE_TYPE,
+  GROUP_INVITE_TYPE,
 } from '@nx-platform-application/messenger-domain-message-content';
+
+// Import Types
+import { DraftMessage } from '@nx-platform-application/messenger-types';
 
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
 import {
@@ -38,9 +42,11 @@ import {
   MessageRendererComponent,
   ChatInviteMessageComponent,
   InviteViewModel,
+  ChatMessageInputComponent, // <-- Direct Import
 } from '@nx-platform-application/messenger-ui-chat';
-import { ChatInputComponent } from '../chat-input/chat-input.component';
+
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
+import { MessageContentPipe } from '../message-content.pipe';
 
 @Component({
   selector: 'messenger-chat-conversation',
@@ -56,8 +62,9 @@ import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
     ChatTypingIndicatorComponent,
     MessageRendererComponent,
     ChatInviteMessageComponent,
-    ChatInputComponent,
+    ChatMessageInputComponent,
     ContactNamePipe,
+    MessageContentPipe,
   ],
   providers: [DatePipe],
   templateUrl: './chat-conversation.component.html',
@@ -85,9 +92,12 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
-  readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
-  readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
-  readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE;
+  // readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
+  // readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
+  // readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE;
+  readonly TEXT_MESSAGE = TEXT_MESSAGE_TYPE;
+  readonly IMAGE_MESSAGE = IMAGE_MESSAGE_TYPE;
+  readonly GROUP_INVITE_MESSAGE = GROUP_INVITE_TYPE;
 
   constructor() {
     effect((onCleanup) => {
@@ -103,9 +113,10 @@ export class ChatConversationComponent {
   }
 
   // --- VIEW HELPERS ---
+  // ... (Existing helpers: getTypeId, getReadCursors, showTypingIndicator, etc. remain unchanged) ...
 
   getTypeId(msg: ChatMessage): string {
-    return msg.typeId.toString();
+    return msg.typeId.entityId;
   }
 
   getReadCursorsForMessage(msgId: string): URN[] {
@@ -167,29 +178,20 @@ export class ChatConversationComponent {
     if (msg.typeId.equals(MessageTypeText) && msg.textContent) {
       return { kind: 'text', text: msg.textContent };
     }
-
     if (!msg.payloadBytes || (msg.payloadBytes as any).length === 0) {
       return null;
     }
-
     try {
       const bytes =
         msg.payloadBytes instanceof Uint8Array
           ? msg.payloadBytes
           : new Uint8Array(Object.values(msg.payloadBytes));
-
       const decoded = new TextDecoder().decode(bytes);
-
       if (msg.typeId.equals(MessageTypeText)) {
         return { kind: 'text', text: decoded };
       }
-
       return JSON.parse(decoded);
     } catch (e) {
-      console.warn(
-        `[ChatConversation] Failed to hydrate payload for ${msg.id}`,
-        e,
-      );
       return null;
     }
   }
@@ -208,14 +210,12 @@ export class ChatConversationComponent {
   getReceiptSummary(msg: ChatMessage): string {
     if (!this.isMyMessage(msg)) return '';
     if (msg.status === 'reference') return 'Sent via Broadcast';
-
     const map = msg.receiptMap;
     if (map && Object.keys(map).length > 0) {
       const total = Object.keys(map).length;
       const readCount = Object.values(map).filter((s) => s === 'read').length;
       return `Read by ${readCount} of ${total}`;
     }
-
     switch (msg.status) {
       case 'read':
         return 'Read';
@@ -234,31 +234,11 @@ export class ChatConversationComponent {
 
   async onRetryMessage(msg: ChatMessage): Promise<void> {
     if (msg.status !== 'failed') return;
-    const restoredText = await this.appState.recoverFailedMessage(msg.id);
-    console.log('Retried message:', restoredText);
+    await this.appState.recoverFailedMessage(msg.id);
   }
 
   onContentAction(urnString: string): void {
     this.router.navigate(['/contacts/edit', urnString]);
-  }
-
-  onTyping(): void {
-    this.appState.notifyTyping();
-  }
-
-  onSendMessage(text: string): void {
-    const recipient = this.selectedConversation();
-    if (text && recipient) {
-      this.appState.sendMessage(recipient, text);
-    }
-  }
-
-  // ✅ FIXED: Handle new event signature { file, payload }
-  onSendImage(event: { file: File; payload: ImageContent }): void {
-    const recipient = this.selectedConversation();
-    if (recipient) {
-      this.appState.sendImage(recipient, event.file, event.payload);
-    }
   }
 
   async onAcceptInvite(msg: ChatMessage): Promise<void> {
@@ -288,5 +268,20 @@ export class ChatConversationComponent {
     } else {
       this.snackBar.dismiss();
     }
+  }
+
+  // --- ACTIONS ---
+
+  onTyping(): void {
+    this.appState.notifyTyping();
+  }
+
+  /**
+   * ✅ PURE DELEGATION
+   * The UI just hands the draft to the State.
+   * No logic here about checking files vs text.
+   */
+  onSendDraft(draft: DraftMessage): void {
+    this.appState.sendDraft(draft);
   }
 }

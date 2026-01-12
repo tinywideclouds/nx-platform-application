@@ -46,18 +46,18 @@
             [class.justify-start]="!isMyMessage(msg)"
           >
             @switch (getTypeId(msg)) {
-              @case (MSG_TYPE_TEXT) {
+              @case (TEXT_MESSAGE) {
                 <ng-container
                   *ngTemplateOutlet="contentBubble; context: { $implicit: msg }"
                 ></ng-container>
               }
-              @case (MSG_TYPE_IMAGE) {
+              @case (IMAGE_MESSAGE) {
                 <ng-container
                   *ngTemplateOutlet="contentBubble; context: { $implicit: msg }"
                 ></ng-container>
               }
 
-              @case (MSG_TYPE_INVITE) {
+              @case (GROUP_INVITE_MESSAGE) {
                 <div class="max-w-[85%]">
                   <messenger-chat-invite-message
                     [payload]="getInviteViewModel(msg)"
@@ -97,7 +97,7 @@
             (retry)="onRetryMessage(msg)"
           >
             <chat-message-renderer
-              [payload]="getContentPayload(msg)"
+              [payload]="msg | messageContent"
               (action)="onContentAction($event)"
             />
           </chat-message-bubble>
@@ -139,9 +139,5 @@
     </div>
   </main>
 
-  <messenger-chat-input
-    (send)="onSendMessage($event)"
-    (sendImage)="onSendImage($event)"
-    (typing)="onTyping()"
-  />
+  <chat-message-input (send)="onSendDraft($event)" (typing)="onTyping()" />
 </div>

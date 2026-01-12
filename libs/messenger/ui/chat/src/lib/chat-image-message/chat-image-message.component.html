@@ -1,22 +1,24 @@
 <div
-  class="image-container relative group cursor-pointer overflow-hidden rounded-md mt-1 border border-gray-200/20"
-  [class.uploading]="isPending()"
+  class="relative group overflow-hidden rounded-lg border border-gray-200/20 bg-gray-100 inline-block"
+  [matBadge]="'HD'"
+  [matBadgeHidden]="!hasOriginal()"
+  matBadgePosition="above after"
+  matBadgeSize="small"
+  matBadgeColor="accent"
 >
   <img
-    alt="image"
+    alt="inline image"
     [src]="displaySrc()"
     [alt]="altText()"
-    class="image-content"
+    class="block w-full h-auto max-w-sm object-cover min-w-[150px] min-h-[150px]"
     loading="lazy"
   />
 
-  @if (isPending()) {
-    <div class="pending-overlay">
-      <mat-icon class="text-white drop-shadow-md animate-spin">sync</mat-icon>
-    </div>
-  }
-
   @if (content().caption; as caption) {
-    <p class="caption mt-2 text-sm px-1">{{ caption }}</p>
+    <div
+      class="bg-black/40 text-white text-xs p-2 absolute bottom-0 w-full backdrop-blur-sm"
+    >
+      {{ caption }}
+    </div>
   }
 </div>

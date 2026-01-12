@@ -6,6 +6,7 @@ import {
   ContactShareData,
   MessageTypeText,
   MessageTypeContactShare,
+  MessageTypeImage,
 } from '../models/content-types';
 import {
   ContentParserStrategy,
@@ -20,11 +21,7 @@ export class TextParserStrategy implements ContentParserStrategy {
     return typeId.equals(MessageTypeText);
   }
 
-  parse(
-    typeId: URN,
-    content: Uint8Array,
-    context: ParsingContext,
-  ): ParsedMessage {
+  parse(_: URN, content: Uint8Array, context: ParsingContext): ParsedMessage {
     return {
       kind: 'content',
       conversationId: context.conversationId!, // Validator in main service ensures this exists
@@ -43,7 +40,7 @@ export class ImageParserStrategy implements ContentParserStrategy {
 
   supports(typeId: URN): boolean {
     // Basic string check, or distinct URN equality check
-    return typeId.toString() === 'urn:message:type:image';
+    return typeId.equals(MessageTypeImage);
   }
 
   parse(_: URN, content: Uint8Array, context: ParsingContext): ParsedMessage {

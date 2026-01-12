@@ -1,288 +1,195 @@
 import { TestBed } from '@angular/core/testing';
-import { BehaviorSubject, Subject } from 'rxjs';
 import { signal } from '@angular/core';
-import { ChatService } from './chat.service';
-import {
-  URN,
-  User,
-  KeyNotFoundError,
-} from '@nx-platform-application/platform-types';
+import { AppState } from './app-state.service';
+import { URN, User } from '@nx-platform-application/platform-types';
+import { DraftMessage } from '@nx-platform-application/messenger-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
-// Infrastructure
-import {
-  IAuthService,
-  AuthStatusResponse,
-} from '@nx-platform-application/platform-auth-access';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+// --- DEPENDENCIES ---
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
+import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
+import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
+import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
+import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { Logger } from '@nx-platform-application/console-logger';
-import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 
-// API Tokens
-import {
-  GatekeeperApi,
-  AddressBookManagementApi,
-} from '@nx-platform-application/contacts-api';
-
-// Domain Services
+// --- DOMAIN ---
 import {
   ConversationService,
   ConversationActionService,
 } from '@nx-platform-application/messenger-domain-conversation';
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
-import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
-import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
-import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
-import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
 
-describe('ChatService', () => {
-  let service: ChatService;
-  let actionService: ConversationActionService;
+// --- INFRA ---
+import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
+import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
+
+describe('AppState', () => {
+  let service: AppState;
 
   // --- Mocks ---
-  const mockIngestion = {
-    process: vi.fn().mockResolvedValue({
-      messages: [],
-      typingIndicators: [],
-      readReceipts: [],
-    }),
+  const mockCurrentUser = { id: URN.parse('urn:contacts:user:me'), alias: 'Me' } as User;
+  const mockKeys = { encKey: 'priv', sigKey: 'priv' } as any;
+  const mockRecipientUrn = URN.parse('urn:contacts:user:recipient');
+
+  // Facades
+  const mockIdentity = {
+    onboardingState: signal('READY'),
+    isCeremonyActive: signal(false),
+    myKeys: signal(mockKeys),
+    initialize: vi.fn(),
+  };
+  const mockMedia = { sendImage: vi.fn().mockResolvedValue(undefined) };
+  const mockModeration = { blockedSet: signal(new Set()) };
+  const mockSync = { isConnected: signal(true), isSyncing: signal(false), resumeSession: vi.fn().mockResolvedValue(true) };
+  
+  // Chat State
+  const mockChatService = {
+    activeConversations: signal([]),
+    typingActivity: signal(new Map()),
+    refreshActiveConversations: vi.fn(),
+    startSyncSequence: vi.fn().mockResolvedValue(undefined),
   };
 
-  const mockConversation = {
+  // Conversation Domain
+  const mockConversationService = {
     messages: signal([]),
-    selectedConversation: signal(null),
-    genesisReached: signal(false),
+    selectedConversation: signal(mockRecipientUrn), // ✅ Default: Conversation Selected
     isLoadingHistory: signal(false),
-    isRecipientKeyMissing: signal(false),
     firstUnreadId: signal(null),
     readCursors: signal(new Map()),
-
-    loadConversation: vi.fn(),
-    loadConversationSummaries: vi.fn().mockResolvedValue([]),
-    loadMoreMessages: vi.fn(),
-    upsertMessages: vi.fn(),
-    notifyTyping: vi.fn(),
-    applyIncomingReadReceipts: vi.fn(),
-    performHistoryWipe: vi.fn(),
-    recoverFailedMessage: vi.fn(),
-
-    typingTrigger$: new Subject(),
-    readReceiptTrigger$: new Subject(),
+    isRecipientKeyMissing: signal(false),
+    typingTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
+    readReceiptTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
   };
 
   const mockActionService = {
     sendMessage: vi.fn().mockResolvedValue(undefined),
-    sendContactShare: vi.fn().mockResolvedValue(undefined),
-    sendTypingIndicator: vi.fn().mockResolvedValue(undefined),
-    sendReadReceiptSignal: vi.fn().mockResolvedValue(undefined),
   };
 
-  const mockSync = { performSync: vi.fn().mockResolvedValue(true) };
-  const mockKeyWorker = { resetIdentityKeys: vi.fn() };
-  const mockOutbox = { processQueue: vi.fn(), clearAllTasks: vi.fn() };
-  const mockQuarantine = { retrieveForInspection: vi.fn(), reject: vi.fn() };
-  const mockPairing = {
-    startReceiverSession: vi.fn().mockResolvedValue({ sessionId: 's1' }),
-    startSenderSession: vi.fn().mockResolvedValue({ sessionId: 's2' }),
-    linkTargetDevice: vi.fn(),
-    pollForReceiverSync: vi.fn(),
-    redeemSenderSession: vi.fn(),
-  };
-  const mockGroupProtocol = {
-    upgradeGroup: vi.fn(),
-    acceptInvite: vi.fn(),
-    rejectInvite: vi.fn(),
-  };
-
+  const mockOutbox = { processQueue: vi.fn() };
   const mockAuth = {
-    sessionLoaded$: new BehaviorSubject<AuthStatusResponse | null>(null),
-    currentUser: signal<User | null>(null),
+    currentUser: signal(mockCurrentUser),
     getJwtToken: vi.fn(() => 'token'),
-    logout: vi.fn(),
+    sessionLoaded$: { pipe: () => ({ subscribe: vi.fn() }) },
   };
 
-  const mockLive = {
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    status$: new Subject(),
-    incomingMessage$: new Subject(),
-  };
-
-  const mockCrypto = {
-    loadMyKeys: vi.fn(),
-    storeMyKeys: vi.fn(),
-    verifyKeysMatch: vi.fn(),
-    clearKeys: vi.fn(),
-  };
-
-  const mockKeyCache = {
-    getPublicKey: vi.fn(),
-    clear: vi.fn(),
-  };
-
-  const mockGatekeeper = {
-    // ✅ FIX: Use BehaviorSubject (Observable) instead of signal
-    // The service uses toSignal(this.gatekeeper.blocked$), so this must be subscribable.
-    blocked$: new BehaviorSubject([]),
-    blockIdentity: vi.fn(),
-  };
-
-  const mockAddressBookManager = {
-    clearData: vi.fn(),
-  };
-
-  const mockStorage = {
-    clearDatabase: vi.fn(),
-    saveMessage: vi.fn(),
-  };
-
-  // Fixtures
-  const mockUser: User = {
-    id: URN.parse('urn:contacts:user:me'),
-    alias: 'Me',
-    email: 'me@test.com',
-  };
-  const mockPrivateKeys = { encKey: 'priv', sigKey: 'priv' } as any;
-  const mockRecipientUrn = URN.parse('urn:contacts:user:bob');
+  // Infra Setup
+  const mockLive = { status$: { pipe: () => ({ subscribe: vi.fn() }) } };
+  const mockSettings = { getWizardSeen: vi.fn().mockResolvedValue(true) };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     TestBed.configureTestingModule({
       providers: [
-        ChatService,
-        { provide: IngestionService, useValue: mockIngestion },
-        { provide: ConversationService, useValue: mockConversation },
+        AppState,
+        // Mocking via Factories or UseValue
+        { provide: ChatIdentityFacade, useValue: mockIdentity },
+        { provide: ChatMediaFacade, useValue: mockMedia },
+        { provide: ChatModerationFacade, useValue: mockModeration },
+        { provide: CloudSyncService, useValue: mockSync },
+        { provide: ChatDataService, useValue: mockChatService },
+        { provide: ConversationService, useValue: mockConversationService },
         { provide: ConversationActionService, useValue: mockActionService },
-
-        { provide: ChatSyncService, useValue: mockSync },
-        { provide: ChatKeyService, useValue: mockKeyWorker },
         { provide: OutboxWorkerService, useValue: mockOutbox },
-        { provide: DevicePairingService, useValue: mockPairing },
-        { provide: QuarantineService, useValue: mockQuarantine },
-        { provide: GroupProtocolService, useValue: mockGroupProtocol },
-
         { provide: IAuthService, useValue: mockAuth },
         { provide: ChatLiveDataService, useValue: mockLive },
-        { provide: MessengerCryptoService, useValue: mockCrypto },
-        { provide: KeyCacheService, useValue: mockKeyCache },
-
-        { provide: GatekeeperApi, useValue: mockGatekeeper },
-        { provide: AddressBookManagementApi, useValue: mockAddressBookManager },
-
-        { provide: ChatStorageService, useValue: mockStorage },
+        { provide: LocalSettingsService, useValue: mockSettings },
+        
+        // Lightweight Mocks for remaining deps
         MockProvider(Logger),
-        MockProvider(MessageContentParser),
+        MockProvider(GroupProtocolService),
+        MockProvider(AddressBookManagementApi),
+        MockProvider(ChatStorageService),
+        MockProvider(MessengerCryptoService),
+        MockProvider(KeyCacheService),
       ],
     });
 
-    service = TestBed.inject(ChatService);
-    actionService = TestBed.inject(ConversationActionService);
-
-    mockAuth.currentUser.set(mockUser);
-    mockAuth.sessionLoaded$.next({
-      authenticated: true,
-      user: mockUser,
-      token: 't',
-    });
+    service = TestBed.inject(AppState);
   });
 
-  describe('Boot Sequence (Init)', () => {
-    it('should enter GENERATING if server returns KeyNotFoundError (204)', async () => {
-      mockCrypto.loadMyKeys.mockResolvedValue(null);
-      mockKeyCache.getPublicKey.mockRejectedValue(
-        new KeyNotFoundError('urn...'),
+  describe('sendDraft()', () => {
+    
+    it('should abort if no keys or user are present', async () => {
+      mockIdentity.myKeys.set(null);
+      await service.sendDraft({ text: 'hi', attachments: [] });
+      
+      expect(mockMedia.sendImage).not.toHaveBeenCalled();
+      expect(mockActionService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    // ✅ CASE 1: File Priority
+    it('should delegate to MediaFacade if attachment is present (File Priority)', async () => {
+      const mockFile = new File([''], 'test.png');
+      const draft: DraftMessage = {
+        text: 'Caption Text', // This text should become the caption
+        attachments: [
+          { file: mockFile, previewUrl: '', mimeType: 'image/png', name: 'test.png', size: 0 }
+        ]
+      };
+
+      await service.sendDraft(draft);
+
+      // Expect Media Facade call
+      expect(mockMedia.sendImage).toHaveBeenCalledWith(
+        mockRecipientUrn,
+        mockFile,
+        'Caption Text', // Checked: Caption passed
+        mockKeys,
+        mockCurrentUser.id
       );
-      mockKeyWorker.resetIdentityKeys.mockResolvedValue(mockPrivateKeys);
 
-      await (service as any).init();
-
-      expect(service.onboardingState()).toBe('READY');
-      expect(mockKeyWorker.resetIdentityKeys).toHaveBeenCalled();
+      // Expect Text Logic SKIPPED
+      expect(mockActionService.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('should enter OFFLINE_READY if server returns Network Error', async () => {
-      mockCrypto.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-      mockKeyCache.getPublicKey.mockRejectedValue(
-        new Error('500 Server Error'),
-      );
+    // ✅ CASE 2: Text Only
+    it('should delegate to ActionService if NO attachment is present', async () => {
+      const draft: DraftMessage = {
+        text: 'Pure Text Message',
+        attachments: []
+      };
 
-      await (service as any).init();
+      await service.sendDraft(draft);
 
-      expect(service.onboardingState()).toBe('OFFLINE_READY');
-    });
-
-    it('should enter REQUIRES_LINKING if keys mismatch', async () => {
-      mockCrypto.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-      mockKeyCache.getPublicKey.mockResolvedValue({} as any);
-      mockCrypto.verifyKeysMatch.mockResolvedValue(false);
-
-      await (service as any).init();
-
-      expect(service.onboardingState()).toBe('REQUIRES_LINKING');
-    });
-  });
-
-  describe('Delegation Logic (Actions)', () => {
-    // Setup state for delegation tests
-    beforeEach(async () => {
-      mockCrypto.loadMyKeys.mockResolvedValue(mockPrivateKeys);
-      mockKeyCache.getPublicKey.mockResolvedValue({} as any);
-      mockCrypto.verifyKeysMatch.mockResolvedValue(true);
-      await (service as any).init();
-    });
-
-    it('should delegate sendMessage to ConversationActionService', async () => {
-      await service.sendMessage(mockRecipientUrn, 'Hello');
-
+      // Expect Text Logic
       expect(mockActionService.sendMessage).toHaveBeenCalledWith(
         mockRecipientUrn,
-        'Hello',
-        mockPrivateKeys,
-        mockUser.id,
+        'Pure Text Message',
+        mockKeys,
+        mockCurrentUser.id
       );
+
+      // Expect Media Logic SKIPPED
+      expect(mockMedia.sendImage).not.toHaveBeenCalled();
     });
 
-    it('should delegate sendContactShare to ConversationActionService', async () => {
-      const data = { urn: 'u:1', alias: 'A' };
-      await service.sendContactShare(mockRecipientUrn, data);
+    // ✅ CASE 3: Side Effects
+    it('should trigger UI refresh and Outbox processing after sending', async () => {
+      const draft: DraftMessage = { text: 'test', attachments: [] };
+      
+      await service.sendDraft(draft);
 
-      expect(mockActionService.sendContactShare).toHaveBeenCalledWith(
-        mockRecipientUrn,
-        data,
-        mockPrivateKeys,
-        mockUser.id,
-      );
+      expect(mockChatService.refreshActiveConversations).toHaveBeenCalled();
+      expect(mockOutbox.processQueue).toHaveBeenCalledWith(mockCurrentUser.id, mockKeys);
     });
-  });
 
-  describe('Device Wipe / Logout', () => {
-    it('should clear all subsystems', async () => {
-      await service.fullDeviceWipe();
+    it('should do nothing if text is empty and attachments are empty', async () => {
+      const draft: DraftMessage = { text: '   ', attachments: [] };
+      
+      await service.sendDraft(draft);
 
-      expect(mockLive.disconnect).toHaveBeenCalled();
-      expect(mockStorage.clearDatabase).toHaveBeenCalled();
-      expect(mockAddressBookManager.clearData).toHaveBeenCalled();
-      expect(mockKeyCache.clear).toHaveBeenCalled();
-      expect(mockCrypto.clearKeys).toHaveBeenCalled();
-      expect(mockOutbox.clearAllTasks).toHaveBeenCalled();
-      expect(mockAuth.logout).toHaveBeenCalled();
-    });
-  });
-
-  describe('Block / Quarantine', () => {
-    it('should delegate block to Gatekeeper', async () => {
-      const urn = URN.parse('urn:contacts:user:spammer');
-      await service.block([urn], 'messenger');
-      expect(mockGatekeeper.blockIdentity).toHaveBeenCalledWith(urn, [
-        'messenger',
-      ]);
+      expect(mockMedia.sendImage).not.toHaveBeenCalled();
+      expect(mockActionService.sendMessage).not.toHaveBeenCalled();
     });
   });
 });

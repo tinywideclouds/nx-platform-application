@@ -1,36 +1,22 @@
-@if (!payload()) {
-  <div class="p-2 text-xs text-gray-400 italic">
-    Message content unavailable
-  </div>
-} @else {
-  @switch (payload()!.kind) {
+@if (payload(); as p) {
+  @switch (p.kind) {
     @case ('text') {
-      <p class="text-sm whitespace-pre-wrap leading-relaxed">
-        {{ $any(payload()).text }}
-      </p>
+      <div
+        class="whitespace-pre-wrap break-words text-sm leading-relaxed"
+        (click)="onLinkClick($event)"
+      >
+        {{ p.text }}
+      </div>
     }
 
     @case ('image') {
-      <chat-image-message [content]="$any(payload())" />
-    }
-
-    @case ('rich') {
-      @switch ($any(payload()).subType) {
-        @case ('urn:message:type:contact-share') {
-          <chat-contact-share-card
-            [data]="$any(payload()).data"
-            (action)="action.emit($event)"
-          />
-        }
-      }
+      <chat-image-message [content]="p" />
     }
 
     @default {
-      <div
-        class="p-2 bg-gray-100 rounded border border-gray-200 text-xs text-gray-500 italic"
-      >
-        Unsupported message type {{ payload()!.kind }}
-      </div>
+      <div class="text-xs text-red-400 italic">[Unsupported Content]</div>
     }
   }
+} @else {
+  <div class="text-xs text-gray-400 italic">[Message Deleted or Corrupted]</div>
 }

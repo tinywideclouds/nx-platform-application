@@ -39,7 +39,14 @@ export class LocalBroadcastStrategy implements SendStrategy {
   private identityResolver = inject(IdentityResolver);
 
   async send(ctx: SendContext): Promise<OutboundResult> {
-    const { myUrn, recipientUrn, optimisticMsg, isEphemeral, myKeys } = ctx;
+    const {
+      myUrn,
+      recipientUrn,
+      optimisticMsg,
+      shouldPersist,
+      isEphemeral,
+      myKeys,
+    } = ctx;
 
     // Inject Broadcast Tag
     const tags = optimisticMsg.tags || [];
@@ -49,7 +56,7 @@ export class LocalBroadcastStrategy implements SendStrategy {
     }
 
     // === 0. Optimistic Persistence (Strategy Owned) ===
-    if (!isEphemeral) {
+    if (shouldPersist) {
       const participants =
         await this.contactsApi.getGroupParticipants(recipientUrn);
 

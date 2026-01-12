@@ -10,7 +10,9 @@ export interface SendContext {
   myUrn: URN;
   recipientUrn: URN; // The Group or User URN
   optimisticMsg: ChatMessage;
-  isEphemeral: boolean;
+  // The Separation of Concerns
+  isEphemeral: boolean; // Instruction for the Wire (Router)
+  shouldPersist: boolean; // Instruction for the Disk (Librarian)
 }
 
 export interface SendOptions {

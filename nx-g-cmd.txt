@@ -198,3 +198,6 @@ nx g @nx/workspace:move --project=messenger-state-chat-session --destination=lib
 
 
 nx g @nx/angular:library --name=platform-infrastructure-drive-integrations --directory=libs/platform/infrastructure/drive-integrations --tags="scope:platform" 
+
+
+nx g @nx/workspace:move --project=messenger-state-chat --destination=libs/messenger/state/chat-data --importPath=@nx-platform-application/messenger-state-chat-data

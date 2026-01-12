@@ -24,11 +24,19 @@ export class DirectSendStrategy implements SendStrategy {
   private identityResolver = inject(IdentityResolver);
 
   async send(ctx: SendContext): Promise<OutboundResult> {
-    const { optimisticMsg, isEphemeral, recipientUrn, myUrn, myKeys } = ctx;
+    const {
+      optimisticMsg,
+      shouldPersist,
+      isEphemeral,
+      recipientUrn,
+      myUrn,
+      myKeys,
+    } = ctx;
 
     // === 0. Optimistic Persistence (Strategy Owned) ===
-    if (!isEphemeral) {
+    if (shouldPersist) {
       // Direct Strategy: 1 Message -> 1 Record
+      this.logger.debug('local optimistic store of message');
       await this.storageService.saveMessage(optimisticMsg);
     }
 

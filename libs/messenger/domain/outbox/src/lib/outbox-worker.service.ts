@@ -29,18 +29,31 @@ export class OutboxWorkerService {
   private readonly identityResolver = inject(IdentityResolver);
 
   private isProcessing = false;
+  private pendingTrigger = false;
 
   async processQueue(senderUrn: URN, myKeys: PrivateKeys): Promise<void> {
-    if (this.isProcessing) return;
-    this.isProcessing = true;
+    if (this.isProcessing) {
+      this.pendingTrigger = true;
+      return;
+    }
 
+    this.isProcessing = true;
+    console.info('starting outbox processing');
     try {
-      const pendingTasks = await this.repo.getPendingTasks();
-      for (const task of pendingTasks) {
-        await this.processTask(task, senderUrn, myKeys);
-      }
+      do {
+        if (this.pendingTrigger) {
+          console.log('draining pending trigger');
+        }
+        this.pendingTrigger = false; // Reset flag at start of loop
+        const pendingTasks = await this.repo.getPendingTasks();
+        console.log(`found ${pendingTasks.length} pending tasks`);
+        for (const task of pendingTasks) {
+          await this.processTask(task, senderUrn, myKeys);
+        }
+      } while (this.pendingTrigger);
     } finally {
       this.isProcessing = false;
+      console.info('outbox processing complete');
     }
   }
 

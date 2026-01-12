@@ -109,7 +109,6 @@ export class ConversationActionService {
 
   /**
    * Generic sender.
-   * ✅ FIX: Filters out Signals from the UI state.
    */
   private async sendGeneric(
     recipientUrn: URN,

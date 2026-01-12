@@ -1,6 +1,5 @@
 import {
   Injectable,
-  WritableSignal,
   DestroyRef,
   effect,
   signal,
@@ -8,12 +7,11 @@ import {
   computed,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { Subject } from 'rxjs';
+import { throttleTime } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
-import {
-  ConversationSummary,
-  DevicePairingSession,
-} from '@nx-platform-application/messenger-types';
+import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 import { Logger } from '@nx-platform-application/console-logger';
 import { filter, skip, take, combineLatest } from 'rxjs';
 
@@ -22,7 +20,7 @@ import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-ide
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
-import { ChatService } from '@nx-platform-application/messenger-state-chat';
+import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
 
 // --- DOMAIN SERVICES ---
 import {
@@ -32,16 +30,16 @@ import {
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
-import {
-  ContactShareData,
-  ImageContent,
-} from '@nx-platform-application/messenger-domain-message-content';
+import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
+import { DraftMessage } from '@nx-platform-application/messenger-types';
 import { IAuthService } from '@nx-platform-application/platform-auth-access';
 import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
+
+const TYPING_DEBOUNCE_MS = 3000; // ✅ Domain Constant
 
 @Injectable({
   providedIn: 'root',
@@ -57,7 +55,7 @@ export class AppState {
   private readonly moderation = inject(ChatModerationFacade);
   private readonly media = inject(ChatMediaFacade);
   private readonly syncService = inject(CloudSyncService);
-  private readonly chatService = inject(ChatService);
+  private readonly chatService = inject(ChatDataService);
 
   // General servfices
   private readonly authService = inject(IAuthService);
@@ -83,6 +81,14 @@ export class AppState {
   public readonly myKeys = this.identity.myKeys;
 
   private readonly myKeys$ = toObservable(this.myKeys);
+
+  private readonly _typingSubject = new Subject<void>();
+  public readonly typingTrigger$ = this._typingSubject
+    .asObservable()
+    .pipe(throttleTime(TYPING_DEBOUNCE_MS))
+    .subscribe(() => {
+      this.performTypingNotification();
+    });
 
   public readonly currentUserUrn = computed(
     () => this.authService.currentUser()?.id || null,
@@ -174,11 +180,6 @@ export class AppState {
   }
 
   private initOrchestration() {
-    // ✅ 1. SUBSCRIBE to the THROTTLED stream from Domain
-    this.conversationService.typingTrigger$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.dispatchTypingSignal()); // Call the worker
-
     this.conversationService.readReceiptTrigger$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((ids) => this.markAsRead(ids));
@@ -245,67 +246,52 @@ export class AppState {
     }
   }
 
-  public async sendMessage(recipientUrn: URN, text: string): Promise<void> {
+  /**
+   * Handles the complex logic of deciding HOW to send a draft.
+   * Splits text, images, or handles mixed content.
+   */
+  public async sendDraft(draft: DraftMessage): Promise<void> {
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
+
     if (!keys || !sender) return;
 
-    await this.conversationActions.sendMessage(
-      recipientUrn,
-      text,
-      keys,
-      sender,
-    );
-    await this.chatService.refreshActiveConversations();
-    void this.outboxWorker.processQueue(sender, keys);
-  }
+    const recipient = this.selectedConversation();
 
-  public async sendImage(
-    recipientUrn: URN,
-    file: File,
-    previewPayload: ImageContent,
-  ): Promise<void> {
-    const keys = this.identity.myKeys();
-    const sender = this.currentUserUrn();
-    if (!keys || !sender) return;
+    if (!recipient) {
+      this.logger.warn('Attempted to send draft with no selected conversation');
+      return;
+    }
 
-    // 1. Send Optimistic Message (High-Res Thumbnail in payload)
-    const messageId = await this.conversationActions.sendImage(
-      recipientUrn,
-      previewPayload,
-      keys,
-      sender,
-    );
+    // 1. Handle File(s)
+    // Future-proof: This is where we will eventually loop through draft.attachments
+    if (draft.attachments.length > 0) {
+      const firstAttachment = draft.attachments[0];
 
-    await this.chatService.refreshActiveConversations();
-    void this.outboxWorker.processQueue(sender, keys);
+      // We delegate to the specific existing logic for images
+      await this.media.sendImage(
+        recipient,
+        firstAttachment.file,
+        draft.text,
+        keys,
+        sender,
+      );
+      return;
+    }
 
-    // 2. Background Upload (Conditional)
-    if (this.syncService.isConnected()) {
-      void this.media
-        .processBackgroundUpload(recipientUrn, messageId, file, keys, sender)
-        .then(() => {
-          this.logger.info(
-            `[ChatService] Reloading message ${messageId} after upload`,
-          );
-          return this.conversationService.reloadMessages([messageId]);
-        })
-        .catch((err) =>
-          this.logger.error(
-            `[ChatService] Background upload error for ${messageId}`,
-            err,
-          ),
-        );
-    } else {
-      console.warn('not uploading - no configured cloud storage');
-      // ✅ No Cloud: We stop here.
-      // The message exists in the DB with the "preview" payload.
-      // The Recipient gets the "preview".
-      // We log it so developers know why no URL was generated.
-      this.logger.info(
-        `[ChatService] Cloud disconnected. Skipping asset upload for ${messageId}. Sent as inline only.`,
+    // 2. Handle Text Only
+    // Only send if there is actual text and no files
+    if (draft.text.trim().length > 0) {
+      await this.conversationActions.sendMessage(
+        recipient,
+        draft.text,
+        keys,
+        sender,
       );
     }
+
+    await this.chatService.refreshActiveConversations();
+    void this.outboxWorker.processQueue(sender, keys);
   }
 
   public async markAsRead(messageIds: string[]): Promise<void> {
@@ -329,28 +315,18 @@ export class AppState {
     }
   }
 
-  /**
-   * ✅ PUBLIC: Called by UI on KeyPress.
-   * Delegates to Domain Layer to apply Debounce/Throttle logic.
-   */
   public notifyTyping(): void {
-    // We do NOT send here. We just poke the Domain Service.
-    // The Domain Service will emit 'typingTrigger$' when it's time to send.
-    this.conversationService.notifyTyping();
+    this._typingSubject.next();
   }
 
-  /**
-   * ✅ PRIVATE: The actual Worker.
-   * Called only when the Domain throttled stream emits.
-   */
-  private dispatchTypingSignal(): void {
+  public performTypingNotification(): void {
+    console.log('debounce?');
     const recipient = this.selectedConversation();
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
 
     if (recipient && keys && sender) {
       this.conversationActions.sendTypingIndicator(recipient, keys, sender);
-      void this.outboxWorker.processQueue(sender, keys);
     }
   }
 

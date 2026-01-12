@@ -1,16 +1,15 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/console-logger';
 import {
-  Observable,
-  Subject,
   BehaviorSubject,
-  EMPTY,
   catchError,
-  tap,
-  retry,
-  timer,
-  Subscription,
   defer,
+  EMPTY,
+  retry,
+  Subject,
+  Subscription,
+  tap,
+  timer,
 } from 'rxjs';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WSS_URL_TOKEN } from './live-data.config';
@@ -26,10 +25,14 @@ export class ChatLiveDataService implements OnDestroy {
   private readonly baseApiUrl =
     inject(WSS_URL_TOKEN, { optional: true }) ?? 'api/connect';
 
-  private socket$?: WebSocketSubject<unknown>;
+  // FIX 1: Strictly type the subject as 'void' to match the deserializer
+  private socket$?: WebSocketSubject<void>;
+
   private subscription?: Subscription;
   private resumeSub: Subscription;
-  private lastToken?: string;
+
+  // Refactor: Store the provider function
+  private tokenProvider?: () => string;
 
   private readonly statusSubject = new BehaviorSubject<ConnectionStatus>(
     'disconnected',
@@ -48,18 +51,17 @@ export class ChatLiveDataService implements OnDestroy {
   }
 
   private handleAppResume(): void {
-    // Only force-cycle if we should be connected
-    if (this.statusSubject.value === 'connected' && this.lastToken) {
+    if (this.statusSubject.value === 'connected' && this.tokenProvider) {
       this.logger.info(
         '[ChatLive] App resumed. Force-cycling connection to ensure health...',
       );
       this.disconnect();
-      this.connect(this.lastToken);
+      this.connect(this.tokenProvider);
     }
   }
 
-  public connect(jwtToken: string): void {
-    this.lastToken = jwtToken;
+  public connect(tokenProvider: () => string): void {
+    this.tokenProvider = tokenProvider;
 
     if (this.subscription) {
       return;
@@ -72,14 +74,22 @@ export class ChatLiveDataService implements OnDestroy {
         `WSS: Creating WebSocket connection to: ${this.baseApiUrl}`,
       );
 
-      // 1. Create the subject but don't assign to this.socket$ yet
-      // We need a reference to 'this' specific instance for the observers below
-      const localSocket = webSocket({
+      const currentToken = this.tokenProvider ? this.tokenProvider() : '';
+
+      // FIX 2: Explicitly genericize the factory to <void>
+      const localSocket = webSocket<void>({
         url: this.baseApiUrl,
-        protocol: [jwtToken],
+        protocol: [currentToken],
+
+        // FIX 3: Deserializer guarantees void return, matching the type
+        deserializer: ({ data }) => {
+          return;
+        },
+
+        serializer: (value) => JSON.stringify(value),
+
         openObserver: {
           next: () => {
-            // Guard: Only update if THIS is the active socket
             if (this.socket$ === localSocket) {
               this.logger.debug('WSS: Connection OPENED.');
               this.statusSubject.next('connected');
@@ -88,19 +98,12 @@ export class ChatLiveDataService implements OnDestroy {
         },
         closeObserver: {
           next: (closeEvent) => {
-            // Guard: Ignore close events from "Zombie" sockets (replaced instances)
-            if (this.socket$ !== localSocket) {
-              this.logger.debug(
-                'WSS: Ignoring close event from replaced socket instance.',
-              );
-              return;
-            }
+            if (this.socket$ !== localSocket) return;
 
             this.logger.debug(
               `WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`,
             );
 
-            // Only update status if we aren't already handling a retry loop
             if (
               this.statusSubject.value !== 'reconnection' &&
               this.statusSubject.value !== 'disconnected'
@@ -111,7 +114,6 @@ export class ChatLiveDataService implements OnDestroy {
         },
       });
 
-      // 2. Now assign it as the active socket
       this.socket$ = localSocket;
       return localSocket;
     }).pipe(
@@ -167,9 +169,6 @@ export class ChatLiveDataService implements OnDestroy {
 
     if (this.socket$) {
       this.socket$.complete();
-      // We do NOT set socket$ to undefined here immediately if we want
-      // the identity check to potentially work, but usually setting it to undefined
-      // ensures the check (this.socket$ === localSocket) fails, which is what we want.
       this.socket$ = undefined;
     }
 

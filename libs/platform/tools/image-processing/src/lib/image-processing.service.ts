@@ -1,133 +1,119 @@
 import { Injectable } from '@angular/core';
 
-export interface ProcessedImage {
-  /** The untouched original file (for HD download) */
-  original: File;
+export interface ImageOptions {
+  /** Target width in pixels. If omitted, uses source width (or scales relative to height). */
+  width?: number;
 
-  /** Optimized version (~800px) for cloud storage & inline display */
-  preview: Blob;
+  /** Target height in pixels. If omitted, uses source height (or scales relative to width). */
+  height?: number;
 
-  /** Tiny Base64 string (~32px) for instant message payload */
-  thumbnailBase64: string;
+  /** * If true (default), preserves the aspect ratio of the original image.
+   * If both width and height are provided, the image will be scaled to fit WITHIN the dimensions.
+   * If false, the image will be stretched to exact width/height.
+   */
+  maintainAspectRatio?: boolean;
 
-  metadata: {
-    width: number;
-    height: number;
-    previewSize: number;
-    mimeType: string;
-  };
+  /** Output MIME type. Default: 'image/jpeg' */
+  format?: 'image/jpeg' | 'image/png' | 'image/webp';
+
+  /** Quality between 0 and 1. Default: 0.8 */
+  quality?: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class ImageProcessingService {
-  private readonly PREVIEW_WIDTH = 800;
-  private readonly THUMBNAIL_WIDTH = 32;
-  private readonly JPEG_QUALITY = 0.8;
-
   /**
-   * Main entry point: Turns a raw file into a chat-ready asset bundle.
+   * Pure transformation: Resizes an image source to a Blob.
+   * Does not handle Base64 conversion (use toBase64 for that).
    */
-  async process(file: File): Promise<ProcessedImage> {
-    // 1. Load Image (Modern Async API)
-    const bitmap = await createImageBitmap(file);
+  async resize(source: Blob | File, options: ImageOptions = {}): Promise<Blob> {
+    // 1. Decode (Async & Efficient)
+    const bitmap = await createImageBitmap(source);
 
-    // 2. Generate Artifacts in Parallel
-    const [previewBlob, thumbBase64] = await Promise.all([
-      this.resizeToBlob(bitmap, this.PREVIEW_WIDTH),
-      this.resizeToBase64(bitmap, this.THUMBNAIL_WIDTH),
-    ]);
+    // 2. Calculate Geometry
+    const { width, height } = this.calculateDimensions(
+      bitmap.width,
+      bitmap.height,
+      options,
+    );
 
-    // 3. Cleanup memory
+    // 3. Render
+    const { canvas, ctx } = this.createCanvas(width, height);
+    ctx.drawImage(bitmap, 0, 0, width, height);
+
+    // Close bitmap to free GPU memory immediately
     bitmap.close();
 
-    return {
-      original: file,
-      preview: previewBlob,
-      thumbnailBase64: thumbBase64,
-      metadata: {
-        width: bitmap.width,
-        height: bitmap.height,
-        previewSize: previewBlob.size,
-        mimeType: file.type,
-      },
-    };
+    // 4. Encode
+    const format = options.format ?? 'image/jpeg';
+    const quality = options.quality ?? 0.8;
+
+    return this.exportBlob(canvas, format, quality);
   }
 
   /**
-   * Resizes image to specific width and returns a Blob (for upload).
+   * Pure IO: Converts a Blob/File to a Base64 Data URL.
+   * Useful for inline JSON payloads or CSS backgrounds.
    */
-  private async resizeToBlob(
-    source: ImageBitmap,
-    targetWidth: number,
-  ): Promise<Blob> {
-    const { canvas, ctx, width, height } = this.setupCanvas(
-      source,
-      targetWidth,
-    );
-
-    ctx.drawImage(source, 0, 0, width, height);
-
-    // Modern browsers support 'convertToBlob' on OffscreenCanvas
-    // Fallback to HTMLCanvasElement.toBlob if needed (though unlikely in modern envs)
-    if (canvas instanceof OffscreenCanvas) {
-      return canvas.convertToBlob({
-        type: 'image/jpeg',
-        quality: this.JPEG_QUALITY,
-      });
-    } else {
-      return new Promise<Blob>((resolve, reject) => {
-        (canvas as HTMLCanvasElement).toBlob(
-          (blob) =>
-            blob ? resolve(blob) : reject(new Error('Canvas blob failed')),
-          'image/jpeg',
-          this.JPEG_QUALITY,
-        );
-      });
-    }
+  toBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
-  /**
-   * Resizes image to specific width and returns Base64 (for inline JSON payload).
-   */
-  private async resizeToBase64(
-    source: ImageBitmap,
-    targetWidth: number,
-  ): Promise<string> {
-    const { canvas, ctx, width, height } = this.setupCanvas(
-      source,
-      targetWidth,
-    );
+  // =================================================================
+  // INTERNAL HELPERS
+  // =================================================================
 
-    ctx.drawImage(source, 0, 0, width, height);
+  private calculateDimensions(
+    srcW: number,
+    srcH: number,
+    opts: ImageOptions,
+  ): { width: number; height: number } {
+    const maintainRatio = opts.maintainAspectRatio ?? true;
+    let w = opts.width;
+    let h = opts.height;
 
-    // For Base64, standard canvas.toDataURL is the synchronous way,
-    // but OffscreenCanvas doesn't have it. We use FileReader on the blob.
-    let blob: Blob;
+    // Case 1: No resize needed (or invalid inputs)
+    if (!w && !h) return { width: srcW, height: srcH };
 
-    if (canvas instanceof OffscreenCanvas) {
-      blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.5 }); // Low quality for thumb
-    } else {
-      blob = await new Promise((resolve) =>
-        (canvas as HTMLCanvasElement).toBlob(
-          (b) => resolve(b!),
-          'image/jpeg',
-          0.5,
-        ),
-      );
+    if (!maintainRatio) {
+      // Stretch to exact dimensions (defaulting to source if one missing)
+      return { width: w ?? srcW, height: h ?? srcH };
     }
 
-    return this.blobToBase64(blob);
+    // Case 2: Aspect Ratio Preserved
+    const ratio = srcW / srcH;
+
+    if (w && !h) {
+      // Width driven
+      return { width: w, height: Math.round(w / ratio) };
+    }
+
+    if (!w && h) {
+      // Height driven
+      return { width: Math.round(h * ratio), height: h };
+    }
+
+    // Both provided + Maintain Ratio = "Contain" (Fit within box)
+    if (w && h) {
+      const scale = Math.min(w / srcW, h / srcH);
+      return {
+        width: Math.round(srcW * scale),
+        height: Math.round(srcH * scale),
+      };
+    }
+
+    return { width: srcW, height: srcH };
   }
 
-  // --- Helpers ---
-
-  private setupCanvas(source: ImageBitmap, targetWidth: number) {
-    const scale = Math.min(1, targetWidth / source.width);
-    const width = Math.floor(source.width * scale);
-    const height = Math.floor(source.height * scale);
-
-    // Use OffscreenCanvas if available (Web Worker safe)
+  private createCanvas(width: number, height: number) {
     let canvas: OffscreenCanvas | HTMLCanvasElement;
+
+    // Prefer OffscreenCanvas (Worker safe, Main thread friendly)
     if (typeof OffscreenCanvas !== 'undefined') {
       canvas = new OffscreenCanvas(width, height);
     } else {
@@ -139,19 +125,30 @@ export class ImageProcessingService {
     const ctx = canvas.getContext('2d') as
       | CanvasRenderingContext2D
       | OffscreenCanvasRenderingContext2D;
-    // Better smoothing for thumbnails
+
+    // High quality scaling
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    return { canvas, ctx, width, height };
+    return { canvas, ctx };
   }
 
-  private blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+  private exportBlob(
+    canvas: OffscreenCanvas | HTMLCanvasElement,
+    type: string,
+    quality: number,
+  ): Promise<Blob> {
+    if (canvas instanceof OffscreenCanvas) {
+      return canvas.convertToBlob({ type, quality });
+    } else {
+      return new Promise((resolve, reject) => {
+        (canvas as HTMLCanvasElement).toBlob(
+          (blob) =>
+            blob ? resolve(blob) : reject(new Error('Canvas export failed')),
+          type,
+          quality,
+        );
+      });
+    }
   }
 }

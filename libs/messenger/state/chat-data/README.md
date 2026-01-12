@@ -1,12 +1,10 @@
-# 📉 @nx-platform-application/messenger-state-chat
+# 📉 @nx-platform-application/messenger-state-chat-data
 
-This library contains the **Data Sync Engine** for the active messaging session: the `ChatService`.
-
-> **⚠️ Naming Note:** This is **NOT** the high-level application orchestrator (see `messenger-state-app`). This service is strictly responsible for keeping the local data consistent with the server.
+This library contains the **Data Sync Engine** for the active messaging session: the `ChatDataService`.
 
 ## 🏛️ Architecture: The Data Pump
 
-The `ChatService` acts as the bridge between the **Infrastructure Layer** (WebSockets/Live Data) and the **Domain Layer** (Conversation/Ingestion logic).
+The `ChatDataService` acts as the bridge between the **Infrastructure Layer** (WebSockets/Live Data) and the **Domain Layer** (Conversation/Ingestion logic).
 
 It implements the **"Sync Loop"** pattern:
 

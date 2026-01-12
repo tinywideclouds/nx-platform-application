@@ -1,7 +1,7 @@
 {
-  "name": "messenger-state-chat",
+  "name": "messenger-state-chat-data",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/state/chat/src",
+  "sourceRoot": "libs/messenger/state/chat-data/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:messenger"],

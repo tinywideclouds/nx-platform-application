@@ -2,10 +2,10 @@ import { Injectable } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import { ParsedMessage } from '../models/content-types';
 import {
-  MESSAGE_TYPE_GROUP_INVITE,
-  MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
   GroupInvitePayload,
   GroupJoinData,
+  MessageGroupInvite,
+  MessageGroupInviteResponse,
 } from '../models/group-protocol-types';
 import {
   ContentParserStrategy,
@@ -17,10 +17,9 @@ export class GroupParserStrategy implements ContentParserStrategy {
   private decoder = new TextDecoder();
 
   supports(typeId: URN): boolean {
-    const s = typeId.toString();
     return (
-      s === MESSAGE_TYPE_GROUP_INVITE ||
-      s === MESSAGE_TYPE_GROUP_INVITE_RESPONSE
+      typeId.equals(MessageGroupInvite) ||
+      typeId.equals(MessageGroupInviteResponse)
     );
   }
 
@@ -29,10 +28,9 @@ export class GroupParserStrategy implements ContentParserStrategy {
     content: Uint8Array,
     context: ParsingContext,
   ): ParsedMessage {
-    const typeStr = typeId.toString();
     const json = this.decoder.decode(content);
 
-    if (typeStr === MESSAGE_TYPE_GROUP_INVITE) {
+    if (typeId.equals(MessageGroupInvite)) {
       const data = JSON.parse(json) as GroupInvitePayload;
       return {
         kind: 'content',
@@ -42,7 +40,7 @@ export class GroupParserStrategy implements ContentParserStrategy {
       };
     }
 
-    if (typeStr === MESSAGE_TYPE_GROUP_INVITE_RESPONSE) {
+    if (typeId.equals(MessageGroupInviteResponse)) {
       const data = JSON.parse(json) as GroupJoinData;
       return {
         kind: 'content',
@@ -52,6 +50,6 @@ export class GroupParserStrategy implements ContentParserStrategy {
       };
     }
 
-    throw new Error(`GroupStrategy cannot parse ${typeStr}`);
+    throw new Error(`GroupStrategy cannot parse ${typeId.toString()}`);
   }
 }

@@ -8,12 +8,12 @@ describe('ImageProcessingService', () => {
   beforeEach(() => {
     // 1. Mock createImageBitmap
     global.createImageBitmap = vi.fn().mockResolvedValue({
-      width: 1920,
-      height: 1080,
+      width: 1000,
+      height: 500, // 2:1 Ratio
       close: vi.fn(),
     });
 
-    // 2. Mock OffscreenCanvas as a CLASS so 'instanceof' checks pass
+    // 2. Mock OffscreenCanvas
     global.OffscreenCanvas = class MockOffscreenCanvas {
       width: number;
       height: number;
@@ -33,7 +33,7 @@ describe('ImageProcessingService', () => {
       }
     } as any;
 
-    // 3. Polyfill HTMLCanvasElement.toBlob (Safety net for JSDOM)
+    // 3. Polyfill HTMLCanvasElement.toBlob
     if (!HTMLCanvasElement.prototype.toBlob) {
       Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
         value: function (callback: (blob: Blob | null) => void) {
@@ -43,12 +43,16 @@ describe('ImageProcessingService', () => {
       });
     }
 
-    // 4. Mock FileReader (Robust Version)
+    // 4. Mock FileReader
     global.FileReader = class {
       onloadend: ((ev: ProgressEvent<FileReader>) => any) | null = null;
-      result = 'data:image/jpeg;base64,MOCK_DATA';
+      onerror: ((ev: ProgressEvent<FileReader>) => any) | null = null;
+      result: string | ArrayBuffer | null = null; // ✅ Property must exist
 
       readAsDataURL(blob: Blob) {
+        // ✅ Set the result on the instance before firing the callback
+        this.result = 'data:image/jpeg;base64,MOCK';
+
         if (this.onloadend) {
           this.onloadend({
             target: { result: this.result },
@@ -65,22 +69,59 @@ describe('ImageProcessingService', () => {
     vi.restoreAllMocks();
   });
 
-  it('should process a file into 3 artifacts', async () => {
-    const mockFile = new File([''], 'photo.jpg', { type: 'image/jpeg' });
+  describe('resize()', () => {
+    it('should resize width-driven (maintain ratio)', async () => {
+      const file = new File([''], 'test.jpg');
 
-    const result = await service.process(mockFile);
+      // Spy on canvas creation to check dims
+      const spy = vi.spyOn(service as any, 'createCanvas');
 
-    // 1. Original Preserved
-    expect(result.original).toBe(mockFile);
+      await service.resize(file, { width: 500 }); // Half width
 
-    // 2. Preview Generated
-    expect(result.preview).toBeInstanceOf(Blob);
+      // Should auto-calc height to 250 (maintain 2:1)
+      expect(spy).toHaveBeenCalledWith(500, 250);
+    });
 
-    // 3. Thumbnail Generated
-    expect(result.thumbnailBase64).toContain('data:image/jpeg;base64');
+    it('should resize height-driven (maintain ratio)', async () => {
+      const file = new File([''], 'test.jpg');
+      const spy = vi.spyOn(service as any, 'createCanvas');
 
-    // 4. Metadata Calculated
-    expect(result.metadata.width).toBe(1920);
-    expect(result.metadata.height).toBe(1080);
+      await service.resize(file, { height: 100 });
+
+      // Should auto-calc width to 200
+      expect(spy).toHaveBeenCalledWith(200, 100);
+    });
+
+    it('should fit within box when both dims provided (contain)', async () => {
+      const file = new File([''], 'test.jpg');
+      const spy = vi.spyOn(service as any, 'createCanvas');
+
+      // Source is 1000x500. Box is 100x100.
+      // Must scale down to fit. Width becomes 100, Height becomes 50.
+      await service.resize(file, { width: 100, height: 100 });
+
+      expect(spy).toHaveBeenCalledWith(100, 50);
+    });
+
+    it('should stretch if maintainAspectRatio is false', async () => {
+      const file = new File([''], 'test.jpg');
+      const spy = vi.spyOn(service as any, 'createCanvas');
+
+      await service.resize(file, {
+        width: 100,
+        height: 100,
+        maintainAspectRatio: false,
+      });
+
+      expect(spy).toHaveBeenCalledWith(100, 100);
+    });
+  });
+
+  describe('toBase64()', () => {
+    it('should convert blob to string', async () => {
+      const blob = new Blob(['data']);
+      const result = await service.toBase64(blob);
+      expect(result).toBe('data:image/jpeg;base64,MOCK');
+    });
   });
 });

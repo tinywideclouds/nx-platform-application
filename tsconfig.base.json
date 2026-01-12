@@ -122,8 +122,8 @@
       "@nx-platform-application/messenger-state-app": [
         "libs/messenger/state/app/src/index.ts"
       ],
-      "@nx-platform-application/messenger-state-chat": [
-        "libs/messenger/state/chat/src/index.ts"
+      "@nx-platform-application/messenger-state-chat-data": [
+        "libs/messenger/state/chat-data/src/index.ts"
       ],
       "@nx-platform-application/messenger-state-cloud-sync": [
         "libs/messenger/state/cloud-sync/src/index.ts"

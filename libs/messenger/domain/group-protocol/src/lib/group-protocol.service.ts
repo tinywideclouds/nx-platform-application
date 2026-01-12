@@ -16,11 +16,11 @@ import {
 
 // Content Types
 import {
-  MESSAGE_TYPE_GROUP_INVITE,
-  MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
   GroupInvitationData,
   GroupJoinData,
   GroupParticipantSnapshot,
+  MessageGroupInvite,
+  MessageGroupInviteResponse,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 
@@ -110,7 +110,7 @@ export class GroupProtocolService {
       myKeys,
       myUrn,
       networkGroupUrn,
-      URN.parse(MESSAGE_TYPE_GROUP_INVITE),
+      MessageGroupInvite,
       bytes,
     );
 
@@ -170,7 +170,7 @@ export class GroupProtocolService {
       myKeys,
       myUrn,
       groupUrn,
-      URN.parse(MESSAGE_TYPE_GROUP_INVITE_RESPONSE),
+      MessageGroupInviteResponse,
       bytes,
     );
   }

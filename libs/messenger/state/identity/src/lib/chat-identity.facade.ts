@@ -162,8 +162,9 @@ export class ChatIdentityFacade {
       );
     }
 
-    const token = this.authService.getJwtToken();
-    if (token) this.liveService.connect(token);
+    if (this.authService.getJwtToken()) {
+      this.liveService.connect(() => this.authService.getJwtToken() ?? '');
+    }
 
     const session = await this.pairingService.startReceiverSession();
 
@@ -204,8 +205,9 @@ export class ChatIdentityFacade {
       throw new Error('Invalid State for redeeming session');
     }
 
-    const token = this.authService.getJwtToken();
-    if (token) this.liveService.connect(token);
+    if (this.authService.getJwtToken()) {
+      this.liveService.connect(() => this.authService.getJwtToken() ?? '');
+    }
 
     const keys = await this.pairingService.redeemSenderSession(qrCode, user.id);
 

@@ -36,10 +36,17 @@ export class NetworkGroupStrategy implements SendStrategy {
   private identityResolver = inject(IdentityResolver);
 
   async send(ctx: SendContext): Promise<OutboundResult> {
-    const { recipientUrn, optimisticMsg, isEphemeral, myUrn, myKeys } = ctx;
+    const {
+      recipientUrn,
+      optimisticMsg,
+      shouldPersist,
+      isEphemeral,
+      myUrn,
+      myKeys,
+    } = ctx;
 
     // === 0. Optimistic Persistence (Strategy Owned) ===
-    if (!isEphemeral) {
+    if (shouldPersist) {
       const participants =
         await this.contactsApi.getGroupParticipants(recipientUrn);
 
