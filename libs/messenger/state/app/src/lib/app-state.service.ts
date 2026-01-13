@@ -12,7 +12,7 @@ import { throttleTime } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { filter, skip, take, combineLatest } from 'rxjs';
 
 // --- FACADES & STATE ---
@@ -32,7 +32,7 @@ import { GroupProtocolService } from '@nx-platform-application/messenger-domain-
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
 import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
 import { DraftMessage } from '@nx-platform-application/messenger-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';

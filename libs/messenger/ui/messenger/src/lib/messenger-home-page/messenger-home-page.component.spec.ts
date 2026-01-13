@@ -4,7 +4,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { vi } from 'vitest';
 import { Router } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';

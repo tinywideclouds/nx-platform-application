@@ -1,12 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { Logger } from '@nx-platform-application/console-logger';
-
-export interface IntegrationStatus {
-  google: boolean;
-  dropbox: boolean; // Future-proofing
-}
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { IntegrationStatus } from '@nx-platform-application/platform-types';
 
 @Injectable({ providedIn: 'root' })
 export class IntegrationApiService {

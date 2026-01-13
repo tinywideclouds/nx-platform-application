@@ -15,9 +15,12 @@ import {
   authInterceptor,
   IAuthService,
   AuthService,
-} from '@nx-platform-application/platform-auth-access';
+} from '@nx-platform-application/platform-infrastructure-auth-access';
 import { MockAuthService } from './auth/mocks/mock-auth.service';
-import { LOG_LEVEL, LogLevel } from '@nx-platform-application/console-logger';
+import {
+  LOG_LEVEL,
+  LogLevel,
+} from '@nx-platform-application/platform-tools-console-logger';
 
 // Conditionally provide the correct implementation for the IAuthService token
 const authProvider = environment.useMocks
@@ -26,7 +29,7 @@ const authProvider = environment.useMocks
 
 // 3. Define the factory function for the initializer
 export function initializeAuthFactory(
-  authService: IAuthService
+  authService: IAuthService,
 ): () => Promise<unknown> {
   return () => firstValueFrom(authService.sessionLoaded$);
 }

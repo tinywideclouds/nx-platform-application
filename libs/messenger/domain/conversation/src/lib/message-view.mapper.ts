@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 

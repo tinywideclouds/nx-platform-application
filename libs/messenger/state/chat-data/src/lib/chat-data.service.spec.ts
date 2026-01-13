@@ -5,8 +5,8 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { Logger } from '@nx-platform-application/console-logger';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 
 // Infrastructure
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';

@@ -4,7 +4,7 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 
 // APIs

@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { Logger } from '@nx-platform-application/console-logger';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { IdentityResolver } from '../interfaces/identity-resolver.interface';
 
 @Injectable()

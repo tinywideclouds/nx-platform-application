@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IdentitySettingsPageComponent } from './identity-settings-page.component';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';

@@ -3,8 +3,8 @@ import { Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoginSuccessComponent } from './login-success';
 import { User, URN } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
-import { MockTestingAuthService } from '@nx-platform-application/platform-auth-access/testing';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+import { MockTestingAuthService } from '@nx-platform-application/platform-infrastructure-auth-access/testing';
 
 const mockUser: User = {
   id: URN.parse('urn:contacts:user:1'),

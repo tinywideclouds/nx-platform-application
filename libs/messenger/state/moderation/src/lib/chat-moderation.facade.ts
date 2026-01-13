@@ -1,6 +1,6 @@
 import { Injectable, inject, computed, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   URN,
   ISODateTimeString,

@@ -2,7 +2,7 @@ import { InjectionToken, inject, signal, Signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom, tap, catchError, of } from 'rxjs';
 import { PlatformStorageConfig } from '../vault.tokens';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // --- SHARED TYPES ---
 export interface IGoogleTokenStrategy {

@@ -7,7 +7,7 @@ import { MockProvider } from 'ng-mocks';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { DirectSendStrategy } from './strategies/direct-send.strategy';
 import { NetworkGroupStrategy } from './strategies/group-network.strategy';
 import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';

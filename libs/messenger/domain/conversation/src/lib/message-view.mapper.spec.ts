@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MessageViewMapper } from './message-view.mapper';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { MESSAGE_TYPE_TEXT } from '@nx-platform-application/messenger-domain-message-content';

@@ -1,6 +1,6 @@
 //libs/messenger/infrastructure/chat-storage/src/lib/strategies/chat-merge.strategy.ts
 import { Injectable, inject } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 import {
   MessengerDatabase,

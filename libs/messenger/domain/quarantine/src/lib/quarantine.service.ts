@@ -5,7 +5,7 @@ import {
   ChatMessage,
 } from '@nx-platform-application/messenger-types';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 import { QuarantineStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';

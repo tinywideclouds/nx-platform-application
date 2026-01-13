@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { SwPush } from '@angular/service-worker';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { serializeWebPushSubscription } from '@nx-platform-application/platform-types';

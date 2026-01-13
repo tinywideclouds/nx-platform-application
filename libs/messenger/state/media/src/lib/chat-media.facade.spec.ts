@@ -4,7 +4,7 @@ import { AssetStorageService } from '@nx-platform-application/messenger-infrastr
 import { ConversationActionService } from '@nx-platform-application/messenger-domain-conversation';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { URN } from '@nx-platform-application/platform-types';

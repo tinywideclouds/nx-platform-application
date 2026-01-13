@@ -19,7 +19,7 @@ import { LogoutDialogComponent } from '../logout-dialog/logout-dialog.component'
 import { DeviceLinkWizardComponent } from '../device-link-wizard/device-link-wizard.component';
 
 // SERVICES
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { AppState } from '@nx-platform-application/messenger-state-app';
 
 @Component({

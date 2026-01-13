@@ -13,7 +13,7 @@ import {
   ContactsStorageService,
   Contact,
 } from '@nx-platform-application/contacts-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // ng-mocks
 import { MockComponent, MockProvider } from 'ng-mocks';

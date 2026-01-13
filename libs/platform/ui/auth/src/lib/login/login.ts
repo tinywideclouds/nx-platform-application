@@ -5,7 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 import {
   IAuthService,
   AUTH_API_URL,
-} from '@nx-platform-application/platform-auth-access';
+} from '@nx-platform-application/platform-infrastructure-auth-access';
 
 @Component({
   selector: 'aui-login',

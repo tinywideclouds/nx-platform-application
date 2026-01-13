@@ -1,12 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatIdentityFacade } from './chat-identity.facade';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { BehaviorSubject } from 'rxjs';
 import { signal } from '@angular/core';

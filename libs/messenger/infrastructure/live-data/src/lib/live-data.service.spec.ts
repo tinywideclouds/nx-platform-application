@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatLiveDataService } from './live-data.service';
 import { ConnectionStatus } from '@nx-platform-application/platform-types';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { vi } from 'vitest';
 import { WSS_URL_TOKEN } from './live-data.config';
-import { AppLifecycleService } from '@nx-platform-application/platform-lifecycle';
+import { AppLifecycleService } from '@nx-platform-application/platform-infrastructure-browser-lifecycle';
 import { Subject } from 'rxjs';
 
 const RealWebSocket = global.WebSocket;

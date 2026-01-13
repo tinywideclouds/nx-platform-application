@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { MessengerCryptoService } from './messenger-crypto.service';
 import { CryptoEngine } from './crypto';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { SecureKeyService } from '@nx-platform-application/messenger-infrastructure-key-access';
-import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
+import { WebKeyDbStore } from '@nx-platform-application/platform-infrastructure-web-key-storage';
 import {
   URN,
   ISODateTimeString,

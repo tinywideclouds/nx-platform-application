@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { HistoryReader } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';

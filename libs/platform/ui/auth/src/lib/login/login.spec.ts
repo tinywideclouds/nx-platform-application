@@ -5,7 +5,7 @@ import { User, URN } from '@nx-platform-application/platform-types';
 import {
   IAuthService,
   AUTH_API_URL,
-} from '@nx-platform-application/platform-auth-access';
+} from '@nx-platform-application/platform-infrastructure-auth-access';
 import { LoginComponent } from './login';
 
 const mockUser: User = {

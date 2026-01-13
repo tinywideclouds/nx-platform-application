@@ -21,7 +21,7 @@ import { filter, map } from 'rxjs/operators';
 import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { URN } from '@nx-platform-application/platform-types';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatParticipant } from '@nx-platform-application/messenger-types';
 
 // Components

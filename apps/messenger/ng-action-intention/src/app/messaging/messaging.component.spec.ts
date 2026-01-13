@@ -5,7 +5,7 @@ import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { User } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { MessagingComponent } from './messaging.component';
 
 const testUser: User = {
@@ -64,7 +64,7 @@ describe('MessagingComponent (Zoneless + Globals)', () => {
     await fixture.whenStable(); // Wait for effects of signal change
 
     const cardTitle: HTMLElement = fixture.debugElement.query(
-      By.css('mat-card-title')
+      By.css('mat-card-title'),
     ).nativeElement;
     expect(cardTitle.textContent).toContain('Welcome, TestUser!');
   });
@@ -75,7 +75,7 @@ describe('MessagingComponent (Zoneless + Globals)', () => {
     await fixture.whenStable();
 
     const logoutButton: HTMLButtonElement = fixture.debugElement.query(
-      By.css('button[color="warn"]')
+      By.css('button[color="warn"]'),
     ).nativeElement;
     logoutButton.click();
 

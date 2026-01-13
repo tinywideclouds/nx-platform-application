@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
-import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
+import { PlatformDexieService } from '@nx-platform-application/platform-infrastructure-indexed-db';
 import { ContactTombstone } from '@nx-platform-application/contacts-types';
 import {
   StorableContact,

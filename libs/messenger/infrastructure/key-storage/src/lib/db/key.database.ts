@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Table } from 'dexie';
-import { PlatformDexieService } from '@nx-platform-application/platform-dexie-storage';
+import { PlatformDexieService } from '@nx-platform-application/platform-infrastructure-indexed-db';
 import { PublicKeyRecord } from '../key-storage.models';
 
 /**

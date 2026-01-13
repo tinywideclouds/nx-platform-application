@@ -1,4 +1,4 @@
-import { LogLevel } from '@nx-platform-application/console-logger';
+import { LogLevel } from '@nx-platform-application/platform-tools-console-logger';
 
 // This file configures the application to run against the real identity-service
 export const environment = {

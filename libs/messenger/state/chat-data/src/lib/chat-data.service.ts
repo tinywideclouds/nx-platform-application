@@ -6,12 +6,12 @@ import {
   DestroyRef,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { switchMap, EMPTY, interval } from 'rxjs';
 import { URN } from '@nx-platform-application/platform-types';
 import { ConversationSummary } from '@nx-platform-application/messenger-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 
 // Infrastructure
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';

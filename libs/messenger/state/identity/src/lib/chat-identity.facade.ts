@@ -5,8 +5,8 @@ import {
   KeyNotFoundError,
   PublicKeys,
 } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
-import { Logger } from '@nx-platform-application/console-logger';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessengerCryptoService,
   PrivateKeys,

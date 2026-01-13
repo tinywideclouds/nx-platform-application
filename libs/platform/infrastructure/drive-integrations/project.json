@@ -4,7 +4,7 @@
   "sourceRoot": "libs/platform/infrastructure/drive-integrations/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:platform"],
+  "tags": ["scope:platform", "type:infrastructure"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

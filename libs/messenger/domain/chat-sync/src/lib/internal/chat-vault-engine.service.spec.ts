@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ChatVaultEngine } from './chat-vault-engine.service';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { signal } from '@angular/core';

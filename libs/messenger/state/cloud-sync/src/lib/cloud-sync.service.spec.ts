@@ -3,7 +3,7 @@ import { CloudSyncService } from './cloud-sync.service';
 import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { signal } from '@angular/core';

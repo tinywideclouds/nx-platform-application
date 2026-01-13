@@ -7,7 +7,7 @@ import { join } from 'path';
 // THIS IS NOW YOUR DEDICATED TEST CONFIG
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/platorm/infrastructure/storage',
+  cacheDir: '../../../node_modules/.vite/libs/platform/infrastructure/storage',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -25,11 +25,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/platorm/infrastructure/storage/index.html',
+        '../../../dist/test-reports/libs/platform/infrastructure/storage/index.html',
       ),
     },
     coverage: {
-      reportsDirectory: '../../../coverage/libs/platorm/infrastructure/storage',
+      reportsDirectory:
+        '../../../coverage/libs/platform/infrastructure/storage',
       provider: 'v8' as const,
     },
   },

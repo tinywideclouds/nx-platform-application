@@ -4,7 +4,7 @@ import { Injectable, inject } from '@angular/core';
 import {
   WebKeyStorageProvider,
   WebKeyDbStore,
-} from '@nx-platform-application/platform-web-key-storage';
+} from '@nx-platform-application/platform-infrastructure-web-key-storage';
 import {
   URN,
   PublicKeys,
@@ -17,7 +17,7 @@ import {
   serializePayloadToProtoBytes,
   deserializeProtoBytesToPayload,
 } from '@nx-platform-application/messenger-types';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 import { CryptoEngine } from './crypto';
 import { PrivateKeys } from './types';

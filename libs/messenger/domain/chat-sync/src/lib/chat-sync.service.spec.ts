@@ -3,7 +3,7 @@ import { ChatSyncService } from './chat-sync.service';
 import { ChatVaultEngine } from './internal/chat-vault-engine.service';
 import { HistoryReader } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { signal } from '@angular/core';

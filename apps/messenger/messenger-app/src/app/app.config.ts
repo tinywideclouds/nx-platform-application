@@ -20,7 +20,7 @@ import {
   IAuthService,
   AuthService,
   AUTH_API_URL,
-} from '@nx-platform-application/platform-auth-access';
+} from '@nx-platform-application/platform-infrastructure-auth-access';
 
 // --- Mock Providers ---
 import { AppState } from '@nx-platform-application/messenger-state-app';
@@ -55,7 +55,7 @@ import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-
 import {
   LOGGER_CONFIG,
   LogLevel,
-} from '@nx-platform-application/console-logger';
+} from '@nx-platform-application/platform-tools-console-logger';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 

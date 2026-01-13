@@ -20,9 +20,6 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@nx-platform-application/console-logger": [
-        "libs/platform/ng/console-logger/src/index.ts"
-      ],
       "@nx-platform-application/contacts-api": [
         "libs/contacts/api/src/index.ts"
       ],
@@ -152,32 +149,38 @@
       "@nx-platform-application/node-logger": [
         "libs/platform/node/node-logger/src/index.ts"
       ],
-      "@nx-platform-application/platform-auth-access": [
-        "libs/platform/ng/auth-access/src/index.ts"
-      ],
       "@nx-platform-application/platform-auth-access/testing": [
         "libs/platform/ng/auth-access/src/testing.ts"
-      ],
-      "@nx-platform-application/platform-dexie-storage": [
-        "libs/platform/ng/dexie-storage/src/index.ts"
       ],
       "@nx-platform-application/platform-domain-storage": [
         "libs/platform/domain/storage/src/index.ts"
       ],
+      "@nx-platform-application/platform-infrastructure-auth-access": [
+        "libs/platform/infrastructure/auth-access/src/index.ts"
+      ],
+      "@nx-platform-application/platform-infrastructure-browser-lifecycle": [
+        "libs/platform/infrastructure/browser-lifecycle/src/index.ts"
+      ],
       "@nx-platform-application/platform-infrastructure-drive-integrations": [
         "libs/platform/infrastructure/drive-integrations/src/index.ts"
+      ],
+      "@nx-platform-application/platform-infrastructure-indexed-db": [
+        "libs/platform/infrastructure/indexed-db/src/index.ts"
       ],
       "@nx-platform-application/platform-infrastructure-storage": [
         "libs/platform/infrastructure/storage/src/index.ts"
       ],
-      "@nx-platform-application/platform-lifecycle": [
-        "libs/platform/ng/lifecycle/src/index.ts"
+      "@nx-platform-application/platform-infrastructure-web-key-storage": [
+        "libs/platform/infrastructure/web-key-storage/src/index.ts"
       ],
       "@nx-platform-application/platform-protos": [
         "libs/platform/protos/src/index.ts"
       ],
       "@nx-platform-application/platform-protos/*": [
         "libs/platform/protos/dist/ts/src/types/*"
+      ],
+      "@nx-platform-application/platform-tools-console-logger": [
+        "libs/platform/tools/console-logger/src/index.ts"
       ],
       "@nx-platform-application/platform-tools-image-processing": [
         "libs/platform/tools/image-processing/src/index.ts"
@@ -193,9 +196,6 @@
       ],
       "@nx-platform-application/platform-ui-toolkit": [
         "libs/platform/ui/toolkit/src/index.ts"
-      ],
-      "@nx-platform-application/platform-web-key-storage": [
-        "libs/platform/ng/web-key-storage/src/index.ts"
       ]
     }
   },

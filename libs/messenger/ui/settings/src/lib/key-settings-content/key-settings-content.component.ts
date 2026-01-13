@@ -17,7 +17,7 @@ import { firstValueFrom } from 'rxjs';
 import { AppState } from '@nx-platform-application/messenger-state-app';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { NotificationPermissionButtonComponent } from '../notification-permission-button/notification-permission-button';
 
 @Component({

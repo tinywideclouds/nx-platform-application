@@ -8,7 +8,7 @@ import { Router } from '@angular/router';
 import { MockProvider } from 'ng-mocks';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 describe('KeySettingsContentComponent', () => {
   let component: KeySettingsContentComponent;

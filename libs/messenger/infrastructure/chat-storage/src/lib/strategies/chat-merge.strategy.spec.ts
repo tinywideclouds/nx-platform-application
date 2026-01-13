@@ -5,7 +5,7 @@ import {
   MessengerDatabase,
   ConversationIndexRecord,
 } from '@nx-platform-application/messenger-infrastructure-db-schema';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';

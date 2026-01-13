@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';

@@ -6,7 +6,7 @@ import {
   PLATFORM_ID,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   Visibility,
   VaultProvider,
@@ -43,10 +43,7 @@ export class StorageService {
    * If found, attempts to silently restore that specific session.
    */
   private async restoreSession() {
-    // SSR GUARD: Do not access localStorage on the server
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
+    if (!isPlatformBrowser(this.platformId)) return;
 
     const savedId = localStorage.getItem(STORAGE_KEY_PROVIDER);
 
@@ -54,38 +51,10 @@ export class StorageService {
       this.logger.info(
         `[StorageService] Found saved session for '${savedId}'. Restoring...`,
       );
-      const driver = this.getDriver(savedId);
-
-      if (driver) {
-        try {
-          // Attempt silent auth (persist = true)
-          const success = await driver.link(true);
-          if (success) {
-            this.activeProviderId.set(savedId);
-            this.logger.info(
-              `[StorageService] Session restored for '${savedId}'.`,
-            );
-          } else {
-            // If silent auth fails, clear the stale state
-            this.logger.warn(
-              `[StorageService] Silent restore failed for '${savedId}'. Driver returned false.`,
-            );
-            this.persistState(null);
-          }
-        } catch (e) {
-          this.logger.error(
-            `[StorageService] Error during restore for '${savedId}'`,
-            e,
-          );
-          this.persistState(null);
-        }
-      } else {
-        this.logger.warn(
-          `[StorageService] Driver '${savedId}' not found in registry. Drivers available: [${this.drivers
-            .map((d) => d.providerId)
-            .join(', ')}]`,
-        );
-        this.persistState(null);
+      // We don't use connect() here because we might want different error handling for restoration
+      const success = await this.connect(savedId);
+      if (!success) {
+        this.clearSession(); // Invalid session ID, clean it up
       }
     }
   }
@@ -98,26 +67,39 @@ export class StorageService {
     const driver = this.getDriver(providerId);
 
     if (!driver) {
-      this.logger.error(`[StorageService] Unknown provider: ${providerId}`);
+      this.logger.error(
+        `[StorageService] No driver found for ID: ${providerId}`,
+      );
       return false;
     }
 
-    // Trigger interactive auth
-    const success = await driver.link(true);
+    try {
+      // 1. Authenticate/Link
+      // We pass 'true' to persist the session within the driver (e.g. OIDC tokens)
+      const linked = await driver.link(true);
 
-    if (success) {
-      this.activeProviderId.set(providerId);
-      this.persistState(providerId);
-      this.logger.info(`[StorageService] Connected to ${driver.displayName}`);
+      if (linked) {
+        // 2. Update State
+        this.activeProviderId.set(providerId);
+        this.persistSession(providerId);
+        this.logger.info(
+          `[StorageService] Connected to ${driver.displayName} (${providerId})`,
+        );
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      this.logger.error('[StorageService] Connection failed', e);
+      return false;
     }
-
-    return success;
   }
 
   /**
    * SYSTEM ACTION: Resume
    * Silently activates a driver. Used when the application boot sequence
    * detects a valid server-side integration.
+   * [RESTORED] Required by CloudSyncService.
    */
   resume(providerId: string): boolean {
     const driver = this.getDriver(providerId);
@@ -131,33 +113,31 @@ export class StorageService {
 
     // Just select it. The driver's internal strategy handles the token.
     this.activeProviderId.set(providerId);
-    // We do NOT persist state here necessarily, as this is a server-driven resume,
-    // but persisting it keeps local state consistent for next reload.
-    this.persistState(providerId);
+    this.persistSession(providerId);
     this.logger.info(`[StorageService] Resumed connection to ${providerId}`);
     return true;
   }
 
   /**
-   * USER ACTION: Disconnect
-   * Signs out and clears local state.
+   * DISCONNECT
+   * Unlinks the active driver and clears persistence.
    */
   async disconnect(): Promise<void> {
-    const currentId = this.activeProviderId();
-    if (currentId) {
-      const driver = this.getDriver(currentId);
-      if (driver) {
+    const driver = this.getActiveDriver();
+    if (driver) {
+      try {
         await driver.unlink();
+      } catch (e) {
+        this.logger.warn('[StorageService] Unlink warning', e);
       }
     }
 
     this.activeProviderId.set(null);
-    this.persistState(null);
-    this.logger.info('[StorageService] Disconnected.');
+    this.clearSession();
+    this.logger.info('[StorageService] Disconnected');
   }
 
   /**
-   * EXPOSED FOR ENGINES
    * Returns the currently active driver instance.
    * Used by Domain Engines (ChatVault, ContactsSync) to perform direct file I/O.
    */
@@ -184,7 +164,6 @@ export class StorageService {
 
     try {
       const uniqueName = `${Date.now()}_${filename}`;
-      // Cast to any to support the extra argument if the interface isn't updated yet
       return await driver.uploadAsset(
         blob,
         uniqueName,
@@ -203,12 +182,14 @@ export class StorageService {
     return this.drivers.find((d) => d.providerId === id);
   }
 
-  private persistState(id: string | null) {
-    if (!isPlatformBrowser(this.platformId)) return;
-
-    if (id) {
+  private persistSession(id: string) {
+    if (isPlatformBrowser(this.platformId)) {
       localStorage.setItem(STORAGE_KEY_PROVIDER, id);
-    } else {
+    }
+  }
+
+  private clearSession() {
+    if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem(STORAGE_KEY_PROVIDER);
     }
   }

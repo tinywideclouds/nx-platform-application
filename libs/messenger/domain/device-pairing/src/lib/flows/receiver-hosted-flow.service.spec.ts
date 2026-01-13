@@ -3,7 +3,7 @@ import { ReceiverHostedFlowService } from './receiver-hosted-flow.service';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN, Priority } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';

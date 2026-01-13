@@ -201,3 +201,18 @@ nx g @nx/angular:library --name=platform-infrastructure-drive-integrations --dir
 
 
 nx g @nx/workspace:move --project=messenger-state-chat --destination=libs/messenger/state/chat-data --importPath=@nx-platform-application/messenger-state-chat-data
+
+nx g @nx/workspace:move --project=platform-auth-access     --destination=libs/platform/infrastructure/auth-access --importPath=@nx-platform-application/platform-infrastructure-auth-access
+
+
+nx g @nx/workspace:move --project=console-logger     --destination=libs/platform/tools/console-logger --importPath=@nx-platform-application/platform-tools-console-logger
+
+
+nx g @nx/workspace:move --project=platform-dexie-storage     --destination=libs/platform/infrastructure/indexed-db --importPath=@nx-platform-application/platform-infrastructure-indexed-db
+
+nx g @nx/workspace:move --project=platform-web-key-storage     --destination=libs/platform/infrastructure/web-key-storage --importPath=@nx-platform-application/platform-infrastructure-web-key-storage
+
+nx g @nx/workspace:move --project=platform-lifecycle  --destination=libs/platform/infrastructure/browser-lifecycle --importPath=@nx-platform-application/platform-infrastructure-browser-lifecycle
+
+
+platform-web-key-storage

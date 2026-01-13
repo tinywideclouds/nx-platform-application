@@ -14,7 +14,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 
 import { AppState } from '@nx-platform-application/messenger-state-app';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
 

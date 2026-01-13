@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { GoogleDriveDriver } from './google-drive.driver';
 import { PlatformStorageConfig } from '../vault.tokens';
 import { GOOGLE_TOKEN_STRATEGY } from './google-token.strategy';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { signal } from '@angular/core';
 
@@ -12,6 +12,8 @@ const mockLogger = {
   error: vi.fn(),
   warn: vi.fn(),
   log: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
 };
 
 const mockConfig: PlatformStorageConfig = {
@@ -33,15 +35,16 @@ function setupGoogleMocks() {
   const listSpy = vi.fn();
   const createSpy = vi.fn();
   const getSpy = vi.fn();
-  const setTokenSpy = vi.fn(); // <--- Captured Spy
+  const setTokenSpy = vi.fn();
   const permissionsCreateSpy = vi.fn();
 
+  // 1. GAPI Mock (Metadata Operations)
   const gapiMock = {
     load: vi.fn((lib, cb) => cb()),
     client: {
       init: vi.fn().mockResolvedValue(undefined),
-      getToken: vi.fn(),
-      setToken: setTokenSpy, // <--- Assigned here
+      getToken: vi.fn().mockReturnValue({ access_token: 'MOCK_TOKEN' }),
+      setToken: setTokenSpy,
       request: requestSpy,
       drive: {
         files: { list: listSpy, create: createSpy, get: getSpy },
@@ -57,6 +60,46 @@ function setupGoogleMocks() {
   vi.stubGlobal('gapi', gapiMock);
   vi.stubGlobal('google', googleMock);
 
+  // 2. FETCH Mock (Upload Operations)
+  const fetchSpy = vi.fn().mockImplementation((url, options) => {
+    // Phase 1: Initialization
+    // Accept POST (Create) OR PATCH (Update) for resumable sessions
+    const isInitMethod =
+      options?.method === 'POST' || options?.method === 'PATCH';
+
+    if (isInitMethod && url.includes('upload/drive')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          get: (key: string) =>
+            key === 'Location' ? 'https://mock-upload-session' : null,
+        },
+        json: () => Promise.resolve({}),
+      });
+    }
+
+    // Phase 2: Actual Upload (PUT)
+    if (options?.method === 'PUT' && url === 'https://mock-upload-session') {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({ id: 'uploaded_file_id' }),
+      });
+    }
+
+    // Default Fallback
+    return Promise.resolve({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    });
+  });
+
+  vi.stubGlobal('fetch', fetchSpy);
+
   return {
     requestSpy,
     listSpy,
@@ -64,6 +107,7 @@ function setupGoogleMocks() {
     getSpy,
     setTokenSpy,
     permissionsCreateSpy,
+    fetchSpy,
   };
 }
 
@@ -72,10 +116,8 @@ describe('GoogleDriveDriver', () => {
   let mocks: ReturnType<typeof setupGoogleMocks>;
 
   beforeEach(() => {
-    // 1. Setup Globals FIRST
     mocks = setupGoogleMocks();
 
-    // 2. Configure Module
     TestBed.configureTestingModule({
       providers: [
         GoogleDriveDriver,
@@ -110,72 +152,57 @@ describe('GoogleDriveDriver', () => {
     it('should set token from strategy before writing', async () => {
       mocks.listSpy.mockResolvedValue({ result: { files: [] } });
       mocks.createSpy.mockResolvedValue({ result: { id: 'folder_123' } });
-      mocks.requestSpy.mockResolvedValue({ result: { id: 'file_456' } });
 
       await service.writeJson('test/data.json', { foo: 'bar' });
 
-      // Verify delegation flow
       expect(mockStrategy.getAccessToken).toHaveBeenCalled();
-      // USE THE CAPTURED SPY, NOT THE GLOBAL
-      expect(mocks.setTokenSpy).toHaveBeenCalledWith({
-        access_token: 'MOCK_TOKEN',
-      });
-      expect(mocks.requestSpy).toHaveBeenCalled();
+
+      // Verify POST (Create)
+      expect(mocks.fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('upload/drive/v3/files'),
+        expect.objectContaining({ method: 'POST' }),
+      );
     });
 
     it('should update file if it already exists', async () => {
       mocks.listSpy.mockResolvedValueOnce({
         result: { files: [{ id: 'existing_file_id', name: 'config.json' }] },
       });
-      mocks.requestSpy.mockResolvedValue({ result: {} });
 
       await service.writeJson('config.json', { valid: true });
 
-      expect(mocks.requestSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'PATCH',
-          path: '/upload/drive/v3/files/existing_file_id',
-          params: expect.objectContaining({ uploadType: 'multipart' }),
-        }),
+      // Verify PATCH (Update)
+      expect(mocks.fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('existing_file_id'),
+        expect.objectContaining({ method: 'PATCH' }),
       );
     });
   });
 
-  describe('uploadPublicAsset()', () => {
+  describe('uploadAsset()', () => {
     it('should upload file and make it public', async () => {
-      // Mock finding the 'assets' folder
       mocks.listSpy.mockResolvedValueOnce({
         result: { files: [{ id: 'assets_folder_id', name: 'assets' }] },
       });
 
-      // Mock the upload response
-      mocks.requestSpy.mockResolvedValue({
-        result: {
-          id: 'new_asset_id',
-          webViewLink: 'https://drive.google.com/file/...',
-        },
-      });
-
-      // Mock Blob
       const mockBlob = new Blob(['test content'], { type: 'text/plain' });
 
-      const link = await service.uploadPublicAsset(mockBlob, 'test.txt');
-
-      // 1. Check Upload
-      expect(mocks.requestSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'POST',
-          path: '/upload/drive/v3/files',
-        }),
+      const result = await service.uploadAsset(
+        mockBlob,
+        'test.txt',
+        'public',
+        'text/plain',
       );
 
-      // 2. Check Permissions (The "Public" part)
+      expect(mocks.fetchSpy).toHaveBeenCalled();
+
       expect(mocks.permissionsCreateSpy).toHaveBeenCalledWith({
-        fileId: 'new_asset_id',
+        fileId: 'uploaded_file_id',
         resource: { role: 'reader', type: 'anyone' },
       });
 
-      expect(link).toBe('https://drive.google.com/file/...');
+      expect(result.resourceId).toBe('uploaded_file_id');
+      expect(result.provider).toBe('google-drive');
     });
   });
 });

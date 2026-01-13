@@ -12,7 +12,7 @@ import {
   PrivateKeys,
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 // REMOVED: MessageMetadataService import (No longer used)
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 

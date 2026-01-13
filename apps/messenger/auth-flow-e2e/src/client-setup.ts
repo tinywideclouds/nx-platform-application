@@ -15,7 +15,7 @@ import {
   IAuthService,
   provideAuth,
   AUTH_API_URL,
-} from '@nx-platform-application/platform-auth-access';
+} from '@nx-platform-application/platform-infrastructure-auth-access';
 import {
   MessengerCryptoService,
   CryptoEngine,
@@ -35,8 +35,8 @@ import {
   SecureKeyService,
   KEY_SERVICE_URL,
 } from '@nx-platform-application/messenger-infrastructure-key-access';
-import { Logger } from '@nx-platform-application/console-logger';
-import { WebKeyDbStore } from '@nx-platform-application/platform-web-key-storage';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { WebKeyDbStore } from '@nx-platform-application/platform-infrastructure-web-key-storage';
 import { TestClient } from './test-helpers';
 
 const identityUrl = 'http://localhost:3000/api/auth';

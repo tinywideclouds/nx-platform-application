@@ -11,7 +11,7 @@ import {
   ChatStorageService,
   OutboxStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';

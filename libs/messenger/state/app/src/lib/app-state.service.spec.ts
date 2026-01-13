@@ -12,8 +12,8 @@ import { ChatModerationFacade } from '@nx-platform-application/messenger-state-m
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
-import { Logger } from '@nx-platform-application/console-logger';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // --- DOMAIN ---
 import {
@@ -35,7 +35,10 @@ describe('AppState', () => {
   let service: AppState;
 
   // --- Mocks ---
-  const mockCurrentUser = { id: URN.parse('urn:contacts:user:me'), alias: 'Me' } as User;
+  const mockCurrentUser = {
+    id: URN.parse('urn:contacts:user:me'),
+    alias: 'Me',
+  } as User;
   const mockKeys = { encKey: 'priv', sigKey: 'priv' } as any;
   const mockRecipientUrn = URN.parse('urn:contacts:user:recipient');
 
@@ -48,8 +51,12 @@ describe('AppState', () => {
   };
   const mockMedia = { sendImage: vi.fn().mockResolvedValue(undefined) };
   const mockModeration = { blockedSet: signal(new Set()) };
-  const mockSync = { isConnected: signal(true), isSyncing: signal(false), resumeSession: vi.fn().mockResolvedValue(true) };
-  
+  const mockSync = {
+    isConnected: signal(true),
+    isSyncing: signal(false),
+    resumeSession: vi.fn().mockResolvedValue(true),
+  };
+
   // Chat State
   const mockChatService = {
     activeConversations: signal([]),
@@ -103,7 +110,7 @@ describe('AppState', () => {
         { provide: IAuthService, useValue: mockAuth },
         { provide: ChatLiveDataService, useValue: mockLive },
         { provide: LocalSettingsService, useValue: mockSettings },
-        
+
         // Lightweight Mocks for remaining deps
         MockProvider(Logger),
         MockProvider(GroupProtocolService),
@@ -118,11 +125,10 @@ describe('AppState', () => {
   });
 
   describe('sendDraft()', () => {
-    
     it('should abort if no keys or user are present', async () => {
       mockIdentity.myKeys.set(null);
       await service.sendDraft({ text: 'hi', attachments: [] });
-      
+
       expect(mockMedia.sendImage).not.toHaveBeenCalled();
       expect(mockActionService.sendMessage).not.toHaveBeenCalled();
     });
@@ -133,8 +139,14 @@ describe('AppState', () => {
       const draft: DraftMessage = {
         text: 'Caption Text', // This text should become the caption
         attachments: [
-          { file: mockFile, previewUrl: '', mimeType: 'image/png', name: 'test.png', size: 0 }
-        ]
+          {
+            file: mockFile,
+            previewUrl: '',
+            mimeType: 'image/png',
+            name: 'test.png',
+            size: 0,
+          },
+        ],
       };
 
       await service.sendDraft(draft);
@@ -145,7 +157,7 @@ describe('AppState', () => {
         mockFile,
         'Caption Text', // Checked: Caption passed
         mockKeys,
-        mockCurrentUser.id
+        mockCurrentUser.id,
       );
 
       // Expect Text Logic SKIPPED
@@ -156,7 +168,7 @@ describe('AppState', () => {
     it('should delegate to ActionService if NO attachment is present', async () => {
       const draft: DraftMessage = {
         text: 'Pure Text Message',
-        attachments: []
+        attachments: [],
       };
 
       await service.sendDraft(draft);
@@ -166,7 +178,7 @@ describe('AppState', () => {
         mockRecipientUrn,
         'Pure Text Message',
         mockKeys,
-        mockCurrentUser.id
+        mockCurrentUser.id,
       );
 
       // Expect Media Logic SKIPPED
@@ -176,16 +188,19 @@ describe('AppState', () => {
     // ✅ CASE 3: Side Effects
     it('should trigger UI refresh and Outbox processing after sending', async () => {
       const draft: DraftMessage = { text: 'test', attachments: [] };
-      
+
       await service.sendDraft(draft);
 
       expect(mockChatService.refreshActiveConversations).toHaveBeenCalled();
-      expect(mockOutbox.processQueue).toHaveBeenCalledWith(mockCurrentUser.id, mockKeys);
+      expect(mockOutbox.processQueue).toHaveBeenCalledWith(
+        mockCurrentUser.id,
+        mockKeys,
+      );
     });
 
     it('should do nothing if text is empty and attachments are empty', async () => {
       const draft: DraftMessage = { text: '   ', attachments: [] };
-      
+
       await service.sendDraft(draft);
 
       expect(mockMedia.sendImage).not.toHaveBeenCalled();

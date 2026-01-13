@@ -6,7 +6,7 @@ import {
   computed,
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 import {

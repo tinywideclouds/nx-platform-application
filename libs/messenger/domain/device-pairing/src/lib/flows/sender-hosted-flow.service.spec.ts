@@ -4,7 +4,7 @@ import { MessengerCryptoService } from '@nx-platform-application/messenger-infra
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';

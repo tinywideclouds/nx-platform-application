@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HotQueueMonitor } from './hot-queue-monitor.service';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { URN } from '@nx-platform-application/platform-types';

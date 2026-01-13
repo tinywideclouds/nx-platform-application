@@ -1,0 +1,49 @@
+{
+  "name": "platform-infrastructure-browser-lifecycle",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/infrastructure/browser-lifecycle/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [
+        "^build",
+        {
+          "projects": "platform-protos",
+          "target": "generate"
+        }
+      ],
+      "options": {
+        "outputPath": "dist/libs/platform/infrastructure/browser-lifecycle",
+        "configFile": "libs/platform/infrastructure/browser-lifecycle/vite.config.mts",
+        "main": "libs/platform/infrastructure/browser-lifecycle/src/index.ts",
+        "assets": ["libs/platform/infrastructure/browser-lifecycle/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "dependsOn": [
+        "^build",
+        {
+          "projects": "console-logger",
+          "target": "build"
+        }
+      ],
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/infrastructure/browser-lifecycle",
+        "htmlReportDirectory": "dist/test-reports/libs/platform/infrastructure/browser-lifecycle",
+        "configFile": "libs/platform/infrastructure/browser-lifecycle/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

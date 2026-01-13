@@ -1,0 +1,42 @@
+{
+  "name": "platform-infrastructure-auth-access",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/infrastructure/auth-access/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform", "type:infrastructure"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [
+        "^build",
+        {
+          "projects": "platform-protos",
+          "target": "generate"
+        }
+      ],
+      "options": {
+        "outputPath": "dist/libs/platform/infrastructure/auth-access",
+        "configFile": "libs/platform/infrastructure/auth-access/vite.config.mts",
+        "main": "libs/platform/infrastructure/auth-access/src/index.ts",
+        "assets": ["libs/platform/infrastructure/auth-access/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/infrastructure/auth-access",
+        "htmlReportDirectory": "dist/test-reports/platform/ng/auth-access",
+        "configFile": "libs/platform/infrastructure/auth-access/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

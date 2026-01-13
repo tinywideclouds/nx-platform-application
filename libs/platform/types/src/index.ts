@@ -9,3 +9,4 @@ export * from './lib/resource';
 export * from './lib/time';
 export * from './lib/connections';
 export * from './lib/errors';
+export * from './lib/storage';

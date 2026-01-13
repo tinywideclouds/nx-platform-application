@@ -7,7 +7,7 @@ import { IngestionService } from './ingestion.service';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
   MESSAGE_TYPE_READ_RECEIPT,

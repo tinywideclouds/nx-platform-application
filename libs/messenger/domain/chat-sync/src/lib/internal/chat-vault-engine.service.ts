@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   ChatMessage,
   MessageTombstone,

@@ -1,25 +1,35 @@
-# Platform Infrastructure Storage
+# 📦 Platform Infrastructure Storage
 
-A pluggable, cloud-agnostic storage library designed to abstract file system operations behind a unified contract. This library implements the **Strategy Pattern**, allowing applications to switch between storage providers (e.g., Google Drive, Dropbox, Local Storage) without modifying domain logic.
+**Layer:** Infrastructure
+**Scope:** Platform (Shared)
 
-## Architecture
+A pluggable, cloud-agnostic storage library designed to abstract file system operations behind a unified contract. This library implements the **Strategy Pattern**, allowing applications to switch between storage providers (e.g., Google Drive, Dropbox) without modifying domain logic.
+
+## 🏗 Architecture
 
 The core of this library is the `VaultProvider` abstract class, which defines the standard contract for all storage operations.
 
-- **Contract:** `VaultProvider` (Auth, Read, Write, List)
+- **Contract:** `VaultProvider` (Auth, Read, Write, List, Upload Asset)
 - **Injection:** `VaultDrivers` (Multi-provider token)
 - **Configuration:** `PlatformStorageConfig` (API keys)
 
-## 1. Installation & Configuration
+## 📦 Capabilities
 
-To use the storage infrastructure, you must provide the configuration and the specific drivers you wish to enable in your application's root provider set (e.g., `app.config.ts` or `AppModule`).
+| Feature         | Description                             | Google Drive Impl                   |
+| :-------------- | :-------------------------------------- | :---------------------------------- |
+| **Auth**        | OAuth2 Popup / Redirect flow            | ✅ (Client-side & Server-side Code) |
+| **Data Plane**  | Read/Write JSON objects                 | ✅ (`appDataFolder` or root)        |
+| **Asset Plane** | Resumable binary uploads (Images/Video) | ✅ (Resumable Upload API)           |
+| **Sharing**     | Generate public read-only links         | ✅ (Permissions API)                |
 
-### Providing the Google Drive Driver
+## 🔨 Installation & Configuration
+
+To use the storage infrastructure, provide the configuration and specific drivers in your application's root provider set.
 
 ```typescript
 // app.config.ts
-import { provideValues } from '@angular/core';
-import { VaultDrivers, PlatformStorageConfig, GoogleDriveDriver } from '@platform/infrastructure/storage';
+import { ApplicationConfig } from '@angular/core';
+import { VaultDrivers, PlatformStorageConfig, GoogleDriveDriver, GOOGLE_TOKEN_STRATEGY, LocalClientStrategy } from '@nx-platform-application/platform-infrastructure-storage';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -31,8 +41,12 @@ export const appConfig: ApplicationConfig = {
         googleApiKey: 'YOUR_API_KEY',
       },
     },
-
-    // 2. Register Drivers (Multi-provider)
+    // 2. Choose an Auth Strategy (e.g., Local Popup or Server-Side)
+    {
+      provide: GOOGLE_TOKEN_STRATEGY,
+      useClass: LocalClientStrategy,
+    },
+    // 3. Register Drivers (Multi-provider)
     {
       provide: VaultDrivers,
       useClass: GoogleDriveDriver,
@@ -42,64 +56,58 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
-## 2. Usage
+## 💻 Usage Example
 
-Inject the `VaultDrivers` token to access the list of available storage providers.
+### 1. Basic JSON Storage
 
 ```typescript
-import { Component, Inject } from '@angular/core';
-import { VaultDrivers, VaultProvider } from '@platform/infrastructure/storage';
-
 @Component({ ... })
 export class StorageComponent {
   constructor(@Inject(VaultDrivers) private drivers: VaultProvider[]) {}
 
-  async connectToDrive() {
-    // Select Google Drive from the list
-    const drive = this.drivers.find(d => d.providerId === 'google');
-
-    if (drive) {
-      const success = await drive.link(true); // true = persist session
-      if (success) {
-        console.log('Connected to Google Drive!');
-      }
-    }
-  }
-
   async saveData(data: any) {
     const drive = this.drivers.find(d => d.providerId === 'google');
+
     // Write a file (blindCreate = true skips existence check for speed)
-    await drive.writeJson('2024/data.json', data, { blindCreate: true });
+    await drive.writeJson('2024/settings.json', data, { blindCreate: true });
   }
 }
 
 ```
 
-## 3. Implementing New Drivers
+### 2. Uploading Public Assets
 
-To add a new storage provider (e.g., `DropboxDriver`), extend the `VaultProvider` abstract class:
+The `uploadAsset` method handles large binaries using resumable uploads (via `fetch`) and can automatically set file permissions to "Public".
 
 ```typescript
-import { Injectable } from '@angular/core';
-import { VaultProvider, WriteOptions } from './vault.provider';
+async uploadProfilePicture(file: File) {
+  const drive = this.drivers.find(d => d.providerId === 'google');
 
-@Injectable()
-export class DropboxDriver implements VaultProvider {
-  readonly providerId = 'dropbox';
-  readonly displayName = 'Dropbox';
+  // Returns { resourceId: '...', provider: 'google-drive' }
+  const result = await drive.uploadAsset(
+    file,
+    `avatars/${file.name}`,
+    'public', // Visibility: 'public' | 'private'
+    file.type
+  );
 
-  isAuthenticated(): boolean {
-    // ... implementation
-  }
-
-  async link(persist: boolean): Promise<boolean> {
-    // ... implementation
-  }
-
-  // ... implement remaining abstract methods
+  console.log('Uploaded ID:', result.resourceId);
 }
+
 ```
 
-## Running Unit Tests
+## ⚠️ Implementation Notes
 
-Run `nx test platform-infrastructure-storage` to execute the unit tests via Vitest.
+- **Google Drive Uploads:** The driver uses the native `fetch` API for binary uploads to support the "Resumable Upload" protocol, bypassing the GAPI client limitations for large files.
+- **Error Handling:** All methods return Promises. Authentication errors (e.g., 401/403) are generally thrown and should be caught by the State Layer.
+
+```
+
+### Checklist Status
+* **Code:** ✅ Verified & Refactored.
+* **Tests:** ✅ Passing (Includes `fetch` mocking).
+* **Docs:** ✅ Synchronized (Added Asset Upload & Auth Strategy details).
+
+This library is now **Baselined**. Ready to move to the next component in the stack.
+
+```

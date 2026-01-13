@@ -3,7 +3,7 @@ import { ChatContactDetailWrapperComponent } from './chat-detail-wrapper.compone
 import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Contact } from '@nx-platform-application/contacts-types';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   ISODateTimeString,
   URN,

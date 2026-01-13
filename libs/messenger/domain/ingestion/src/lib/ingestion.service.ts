@@ -16,7 +16,7 @@ import {
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { GroupNetworkStorageApi } from '@nx-platform-application/contacts-api';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
   ReadReceiptData,

@@ -1,78 +1,93 @@
-# Platform Domain Storage
+# 📦 Platform Domain Storage
 
-The **Orchestration Layer** for the application's file system interactions. This library provides a unified, reactive service (`StorageService`) that manages authentication state, driver selection, and session persistence, abstracting the complexity of specific infrastructure drivers (Google Drive, Dropbox, etc.) from the rest of the app.
+**Layer:** Domain
+**Scope:** Platform (Shared)
 
-## Architecture
+The **Storage Orchestrator** for the application. This library provides a unified, reactive service (`StorageService`) that manages authentication state, driver selection, and session persistence.
 
-- **Role:** Orchestrator / Singleton Service
-- **Dependencies:** Consumes `VaultDrivers` (Infrastructure Layer)
-- **Consumers:** Application Engines (e.g., `ChatVault`, `ContactsSync`)
+It abstracts the complexity of specific infrastructure drivers (Google Drive, Dropbox, Local) from the feature layers (Messenger, Contacts).
 
-## 1. Features
+## 🏗 Architecture
 
-- **Driver Agnostic:** The service doesn't know _which_ provider is active, only that it adheres to the `VaultProvider` contract.
-- **Reactive State:** Exposes `activeProviderId` and `isConnected` as Angular Signals.
-- **Session Restoration:** Automatically checks `localStorage` on startup to restore the user's previous cloud connection (e.g., re-linking Google Drive without a prompt).
-- **Public Assets:** Provides a unified `uploadPublicAsset` API that handles the nuances of making a file publicly readable on the active provider.
+- **Role:** Singleton Orchestrator.
+- **Dependencies:** Consumes `VaultDrivers` (from Infrastructure Layer).
+- **Consumers:** State Services (e.g., `CloudSyncService`, `ChatDataService`).
 
-## 2. Usage
+## 📦 Public API
 
-Inject `StorageService` to manage the cloud connection or perform generic file I/O.
+### `StorageService`
 
-### Connecting a Provider
+The primary entry point.
+
+| Method               | Description            | Usage Context                                                                                                                       |
+| :------------------- | :--------------------- | :---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `activeProviderId()` | \*\*Signal<string      | null>\*\*                                                                                                                           | Reactive signal of the currently active provider ID (e.g., `'google'`). |
+| `isConnected()`      | **Signal<boolean>**    | Computed signal for UI binding.                                                                                                     |
+| `connect(id)`        | `Promise<boolean>`     | **Interactive**. Triggers the driver's login flow (e.g., OIDC Popup). Used when user clicks "Link Account".                         |
+| `resume(id)`         | `boolean`              | **Silent**. Activates a driver _without_ triggering login UI. Used by `CloudSyncService` after verifying a server-side link exists. |
+| `disconnect()`       | `Promise<void>`        | Unlinks the driver and clears local persistence.                                                                                    |
+| `uploadAsset(...)`   | `Promise<AssetResult>` | **Universal Upload**. Handles MIME types, visibility, and provider-specific upload protocols (e.g., Resumable Uploads).             |
+| `getActiveDriver()`  | `VaultProvider         | null`                                                                                                                               | Returns the raw driver instance for direct file I/O (Read/Write JSON).  |
+
+## 💻 Usage Examples
+
+### 1. The "Silent Boot" (Resume)
+
+Used by the App Boot sequence to restore a connection if the backend confirms validity.
 
 ```typescript
-import { Component, inject } from '@angular/core';
-import { StorageService } from '@platform/domain/storage';
+// cloud-sync.service.ts
+if (serverStatus.google) {
+  // We trust the server, so we 'resume' the local driver immediately
+  this.storage.resume('google');
+}
+```
 
-@Component({ ... })
-export class ConnectionComponent {
-  storage = inject(StorageService);
+### 2. The "Interactive Link" (Connect)
 
-  // Signals for template binding
-  isConnected = this.storage.isConnected;
-  activeProvider = this.storage.activeProviderId;
+Used by the Settings UI when a user explicitly wants to add a provider.
 
-  async connectGoogle() {
-    await this.storage.connect('google');
-  }
-
-  async disconnect() {
-    await this.storage.disconnect();
+```typescript
+// settings.component.ts
+async linkGoogle() {
+  const success = await this.storage.connect('google');
+  if (success) {
+    this.toast.success('Google Drive Linked');
   }
 }
 
 ```
 
-### Performing File I/O
+### 3. Uploading Public Assets
 
-Domain engines should use `getActiveDriver()` to perform operations.
+Used by the Media State layer to upload images/attachments.
 
 ```typescript
-export class ContactsSyncEngine {
-  storage = inject(StorageService);
-
-  async saveBackup(data: any) {
-    const driver = this.storage.getActiveDriver();
-    if (!driver) throw new Error('No cloud storage connected');
-
-    await driver.writeJson('backups/contacts.json', data);
+// media.facade.ts
+async uploadProfile(file: File) {
+  try {
+    const result = await this.storage.uploadAsset(
+      file,
+      'avatar.png',
+      'public', // Sets ACL to public-read
+      'image/png'
+    );
+    return result.resourceId;
+  } catch (e) {
+    // Handle "No Provider Connected" or Upload failures
   }
 }
+
 ```
 
-## 3. Configuration
+## 🔧 Configuration
 
-Ensure the infrastructure drivers are provided in your root `app.config.ts`. This domain service will automatically inject the `VaultDrivers` token to find them.
+This library does not define the drivers themselves. It injects them via the `VaultDrivers` token. Ensure your application root provides the infrastructure drivers:
 
 ```typescript
 // app.config.ts
 providers: [
-  // ... infrastructure config
+  // ... infrastructure providers
   { provide: VaultDrivers, useClass: GoogleDriveDriver, multi: true },
 ];
 ```
-
-## Running Unit Tests
-
-Run `nx test platform-domain-storage` to execute the unit tests via Vitest.

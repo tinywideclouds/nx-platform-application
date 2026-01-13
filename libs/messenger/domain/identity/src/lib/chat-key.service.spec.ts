@@ -6,7 +6,7 @@ import { MockProvider } from 'ng-mocks';
 
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 describe('ChatKeyService', () => {

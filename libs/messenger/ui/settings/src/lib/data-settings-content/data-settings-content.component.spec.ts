@@ -7,7 +7,7 @@ import { MockProvider, MockComponent } from 'ng-mocks';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
 
 describe('DataSettingsContentComponent', () => {

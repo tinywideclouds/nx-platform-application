@@ -1,0 +1,31 @@
+{
+  "name": "platform-tools-console-logger",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/tools/console-logger/src",
+  "prefix": "clog",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/platform/tools/console-logger",
+        "configFile": "libs/platform/tools/console-logger/vite.config.mts",
+        "main": "libs/platform/tools/console-logger/src/index.ts",
+        "assets": ["libs/platform/tools/console-logger/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/tools/console-logger",
+        "configFile": "libs/platform/tools/console-logger/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

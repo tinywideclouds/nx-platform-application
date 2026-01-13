@@ -1,6 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // Infrastructure
 import { ContactsSyncService } from '@nx-platform-application/contacts-sync';

@@ -16,7 +16,7 @@ import { AddressBookApi } from '@nx-platform-application/contacts-api';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { MessageViewMapper } from './message-view.mapper';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
   MESSAGE_TYPE_TEXT,

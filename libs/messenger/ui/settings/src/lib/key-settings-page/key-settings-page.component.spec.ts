@@ -5,7 +5,7 @@ import { KeyCacheService } from '@nx-platform-application/messenger-infrastructu
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MockProvider, MockComponent } from 'ng-mocks';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { KeySettingsContentComponent } from '../key-settings-content/key-settings-content.component';
 
 describe('KeySettingsPageComponent', () => {

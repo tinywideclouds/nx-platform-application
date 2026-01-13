@@ -1,7 +1,7 @@
 // src/app/auth/auth.guard.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { authGuard } from './auth.guard';
 import { Component } from '@angular/core';
 // 1. Import firstValueFrom

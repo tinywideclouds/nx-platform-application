@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { QuarantineService } from './quarantine.service';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { URN } from '@nx-platform-application/platform-types';
 import { TransportMessage } from '@nx-platform-application/messenger-types';

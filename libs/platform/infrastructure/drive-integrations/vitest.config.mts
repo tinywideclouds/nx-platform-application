@@ -8,7 +8,7 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir:
-    '../../../node_modules/.vite/libs/platorm/infrastructure/drive-integrations',
+    '../../../node_modules/.vite/libs/platform/infrastructure/drive-integrations',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -26,12 +26,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../dist/test-reports/libs/platorm/infrastructure/drive-integrations/index.html',
+        '../../../dist/test-reports/libs/platform/infrastructure/drive-integrations/index.html',
       ),
     },
     coverage: {
       reportsDirectory:
-        '../../../coverage/libs/platorm/infrastructure/drive-integrations',
+        '../../../coverage/libs/platform/infrastructure/drive-integrations',
       provider: 'v8' as const,
     },
   },

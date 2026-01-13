@@ -3,7 +3,7 @@ import { Component, inject } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { User } from '@nx-platform-application/platform-types';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { MockAuthService, MOCK_USERS } from './mock-auth.service';
 
 @Component({
@@ -19,9 +19,9 @@ import { MockAuthService, MOCK_USERS } from './mock-auth.service';
         </mat-card-header>
         <mat-card-content class="user-buttons">
           @for (user of mockUsers; track user.id) {
-          <button mat-raised-button color="primary" (click)="login(user)">
-            Login as {{ user.alias }}
-          </button>
+            <button mat-raised-button color="primary" (click)="login(user)">
+              Login as {{ user.alias }}
+            </button>
           }
         </mat-card-content>
       </mat-card>

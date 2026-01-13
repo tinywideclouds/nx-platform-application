@@ -7,7 +7,7 @@ import {
   GatekeeperStorage,
 } from '@nx-platform-application/contacts-storage';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { BackupPayload } from './models/backup-payload.interface';
 
 // --- MOCKS ---

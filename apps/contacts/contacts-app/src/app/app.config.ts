@@ -14,7 +14,7 @@ import { environment } from './environments/environment';
 import {
   LOGGER_CONFIG,
   LogLevel,
-} from '@nx-platform-application/console-logger';
+} from '@nx-platform-application/platform-tools-console-logger';
 
 // --- Contacts Storage ---
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';

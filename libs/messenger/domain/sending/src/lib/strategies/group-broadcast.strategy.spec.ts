@@ -10,7 +10,7 @@ import {
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { SendContext } from '../send-strategy.interface';

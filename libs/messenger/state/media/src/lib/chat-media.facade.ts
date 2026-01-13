@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 import { AssetResult } from '@nx-platform-application/platform-infrastructure-storage';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';

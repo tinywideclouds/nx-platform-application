@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { ContactMessengerMapper } from './contact-messenger.mapper';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { IAuthService } from '@nx-platform-application/platform-auth-access';
-import { Logger } from '@nx-platform-application/console-logger';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 import { signal } from '@angular/core';
 import { vi, describe, it, expect, beforeEach } from 'vitest';

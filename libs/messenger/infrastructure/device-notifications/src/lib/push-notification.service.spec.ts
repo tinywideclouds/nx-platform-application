@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { PushNotificationService } from './push-notification.service';
 import { DeviceRegistrationService } from './device-registration.service';
 import { SwPush } from '@angular/service-worker';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { VAPID_PUBLIC_KEY } from './tokens';
 import { of } from 'rxjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';

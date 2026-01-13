@@ -7,7 +7,7 @@ import { MockComponent, MockProvider } from 'ng-mocks';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
 import { SecureLogoutDialogComponent } from '../secure-logout-dialog/secure-logout-dialog.component';
 

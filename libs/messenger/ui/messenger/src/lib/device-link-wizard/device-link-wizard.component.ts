@@ -23,7 +23,7 @@ import {
   DeviceLinkQrDisplayComponent,
   DeviceLinkScannerUiComponent,
 } from '@nx-platform-application/messenger-settings-ui';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 export type WizardStep = 'CHOICE' | 'LINKING' | 'RESET_WARNING';
 export type LinkMode = 'SHOW' | 'SCAN' | 'REVIEW';

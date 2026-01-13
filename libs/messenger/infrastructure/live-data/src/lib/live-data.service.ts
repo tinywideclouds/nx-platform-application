@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
-import { Logger } from '@nx-platform-application/console-logger';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   BehaviorSubject,
   catchError,
@@ -14,7 +14,7 @@ import {
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WSS_URL_TOKEN } from './live-data.config';
 import { ConnectionStatus } from '@nx-platform-application/platform-types';
-import { AppLifecycleService } from '@nx-platform-application/platform-lifecycle';
+import { AppLifecycleService } from '@nx-platform-application/platform-infrastructure-browser-lifecycle';
 
 @Injectable({
   providedIn: 'root',

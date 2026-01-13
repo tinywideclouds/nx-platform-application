@@ -6,7 +6,7 @@ import { User } from '@nx-platform-application/platform-types';
 import {
   IAuthService,
   AuthStatusResponse,
-} from '@nx-platform-application/platform-auth-access';
+} from '@nx-platform-application/platform-infrastructure-auth-access';
 
 export const MOCK_USERS: User[] = [
   { id: 'user-123', email: 'user@local.mock', alias: 'Regular User' },
@@ -20,7 +20,7 @@ export class MockAuthService implements IAuthService {
   public readonly currentUser: Signal<User | null> =
     this._currentUser.asReadonly();
   public readonly isAuthenticated: Signal<boolean> = computed(
-    () => !!this._currentUser()
+    () => !!this._currentUser(),
   );
 
   // REMOVED: The old authStateLoaded signal is obsolete.
