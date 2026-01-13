@@ -9,13 +9,7 @@
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
-      "dependsOn": [
-        "^build",
-        {
-          "projects": "platform-protos",
-          "target": "generate"
-        }
-      ],
+      "dependsOn": [],
       "options": {
         "outputPath": "dist/libs/platform/infrastructure/browser-lifecycle",
         "configFile": "libs/platform/infrastructure/browser-lifecycle/vite.config.mts",

@@ -8,11 +8,15 @@
     "generate": {
       "executor": "nx:run-commands",
       "options": {
-        "commands": [
-          "rimraf dist",
-          "buf generate --template buf.gen.ts.yaml"
-        ],
+        "commands": ["rimraf dist", "buf generate --template buf.gen.ts.yaml"],
         "cwd": "libs/platform/protos"
+      },
+      "lint": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "buf lint",
+          "cwd": "libs/platform/protos"
+        }
       },
       "outputs": ["{projectRoot}/dist"]
     }

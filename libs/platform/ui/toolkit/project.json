@@ -4,7 +4,7 @@
   "sourceRoot": "libs/platform/ui/toolkit/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:platform"],
+  "tags": ["scope:platform", "type:ui"],
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",

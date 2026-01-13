@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { StorageOption } from '@nx-platform-application/platform-domain-storage';
+import { StorageOption } from '@nx-platform-application/platform-types';
 
 @Component({
   selector: 'platform-storage-provider-menu',

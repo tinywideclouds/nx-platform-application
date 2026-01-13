@@ -2,19 +2,24 @@
   "name": "platform-ui-auth",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/platform/ui/auth/src",
-  "prefix": "lib",
+  "prefix": "aui",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:platform", "type:ui"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ui/auth",
+        "configFile": "libs/platform/ui/auth/vite.config.mts",
+        "main": "libs/platform/ui/auth/src/index.ts",
+        "assets": ["libs/platform/ui/auth/*.md"]
+      }
+    },
     "test": {
       "executor": "@nx/vitest:test",
-      "dependsOn": [
-        "^build",
-        {
-          "projects": "console-logger",
-          "target": "build"
-        }
-      ],
+      "dependsOn": [],
       "outputs": [
         "{options.reportsDirectory}",
         "{options.htmlReportDirectory}"

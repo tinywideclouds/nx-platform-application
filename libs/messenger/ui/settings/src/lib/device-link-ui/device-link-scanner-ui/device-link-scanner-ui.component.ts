@@ -8,7 +8,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { QrScannerComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { QrScannerComponent } from '@nx-platform-application/platform-ui-qr-codes';
 
 @Component({
   selector: 'lib-device-link-scanner-ui',

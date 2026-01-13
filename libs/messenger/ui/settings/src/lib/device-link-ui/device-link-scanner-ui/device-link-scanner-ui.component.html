@@ -3,11 +3,11 @@
     <div
       class="my-6 border-2 border-gray-200 rounded-lg overflow-hidden min-h-[300px] bg-black"
     >
-      <lib-qr-scanner
+      <platform-qr-scanner
         [active]="true"
         (scanSuccess)="scanSuccess.emit($event)"
         (scanError)="scanError.emit($event)"
-      ></lib-qr-scanner>
+      ></platform-qr-scanner>
     </div>
   } @else {
     <div

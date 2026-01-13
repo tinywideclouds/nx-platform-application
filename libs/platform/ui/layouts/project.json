@@ -1,0 +1,32 @@
+{
+  "name": "platform-ui-layouts",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ui/layouts/src",
+  "prefix": "platform",
+  "projectType": "library",
+  "tags": ["scope:platform", "type:ui"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ui/layouts",
+        "configFile": "libs/platform/ui/layouts/vite.config.mts",
+        "main": "libs/platform/ui/layouts/src/index.ts",
+        "assets": ["libs/platform/ui/layouts/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/platform/ui/layouts"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ui/layouts",
+        "configFile": "libs/platform/ui/layouts/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

@@ -18,7 +18,7 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
-import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 import { SettingsSidebarComponent } from '../settings-sidebar/settings-sidebar.component';
 
 @Component({

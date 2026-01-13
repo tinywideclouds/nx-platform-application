@@ -2,38 +2,38 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoginSuccessComponent } from './login-success';
-import { User, URN } from '@nx-platform-application/platform-types';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { MockTestingAuthService } from '@nx-platform-application/platform-infrastructure-auth-access/testing';
-
-const mockUser: User = {
-  id: URN.parse('urn:contacts:user:1'),
-  alias: 'Test User',
-  email: 'test@example.com',
-};
+import { of, throwError } from 'rxjs';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 describe('LoginSuccessComponent', () => {
   let fixture: ComponentFixture<LoginSuccessComponent>;
   let mockRouter: { navigate: ReturnType<typeof vi.fn> };
-  let mockAuthService: MockTestingAuthService;
+
+  // LOCAL MOCK: No external dependency needed
+  const mockAuthService = {
+    checkAuthStatus: vi.fn(),
+    isAuthenticated: vi.fn(),
+  };
 
   beforeEach(async () => {
     mockRouter = {
       navigate: vi.fn(),
     };
 
+    // Reset mocks before each test
+    mockAuthService.checkAuthStatus.mockReset();
+    mockAuthService.isAuthenticated.mockReset();
+
     await TestBed.configureTestingModule({
       imports: [LoginSuccessComponent],
       providers: [
         provideNoopAnimations(),
         { provide: Router, useValue: mockRouter },
-        { provide: IAuthService, useClass: MockTestingAuthService },
+        { provide: IAuthService, useValue: mockAuthService },
       ],
     }).compileComponents();
 
-    mockAuthService = TestBed.inject(
-      IAuthService,
-    ) as unknown as MockTestingAuthService;
     fixture = TestBed.createComponent(LoginSuccessComponent);
   });
 
@@ -42,21 +42,27 @@ describe('LoginSuccessComponent', () => {
   });
 
   it('should redirect to / on successful auth check', async () => {
-    mockAuthService.mockCheckAuthStatusSuccess(mockUser);
+    // 1. Mock the API call completing
+    mockAuthService.checkAuthStatus.mockReturnValue(
+      of({ authenticated: true }),
+    );
+    // 2. Mock the signal state being true (simulating the side effect of the call)
+    mockAuthService.isAuthenticated.mockReturnValue(true);
 
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    fixture.detectChanges(); // Triggers ngOnInit
+    await fixture.whenStable(); // Waits for the promise/observable
 
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/']);
   });
 
   it('should redirect to /login on failed auth check', async () => {
-    mockAuthService.mockCheckAuthStatusFailure();
+    // 1. API completes (returning null or unauthenticated DTO)
+    mockAuthService.checkAuthStatus.mockReturnValue(of(null));
+    // 2. Signal state remains false
+    mockAuthService.isAuthenticated.mockReturnValue(false);
 
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
 
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/login'], {
       queryParams: { error: 'auth_failed' },
@@ -64,11 +70,13 @@ describe('LoginSuccessComponent', () => {
   });
 
   it('should redirect to /login on network error', async () => {
-    mockAuthService.mockCheckAuthStatusError();
+    // 1. API throws error
+    mockAuthService.checkAuthStatus.mockReturnValue(
+      throwError(() => new Error('Network Error')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
 
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/login'], {
       queryParams: { error: 'auth_failed' },

@@ -1,4 +1,6 @@
-<lib-master-detail-layout [showDetail]="showDetail() || showRequestsPane()">
+<platform-master-detail-layout
+  [showDetail]="showDetail() || showRequestsPane()"
+>
   <div sidebar class="h-full flex flex-col border-r border-gray-200 bg-white">
     <mat-toolbar
       class="layout-header justify-between bg-white border-b border-gray-100 !h-14 px-2"
@@ -160,4 +162,4 @@
       }
     }
   </div>
-</lib-master-detail-layout>
+</platform-master-detail-layout>

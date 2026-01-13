@@ -191,6 +191,12 @@
       "@nx-platform-application/platform-ui-auth": [
         "libs/platform/ui/auth/src/index.ts"
       ],
+      "@nx-platform-application/platform-ui-layouts": [
+        "libs/platform/ui/layouts/src/index.ts"
+      ],
+      "@nx-platform-application/platform-ui-qr-codes": [
+        "libs/platform/ui/qr-codes/src/index.ts"
+      ],
       "@nx-platform-application/platform-ui-storage": [
         "libs/platform/ui/storage/src/index.ts"
       ],

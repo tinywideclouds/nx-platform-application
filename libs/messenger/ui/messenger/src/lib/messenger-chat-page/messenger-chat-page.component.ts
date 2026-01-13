@@ -11,9 +11,9 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 import { Temporal } from '@js-temporal/polyfill';
 
+import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 // SHARED & UI
 import {
-  MasterDetailLayoutComponent,
   FeaturePlaceholderComponent,
   ListFilterComponent,
   ConfirmationDialogComponent,

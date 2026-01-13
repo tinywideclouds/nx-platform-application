@@ -1,7 +1,7 @@
 import { Component, input, ViewEncapsulation } from '@angular/core';
 
 @Component({
-  selector: 'lib-master-detail-layout',
+  selector: 'platform-master-detail-layout',
   standalone: true,
   imports: [],
   encapsulation: ViewEncapsulation.None,

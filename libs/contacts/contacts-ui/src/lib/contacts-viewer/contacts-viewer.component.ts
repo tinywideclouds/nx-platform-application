@@ -18,7 +18,7 @@ import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 
 // LAYOUT & UI
-import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 
 // FEATURE COMPONENTS
 import { ContactsSidebarComponent } from '../contacts-sidebar/contacts-sidebar.component';

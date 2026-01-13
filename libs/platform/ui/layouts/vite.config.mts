@@ -6,18 +6,19 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/platform/ui/storage',
+  cacheDir: '../../../../node_modules/.vite/libs/platform/ui/layouts',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   build: {
-    outDir: '../../../../dist/libs/platform/ui/storage',
+    outDir: '../../../../dist/libs/platform/ui/layouts',
     emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,
     },
+    // This tells Vite to build a library, not an app
     lib: {
       entry: 'src/index.ts',
-      name: 'platform-ui-storage',
+      name: 'platform-ui-layouts',
       fileName: 'index',
       formats: ['es' as const],
     },

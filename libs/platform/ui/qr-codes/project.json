@@ -1,0 +1,24 @@
+{
+  "name": "platform-ui-qr-codes",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ui/qr-codes/src",
+  "prefix": "platform",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ui/qr-codes",
+        "configFile": "libs/platform/ui/qr-codes/vite.config.mts",
+        "main": "libs/platform/ui/qr-codes/src/index.ts",
+        "assets": ["libs/platform/ui/qr-codes/*.md"]
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

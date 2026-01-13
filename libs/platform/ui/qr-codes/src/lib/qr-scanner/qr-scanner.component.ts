@@ -14,7 +14,7 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 @Component({
-  selector: 'lib-qr-scanner',
+  selector: 'platform-qr-scanner',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './qr-scanner.component.html',
