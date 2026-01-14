@@ -29,9 +29,15 @@
       </header>
       <div class="flex-1 overflow-y-auto">
         @if (mode === 'group') {
-          <contacts-group-page />
+          <contacts-group-page
+            (saved)="clearSelection()"
+            (cancelled)="clearSelection()"
+          />
         } @else {
-          <contacts-page />
+          <contacts-page
+            (saved)="clearSelection()"
+            (cancelled)="clearSelection()"
+          />
         }
       </div>
     } @else if (selectedUrn(); as urn) {
@@ -40,7 +46,11 @@
       </header>
       <div class="flex-1 max-w-lg overflow-y-auto">
         @if (activeTab() === 'groups') {
-          <contacts-group-page [groupId]="urn" />
+          <contacts-group-page
+            [groupId]="urn"
+            (saved)="clearSelection()"
+            (cancelled)="clearSelection()"
+          />
         } @else {
           <contacts-detail
             [contactId]="urn"
@@ -51,10 +61,12 @@
       </div>
     } @else {
       <div
-        class="h-full flex flex-col items-center justify-center text-gray-400"
+        class="flex flex-col items-center justify-center h-full text-gray-400"
       >
-        <mat-icon class="text-6xl h-16 w-16 mb-4">contacts</mat-icon>
-        <p class="text-lg">Select an item to view details</p>
+        <mat-icon class="text-6xl mb-4 text-gray-300">contacts</mat-icon>
+        <p class="text-lg" data-testid="empty-selection">
+          Select a contact to view details
+        </p>
       </div>
     }
   </div>

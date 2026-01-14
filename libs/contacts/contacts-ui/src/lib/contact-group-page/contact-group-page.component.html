@@ -1,26 +1,25 @@
 <contacts-page-toolbar #toolbar>
   @if (toolbar.mode() === 'full') {
     <div class="flex gap-2">
-      <a
-        matButton="tonal"
-        routerLink="/contacts"
-        [queryParams]="{ tab: 'contacts' }"
+      <button
+        mat-button
+        class="toolbar-tonal-button"
+        (click)="onClose()"
         data-testid="close-button"
       >
         Close
-      </a>
+      </button>
     </div>
   } @else {
     <div class="flex gap-2">
-      <a
+      <button
         mat-icon-button
-        routerLink="/contacts"
-        [queryParams]="{ tab: 'contacts' }"
+        (click)="onClose()"
         data-testid="close-button"
         aria-label="Close"
       >
         <mat-icon>close</mat-icon>
-      </a>
+      </button>
     </div>
   }
 </contacts-page-toolbar>

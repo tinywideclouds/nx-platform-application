@@ -4,7 +4,10 @@ import { Component, signal } from '@angular/core';
 import {} from '@nx-platform-application/contacts-storage';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 // --- 1. Import URN ---
-import { URN, ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { vi } from 'vitest';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 // --- 2. Import NoopAnimationsModule ---
@@ -48,9 +51,7 @@ const MOCK_GROUP: ContactGroup = {
   id: mockGroupUrn,
   name: 'Test Group',
   scope: 'local',
-  members: [
-    { contactId: mockContact2Urn, status: 'added' }
-  ]
+  members: [{ contactId: mockContact2Urn, status: 'added' }],
 };
 
 // --- Test Host (This is the original, correct setup) ---
@@ -199,7 +200,7 @@ describe('ContactGroupFormComponent', () => {
     expect(hostComponent.savedGroup?.id).toBe(mockGroupUrn); // Preserved URN
 
     expect(hostComponent.savedGroup?.members).toEqual([
-      { contactId: mockContact1Urn, status: 'added' }
+      { contactId: mockContact1Urn, status: 'added' },
     ]);
   });
 
@@ -247,5 +248,36 @@ describe('ContactGroupFormComponent', () => {
     fixture.detectChanges();
 
     expect(formComponent.isEditing()).toBe(true);
+  });
+
+  it('should NOT show delete button when in "add mode"', () => {
+    hostComponent.startInEditMode.set(true);
+    // Even if a "draft" group is present (which Page component does)
+    hostComponent.group.set(MOCK_GROUP);
+    fixture.detectChanges();
+
+    const deleteButton = fixture.debugElement.query(
+      By.css('[data-testid="delete-button"]'),
+    );
+    expect(deleteButton).toBeNull();
+  });
+
+  it('should SHOW delete button when in "edit mode"', async () => {
+    hostComponent.group.set(MOCK_GROUP);
+    hostComponent.startInEditMode.set(false); // Existing group
+    fixture.detectChanges();
+
+    // Enter Edit Mode manually
+    const editButton = fixture.debugElement.query(
+      By.css('[data-testid="edit-button"]'),
+    ).nativeElement;
+    editButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const deleteButton = fixture.debugElement.query(
+      By.css('[data-testid="delete-button"]'),
+    );
+    expect(deleteButton).toBeTruthy();
   });
 });

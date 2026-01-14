@@ -1,5 +1,12 @@
-import { Component, inject, input, signal, computed } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+// libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.ts
+import {
+  Component,
+  inject,
+  input,
+  output,
+  signal,
+  computed,
+} from '@angular/core';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
@@ -14,7 +21,6 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
-// ✅ Import Shared Dialog
 import {
   ConfirmationDialogComponent,
   ConfirmationData,
@@ -24,7 +30,6 @@ import {
   selector: 'contacts-group-page',
   standalone: true,
   imports: [
-    RouterLink,
     MatButtonModule,
     MatIconModule,
     MatChipsModule,
@@ -36,9 +41,12 @@ import {
   styleUrl: './contact-group-page.component.scss',
 })
 export class ContactGroupPageComponent {
-  private router = inject(Router);
   private contactsService = inject(ContactsStorageService);
   private dialog = inject(MatDialog);
+
+  // ✅ 1. Outputs replace Router
+  saved = output<void>();
+  cancelled = output<void>();
 
   groupId = input<URN | undefined>(undefined);
   startInEditMode = signal(false);
@@ -67,10 +75,10 @@ export class ContactGroupPageComponent {
 
   async onSave(group: ContactGroup): Promise<void> {
     await this.contactsService.saveGroup(group);
-    this.navigateBack();
+    // ✅ Emit event instead of navigating
+    this.saved.emit();
   }
 
-  // ✅ NEW: Delete Logic with Recursive Check
   async onDelete(options: { recursive: boolean }): Promise<void> {
     const group = this.groupToEdit();
     if (!group) return;
@@ -100,19 +108,14 @@ export class ContactGroupPageComponent {
       }
 
       await this.contactsService.deleteGroup(group.id);
-      this.navigateBack();
+      // ✅ Emit event instead of navigating
+      this.saved.emit();
     }
   }
 
   onClose(): void {
-    this.navigateBack();
-  }
-
-  private navigateBack(): void {
-    this.router.navigate(['/contacts'], {
-      queryParams: { tab: 'groups' },
-      queryParamsHandling: 'merge',
-    });
+    // ✅ Emit event instead of navigating
+    this.cancelled.emit();
   }
 
   private getGroup(urn: URN): Observable<ContactGroup | null> {

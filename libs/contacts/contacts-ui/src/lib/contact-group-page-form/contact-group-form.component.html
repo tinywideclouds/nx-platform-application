@@ -61,7 +61,7 @@
   @if (!readonly()) {
     @if (isEditing()) {
       <div class="flex justify-between items-center pt-4">
-        @if (group()) {
+        @if (group() && !startInEditMode()) {
           <button
             type="button"
             mat-button

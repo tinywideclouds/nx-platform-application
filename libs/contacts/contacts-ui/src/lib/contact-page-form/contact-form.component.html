@@ -10,6 +10,9 @@
   >
     <mat-label>First Name</mat-label>
     <input aria-label="first name" matInput formControlName="firstName" />
+    @if (form.get('firstName')?.hasError('required')) {
+      <mat-error>First name is required</mat-error>
+    }
   </mat-form-field>
 
   <mat-form-field
@@ -28,6 +31,9 @@
   >
     <mat-label>Alias</mat-label>
     <input aria-label="alias" matInput formControlName="alias" />
+    @if (form.get('alias')?.hasError('required')) {
+      <mat-error>Alias is required</mat-error>
+    }
   </mat-form-field>
 
   <mat-form-field
@@ -36,83 +42,25 @@
     class="w-full"
   >
     <mat-label>Primary Email</mat-label>
-    <input aria-label="email" matInput formControlName="email" type="email" />
+    <input aria-label="email" matInput formControlName="email" />
+    @if (form.get('email')?.hasError('required')) {
+      <mat-error>Email is required</mat-error>
+    }
+    @if (form.get('email')?.hasError('email')) {
+      <mat-error>Invalid email address</mat-error>
+    }
   </mat-form-field>
 
-  <div formArrayName="phoneNumbers">
-    <h3 class="font-medium text-gray-700">Phone Numbers</h3>
-    @for (phone of phoneNumbers.controls; track phone; let i = $index) {
-      <div class="flex gap-2 mb-2 items-center">
-        <mat-form-field
-          class="flex-1"
-          [floatLabel]="'always'"
-          [hideRequiredMarker]="!isEditing()"
-        >
-          <mat-label>Phone Number</mat-label>
-          <input aria-label="phoneNumber" matInput [formControlName]="i" />
-        </mat-form-field>
-        @if (isEditing()) {
-          <button
-            type="button"
-            (click)="removePhoneNumber(i)"
-            mat-icon-button
-            color="warn"
-          >
-            <mat-icon>delete</mat-icon>
-          </button>
-        }
-      </div>
-    }
-    @if (isEditing()) {
-      <button type="button" (click)="addPhoneNumber()" mat-stroked-button>
-        Add Phone
-      </button>
-    }
-  </div>
-
-  <div formArrayName="emailAddresses">
-    <h3 class="font-medium text-gray-700">Other Emails</h3>
-    @for (email of emailAddresses.controls; track email; let i = $index) {
-      <div class="flex gap-2 mb-2 items-center">
-        <mat-form-field
-          class="flex-1"
-          [floatLabel]="'always'"
-          [hideRequiredMarker]="!isEditing()"
-        >
-          <mat-label>Email Address</mat-label>
-          <input
-            aria-label="email"
-            matInput
-            [formControlName]="i"
-            type="email"
-          />
-        </mat-form-field>
-        @if (isEditing()) {
-          <button
-            type="button"
-            (click)="removeEmailAddress(i)"
-            mat-icon-button
-            color="warn"
-          >
-            <mat-icon>delete</mat-icon>
-          </button>
-        }
-      </div>
-    }
-    @if (isEditing()) {
-      <button type="button" (click)="addEmailAddress()" mat-stroked-button>
-        Add Email
-      </button>
-    }
-  </div>
-
   @if (linkedIdentities().length > 0) {
-    <div class="mt-4">
-      <h3 class="font-medium text-gray-700 mb-2">Linked Accounts</h3>
-      <mat-chip-listbox aria-label="Linked Identities">
+    <div class="pt-2">
+      <label class="text-sm font-medium text-gray-700 block mb-2"
+        >Linked Identities</label
+      >
+      <mat-chip-listbox aria-label="Linked identities">
         @for (urn of linkedIdentities(); track urn.toString()) {
-          <mat-chip data-testid="identity-chip">
-            <span class="font-bold"
+          <mat-chip data-testid="identity-chip" class="identity-chip">
+            <mat-icon matChipAvatar>account_circle</mat-icon>
+            <span class="font-medium"
               >{{ getProviderName(urn) | titlecase }}:
             </span>
             <span>{{ getProviderId(urn) }}</span>
@@ -125,7 +73,7 @@
   @if (!readonly()) {
     @if (isEditing()) {
       <div class="flex justify-between items-center pt-4">
-        @if (contact()) {
+        @if (contact() && !startInEditMode()) {
           <button
             type="button"
             mat-button
@@ -164,12 +112,12 @@
       <div class="flex justify-end gap-2 pt-4">
         <button
           type="button"
-          (click)="isEditing.set(true)"
-          mat-flat-button
+          mat-stroked-button
           color="primary"
+          (click)="isEditing.set(true)"
           data-testid="edit-button"
         >
-          Edit
+          <mat-icon>edit</mat-icon> Edit
         </button>
       </div>
     }
