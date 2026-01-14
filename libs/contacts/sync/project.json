@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/sync/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:contacts"],
+  "tags": ["scope:contacts", "type:infrastructure"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

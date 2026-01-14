@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/contacts-ui/src",
   "prefix": "contacts",
   "projectType": "library",
-  "tags": ["scope:contacts"],
+  "tags": ["scope:contacts", "type:ui"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

@@ -1,5 +1,5 @@
 import { URN } from '@nx-platform-application/platform-types';
-import { GroupMemberStatus } from 'libs/contacts/types/src/lib/contacts.model';
+import { GroupMemberStatus } from '@nx-platform-application/contacts-types';
 
 export interface ContactSummary {
   id: URN;

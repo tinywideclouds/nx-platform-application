@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/persistence/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:contacts"],
+  "tags": ["scope:contacts", "type:infrastructure"],
   "targets": {
     "lint": {
       "executor": "@nx/eslint:lint"

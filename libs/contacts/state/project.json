@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/state/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:contacts"],
+  "tags": ["scope:contacts", "type:state"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

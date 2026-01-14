@@ -54,7 +54,6 @@ These components are reusable, state-less, and receive all data via `input()` an
 | `ContactListComponent`      | `contacts-list`         | Renders a list of contacts with selection support.                                 |
 | `ContactGroupListComponent` | `contacts-group-list`   | Renders a list of groups with selection support.                                   |
 | `PendingListComponent`      | `contacts-pending-list` | **The Waiting Room.** Displays unknown or vouched identities waiting for approval. |
-| `BlockedListComponent`      | `contacts-blocked-list` | **The Block List.** Displays blocked identities with options to unblock.           |
 
 #### Utility Components
 
