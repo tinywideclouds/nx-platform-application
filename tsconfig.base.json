@@ -41,6 +41,9 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
+      "@nx-platform-application/contacts-app-mocking": [
+        "libs/contacts/app-mocking/src/index.ts"
+      ],
       "@nx-platform-application/messenger-domain-chat-sync": [
         "libs/messenger/domain/chat-sync/src/index.ts"
       ],

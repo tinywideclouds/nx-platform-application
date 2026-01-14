@@ -214,8 +214,11 @@ nx g @nx/workspace:move --project=platform-web-key-storage     --destination=lib
 
 nx g @nx/workspace:move --project=platform-lifecycle  --destination=libs/platform/infrastructure/browser-lifecycle --importPath=@nx-platform-application/platform-infrastructure-browser-lifecycle
 
-
 nx g @nx/angular:library --name=platform-ui-qr-codes --directory=libs/platform/ui/qr-codes --tags="scope:platform" 
 
-
 nx g @nx/angular:library --name=platform-ui-layouts --directory=libs/platform/ui/layouts --tags="scope:platform" 
+
+
+nx g @nx/angular:library --name=lib-contacts-app-mocking --directory=libs/contacts/app-mocking --tags="scope:contacts" 
+
+

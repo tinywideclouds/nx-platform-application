@@ -2,6 +2,7 @@ import {
   ApplicationConfig,
   provideZonelessChangeDetection,
   isDevMode,
+  APP_INITIALIZER,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
@@ -9,61 +10,59 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 
 import { appRoutes } from './app.routes';
 import { environment } from './environments/environment';
-
-// --- Logging ---
 import {
   LOGGER_CONFIG,
   LogLevel,
 } from '@nx-platform-application/platform-tools-console-logger';
-
-// --- Contacts Storage ---
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-
-// --- Infrastructure: Cloud Drivers ---
-// ✅ NEW: Use the shared Platform Infrastructure
 import {
   VaultDrivers,
   PlatformStorageConfig,
   GoogleDriveDriver,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
-// --- Cloud Configuration ---
-const cloudProviders = [
-  {
-    provide: PlatformStorageConfig,
-    useValue: {
-      googleClientId: environment.googleClientId,
-    } as PlatformStorageConfig,
-  },
-  {
-    provide: VaultDrivers,
-    // Note: If you need a Mock Driver for 'useMocks', create a MockVaultDriver class
-    // that implements VaultProvider and swap it here.
-    // For now, we wire the real driver or an empty array if mocks are strict.
-    useClass: environment.useMocks
-      ? class MockVaultDriver {}
-      : GoogleDriveDriver,
-    multi: true,
-  },
-];
+// 1. Import Service
+import { ScenarioService } from './services/scenario.service';
+
+// 2. Factory
+export function initializeScenario(scenarioService: ScenarioService) {
+  return () =>
+    environment.useMocks ? scenarioService.initialize() : Promise.resolve();
+}
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
     provideRouter(appRoutes, withComponentInputBinding()),
     provideAnimations(),
-    provideHttpClient(), // Required for GoogleDriveDriver
+    provideHttpClient(),
 
-    // 1. Logger Config
     {
       provide: LOGGER_CONFIG,
       useValue: { level: isDevMode() ? LogLevel.DEBUG : LogLevel.INFO },
     },
 
-    // 2. Contacts Storage
+    // 3. Services
     ContactsStorageService,
 
-    // 3. Cloud Infrastructure (Replacing old CONTACTS_CLOUD_CONFIG)
-    ...cloudProviders,
+    // 4. Seeder (The Fix)
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initializeScenario,
+      deps: [ScenarioService],
+      multi: true,
+    },
+
+    {
+      provide: PlatformStorageConfig,
+      useValue: {
+        googleClientId: environment.googleClientId,
+      } as PlatformStorageConfig,
+    },
+    {
+      provide: VaultDrivers,
+      useClass: GoogleDriveDriver,
+      multi: true,
+    },
   ],
 };

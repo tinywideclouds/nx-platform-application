@@ -85,6 +85,10 @@
         },
         "development": {
           "buildTarget": "contacts-app:build:development"
+        },
+        "mock": {
+          "buildTarget": "contacts-app:build:mock",
+          "port": 4201
         }
       },
       "defaultConfiguration": "development"

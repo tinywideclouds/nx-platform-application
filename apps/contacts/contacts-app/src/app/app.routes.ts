@@ -1,23 +1,19 @@
-// apps/contacts-app/src/app/app.routes.ts
-
 import { Routes } from '@angular/router';
-// This import for the placeholder is still correct 
-import { AllContactsPlaceholderComponent } from './contacts/contacts.component';
 
 export const appRoutes: Routes = [
   {
-    path: 'contacts',
-    // 1. Use loadChildren to import the feature routes file
-    loadChildren: () =>
-      import('./contacts/contacts.routes').then((m) => m.CONTACTS_ROUTES),
-  },
-  {
-    path: 'all-contacts',
-    component: AllContactsPlaceholderComponent,
-  },
-  {
     path: '',
-    redirectTo: 'contacts', // Default to the contacts feature
-    pathMatch: 'full',
+    // Load the "Smart Shell" from the UI library
+    loadComponent: () =>
+      import('@nx-platform-application/contacts-ui').then(
+        (m) => m.ContactsViewerComponent,
+      ),
+  },
+  {
+    path: 'settings',
+    loadComponent: () =>
+      import('@nx-platform-application/contacts-ui').then(
+        (m) => m.ContactsSettingsPageComponent,
+      ),
   },
 ];
