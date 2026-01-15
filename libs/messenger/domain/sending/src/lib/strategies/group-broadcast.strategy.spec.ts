@@ -85,6 +85,7 @@ describe('LocalBroadcastStrategy', () => {
         tags: [],
       } as any,
       myKeys: {} as any,
+      shouldPersist: true,
       isEphemeral: false,
     };
   });

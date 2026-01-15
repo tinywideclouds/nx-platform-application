@@ -48,62 +48,62 @@ export class IngestionService {
     blockedSet: Set<string>,
     batchSize = 50,
   ): Promise<IngestionResult> {
-    const result: IngestionResult = {
+    // 1. Initialize Accumulator
+    const finalResult: IngestionResult = {
       messages: [],
       typingIndicators: [],
       readReceipts: [],
       patchedMessageIds: [],
     };
 
-    const queue = await firstValueFrom(
-      this.dataService.getMessageBatch(batchSize),
-    );
+    let hasMore = true;
 
-    if (!queue || queue.length === 0) {
-      return result;
-    }
+    // 2. Iterative Loop (Replacing Recursion)
+    while (hasMore) {
+      const queue = await firstValueFrom(
+        this.dataService.getMessageBatch(batchSize),
+      );
 
-    const processedIds: string[] = [];
+      // Stop if network returns nothing
+      if (!queue || queue.length === 0) {
+        break;
+      }
 
-    for (const item of queue) {
-      try {
-        await this.processSingleMessage(item, myKeys, blockedSet, result);
-        processedIds.push(item.id);
-      } catch (error) {
-        this.logger.error(
-          `[Ingestion] Failed to process msg ${item.id}`,
-          error,
-        );
-        processedIds.push(item.id);
+      const processedIds: string[] = [];
+
+      for (const item of queue) {
+        try {
+          // Mutate finalResult directly (Pass-by-reference)
+          await this.processSingleMessage(
+            item,
+            myKeys,
+            blockedSet,
+            finalResult,
+          );
+          processedIds.push(item.id);
+        } catch (error) {
+          this.logger.error(
+            `[Ingestion] Failed to process msg ${item.id}`,
+            error,
+          );
+          // Still ACK to flush poison pills
+          processedIds.push(item.id);
+        }
+      }
+
+      // ACK the current batch
+      if (processedIds.length > 0) {
+        await firstValueFrom(this.dataService.acknowledge(processedIds));
+      }
+
+      // 3. Check Termination Condition
+      // If we received fewer messages than requested, the server queue is empty.
+      if (queue.length < batchSize) {
+        hasMore = false;
       }
     }
 
-    if (processedIds.length > 0) {
-      await firstValueFrom(this.dataService.acknowledge(processedIds));
-    }
-
-    if (queue.length === batchSize) {
-      const nextBatch = await this.process(
-        myKeys,
-        myUrn,
-        blockedSet,
-        batchSize,
-      );
-      return {
-        messages: [...result.messages, ...nextBatch.messages],
-        typingIndicators: [
-          ...result.typingIndicators,
-          ...nextBatch.typingIndicators,
-        ],
-        readReceipts: [...result.readReceipts, ...nextBatch.readReceipts],
-        patchedMessageIds: [
-          ...result.patchedMessageIds,
-          ...nextBatch.patchedMessageIds,
-        ],
-      };
-    }
-
-    return result;
+    return finalResult;
   }
 
   private async processSingleMessage(

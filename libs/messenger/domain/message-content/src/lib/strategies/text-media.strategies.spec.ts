@@ -5,10 +5,9 @@ import {
   ImageParserStrategy,
 } from './text-media.strategies';
 import {
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_IMAGE,
   ImageContent,
-  MessageTypeText,
+  MessageTypeText, // ✅ Correct Import
+  MessageTypeImage, // ✅ Correct Import
 } from '../models/content-types';
 
 describe('Text & Media Strategies', () => {
@@ -27,17 +26,15 @@ describe('Text & Media Strategies', () => {
     });
 
     it('should support text type', () => {
+      // ✅ FIX: Use URN object directly
       expect(strategy.supports(MessageTypeText)).toBe(true);
       expect(strategy.supports(URN.parse('urn:other:type:audio'))).toBe(false);
     });
 
     it('should parse text content', () => {
       const bytes = encoder.encode('Hello World');
-      const result = strategy.parse(
-        URN.parse(MESSAGE_TYPE_TEXT),
-        bytes,
-        mockContext,
-      );
+      // ✅ FIX: Use URN object directly
+      const result = strategy.parse(MessageTypeText, bytes, mockContext);
 
       expect(result.kind).toBe('content');
       if (result.kind === 'content') {
@@ -57,34 +54,33 @@ describe('Text & Media Strategies', () => {
     });
 
     it('should support image type', () => {
-      expect(strategy.supports(URN.parse(MESSAGE_TYPE_IMAGE))).toBe(true);
+      // ✅ FIX: Use URN object directly
+      expect(strategy.supports(MessageTypeImage)).toBe(true);
     });
 
     it('should parse JSON image data', () => {
+      // ✅ FIX: Match new ImageContent interface
       const imageData: ImageContent = {
         kind: 'image',
-        thumbnailBase64: 'data:img',
-        remoteUrl: 'http://url',
+        inlineImage: 'data:img-base64', // Replaces thumbnailBase64
         decryptionKey: 'key',
         mimeType: 'image/png',
         width: 100,
         height: 100,
         sizeBytes: 500,
         caption: 'Caption',
+        // assets: optional, omitted for this test
       };
       const bytes = encoder.encode(JSON.stringify(imageData));
 
-      const result = strategy.parse(
-        URN.parse(MESSAGE_TYPE_IMAGE),
-        bytes,
-        mockContext,
-      );
+      const result = strategy.parse(MessageTypeImage, bytes, mockContext);
 
       expect(result.kind).toBe('content');
       if (result.kind === 'content') {
         const payload = result.payload as ImageContent;
         expect(payload.kind).toBe('image');
-        expect(payload.remoteUrl).toBe('http://url');
+        // ✅ FIX: Assert on new field
+        expect(payload.inlineImage).toBe('data:img-base64');
         expect(payload.caption).toBe('Caption');
       }
     });

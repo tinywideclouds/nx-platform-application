@@ -49,6 +49,7 @@ describe('DirectSendStrategy', () => {
     myUrn,
     recipientUrn,
     optimisticMsg: mockMsg,
+    shouldPersist: true,
     isEphemeral: false,
   };
 
@@ -113,7 +114,11 @@ describe('DirectSendStrategy', () => {
 
   describe('Ephemeral Signals', () => {
     it('should BYPASS persistence and wrapping', async () => {
-      const ephemeralCtx = { ...mockContext, isEphemeral: true };
+      const ephemeralCtx = {
+        ...mockContext,
+        isEphemeral: true,
+        shouldPersist: false,
+      };
 
       const result = await strategy.send(ephemeralCtx);
       await result.outcome;

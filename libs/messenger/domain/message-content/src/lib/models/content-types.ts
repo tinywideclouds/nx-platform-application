@@ -38,6 +38,9 @@ export const MessageTypeReadReceipt = URN.parse(MESSAGE_TYPE_READ_RECEIPT);
 const MESSAGE_TYPE_ASSET_REVEAL = 'urn:message:signal:asset-reveal';
 export const MessageTypeAssetReveal = URN.parse(MESSAGE_TYPE_ASSET_REVEAL);
 
+const DEVICE_SYNC_TYPE = 'urn:message:type:device-sync';
+export const MessageTypeDeviceSync = URN.parse(DEVICE_SYNC_TYPE);
+
 // --- 1. PAYLOAD DEFINITIONS (CONTENT) ---
 
 export interface ContactShareData {

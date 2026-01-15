@@ -10,7 +10,7 @@ import { ChatStorageService } from '@nx-platform-application/messenger-infrastru
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
-  MESSAGE_TYPE_READ_RECEIPT,
+  MessageTypeReadReceipt,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupNetworkStorageApi } from '@nx-platform-application/contacts-api'; // Added dep
@@ -132,7 +132,7 @@ describe('IngestionService', () => {
       // Force transport type to match signal (optional, but cleaner)
       const receiptTransport = {
         ...mockTransport,
-        typeId: URN.parse(MESSAGE_TYPE_READ_RECEIPT),
+        typeId: MessageTypeReadReceipt,
         sentTimestamp: mockTransport.sentTimestamp as ISODateTimeString,
       };
       vi.mocked(

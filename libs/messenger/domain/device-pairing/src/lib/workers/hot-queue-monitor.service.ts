@@ -3,10 +3,9 @@ import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
+import { MessageTypeDeviceSync } from '@nx-platform-application/messenger-domain-message-content';
 import { URN } from '@nx-platform-application/platform-types';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-
-const DEVICE_SYNC_TYPE = 'urn:message:type:device-sync';
 
 @Injectable({ providedIn: 'root' })
 export class HotQueueMonitor {
@@ -47,10 +46,12 @@ export class HotQueueMonitor {
         }
 
         const typeStr = decrypted.typeId.toString();
-        this.logger.debug(`[HotQueueSpy] Decrypted Type: ${typeStr}`);
+        this.logger.debug(
+          `[HotQueueSpy] Decrypted Type: ${decrypted.typeId.toString()}`,
+        );
 
         // 3. Validate
-        if (typeStr === DEVICE_SYNC_TYPE) {
+        if (decrypted.typeId.equals(MessageTypeDeviceSync)) {
           this.logger.info('[HotQueueSpy] 🎯 Trojan Horse Found!');
           return decrypted;
         } else {
@@ -59,7 +60,7 @@ export class HotQueueMonitor {
       } catch (e) {
         // ✅ CRITICAL LOG: Why did decryption fail?
         // This usually means "Wrong Key" or "Message wasn't meant for this session"
-        this.logger.warn(`[HotQueueSpy] Decryption failed for ${msg.id}`, e);
+        this.logger.debug(`[HotQueueSpy] Decryption failed for ${msg.id}`, e);
         continue;
       }
     }

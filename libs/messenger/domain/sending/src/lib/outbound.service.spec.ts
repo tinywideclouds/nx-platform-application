@@ -11,7 +11,8 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { DirectSendStrategy } from './strategies/direct-send.strategy';
 import { NetworkGroupStrategy } from './strategies/group-network.strategy';
 import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';
-import { OutboundResult } from './outbound.service';
+
+import { OutboundResult } from './send-strategy.interface';
 
 describe('OutboundService', () => {
   let service: OutboundService;

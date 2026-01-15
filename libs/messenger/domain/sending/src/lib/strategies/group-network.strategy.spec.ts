@@ -87,6 +87,7 @@ describe('NetworkGroupStrategy', () => {
         receiptMap: undefined,
       } as any,
       myKeys: {} as any,
+      shouldPersist: true,
       isEphemeral: false,
     };
   });

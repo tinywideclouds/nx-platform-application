@@ -7,7 +7,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   MessageTypingIndicator,
   ImageContent,
-  MessageTypeImage, // ✅ NEW
+  MessageTypeImage,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { MockProvider } from 'ng-mocks';
@@ -52,50 +52,59 @@ describe('ConversationActionService', () => {
     expect(conversationState.upsertMessages).toHaveBeenCalled();
   });
 
-  // ✅ NEW TEST
-  it('should delegate sendImage to OutboundService with correct type', async () => {
+  it('should delegate sendImage to OutboundService with correct type and payload', async () => {
+    // ✅ FIX: Use updated ImageContent interface (inlineImage)
     const imageData: ImageContent = {
       kind: 'image',
-      thumbnailBase64: 'data:abc',
-      remoteUrl: 'pending',
+      inlineImage: 'data:abc', // Replaces thumbnailBase64
+      remoteUrl: 'pending', // Optional but good for testing
       decryptionKey: 'none',
       mimeType: 'image/png',
       width: 100,
       height: 100,
       sizeBytes: 1024,
-    };
+    } as any; // Cast to satisfy partial mock if needed, or strictly match interface
 
     await service.sendImage(recipientUrn, imageData, mockKeys, mockUrn);
 
-    expect(outbound.sendMessage).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      // Verify correct URN
-      MessageTypeImage,
-      // Verify payload is JSON stringified
-      expect.any(Uint8Array),
-      undefined, // Not ephemeral
-    );
+    // Capture the arguments from the first call
+    const calls = vi.mocked(outbound.sendMessage).mock.calls;
+    expect(calls).toHaveLength(1);
+    const args = calls[0];
 
-    // Verify content decoding for strict correctness
-    const callArgs = vi.mocked(outbound.sendMessage).mock.calls[0];
-    const bytes = callArgs[4] as Uint8Array;
-    const decoded = JSON.parse(new TextDecoder().decode(bytes));
+    // Arg 2: Recipient
+    expect(args[2].toString()).toBe(recipientUrn.toString());
+
+    // Arg 3: Type ID (Image) - ✅ FIX: Compare URN strings
+    expect(args[3].toString()).toBe(MessageTypeImage.toString());
+
+    // Arg 4: Payload (Uint8Array)
+    const payloadBytes = args[4] as Uint8Array;
+
+    // If this is undefined or not a buffer, the TextDecoder below will fail.
+    expect(payloadBytes).toBeDefined();
+
+    // Verify Payload Content (Decode JSON)
+    const decoded = JSON.parse(new TextDecoder().decode(payloadBytes));
     expect(decoded.kind).toBe('image');
-    expect(decoded.remoteUrl).toBe('pending');
+    expect(decoded.inlineImage).toBe('data:abc');
+    expect(decoded.width).toBe(100);
+
+    // Arg 5: Options (undefined for standard messages)
+    expect(args[5]).toBeUndefined();
   });
 
-  it('should delegate typing indicator to OutboundService', async () => {
+  it('should delegate typing indicator to OutboundService as ephemeral', async () => {
     await service.sendTypingIndicator(recipientUrn, mockKeys, mockUrn);
 
-    expect(outbound.sendMessage).toHaveBeenCalledWith(
-      expect.anything(), // keys
-      expect.anything(), // sender
-      expect.anything(), // recipient
-      MessageTypingIndicator,
-      expect.anything(), // payload
-      expect.objectContaining({ isEphemeral: true }),
-    );
+    const calls = vi.mocked(outbound.sendMessage).mock.calls;
+    expect(calls).toHaveLength(1);
+    const args = calls[0];
+
+    // Check Type - ✅ FIX: Use URN constant
+    expect(args[3].toString()).toBe(MessageTypingIndicator.toString());
+
+    // Check Ephemeral Flag
+    expect(args[5]).toEqual(expect.objectContaining({ isEphemeral: true }));
   });
 });

@@ -121,3 +121,118 @@ Domain logic is **pure TypeScript**.
 - **Do not** depend on the DOM.
 - **Do not** depend on `TestBed` unless necessary for injection.
 - **Mock Infrastructure:** Always mock the `Infrastructure` dependencies (Crypto, Storage, Network) to test the _business logic_ in isolation.
+
+## Update:
+
+# 🌍 Messenger Domain Layer: The Application Core
+
+**Scope:** Messenger Domain
+**Role:** Policy, Workflow, & State Management
+
+The **Domain Layer** is the "Engine Room" of the Messenger application. It encapsulates all business rules, workflows, and state management logic required to run a secure, local-first messaging system.
+
+Unlike the **UI Layer** (Presentation) and the **Infrastructure Layer** (Mechanism), the Domain Layer is concerned with **Policy**.
+
+---
+
+## 🏛️ Architecture & Interaction Model
+
+We utilize a **Pragmatic Layered Architecture**. The flow of control is strictly top-down.
+
+### The "State Facade" Pattern
+
+A critical rule of our architecture is that **UI Components never interact with the Domain directly.** Instead, we use an intermediary **State Layer** (implemented as Facade Services like `ChatService`).
+
+#### The Data Flow: "Sync Now" Example
+
+1.  **UI Layer:** User clicks "Backup Now".
+2.  **State Layer (`ChatService`):** Checks auth, then calls `chatSyncService.syncMessages()`.
+3.  **Domain Layer (`ChatSyncService`):**
+    - **Logic:** Toggles `isSyncing` signal.
+    - **Orchestration:** Calls Infrastructure to download files, Ingestion to parse them, and Engine to merge them.
+4.  **State Layer:** Projects the domain's `isSyncing` signal into a View Model.
+5.  **UI Layer:** Reacts to the signal and shows a spinner.
+
+---
+
+## 🧩 The Sub-Domains (Departments)
+
+The Domain is split into distinct logical areas, each solving a specific class of problems.
+
+### 1. The Conversation Engine (`domain-conversation`)
+
+**"How do I read messages efficiently?"**
+
+- **Optimistic UI:** Adds messages to memory with "Pending" status immediately.
+- **Smart History:** Manages the "Sliding Window" of loaded messages and detects history deficits.
+- **Lurker Filter:** Hides content from users who have been invited but haven't joined.
+
+### 2. The Sending Engine (`domain-sending`)
+
+**"How do I route this message?"**
+
+- **Strategy Pattern:** Decouples the "User Intent" from the "Transport Logic".
+  - **Direct:** 1:1 Encrypted Send.
+  - **Broadcast:** Local-First distribution to a list (with Ghosting).
+  - **Network Group:** Server-Assisted Fan-out with Receipt Scorecards.
+
+### 3. The Group Protocol (`domain-group-protocol`)
+
+**"How do we agree a group exists?"**
+
+- **Ownerless Consensus:** Groups exist only because peers agree they exist. There is no central admin table.
+- **Upgrade Workflow:** Handles the transition from a "Local List" (Address Book) to a "Network Group" (Shared Context) via an Invite/Response handshake.
+
+### 4. The Sync Engine (`domain-chat-sync`)
+
+**"Data Continuity across Devices."**
+
+- **LSM-Lite:** Uses a Log-Structured Merge strategy (Snapshots + Deltas) for append-only cloud backups.
+- **BYOS:** Agnostic to the storage provider (Google Drive, IPFS, etc.).
+
+### 5. Identity & Trust (`domain-identity`)
+
+**"Who am I talking to?"**
+
+- **Identity Resolver:** Maps local Contact URNs to routable Network Handles.
+- **Key Rotation:** Handles the "Identity Reset" workflow, claiming public handles in the registry.
+
+### 6. Device Pairing (`domain-device-pairing`)
+
+**"Adding a second device."**
+
+- **Trojan Horse Protocol:** Embeds identity exchange inside standard chat messages (`MESSAGE_TYPE_DEVICE_SYNC`) to reuse the existing routing infrastructure.
+- **Flows:** Supports both Receiver-Hosted (Scan to Pair) and Sender-Hosted (Dead Drop) workflows.
+
+### 7. Ingestion & Routing (`domain-ingestion`, `domain-message-content`)
+
+**"Understanding chaotic input."**
+
+- **The Parser:** Translates raw bytes into typed `ParsedMessage` objects using Strategies (Text, Image, Signal).
+- **The Router:** Directs traffic:
+  - Content → Conversation / Storage
+  - Signals (Receipts/Typing) → In-Memory State
+  - System Events → Group Protocol
+
+### 8. Resilience (`domain-outbox`, `domain-quarantine`)
+
+**"Real-world reliability."**
+
+- **The Outbox:** Retries failed messages with exponential backoff.
+- **The Quarantine:** Detains messages from unknown senders ("Gatekeeper" pattern) until trusted.
+
+---
+
+## 🛠️ Developer Guide
+
+### Adding a New Feature
+
+1.  **Define Schema:** Update `domain-message-content` (e.g., `MESSAGE_TYPE_REACTION`).
+2.  **Update Logic:** Update `ConversationService` / `IngestionService` to handle the type.
+3.  **Update State:** Expose via `ChatService`.
+4.  **Update UI:** Angular Components.
+
+### Testing
+
+- **Pure TypeScript:** Domain logic should not depend on the DOM.
+- **Mock Infrastructure:** Always mock `Storage`, `Crypto`, and `Network` to test business rules in isolation.

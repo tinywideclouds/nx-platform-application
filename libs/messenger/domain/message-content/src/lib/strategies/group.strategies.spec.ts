@@ -1,15 +1,14 @@
 import { TestBed } from '@angular/core/testing';
-import { URN } from '@nx-platform-application/platform-types';
 import { GroupParserStrategy } from './group.strategies';
 import {
-  MESSAGE_TYPE_GROUP_INVITE,
+  MessageGroupInvite, // ✅ Use the URN object
   GroupInvitePayload,
 } from '../models/group-protocol-types';
 
 describe('GroupParserStrategy', () => {
   let strategy: GroupParserStrategy;
   const encoder = new TextEncoder();
-  const mockContext = { tags: [] };
+  const mockContext = { tags: [] } as any; // Cast for simplified context
 
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [GroupParserStrategy] });
@@ -17,7 +16,8 @@ describe('GroupParserStrategy', () => {
   });
 
   it('should support group invite types', () => {
-    expect(strategy.supports(URN.parse(MESSAGE_TYPE_GROUP_INVITE))).toBe(true);
+    // ✅ FIX: Pass URN object directly, don't parse undefined string
+    expect(strategy.supports(MessageGroupInvite)).toBe(true);
   });
 
   it('should parse group invite payload', () => {
@@ -28,11 +28,8 @@ describe('GroupParserStrategy', () => {
     };
     const bytes = encoder.encode(JSON.stringify(invite));
 
-    const result = strategy.parse(
-      URN.parse(MESSAGE_TYPE_GROUP_INVITE),
-      bytes,
-      mockContext,
-    );
+    // ✅ FIX: Pass URN object directly
+    const result = strategy.parse(MessageGroupInvite, bytes, mockContext);
 
     expect(result.kind).toBe('content');
     if (result.kind === 'content') {

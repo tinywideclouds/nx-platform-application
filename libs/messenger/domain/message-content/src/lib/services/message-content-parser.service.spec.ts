@@ -3,15 +3,13 @@ import { MessageContentParser } from './message-content-parser.service';
 import { MessageMetadataService } from './message-metadata.service';
 import { URN } from '@nx-platform-application/platform-types';
 import {
-  MESSAGE_TYPE_TEXT,
-  MESSAGE_TYPE_IMAGE,
   ImageContent,
   MessageTypeText,
   MessageTypeImage,
 } from '../models/content-types';
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// Strategy Imports (Required for Dependency Injection in the Service)
+// Strategy Imports
 import {
   TextParserStrategy,
   ImageParserStrategy,
@@ -33,7 +31,6 @@ describe('MessageContentParser (Integration)', () => {
       providers: [
         MessageContentParser,
         MessageMetadataService,
-        // Provide all strategies
         TextParserStrategy,
         ImageParserStrategy,
         RichMediaParserStrategy,
@@ -41,6 +38,7 @@ describe('MessageContentParser (Integration)', () => {
         SignalParserStrategy,
       ],
     });
+
     service = TestBed.inject(MessageContentParser);
     metadataService = TestBed.inject(MessageMetadataService);
   });
@@ -65,10 +63,10 @@ describe('MessageContentParser (Integration)', () => {
 
     it('should parse Image messages via strategy', () => {
       const typeId = MessageTypeImage;
+      // ✅ FIX: Match new ImageContent interface
       const img: ImageContent = {
         kind: 'image',
-        thumbnailBase64: 'data:abc',
-        remoteUrl: 'url',
+        inlineImage: 'data:abc',
         decryptionKey: 'k',
         mimeType: 'image/png',
         width: 10,
@@ -83,17 +81,20 @@ describe('MessageContentParser (Integration)', () => {
       expect(result.kind).toBe('content');
       if (result.kind === 'content') {
         expect(result.payload.kind).toBe('image');
+        expect((result.payload as ImageContent).inlineImage).toBe('data:abc');
       }
     });
   });
 
   describe('Unknown Types', () => {
     it('should return unknown for unsupported URNs', () => {
-      const result = service.parse(
-        URN.parse('urn:foo:bar:1'),
-        new Uint8Array([]),
-      );
+      const typeId = URN.parse('urn:foo:bar:1');
+      const result = service.parse(typeId, new Uint8Array([]));
+
       expect(result.kind).toBe('unknown');
+      if (result.kind === 'unknown') {
+        expect(result.rawType).toBe(typeId);
+      }
     });
   });
 });

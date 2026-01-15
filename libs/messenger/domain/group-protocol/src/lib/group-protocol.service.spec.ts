@@ -1,101 +1,165 @@
 import { TestBed } from '@angular/core/testing';
 import { GroupProtocolService } from './group-protocol.service';
-import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { URN } from '@nx-platform-application/platform-types';
-import { ContactGroup } from '@nx-platform-application/contacts-types';
 import {
+  AddressBookApi,
+  AddressBookManagementApi,
+  ContactsQueryApi,
+} from '@nx-platform-application/contacts-api';
+import {
+  MessageContentParser,
   MessageGroupInvite,
   MessageGroupInviteResponse,
 } from '@nx-platform-application/messenger-domain-message-content';
-
-import {
-  GroupNetworkStorageApi,
-  ContactsFacadeService,
-} from '@nx-platform-application/contacts-api';
-
+import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 
 describe('GroupProtocolService', () => {
   let service: GroupProtocolService;
-  let contactsFacade: ContactsFacadeService;
-  let networkStorage: GroupNetworkStorageApi;
-  let outbox: any;
+  let outbound: OutboundService;
+  let abApi: AddressBookApi;
+  let abManager: AddressBookManagementApi;
+  let queryApi: ContactsQueryApi;
+  let parser: MessageContentParser;
 
-  const mockLocalGroupUrn = URN.parse('urn:contacts:group:local-1');
-  const mockMemberUrn = URN.parse('urn:contacts:user:alice');
+  const myUrn = URN.parse('urn:contacts:user:me');
+  const myKeys = {} as PrivateKeys;
+  const localGroupUrn = URN.parse('urn:contacts:group:weekend-trip');
+  const alice = URN.parse('urn:contacts:user:alice');
 
-  const mockLocalGroup: ContactGroup = {
-    id: mockLocalGroupUrn,
+  const mockLocalGroup = {
+    id: localGroupUrn,
     name: 'Weekend Trip',
-    description: 'Planning',
     scope: 'local',
-    members: [{ contactId: mockMemberUrn, status: 'joined' }],
-    contactIds: [mockMemberUrn],
-  } as any;
+  };
+
+  const mockParticipants = [
+    { id: alice, alias: 'Alice' },
+    { id: myUrn, alias: 'Me' },
+  ];
 
   beforeEach(() => {
-    outbox = {
-      enqueue: vi.fn().mockResolvedValue('msg-id-123'),
-    };
-
+    vi.clearAllMocks();
     TestBed.configureTestingModule({
       providers: [
         GroupProtocolService,
-        // 1. Mock Facade (CRUD)
-        MockProvider(ContactsFacadeService, {
-          getGroup: vi.fn(),
+        MockProvider(OutboundService, {
+          sendMessage: vi.fn().mockResolvedValue({ message: { id: 'm1' } }),
+        }),
+        MockProvider(AddressBookApi, {
+          getGroup: vi.fn().mockResolvedValue(mockLocalGroup),
+        }),
+        MockProvider(AddressBookManagementApi, {
           saveGroup: vi.fn().mockResolvedValue(undefined),
         }),
-        // 2. Mock Network Storage (Consensus)
-        MockProvider(GroupNetworkStorageApi, {
-          updateGroupMemberStatus: vi.fn().mockResolvedValue(undefined),
+        MockProvider(ContactsQueryApi, {
+          getGroupParticipants: vi.fn().mockResolvedValue(mockParticipants),
         }),
-        { provide: OutboxStorage, useValue: outbox },
+        MockProvider(MessageContentParser, {
+          parse: vi.fn(),
+        }),
       ],
     });
 
     service = TestBed.inject(GroupProtocolService);
-    contactsFacade = TestBed.inject(ContactsFacadeService);
-    networkStorage = TestBed.inject(GroupNetworkStorageApi);
+    outbound = TestBed.inject(OutboundService);
+    abApi = TestBed.inject(AddressBookApi);
+    abManager = TestBed.inject(AddressBookManagementApi);
+    queryApi = TestBed.inject(ContactsQueryApi);
+    parser = TestBed.inject(MessageContentParser);
   });
 
   describe('upgradeGroup', () => {
-    it('should create a network group and enqueue invites', async () => {
-      vi.mocked(contactsFacade.getGroup).mockResolvedValue(mockLocalGroup);
+    it('should MINT a network group, SAVE it locally, and BROADCAST invite', async () => {
+      const resultUrn = await service.upgradeGroup(
+        localGroupUrn,
+        myKeys,
+        myUrn,
+      );
 
-      const resultUrn = await service.upgradeGroup(mockLocalGroupUrn);
-
+      // 1. Verify Identity Generation
       expect(resultUrn.entityType).toBe('group');
+      expect(resultUrn.namespace).toBe('messenger');
 
-      // Verify Facade usage
-      expect(contactsFacade.saveGroup).toHaveBeenCalledWith(
+      // 2. Verify Local State Transition
+      expect(abManager.saveGroup).toHaveBeenCalledWith(
         expect.objectContaining({
+          id: resultUrn,
           scope: 'messenger',
-          parentId: mockLocalGroupUrn,
-          name: 'Weekend Trip',
+          parentId: localGroupUrn,
+          members: expect.arrayContaining([
+            { contactId: myUrn, status: 'joined' },
+            { contactId: alice, status: 'invited' },
+          ]),
         }),
       );
 
-      expect(outbox.enqueue).toHaveBeenCalledTimes(1);
+      // 3. Verify Network Broadcast (Use Capture Strategy)
+      expect(outbound.sendMessage).toHaveBeenCalled();
+      const calls = vi.mocked(outbound.sendMessage).mock.calls;
+      const args = calls[0];
+
+      // Arg 2: Target (The new Group URN)
+      expect(args[2].toString()).toBe(resultUrn.toString());
+
+      // Arg 3: Type (Group Invite)
+      expect(args[3].toString()).toBe(MessageGroupInvite.toString());
+
+      // Arg 4: Payload (Check content)
+      const sentBytes = args[4] as Uint8Array;
+      expect(sentBytes).toBeDefined();
+      const payload = JSON.parse(new TextDecoder().decode(sentBytes));
+      expect(payload.name).toBe('Weekend Trip');
+      expect(payload.groupUrn).toBe(resultUrn.toString());
+    });
+
+    it('should throw if local group is empty', async () => {
+      vi.mocked(queryApi.getGroupParticipants).mockResolvedValue([]);
+      await expect(
+        service.upgradeGroup(localGroupUrn, myKeys, myUrn),
+      ).rejects.toThrow('Cannot upgrade empty group');
     });
   });
 
-  describe('respondToInvite', () => {
-    it('should reply to the sender (1:1 context)', async () => {
-      const senderUrn = URN.parse('urn:contacts:user:bob');
-      const groupUrn = URN.parse('urn:messenger:group:new-1');
+  describe('acceptInvite', () => {
+    it('should send a JOINED response', async () => {
+      const groupUrn = URN.parse('urn:messenger:group:net-1');
+      const inviteMsg = {
+        id: 'msg-1',
+        typeId: MessageGroupInvite,
+        payloadBytes: new Uint8Array([]),
+      } as ChatMessage;
 
-      vi.mocked(contactsFacade.getGroup).mockResolvedValue(undefined);
+      // Mock Parser to return valid invite data
+      vi.mocked(parser.parse).mockReturnValue({
+        kind: 'content',
+        payload: {
+          kind: 'group-invite',
+          data: { groupUrn: groupUrn.toString() },
+        } as any,
+      } as any);
 
-      await service.respondToInvite(senderUrn, groupUrn, 'Party', 'accept');
+      await service.acceptInvite(inviteMsg, myKeys, myUrn);
 
-      expect(outbox.enqueue).toHaveBeenCalledWith(
-        expect.objectContaining({
-          conversationUrn: senderUrn,
-          typeId: MessageGroupInviteResponse,
-        }),
-      );
+      // Verify with Capture Strategy
+      expect(outbound.sendMessage).toHaveBeenCalled();
+      const calls = vi.mocked(outbound.sendMessage).mock.calls;
+      const args = calls[0];
+
+      // Arg 2: Target (The Group URN extracted from invite)
+      expect(args[2].toString()).toBe(groupUrn.toString());
+
+      // Arg 3: Type (Invite Response)
+      expect(args[3].toString()).toBe(MessageGroupInviteResponse.toString());
+
+      // Arg 4: Payload
+      const sentBytes = args[4] as Uint8Array;
+      const sentJson = new TextDecoder().decode(sentBytes);
+      expect(sentJson).toContain('"status":"joined"');
+      expect(sentJson).toContain(groupUrn.toString());
     });
   });
 });
