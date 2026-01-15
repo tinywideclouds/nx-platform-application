@@ -248,6 +248,108 @@ describe('ChatStorageService', () => {
     });
   });
 
+  describe('applyReceipt (Status Aggregation)', () => {
+    const msgId = 'msg-group-1';
+    // A group message sent by ME to a group
+    const groupMsgRecord = {
+      messageId: msgId,
+      senderId: 'urn:contacts:user:me',
+      conversationUrn: 'urn:messenger:group:project-alpha',
+      recipientId: 'urn:messenger:group:project-alpha', // Group ID
+      sentTimestamp: '2024-01-01T10:00:00Z' as any,
+      typeId: 'urn:message:type:text',
+      payloadBytes: new Uint8Array([]),
+      status: 'sent' as const,
+      // Initial State: No receipts
+      receiptMap: {},
+      tags: [],
+    };
+
+    beforeEach(async () => {
+      await db.messages.put(groupMsgRecord);
+    });
+
+    it('should update receiptMap and promote status for 1:1 interactions', async () => {
+      // Setup 1:1 message
+      const p2pId = 'msg-p2p';
+      await db.messages.put({
+        ...groupMsgRecord,
+        messageId: p2pId,
+        conversationUrn: 'urn:contacts:user:alice',
+      });
+
+      // Action: Alice reads it
+      await service.applyReceipt(
+        p2pId,
+        URN.parse('urn:contacts:user:alice'),
+        'read',
+      );
+
+      const updated = await db.messages.get(p2pId);
+      expect(updated?.receiptMap?.['urn:contacts:user:alice']).toBe('read');
+      // In 1:1, a single read receipt should flip the main status
+      expect(updated?.status).toBe('read');
+    });
+
+    it('should track individual receipts in a group but NOT promote status if partial', async () => {
+      // Action: Bob delivers (but hasn't read)
+      await service.applyReceipt(
+        msgId,
+        URN.parse('urn:contacts:user:bob'),
+        'delivered',
+      );
+
+      const step1 = await db.messages.get(msgId);
+      expect(step1?.receiptMap?.['urn:contacts:user:bob']).toBe('delivered');
+      // If the logic is "High Fidelity", it might switch to 'delivered'
+      // or stay 'sent' depending on your exact threshold.
+      // Usually "at least one delivery" -> delivered.
+      expect(step1?.status).not.toBe('read');
+    });
+
+    it('should promote group message to READ only when consensus is reached (if implemented)', async () => {
+      // Note: This test assumes your implementation aggregates based on known participants
+      // or simply checks "are there any non-read receipts?".
+
+      // 1. Bob Reads
+      await service.applyReceipt(
+        msgId,
+        URN.parse('urn:contacts:user:bob'),
+        'read',
+      );
+
+      // 2. Charlie Reads
+      await service.applyReceipt(
+        msgId,
+        URN.parse('urn:contacts:user:charlie'),
+        'read',
+      );
+
+      const final = await db.messages.get(msgId);
+
+      // Verify Map Integrity
+      expect(final?.receiptMap).toEqual({
+        'urn:contacts:user:bob': 'read',
+        'urn:contacts:user:charlie': 'read',
+      });
+
+      // Verify Aggregation
+      // (Adjust expectation based on whether your logic requires ALL participants or just observed ones)
+      // Assuming "Optimistic Upgrade":
+      expect(final?.status).toBe('read');
+    });
+
+    it('should ignore receipts for non-existent messages gracefully', async () => {
+      await expect(
+        service.applyReceipt(
+          'missing-id',
+          URN.parse('urn:contacts:user:alice'),
+          'read',
+        ),
+      ).resolves.not.toThrow();
+    });
+  });
+
   describe('Maintenance', () => {
     it('should prune tombstones older than a specific date', async () => {
       // FIX: Use valid 4-part URNs

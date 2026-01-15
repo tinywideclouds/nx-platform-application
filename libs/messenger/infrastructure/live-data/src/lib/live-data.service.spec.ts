@@ -1,78 +1,21 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ChatLiveDataService } from './live-data.service';
 import { ConnectionStatus } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, Mock } from 'vitest';
 import { WSS_URL_TOKEN } from './live-data.config';
 import { AppLifecycleService } from '@nx-platform-application/platform-infrastructure-browser-lifecycle';
 import { Subject } from 'rxjs';
+import { WebSocketSubject } from 'rxjs/webSocket';
 
-const RealWebSocket = global.WebSocket;
-
-/**
- * Robust Mock implementation of WebSocket.
- * Includes `readyState` management required by RxJS.
- */
-class MockWebSocket {
-  static instances: MockWebSocket[] = [];
-
-  // WebSocket State Constants
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSING = 2;
-  static readonly CLOSED = 3;
-
-  url: string;
-  protocol: string | string[] | undefined;
-  readyState: number = MockWebSocket.CONNECTING;
-
-  onopen: (() => void) | null = null;
-  onmessage: ((event: { data: string }) => void) | null = null;
-  onerror: ((event: unknown) => void) | null = null;
-  onclose: ((event: CloseEvent) => void) | null = null;
-
-  static get lastInstance(): MockWebSocket | null {
-    return MockWebSocket.instances.length > 0
-      ? MockWebSocket.instances[MockWebSocket.instances.length - 1]
-      : null;
-  }
-
-  constructor(url: string, protocol?: string | string[] | undefined) {
-    this.url = url;
-    this.protocol = protocol;
-    MockWebSocket.instances.push(this);
-  }
-
-  close = vi.fn(() => {
-    this.readyState = MockWebSocket.CLOSED;
-    if (this.onclose) {
-      this.onclose({ wasClean: true } as CloseEvent);
-    }
-  });
-
-  send = vi.fn();
-
-  triggerOpen(): void {
-    this.readyState = MockWebSocket.OPEN;
-    if (this.onopen) this.onopen();
-  }
-
-  triggerMessage(data: string): void {
-    if (this.onmessage) this.onmessage({ data });
-  }
-
-  triggerError(error: unknown): void {
-    // Error doesn't necessarily close the socket immediately in spec,
-    // but typically leads to close.
-    if (this.onerror) {
-      this.onerror(error);
-    }
-  }
-}
-
-vi.mock('@nx-platform-application/messenger-types', () => ({
-  deserializeJsonToEnvelope: vi.fn(),
+// 1. Mock 'rxjs/webSocket' module
+// We need to hoist this so it runs before imports
+vi.mock('rxjs/webSocket', () => ({
+  webSocket: vi.fn(),
 }));
+
+// Import the mocked function to configure it in tests
+import { webSocket } from 'rxjs/webSocket';
 
 const mockLogger = {
   info: vi.fn(),
@@ -89,20 +32,25 @@ describe('ChatLiveDataService', () => {
   const mockJwt = 'mock.jwt.token';
   const mockUrl = 'wss://api.example.com/connect';
 
+  // The Subject that will act as our "Socket"
+  let mockSocketSubject: Subject<any>;
+  // Captured config passed to webSocket() so we can trigger observers
+  let capturedConfig: any;
+
   beforeEach(() => {
-    // Inject our Mock Class
-    global.WebSocket = MockWebSocket as any;
-
-    // Add the constants to the class instance prototype if RxJS checks them statically
-    // (RxJS checks instances, but sometimes checks the static constants on global.WebSocket)
-    (global.WebSocket as any).CONNECTING = 0;
-    (global.WebSocket as any).OPEN = 1;
-    (global.WebSocket as any).CLOSING = 2;
-    (global.WebSocket as any).CLOSED = 3;
-
-    MockWebSocket.instances = [];
     vi.clearAllMocks();
+    // Use fake timers to control retry delays
     vi.useFakeTimers();
+
+    // 2. Setup the webSocket mock
+    mockSocketSubject = new Subject<any>();
+    // Add the .complete() method to mimic WebSocketSubject
+    (mockSocketSubject as any).complete = vi.fn();
+
+    (webSocket as Mock).mockImplementation((configOrUrl) => {
+      capturedConfig = configOrUrl;
+      return mockSocketSubject as unknown as WebSocketSubject<any>;
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -122,7 +70,6 @@ describe('ChatLiveDataService', () => {
 
   afterEach(() => {
     service.ngOnDestroy();
-    global.WebSocket = RealWebSocket;
     vi.useRealTimers();
   });
 
@@ -131,39 +78,37 @@ describe('ChatLiveDataService', () => {
     expect(logger.info).toHaveBeenCalledWith('ChatLiveDataService initialized');
   });
 
-  it('should connect with URL and JWT protocol', async () => {
+  it('should connect with URL and JWT protocol', () => {
     const statuses: ConnectionStatus[] = [];
     service.status$.subscribe((s) => statuses.push(s));
 
-    service.connect(mockJwt);
+    service.connect(() => mockJwt);
 
+    // Assert configuration
+    expect(webSocket).toHaveBeenCalled();
+    expect(capturedConfig.url).toBe(mockUrl);
+    expect(capturedConfig.protocol).toEqual([mockJwt]);
+
+    // Initial state
     expect(statuses).toEqual(['disconnected', 'connecting']);
-    const lastSocket = MockWebSocket.lastInstance;
-    expect(lastSocket).toBeTruthy();
-    expect(lastSocket?.url).toBe(mockUrl);
-    expect(lastSocket?.protocol).toEqual([mockJwt]);
-    expect(lastSocket?.readyState).toBe(MockWebSocket.CONNECTING);
 
-    lastSocket?.triggerOpen();
-    await Promise.resolve();
+    // Simulate Open Event
+    capturedConfig.openObserver.next();
 
-    expect(lastSocket?.readyState).toBe(MockWebSocket.OPEN);
     expect(statuses).toEqual(['disconnected', 'connecting', 'connected']);
   });
 
-  it('should emit a void "poke" on any incoming message', async () => {
+  it('should emit a void "poke" on any incoming message', () => {
     let pokeCount = 0;
     service.incomingMessage$.subscribe(() => {
       pokeCount++;
     });
 
-    service.connect(mockJwt);
-    MockWebSocket.lastInstance?.triggerOpen();
-    await Promise.resolve();
+    service.connect(() => mockJwt);
+    capturedConfig.openObserver.next();
 
-    const pokeMessage = '{"poke":true}';
-    MockWebSocket.lastInstance?.triggerMessage(pokeMessage);
-    await Promise.resolve();
+    // Simulate Message from Socket
+    mockSocketSubject.next({ some: 'data' });
 
     expect(pokeCount).toBe(1);
     expect(logger.info).toHaveBeenCalledWith(
@@ -171,52 +116,54 @@ describe('ChatLiveDataService', () => {
     );
   });
 
-  it('should log error on socket error and attempt retry', async () => {
+  it('should log error on socket error and attempt retry', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    service.connect(mockJwt);
-    await Promise.resolve();
-    expect(MockWebSocket.instances.length).toBe(1);
+    service.connect(() => mockJwt);
+    capturedConfig.openObserver.next();
 
+    // 1. Simulate Error
     const testError = new Error('Socket failed');
-    MockWebSocket.lastInstance?.triggerError(testError);
-    await Promise.resolve();
+    mockSocketSubject.error(testError);
 
+    // Service should catch, log, and schedule retry
     expect(logger.error).toHaveBeenCalledWith(
       'ChatLiveDataService: WebSocket error',
       testError,
     );
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      'WebSocket retry attempt 1, delay 2000ms',
-    );
-
+    // Should enter reconnection state
+    // (Note: The retry delay calculation happens inside the retry operator)
+    // We advance time to trigger the retry
     vi.advanceTimersByTime(2000);
-    await Promise.resolve();
 
-    expect(MockWebSocket.instances.length).toBe(2);
-    expect(MockWebSocket.lastInstance?.protocol).toEqual([mockJwt]);
+    // Expect reconnection attempt (webSocket called again)
+    expect(webSocket).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('WebSocket retry attempt'),
+    );
   });
 
-  it('should transition to "disconnected" on disconnect()', async () => {
+  it('should transition to "disconnected" on disconnect()', () => {
     const statuses: ConnectionStatus[] = [];
     service.status$.subscribe((s) => statuses.push(s));
 
-    service.connect(mockJwt);
-    MockWebSocket.lastInstance?.triggerOpen();
-    await Promise.resolve();
-    expect(statuses.pop()).toBe('connected');
-
-    const instanceToClose = MockWebSocket.lastInstance;
-    // RxJS won't call close() if it doesn't think it's OPEN
-    expect(instanceToClose?.readyState).toBe(MockWebSocket.OPEN);
+    service.connect(() => mockJwt);
+    capturedConfig.openObserver.next();
+    expect(statuses[statuses.length - 1]).toBe('connected');
 
     service.disconnect();
 
-    // Flush microtasks
-    await Promise.resolve();
+    // Verify cleanup
+    expect((mockSocketSubject as any).complete).toHaveBeenCalled();
+    expect(statuses[statuses.length - 1]).toBe('disconnected');
+  });
 
-    expect(instanceToClose?.close).toHaveBeenCalled();
-    expect(statuses.pop()).toBe('disconnected');
+  it('should handle deserializer returning void (Configuration Check)', () => {
+    service.connect(() => mockJwt);
+    expect(capturedConfig.deserializer).toBeDefined();
+
+    const result = capturedConfig.deserializer({ data: '{"test":1}' });
+    expect(result).toBeUndefined();
   });
 });

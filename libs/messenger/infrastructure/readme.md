@@ -142,3 +142,145 @@ graph BT
     Sync --> |Calls| Net
     Sync --> |Calls| DB
 ```
+
+### Update to be merged in:
+
+# 🏛️ Messenger Infrastructure Layer: The Foundation
+
+## 🏗️ Overview
+
+The **Infrastructure Layer** forms the physical foundation of the Messenger application. It provides the concrete tools and mechanisms required to interact with the outside world: the Network, the Disk, the Browser, and the Cryptographic Engine.
+
+While the **Domain Layer** decides _what_ to do (Policy), the Infrastructure Layer knows _how_ to do it (Mechanism).
+
+### The Core Mandate
+
+1.  **Dumb Execution:** This layer does not contain business rules. It does not ask "Should I send this message?"; it simply sends bytes to a URL.
+2.  **Abstraction:** It hides the complexity of external APIs (e.g., IndexedDB, Web Crypto, HTTP) behind clean, injectable Angular services.
+3.  **Reliability:** It is responsible for handling low-level errors (network timeouts, disk quotas) and translating them into standard errors the Domain can understand.
+
+---
+
+## 🔌 Library Catalog
+
+The infrastructure is organized by the **Technical Capability** it provides.
+
+### 1. Network Access (HTTP & WSS)
+
+**Role:** The Communications Link. Wraps `HttpClient` and `WebSocket` to talk to the outer world.
+
+- **Chat Access (`chat-access`):**
+  - Implements the **Poke-then-Pull** protocol.
+  - `ChatDataService`: Fetches queued messages (`GET /messages`) and handles ACKs.
+  - `ChatSendService`: Pushes encrypted envelopes (`POST /send`).
+- **Live Data (`live-data`):**
+  - Manages the WebSocket connection.
+  - "Dumb Pipe" that listens for the `void` "Poke" signal to trigger ingestion.
+  - Handles exponential backoff and connection resilience.
+- **Key Access (`key-access`):**
+  - Fetches Public Keys for identity verification (`GET /keys/:urn`).
+  - Publishes the user's own Public Keys.
+- **Device Notifications (`device-notifications`):**
+  - Manages the **Offline Channel**.
+  - Registers the browser Service Worker to receive VAPID Push Notifications when the app is closed.
+
+### 2. Persistence (IndexedDB)
+
+**Role:** The Local Database. Wraps `Dexie.js` to provide type-safe, offline-first storage.
+
+- **DB Schema (`db-schema`):**
+  - **The Source of Truth.** Defines the exact shape of every record (`MessageRecord`, `ConversationIndexRecord`).
+  - Contains **Mappers** to translate between rich Domain Objects and flat Storage Records.
+- **Chat Storage (`chat-storage`):**
+  - **The Heavy Lifter.** Manages `messages`, `conversations`, `outbox`, `quarantined_messages`, and `tombstones`.
+  - Uses **Strategy Pattern** for complex atomic operations:
+    - `ChatDeletionStrategy`: Handles "Index Rollback" when the latest message is deleted.
+    - `ChatMergeStrategy`: Handles "Last-Write-Wins" merging of conversation indexes.
+- **Key Storage (`key-storage`):**
+  - Isolated database (`messenger_keys`) for storing Public Keys.
+  - Allows wiping keys (Logout) without destroying chat history.
+- **Local Settings (`local-settings`):**
+  - **User Intent Store.** Persists active user choices (e.g., "Wizard Seen", "Drive Consent").
+  - Distinct from system config; this is the "Contract" with the user.
+
+### 3. Cloud & Assets (BYOS)
+
+**Role:** The Bridge to User-Owned Storage.
+
+- **Asset Storage (`asset-storage`):**
+  - Implements the **Bring Your Own Storage (BYOS)** pattern.
+  - Adapts the generic Platform Storage (Google Drive, etc.) for Messenger use.
+  - Enforces MIME types to prevent "Garbage Text" uploads.
+
+### 4. Security & Caching
+
+**Role:** The Trust Engine.
+
+- **Crypto Bridge (`crypto-bridge`):**
+  - Wraps the browser's `Web Crypto API`.
+  - Handles **Hybrid Encryption** (AES-GCM + RSA-OAEP) and **Signing** (RSA-PSS).
+  - Manages the "Device Pairing" ceremony (QR Code generation/parsing).
+- **Key Cache (`key-cache`):**
+  - **Read-Through Cache.** Orchestrates `KeyAccess` (Network) and `KeyStorage` (Disk).
+  - Implements TTL (Time-To-Live) logic to auto-rotate stale keys.
+
+---
+
+## 🛠️ Developer Guide: Working in Infrastructure
+
+### Adding a New API Endpoint
+
+1.  Go to `chat-access` (or relevant lib).
+2.  Add the method to the Service.
+3.  Use `HttpClient` to make the request.
+4.  **Do not** add logic to interpret the result beyond basic success/failure. Return the raw data (or specific DTO) to the Domain.
+
+### Changing the Database Schema
+
+1.  Go to `db-schema`.
+2.  Update the `MessengerDatabase` class version number.
+3.  **Crucial:** If you change the schema, you must implement a migration strategy or a "Wipe and Rebuild" logic if acceptable for the feature.
+
+### Mocking for Tests
+
+Because Infrastructure deals with "Hard Dependencies" (Browser APIs, Network), these libraries are the primary targets for **Mocking** in Domain tests.
+
+- **Domain Unit Tests:** Should _always_ use a Mock version of these infrastructure services (e.g., `MockCryptoService`, `MockStorageService`).
+- **Infrastructure Unit Tests:** Should use mocks for the low-level browser APIs (e.g., `HttpTestingController`, `fakeIndexedDB`).
+
+---
+
+## 🔄 Interaction Diagram
+
+```mermaid
+graph BT
+    %% BT = Bottom to Top direction
+
+    subgraph "Layer 1: Infrastructure"
+        Net[Network Access]
+        DB[Storage & Cache]
+        Crypto[Crypto Bridge]
+        Realtime[Live Data]
+        Cloud[Asset Storage]
+    end
+
+    subgraph "Layer 2: Domain (Consumers)"
+        Identity[Identity Domain]
+        Convo[Conversation Domain]
+        Sync[Chat Sync Domain]
+        Media[Media Domain]
+    end
+
+    %% Dependencies (Domain depends on Infra)
+    Identity --> |Calls| Crypto
+    Identity --> |Calls| Net
+    Identity --> |Calls| DB
+
+    Convo --> |Calls| DB
+    Convo --> |Subscribes| Realtime
+
+    Sync --> |Calls| Net
+    Sync --> |Calls| DB
+
+    Media --> |Uploads| Cloud
+```
