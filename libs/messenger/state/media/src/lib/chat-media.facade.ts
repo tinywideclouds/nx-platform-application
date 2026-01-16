@@ -124,7 +124,7 @@ export class ChatMediaFacade {
       // Expects AssetResult: { uploads: string[], provider: '...' }
       const result = await this.assetStorage.upload(file);
 
-      const assets: Record<string, AssetResult> = { mediaMapId: result };
+      const assets: Record<string, AssetResult> = { [mediaMapId]: result };
       // 3. Signal (Reveal) to Recipient
       // We send the ID (provider reference) so they can "Download" it later
       const signalData: AssetRevealData = {

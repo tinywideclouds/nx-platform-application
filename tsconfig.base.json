@@ -23,6 +23,9 @@
       "@nx-platform-application/contacts-api": [
         "libs/contacts/api/src/index.ts"
       ],
+      "@nx-platform-application/contacts-app-mocking": [
+        "libs/contacts/app-mocking/src/index.ts"
+      ],
       "@nx-platform-application/contacts-persistence": [
         "libs/contacts/persistence/src/index.ts"
       ],
@@ -41,8 +44,8 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
-      "@nx-platform-application/contacts-app-mocking": [
-        "libs/contacts/app-mocking/src/index.ts"
+      "@nx-platform-application/lib-messenger-test-app-mocking": [
+        "libs/messenger/test/app-mocking/src/index.ts"
       ],
       "@nx-platform-application/messenger-domain-chat-sync": [
         "libs/messenger/domain/chat-sync/src/index.ts"

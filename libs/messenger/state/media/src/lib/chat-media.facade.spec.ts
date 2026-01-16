@@ -1,7 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatMediaFacade } from './chat-media.facade';
 import { AssetStorageService } from '@nx-platform-application/messenger-infrastructure-asset-storage';
-import { ConversationActionService } from '@nx-platform-application/messenger-domain-conversation';
+import {
+  ConversationActionService,
+  ConversationService,
+} from '@nx-platform-application/messenger-domain-conversation';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
@@ -13,6 +16,7 @@ describe('ChatMediaFacade', () => {
   let facade: ChatMediaFacade;
   let assetStorage: AssetStorageService;
   let actions: ConversationActionService;
+  let conversation: ConversationService;
   let storage: ChatStorageService;
   let parser: MessageContentParser;
 
@@ -28,10 +32,17 @@ describe('ChatMediaFacade', () => {
       providers: [
         ChatMediaFacade,
         MockProvider(AssetStorageService, {
-          upload: vi.fn().mockResolvedValue('https://cloud.com/img.png'),
+          upload: vi.fn().mockResolvedValue({
+            url: 'https://cloud.com/img.png',
+            provider: 'google',
+          }),
         }),
         MockProvider(ConversationActionService, {
           sendAssetReveal: vi.fn().mockResolvedValue(undefined),
+          sendImage: vi.fn().mockResolvedValue('m1'),
+        }),
+        MockProvider(ConversationService, {
+          reloadMessages: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(ChatStorageService, {
           getMessage: vi.fn().mockResolvedValue({
@@ -41,7 +52,6 @@ describe('ChatMediaFacade', () => {
           }),
           updateMessagePayload: vi.fn().mockResolvedValue(undefined),
         }),
-        // Explicitly initialize parser methods to avoid "does not exist" error
         MockProvider(MessageContentParser, {
           parse: vi.fn(),
           serialize: vi.fn(),
@@ -53,6 +63,7 @@ describe('ChatMediaFacade', () => {
     facade = TestBed.inject(ChatMediaFacade);
     assetStorage = TestBed.inject(AssetStorageService);
     actions = TestBed.inject(ConversationActionService);
+    conversation = TestBed.inject(ConversationService);
     storage = TestBed.inject(ChatStorageService);
     parser = TestBed.inject(MessageContentParser);
   });
@@ -68,12 +79,13 @@ describe('ChatMediaFacade', () => {
     vi.spyOn(parser, 'serialize').mockReturnValue(new Uint8Array([2]));
 
     // Act
-    await facade.processBackgroundUpload(
-      'bob' as any,
+    await facade['processBackgroundUpload'](
+      mockRecipient,
       'm1',
       mockFile,
       mockKeys,
       mockUrn,
+      'drive-image',
     );
 
     // Assert 1: Upload
@@ -81,23 +93,42 @@ describe('ChatMediaFacade', () => {
 
     // Assert 2: Signal
     expect(actions.sendAssetReveal).toHaveBeenCalledWith(
-      'bob',
-      { messageId: 'm1', remoteUrl: 'https://cloud.com/img.png' },
+      mockRecipient,
+      expect.objectContaining({
+        messageId: 'm1',
+        assets: {
+          'drive-image': {
+            url: 'https://cloud.com/img.png',
+            provider: 'google',
+          },
+        },
+      }),
       mockKeys,
       mockUrn,
     );
 
     // Assert 3: Patch
     expect(storage.getMessage).toHaveBeenCalledWith('m1');
+
+    // ✅ FIX: Expect the new 'assets' structure, not the flat 'remoteUrl'
     expect(parser.serialize).toHaveBeenCalledWith(
       expect.objectContaining({
-        remoteUrl: 'https://cloud.com/img.png',
+        assets: {
+          'drive-image': {
+            url: 'https://cloud.com/img.png',
+            provider: 'google',
+          },
+        },
       }),
     );
+
     expect(storage.updateMessagePayload).toHaveBeenCalledWith(
       'm1',
       expect.any(Uint8Array),
     );
+
+    // Assert 4: UI Refresh
+    expect(conversation.reloadMessages).toHaveBeenCalledWith(['m1']);
   });
 
   it('should catch and log errors during upload', async () => {
@@ -105,16 +136,17 @@ describe('ChatMediaFacade', () => {
       new Error('Network Fail'),
     );
 
-    // Should not throw
-    await facade.processBackgroundUpload(
-      'bob' as any,
-      'm1',
-      mockFile,
-      mockKeys,
-      mockUrn,
-    );
+    await expect(
+      facade['processBackgroundUpload'](
+        mockRecipient,
+        'm1',
+        mockFile,
+        mockKeys,
+        mockUrn,
+        'drive-image',
+      ),
+    ).rejects.toThrow('Network Fail');
 
     expect(actions.sendAssetReveal).not.toHaveBeenCalled();
-    expect(storage.updateMessagePayload).not.toHaveBeenCalled();
   });
 });

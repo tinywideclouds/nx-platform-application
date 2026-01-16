@@ -34,7 +34,19 @@ import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastr
 describe('AppState', () => {
   let service: AppState;
 
-  // --- Mocks ---
+  // Variables for mocks (Initialized in beforeEach)
+  let mockIdentity: any;
+  let mockMedia: any;
+  let mockModeration: any;
+  let mockSync: any;
+  let mockChatService: any;
+  let mockConversationService: any;
+  let mockActionService: any;
+  let mockOutbox: any;
+  let mockAuth: any;
+  let mockLive: any;
+  let mockSettings: any;
+
   const mockCurrentUser = {
     id: URN.parse('urn:contacts:user:me'),
     alias: 'Me',
@@ -42,63 +54,59 @@ describe('AppState', () => {
   const mockKeys = { encKey: 'priv', sigKey: 'priv' } as any;
   const mockRecipientUrn = URN.parse('urn:contacts:user:recipient');
 
-  // Facades
-  const mockIdentity = {
-    onboardingState: signal('READY'),
-    isCeremonyActive: signal(false),
-    myKeys: signal(mockKeys),
-    initialize: vi.fn(),
-  };
-  const mockMedia = { sendImage: vi.fn().mockResolvedValue(undefined) };
-  const mockModeration = { blockedSet: signal(new Set()) };
-  const mockSync = {
-    isConnected: signal(true),
-    isSyncing: signal(false),
-    resumeSession: vi.fn().mockResolvedValue(true),
-  };
-
-  // Chat State
-  const mockChatService = {
-    activeConversations: signal([]),
-    typingActivity: signal(new Map()),
-    refreshActiveConversations: vi.fn(),
-    startSyncSequence: vi.fn().mockResolvedValue(undefined),
-  };
-
-  // Conversation Domain
-  const mockConversationService = {
-    messages: signal([]),
-    selectedConversation: signal(mockRecipientUrn), // ✅ Default: Conversation Selected
-    isLoadingHistory: signal(false),
-    firstUnreadId: signal(null),
-    readCursors: signal(new Map()),
-    isRecipientKeyMissing: signal(false),
-    typingTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
-    readReceiptTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
-  };
-
-  const mockActionService = {
-    sendMessage: vi.fn().mockResolvedValue(undefined),
-  };
-
-  const mockOutbox = { processQueue: vi.fn() };
-  const mockAuth = {
-    currentUser: signal(mockCurrentUser),
-    getJwtToken: vi.fn(() => 'token'),
-    sessionLoaded$: { pipe: () => ({ subscribe: vi.fn() }) },
-  };
-
-  // Infra Setup
-  const mockLive = { status$: { pipe: () => ({ subscribe: vi.fn() }) } };
-  const mockSettings = { getWizardSeen: vi.fn().mockResolvedValue(true) };
-
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // --- RE-INITIALIZE MOCKS PER TEST ---
+    mockIdentity = {
+      onboardingState: signal('READY'),
+      isCeremonyActive: signal(false),
+      myKeys: signal(mockKeys),
+      initialize: vi.fn(),
+    };
+    mockMedia = { sendImage: vi.fn().mockResolvedValue(undefined) };
+    mockModeration = { blockedSet: signal(new Set()) };
+    mockSync = {
+      isConnected: signal(true),
+      isSyncing: signal(false),
+      resumeSession: vi.fn().mockResolvedValue(true),
+    };
+
+    mockChatService = {
+      activeConversations: signal([]),
+      typingActivity: signal(new Map()),
+      refreshActiveConversations: vi.fn(),
+      startSyncSequence: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mockConversationService = {
+      messages: signal([]),
+      selectedConversation: signal(mockRecipientUrn),
+      isLoadingHistory: signal(false),
+      firstUnreadId: signal(null),
+      readCursors: signal(new Map()),
+      isRecipientKeyMissing: signal(false),
+      typingTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
+      readReceiptTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
+    };
+
+    mockActionService = {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mockOutbox = { processQueue: vi.fn() };
+    mockAuth = {
+      currentUser: signal(mockCurrentUser),
+      getJwtToken: vi.fn(() => 'token'),
+      sessionLoaded$: { pipe: () => ({ subscribe: vi.fn() }) },
+    };
+
+    mockLive = { status$: { pipe: () => ({ subscribe: vi.fn() }) } };
+    mockSettings = { getWizardSeen: vi.fn().mockResolvedValue(true) };
 
     TestBed.configureTestingModule({
       providers: [
         AppState,
-        // Mocking via Factories or UseValue
         { provide: ChatIdentityFacade, useValue: mockIdentity },
         { provide: ChatMediaFacade, useValue: mockMedia },
         { provide: ChatModerationFacade, useValue: mockModeration },
@@ -111,7 +119,6 @@ describe('AppState', () => {
         { provide: ChatLiveDataService, useValue: mockLive },
         { provide: LocalSettingsService, useValue: mockSettings },
 
-        // Lightweight Mocks for remaining deps
         MockProvider(Logger),
         MockProvider(GroupProtocolService),
         MockProvider(AddressBookManagementApi),
@@ -133,11 +140,10 @@ describe('AppState', () => {
       expect(mockActionService.sendMessage).not.toHaveBeenCalled();
     });
 
-    // ✅ CASE 1: File Priority
     it('should delegate to MediaFacade if attachment is present (File Priority)', async () => {
       const mockFile = new File([''], 'test.png');
       const draft: DraftMessage = {
-        text: 'Caption Text', // This text should become the caption
+        text: 'Caption Text',
         attachments: [
           {
             file: mockFile,
@@ -151,20 +157,17 @@ describe('AppState', () => {
 
       await service.sendDraft(draft);
 
-      // Expect Media Facade call
       expect(mockMedia.sendImage).toHaveBeenCalledWith(
         mockRecipientUrn,
         mockFile,
-        'Caption Text', // Checked: Caption passed
+        'Caption Text',
         mockKeys,
         mockCurrentUser.id,
       );
 
-      // Expect Text Logic SKIPPED
       expect(mockActionService.sendMessage).not.toHaveBeenCalled();
     });
 
-    // ✅ CASE 2: Text Only
     it('should delegate to ActionService if NO attachment is present', async () => {
       const draft: DraftMessage = {
         text: 'Pure Text Message',
@@ -173,7 +176,6 @@ describe('AppState', () => {
 
       await service.sendDraft(draft);
 
-      // Expect Text Logic
       expect(mockActionService.sendMessage).toHaveBeenCalledWith(
         mockRecipientUrn,
         'Pure Text Message',
@@ -181,11 +183,9 @@ describe('AppState', () => {
         mockCurrentUser.id,
       );
 
-      // Expect Media Logic SKIPPED
       expect(mockMedia.sendImage).not.toHaveBeenCalled();
     });
 
-    // ✅ CASE 3: Side Effects
     it('should trigger UI refresh and Outbox processing after sending', async () => {
       const draft: DraftMessage = { text: 'test', attachments: [] };
 

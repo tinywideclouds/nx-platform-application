@@ -3,9 +3,10 @@ import { CloudSyncService } from './cloud-sync.service';
 import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
+import { IntegrationApiService } from '@nx-platform-application/platform-infrastructure-drive-integrations'; // 👈 Import this
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
 
 describe('CloudSyncService (Orchestrator)', () => {
@@ -31,6 +32,10 @@ describe('CloudSyncService (Orchestrator)', () => {
           connect: vi.fn().mockResolvedValue(true),
           isConnected: signal(true),
         }),
+        // ✅ FIX: Mock the API Service so we don't need HttpClient
+        MockProvider(IntegrationApiService, {
+          getStatus: vi.fn().mockReturnValue(signal({ status: 'connected' })),
+        }),
         MockProvider(Logger),
       ],
     });
@@ -41,12 +46,10 @@ describe('CloudSyncService (Orchestrator)', () => {
     storage = TestBed.inject(StorageService);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
+  // ... (tests remain the same)
   describe('syncNow', () => {
     it('should fail immediately if Storage is not connected', async () => {
+      // Override signal for this test
       (storage.isConnected as any).set(false);
 
       const result = await service.syncNow({
@@ -99,7 +102,7 @@ describe('CloudSyncService (Orchestrator)', () => {
       expect(chatSync.syncMessages).toHaveBeenCalled();
       expect(result.messagesProcessed).toBe(true);
 
-      // Overall success is true (we don't crash on partials)
+      // Overall success is true (because partial success is allowed)
       expect(result.success).toBe(true);
     });
   });

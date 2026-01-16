@@ -22,12 +22,6 @@ import {
   AUTH_API_URL,
 } from '@nx-platform-application/platform-infrastructure-auth-access';
 
-// --- Mock Providers ---
-import { AppState } from '@nx-platform-application/messenger-state-app';
-import { MockChatService } from './mocks/mock-chat.service';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
-
 // --- Contacts Infrastructure & API ---
 import {
   ContactsQueryApi,
@@ -41,9 +35,19 @@ import { GroupNetworkStorage } from '@nx-platform-application/contacts-storage';
 import { ContactsFacadeService } from '@nx-platform-application/contacts-state';
 
 // --- Service Tokens ---
-import { ROUTING_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { WSS_URL_TOKEN } from '@nx-platform-application/messenger-infrastructure-live-data';
-import { KEY_SERVICE_URL } from '@nx-platform-application/messenger-infrastructure-key-access';
+import {
+  ChatDataService,
+  ChatSendService,
+  ROUTING_SERVICE_URL,
+} from '@nx-platform-application/messenger-infrastructure-chat-access';
+import {
+  ChatLiveDataService,
+  WSS_URL_TOKEN,
+} from '@nx-platform-application/messenger-infrastructure-live-data';
+import {
+  SecureKeyService,
+  KEY_SERVICE_URL,
+} from '@nx-platform-application/messenger-infrastructure-key-access';
 
 // --- Notification Tokens ---
 import {
@@ -72,28 +76,42 @@ import {
   QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// ✅ NEW: Platform Infrastructure Storage imports
 import {
   VaultDrivers,
   PlatformStorageConfig,
   GoogleDriveDriver,
-  // [NEW] Import the Token Strategy tokens
   GOOGLE_TOKEN_STRATEGY,
   IdentityServerStrategy,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
-// --- Conditional Mock Providers ---
+// --- TEST MOCKS (For Simulation) ---
+import {
+  MockChatDataService,
+  MockChatSendService,
+  MockLiveService,
+  MockKeyService,
+} from '@nx-platform-application/lib-messenger-test-app-mocking';
+
+// --- Provider Selection Logic ---
+
+// 1. Auth Provider (Always Real or Mocked at Adapter Level)
 const authProviders = [{ provide: IAuthService, useExisting: AuthService }];
 
-const chatProvider = environment.useMocks
-  ? { provide: AppState, useClass: MockChatService }
-  : [];
+// 2. Messenger Infrastructure Providers (Real vs Mock)
+const messengerInfraProviders = environment.useMocks
+  ? [
+      { provide: ChatDataService, useClass: MockChatDataService },
+      { provide: ChatSendService, useClass: MockChatSendService },
+      { provide: ChatLiveDataService, useClass: MockLiveService },
+      { provide: SecureKeyService, useClass: MockKeyService },
+    ]
+  : [
+      // Real Services (implicitly provided via @Injectable({providedIn: 'root'})
+      // but explicitly listed here if we need to override tokens, which we don't for these classes directly)
+      // However, to ensure consistency, we leave the default classes active.
+    ];
 
-const contactsProvider = environment.useMocks
-  ? { provide: ContactsStorageService, useClass: MockContactsStorageService }
-  : [];
-
-// --- Token Providers ---
+// 3. Token Providers (Config)
 const tokenProviders = environment.useMocks
   ? []
   : [
@@ -123,7 +141,7 @@ const tokenProviders = environment.useMocks
       },
     ];
 
-// ✅ NEW: Cloud Providers (Storage + Config)
+// 4. Cloud Providers (Storage + Config)
 const cloudProviders = [
   {
     provide: PlatformStorageConfig,
@@ -131,15 +149,13 @@ const cloudProviders = [
       googleClientId: environment.googleClientId,
     } as PlatformStorageConfig,
   },
-  // [NEW] Provide the Server-Side Strategy.
-  // This allows the Driver to delegate auth to your Node Identity Service.
   {
     provide: GOOGLE_TOKEN_STRATEGY,
     useClass: IdentityServerStrategy,
   },
   {
-    provide: VaultDrivers, // The "Menu" of drivers
-    useClass: GoogleDriveDriver, // The implementation
+    provide: VaultDrivers,
+    useClass: GoogleDriveDriver,
     multi: true,
   },
 ];
@@ -180,10 +196,10 @@ export const appConfig: ApplicationConfig = {
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
     { provide: QuarantineStorage, useClass: DexieQuarantineStorage },
 
-    chatProvider,
-    contactsProvider,
+    // --- Dynamic Infra Switching ---
+    ...messengerInfraProviders,
     ...tokenProviders,
-    ...cloudProviders, // ✅ Wired with Strategy
+    ...cloudProviders,
 
     {
       provide: LOGGER_CONFIG,
