@@ -22,40 +22,41 @@
     </span>
   </div>
 
-  <div main class="h-full bg-gray-50 relative flex flex-col">
+  <div
+    main
+    class="flex-1 min-h-0 bg-gray-50 relative flex flex-col overflow-hidden"
+  >
     @if (createMode(); as mode) {
-      <header class="w-full flex justify-center layout-header">
-        <h1>Create</h1>
-      </header>
-      <div class="flex-1 w-full overflow-y-auto">
+      <div class="flex-1 w-full overflow-hidden">
         @if (mode === 'group') {
           <contacts-group-page
-            (saved)="clearSelection()"
+            (saved)="onEntitySaved($event)"
+            (deleted)="clearSelection()"
             (cancelled)="clearSelection()"
           />
         } @else {
           <contacts-page
-            (saved)="clearSelection()"
+            (saved)="onEntitySaved($event)"
+            (deleted)="clearSelection()"
             (cancelled)="clearSelection()"
           />
         }
       </div>
     } @else if (selectedUrn(); as urn) {
-      <header class="w-full flex justify-center layout-header">
-        <h1>Details</h1>
-      </header>
-      <div class="flex-1 w-full overflow-y-auto">
+      <div class="flex-1 w-full overflow-hidden">
         @if (activeTab() === 'groups') {
           <contacts-group-page
             [groupId]="urn"
-            (saved)="clearSelection()"
+            (saved)="onEntitySaved($event)"
+            (deleted)="clearSelection()"
             (cancelled)="clearSelection()"
           />
         } @else {
-          <contacts-detail
-            [contactId]="urn"
-            (saved)="clearSelection()"
+          <contacts-page
+            [selectedUrn]="urn"
+            (saved)="onEntitySaved($event)"
             (deleted)="clearSelection()"
+            (cancelled)="clearSelection()"
           />
         }
       </div>
@@ -64,9 +65,7 @@
         class="flex flex-col items-center justify-center h-full text-gray-400"
       >
         <mat-icon class="text-6xl mb-4 text-gray-300">contacts</mat-icon>
-        <p class="text-lg" data-testid="empty-selection">
-          Select a contact to view details
-        </p>
+        <p class="text-lg">Select a contact to view details</p>
       </div>
     }
   </div>

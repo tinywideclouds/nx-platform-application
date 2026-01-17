@@ -1,5 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-page-form/contact-form.component.ts
-
 import {
   Component,
   output,
@@ -50,9 +48,10 @@ export class ContactFormComponent {
   startInEditMode = input(false);
   readonly = input(false);
 
-  // --- OUTPUTS ---
+  // --- OUTPUTS (Strict Contract) ---
   save = output<Contact>();
   delete = output<void>();
+  cancel = output<void>();
 
   // --- UI STATE ---
   isEditing = signal(false);
@@ -67,7 +66,7 @@ export class ContactFormComponent {
   alias = signal('');
   aliasTouched = signal(false);
 
-  email = signal(''); // Primary Email
+  email = signal('');
   emailTouched = signal(false);
 
   emailAddresses = signal<string[]>([]);
@@ -103,7 +102,7 @@ export class ContactFormComponent {
     );
   });
 
-  // Returns true if the user has typed *anything* meaningful.
+  // Stage 1 Detection
   hasAnyContent = computed(() => {
     return (
       !!this.firstName().trim() ||
@@ -116,13 +115,9 @@ export class ContactFormComponent {
   });
 
   saveTooltip = computed(() => {
-    // Stage 1: Disabled
     if (!this.hasAnyContent()) return 'Enter contact details';
-
-    // Stage 3: Ready
     if (this.isValid()) return 'Save Contact';
 
-    // Stage 2: Semi-Active (Guidance)
     if (this.firstNameError()) return 'Missing: First Name';
     if (this.aliasError()) return 'Missing: Alias';
     if (this.emailError()) return 'Invalid: Primary Email';
@@ -160,10 +155,9 @@ export class ContactFormComponent {
 
   // --- ACTIONS ---
 
-  // [NEW] Handles the transition to edit mode + scrolling
+  // [RESTORED] Handles transition to edit mode + scrolling
   enterEditMode(): void {
     this.isEditing.set(true);
-    // Smooth scroll to the top of the component
     this.el.nativeElement.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
@@ -203,18 +197,15 @@ export class ContactFormComponent {
   }
 
   onSave(): void {
-    // 1. Reveal errors
     this.firstNameTouched.set(true);
     this.aliasTouched.set(true);
     this.emailTouched.set(true);
 
-    // 2. Gatekeeping
     if (!this.isValid()) {
       this.jumpToFirstError();
       return;
     }
 
-    // 3. Execute
     if (this.contact()) {
       const updated: Contact = {
         ...this.contact()!,
@@ -226,6 +217,12 @@ export class ContactFormComponent {
         phoneNumbers: this.phoneNumbers(),
       };
       this.save.emit(updated);
+
+      // ✅ FIX: If editing an existing contact, exit edit mode now.
+      // If creating a new contact, we don't care because the component will be destroyed/navigated.
+      if (!this.startInEditMode()) {
+        this.isEditing.set(false);
+      }
     }
   }
 
@@ -234,7 +231,15 @@ export class ContactFormComponent {
   }
 
   onCancel(): void {
+    // If creating new, emit cancel (Page handles navigation)
+    if (this.startInEditMode()) {
+      this.cancel.emit();
+      return;
+    }
+    // If editing existing, just exit edit mode
     this.isEditing.set(false);
+
+    // Reset form to original value
     const c = this.contact();
     if (c) {
       this.firstName.set(c.firstName ?? '');
@@ -266,8 +271,6 @@ export class ContactFormComponent {
     this.aliasTouched.set(false);
     this.emailTouched.set(false);
   }
-
-  // --- VISUAL FEEDBACK ---
 
   getStatusIcon(field: 'firstName' | 'surname' | 'alias' | 'email'): string {
     if (!this.isEditing()) return '';

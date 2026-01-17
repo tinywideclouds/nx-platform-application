@@ -5,7 +5,7 @@
         <button
           mat-button
           class="toolbar-tonal-button"
-          (click)="onClose()"
+          (click)="onCancel()"
           data-testid="close-button"
         >
           Close
@@ -15,7 +15,7 @@
       <div class="flex gap-2">
         <button
           mat-icon-button
-          (click)="onClose()"
+          (click)="onCancel()"
           data-testid="close-button"
           aria-label="Close"
         >
@@ -25,16 +25,44 @@
     }
   </contacts-page-toolbar>
 
-  <div class="flex-grow overflow-y-auto">
-    @if (contactId(); as data) {
-      <contacts-detail
-        [contactId]="data.urn"
-        [startInEditMode]="data.isNew"
-        (saved)="onSaved()"
-        (deleted)="onClose()"
-      />
+  <div class="flex-grow overflow-y-auto flex justify-center">
+    @if (contact(); as data) {
+      <div class="w-full max-w-lg pb-10">
+        <contacts-form
+          [contact]="data"
+          [linkedIdentities]="linkedIdentities()"
+          [startInEditMode]="contactId()?.isNew ?? false"
+          (save)="onSave($event)"
+          (delete)="onDelete()"
+          (cancel)="onCancel()"
+        />
+
+        @if (groups().length > 0) {
+          <div
+            class="mt-6 mx-4 p-4 border rounded-md bg-gray-50 border-gray-100"
+          >
+            <h3
+              class="font-medium text-gray-700 text-sm mb-3 flex items-center gap-2"
+            >
+              <mat-icon class="text-gray-400 text-base h-4 w-4">group</mat-icon>
+              Member of Groups
+            </h3>
+            <div class="flex flex-wrap gap-2">
+              <mat-chip-listbox aria-label="Group membership">
+                @for (group of groups(); track group.id.toString()) {
+                  <mat-chip data-testid="group-chip" class="text-sm">
+                    {{ group.name }}
+                  </mat-chip>
+                }
+              </mat-chip-listbox>
+            </div>
+          </div>
+        }
+      </div>
     } @else {
-      <div class="p-4 text-red-500">Invalid Contact ID</div>
+      <div class="p-8 text-center text-gray-500 animate-pulse">
+        Loading contact...
+      </div>
     }
   </div>
 </div>

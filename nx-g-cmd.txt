@@ -225,3 +225,5 @@ nx g @nx/angular:library --name=lib-contacts-app-mocking --directory=libs/contac
 nx g @nx/angular:library --name=lib-messenger-test-app-mocking --directory=libs/messenger/test/app-mocking --tags="scope:messenger" 
 
 
+nx g @nx/angular:library --name=platform-ui-forms --directory=libs/platform/ui/forms --tags="scope:platform" 
+

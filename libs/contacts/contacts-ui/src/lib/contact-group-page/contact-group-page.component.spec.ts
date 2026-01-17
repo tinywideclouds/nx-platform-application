@@ -1,19 +1,21 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.spec.ts
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
+import { ContactsStateService } from '@nx-platform-application/contacts-state'; // ✅ Correct Service
 import { Subject, of } from 'rxjs';
-import { By } from '@angular/platform-browser';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
 import { ContactGroupPageComponent } from './contact-group-page.component';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
-// ✅ IMPORT MODULE FOR REMOVAL
+// ✅ IMPORT NG-MOCKS & MATERIAL
+import { MockProvider } from 'ng-mocks';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 
 // --- Mocks Data ---
@@ -24,13 +26,6 @@ const MOCK_CONTACTS: Contact[] = [
   {
     id: mockContactUrn,
     alias: 'johndoe',
-    firstName: 'John',
-    surname: 'Doe',
-    email: 'john@example.com',
-    serviceContacts: {},
-    phoneNumbers: [],
-    emailAddresses: [],
-    lastModified: '' as any,
   } as Contact,
 ];
 
@@ -45,13 +40,13 @@ const MOCK_GROUP: ContactGroup = {
 describe('ContactGroupPageComponent', () => {
   let fixture: ComponentFixture<ContactGroupPageComponent>;
   let component: ContactGroupPageComponent;
-  let mockContactsService: any;
-  let mockDialog: any;
+  let stateService: any;
+  let dialogSpy: any;
+  let snackBarSpy: any;
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    mockContactsService = {
+  // Helper to re-configure for New vs Existing
+  const setupModule = async (routeId: string | null) => {
+    stateService = {
       getGroup: vi.fn(),
       saveGroup: vi.fn(),
       deleteGroup: vi.fn(),
@@ -59,12 +54,14 @@ describe('ContactGroupPageComponent', () => {
       contacts$: new Subject<Contact[]>(),
     };
 
-    // ✅ ROBUST MOCK: Returns the expected Ref structure
-    mockDialog = {
+    // ✅ ROBUST SPY: Create the spy object explicitly
+    dialogSpy = {
       open: vi.fn().mockReturnValue({
-        afterClosed: () => of(true), // Simulates "Yes, Delete"
+        afterClosed: () => of(true), // Simulates "Yes"
       }),
     };
+
+    snackBarSpy = { open: vi.fn() };
 
     await TestBed.configureTestingModule({
       imports: [
@@ -73,68 +70,95 @@ describe('ContactGroupPageComponent', () => {
         NoopAnimationsModule,
       ],
       providers: [
-        { provide: ContactsStorageService, useValue: mockContactsService },
-        // ✅ PROVIDE MOCK: This replaces the real service
-        { provide: MatDialog, useValue: mockDialog },
+        // Use the STATE service (not Storage) as that is what the component injects
+        { provide: ContactsStateService, useValue: stateService },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: of(convertToParamMap(routeId ? { id: routeId } : {})),
+          },
+        },
+        // ✅ USE MOCK PROVIDER
+        MockProvider(MatDialog, dialogSpy),
+        MockProvider(MatSnackBar, snackBarSpy),
       ],
     })
       .overrideComponent(ContactGroupPageComponent, {
-        // ✅ CRITICAL: Remove real module to prevent internal service injection
+        // ✅ STRIP REAL MODULES
         remove: { imports: [ContactGroupFormComponent, MatDialogModule] },
-        add: { imports: [] },
       })
       .compileComponents();
 
     fixture = TestBed.createComponent(ContactGroupPageComponent);
     component = fixture.componentInstance;
+  };
+
+  describe('Existing Group', () => {
+    beforeEach(async () => {
+      await setupModule(mockGroupUrn.toString());
+      stateService.getGroup.mockResolvedValue(MOCK_GROUP);
+      fixture.detectChanges();
+    });
+
+    it('should create and load group', () => {
+      expect(component).toBeTruthy();
+      expect(component.resolvedId()?.urn.toString()).toBe(
+        mockGroupUrn.toString(),
+      );
+    });
+
+    it('should emit (saved) and show "Updated" snackbar', async () => {
+      stateService.saveGroup.mockResolvedValue(undefined);
+      stateService.contacts$.next(MOCK_CONTACTS);
+      const spy = vi.spyOn(component.saved, 'emit');
+
+      await component.onSave(MOCK_GROUP);
+
+      expect(stateService.saveGroup).toHaveBeenCalledWith(MOCK_GROUP);
+      expect(snackBarSpy.open).toHaveBeenCalledWith(
+        expect.stringContaining('updated'),
+        expect.any(String),
+        expect.any(Object),
+      );
+      expect(spy).toHaveBeenCalledWith(MOCK_GROUP);
+    });
+
+    it('should emit (saved) when delete confirmed', async () => {
+      stateService.deleteGroup.mockResolvedValue(undefined);
+      const spy = vi.spyOn(component.deleted, 'emit');
+
+      // ✅ Uses the spy correctly now
+      await component.onDelete({ recursive: false });
+
+      expect(dialogSpy.open).toHaveBeenCalledWith(
+        ConfirmationDialogComponent,
+        expect.anything(),
+      );
+      expect(stateService.deleteGroup).toHaveBeenCalledWith(MOCK_GROUP.id);
+      expect(spy).toHaveBeenCalled();
+    });
   });
 
-  it('should create', () => {
-    mockContactsService.getGroup.mockResolvedValue(MOCK_GROUP);
-    fixture.detectChanges();
-    expect(component).toBeTruthy();
-  });
+  describe('New Group', () => {
+    beforeEach(async () => {
+      await setupModule(null); // No ID in route
+      fixture.detectChanges();
+    });
 
-  it('should emit (saved) when saveGroup completes', async () => {
-    fixture.componentRef.setInput('groupId', undefined);
-    mockContactsService.saveGroup.mockResolvedValue(undefined);
-    mockContactsService.contacts$.next(MOCK_CONTACTS);
-    fixture.detectChanges();
-    await fixture.whenStable();
+    it('should default to New mode', () => {
+      expect(component.resolvedId()?.isNew).toBe(true);
+    });
 
-    const spy = vi.spyOn(component.saved, 'emit');
+    it('should show "Created" snackbar on save', async () => {
+      stateService.saveGroup.mockResolvedValue(undefined);
 
-    await component.onSave(MOCK_GROUP);
+      await component.onSave(MOCK_GROUP);
 
-    expect(mockContactsService.saveGroup).toHaveBeenCalledWith(MOCK_GROUP);
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should emit (cancelled) when onClose is called', () => {
-    const spy = vi.spyOn(component.cancelled, 'emit');
-    component.onClose();
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should emit (saved) when onDelete is confirmed', async () => {
-    fixture.componentRef.setInput('groupId', mockGroupUrn);
-    mockContactsService.getGroup.mockResolvedValue(MOCK_GROUP);
-    mockContactsService.contacts$.next(MOCK_CONTACTS);
-    mockContactsService.deleteGroup.mockResolvedValue(undefined);
-
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const spy = vi.spyOn(component.saved, 'emit');
-
-    // ✅ This will now use mockDialog.open() and succeed
-    await component.onDelete({ recursive: false });
-
-    expect(mockDialog.open).toHaveBeenCalledWith(
-      ConfirmationDialogComponent,
-      expect.anything(),
-    );
-    expect(mockContactsService.deleteGroup).toHaveBeenCalledWith(MOCK_GROUP.id);
-    expect(spy).toHaveBeenCalled();
+      expect(snackBarSpy.open).toHaveBeenCalledWith(
+        expect.stringContaining('created'),
+        expect.any(String),
+        expect.any(Object),
+      );
+    });
   });
 });

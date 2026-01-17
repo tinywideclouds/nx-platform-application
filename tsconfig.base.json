@@ -197,6 +197,9 @@
       "@nx-platform-application/platform-ui-auth": [
         "libs/platform/ui/auth/src/index.ts"
       ],
+      "@nx-platform-application/platform-ui-forms": [
+        "libs/platform/ui/forms/src/index.ts"
+      ],
       "@nx-platform-application/platform-ui-layouts": [
         "libs/platform/ui/layouts/src/index.ts"
       ],

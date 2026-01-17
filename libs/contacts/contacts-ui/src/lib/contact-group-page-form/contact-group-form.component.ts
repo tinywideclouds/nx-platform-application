@@ -1,11 +1,8 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-page-form/contact-group-form.component.ts
-
 import {
   Component,
   input,
   output,
   effect,
-  inject,
   signal,
   computed,
   ChangeDetectionStrategy,
@@ -17,9 +14,6 @@ import {
   ContactGroupMember,
 } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
-
-// SHARED
-import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
 
 import { FormValidators } from '@nx-platform-application/platform-ui-forms';
 
@@ -33,6 +27,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 // PIPES
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
+
+// SHARED
+import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
 
 @Component({
   selector: 'contacts-group-form',
@@ -62,6 +59,7 @@ export class ContactGroupFormComponent {
   // --- OUTPUTS ---
   save = output<ContactGroup>();
   delete = output<{ recursive: boolean }>();
+  cancel = output<void>();
 
   // --- UI STATE ---
   isEditing = signal(false);
@@ -70,10 +68,7 @@ export class ContactGroupFormComponent {
   // --- FORM STATE ---
   name = signal('');
   nameTouched = signal(false);
-
   description = signal('');
-
-  // The selector component manages the IDs, we just hold the value
   contactIds = signal<string[]>([]);
 
   // --- COMPUTED VALIDATION ---
@@ -83,7 +78,6 @@ export class ContactGroupFormComponent {
 
   isValid = computed(() => !this.nameError());
 
-  // ✅ NEW: Stage 1 Detection
   hasAnyContent = computed(() => {
     return (
       !!this.name().trim() ||
@@ -93,15 +87,11 @@ export class ContactGroupFormComponent {
   });
 
   saveTooltip = computed(() => {
-    // Stage 1
     if (!this.hasAnyContent()) return 'Enter group details';
-    // Stage 3
     if (this.isValid()) return 'Save Group';
-    // Stage 2
     return 'Missing: Group Name';
   });
 
-  // --- DERIVED VIEW HELPERS ---
   groupMembers = computed(() => {
     const ids = this.contactIds();
     const contacts = this.allContacts();
@@ -137,7 +127,6 @@ export class ContactGroupFormComponent {
     this.nameTouched.set(true);
 
     if (!this.isValid()) {
-      // Simple focus logic
       document.getElementById('group-name-input')?.focus();
       return;
     }
@@ -154,12 +143,19 @@ export class ContactGroupFormComponent {
         },
       );
 
-      this.save.emit({
+      const updatedGroup = {
         ...originalGroup,
         name: this.name(),
         description: this.description(),
         members: updatedMembers,
-      });
+      };
+
+      this.save.emit(updatedGroup);
+
+      // ✅ FIX: Consistency - Exit Edit Mode after saving updates
+      if (!this.startInEditMode()) {
+        this.isEditing.set(false);
+      }
     }
   }
 
@@ -168,7 +164,19 @@ export class ContactGroupFormComponent {
   }
 
   onCancel(): void {
+    if (this.startInEditMode()) {
+      this.cancel.emit();
+      return;
+    }
     this.isEditing.set(false);
+
+    // Reset to original values
+    const g = this.group();
+    if (g) {
+      this.name.set(g.name);
+      this.description.set(g.description || '');
+      this.contactIds.set(g.members.map((m) => m.contactId.toString()));
+    }
   }
 
   trackContactById(index: number, contact: Contact): string {

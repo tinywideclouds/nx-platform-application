@@ -22,9 +22,7 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 
 // FEATURE COMPONENTS
 import { ContactsSidebarComponent } from '../contacts-sidebar/contacts-sidebar.component';
-import { ContactDetailComponent } from '../contact-detail/contact-detail.component';
 import { ContactGroupPageComponent } from '../contact-group-page/contact-group-page.component';
-// IMPORT NEW PAGE
 import { ContactPageComponent } from '../contact-page/contact-page.component';
 
 @Component({
@@ -35,8 +33,7 @@ import { ContactPageComponent } from '../contact-page/contact-page.component';
     MatIconModule,
     MasterDetailLayoutComponent,
     ContactsSidebarComponent,
-    ContactDetailComponent,
-    ContactPageComponent,
+    ContactPageComponent, // ✅ Unified Page
     ContactGroupPageComponent,
   ],
   templateUrl: './contacts-viewer.component.html',
@@ -64,7 +61,7 @@ export class ContactsViewerComponent {
     return params?.get('new'); // 'contact' | 'group' | null
   });
 
-  // 2. Derive Selected URN (Existing Logic)
+  // 2. Derive Selected URN
   selectedUrn = computed(() => {
     const id = this.selectedId();
     if (!id) return undefined;
@@ -97,7 +94,6 @@ export class ContactsViewerComponent {
     if (event.index === 1) tab = 'groups';
     if (event.index === 2) tab = 'manage';
 
-    // Clear selection AND creation mode when switching tabs
     this.updateUrl({ tab, selectedId: null, new: null });
   }
 
@@ -106,7 +102,6 @@ export class ContactsViewerComponent {
       this.contactSelected.emit(contact);
       return;
     }
-    // Clear 'new' param when selecting
     this.updateUrl({ selectedId: contact.id.toString(), new: null });
   }
 
@@ -116,6 +111,12 @@ export class ContactsViewerComponent {
       return;
     }
     this.updateUrl({ selectedId: group.id.toString(), new: null });
+  }
+
+  // --- NAVIGATION HANDLERS ---
+
+  onEntitySaved(entity: Contact | ContactGroup): void {
+    this.updateUrl({ selectedId: entity.id.toString(), new: null });
   }
 
   clearSelection(): void {

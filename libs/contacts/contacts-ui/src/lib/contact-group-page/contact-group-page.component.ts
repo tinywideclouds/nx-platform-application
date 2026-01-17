@@ -1,4 +1,3 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-group-page/contact-group-page.component.ts
 import {
   Component,
   inject,
@@ -7,18 +6,20 @@ import {
   signal,
   computed,
 } from '@angular/core';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ActivatedRoute } from '@angular/router';
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { map, switchMap, tap } from 'rxjs/operators';
-import { from, of, Observable } from 'rxjs';
+import { from, of, combineLatest, Observable } from 'rxjs';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
 import {
@@ -41,42 +42,82 @@ import {
   styleUrl: './contact-group-page.component.scss',
 })
 export class ContactGroupPageComponent {
-  private contactsService = inject(ContactsStorageService);
+  private route = inject(ActivatedRoute);
+  private state = inject(ContactsStateService);
   private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
 
-  // ✅ 1. Outputs replace Router
-  saved = output<void>();
+  // --- STRICT CONTRACT ---
+  saved = output<ContactGroup>();
+  deleted = output<void>();
   cancelled = output<void>();
 
   groupId = input<URN | undefined>(undefined);
-  startInEditMode = signal(false);
-  subGroups = signal<ContactGroup[]>([]);
 
+  // Internal State
+  subGroups = signal<ContactGroup[]>([]);
   linkedChildrenCount = computed(() => this.subGroups().length);
 
-  allContacts = toSignal(this.contactsService.contacts$, {
+  allContacts = toSignal(this.state.contacts$, {
     initialValue: [] as Contact[],
   });
 
-  private groupStream$: Observable<ContactGroup | null> = toObservable(
-    this.groupId,
-  ).pipe(
-    switchMap((urn) => {
-      if (urn) {
-        return this.getGroup(urn);
-      }
-      return this.getNewGroup();
+  // --- ID RESOLUTION ---
+  private routeId$ = this.route.paramMap.pipe(map((p) => p.get('id')));
+  private inputId$ = toObservable(this.groupId);
+
+  resolvedId = toSignal(
+    combineLatest([this.routeId$, this.inputId$]).pipe(
+      map(([routeId, inputId]) => {
+        // 1. Input Priority (Viewer)
+        if (inputId) return { urn: inputId, isNew: false };
+        // 2. Route Fallback
+        if (routeId) {
+          try {
+            return { urn: URN.parse(routeId), isNew: false };
+          } catch {
+            return null;
+          }
+        }
+        // 3. Creation Mode
+        return {
+          urn: URN.create('group', crypto.randomUUID(), 'contacts'),
+          isNew: true,
+        };
+      }),
+    ),
+    { initialValue: null },
+  );
+
+  // --- COMPUTED UI STATE ---
+  // ✅ FIXED: Restored as computed property so template works
+  startInEditMode = computed(() => this.resolvedId()?.isNew ?? false);
+
+  // --- DATA FETCHING ---
+  private groupStream$ = toObservable(this.resolvedId).pipe(
+    switchMap((data) => {
+      if (!data) return of(null);
+      // Reactively choose fetch method based on ID state
+      if (data.isNew) return this.getNewGroup(data.urn);
+      return this.getGroup(data.urn);
     }),
   );
 
-  groupToEdit = toSignal(this.groupStream$, {
-    initialValue: null as ContactGroup | null,
-  });
+  groupToEdit = toSignal(this.groupStream$, { initialValue: null });
 
   async onSave(group: ContactGroup): Promise<void> {
-    await this.contactsService.saveGroup(group);
-    // ✅ Emit event instead of navigating
-    this.saved.emit();
+    await this.state.saveGroup(group);
+
+    const isNew = this.startInEditMode();
+    const action = isNew ? 'created' : 'updated';
+
+    this.snackBar.open(`Group '${group.name}' ${action}`, 'Close', {
+      duration: 3000,
+      horizontalPosition: 'end',
+      verticalPosition: 'bottom',
+    });
+
+    this.saved.emit(group);
   }
 
   async onDelete(options: { recursive: boolean }): Promise<void> {
@@ -102,25 +143,22 @@ export class ContactGroupPageComponent {
     if (result) {
       if (options.recursive && this.subGroups().length > 0) {
         const promises = this.subGroups().map((child) =>
-          this.contactsService.deleteGroup(child.id),
+          this.state.deleteGroup(child.id),
         );
         await Promise.all(promises);
       }
 
-      await this.contactsService.deleteGroup(group.id);
-      // ✅ Emit event instead of navigating
-      this.saved.emit();
+      await this.state.deleteGroup(group.id);
+      this.deleted.emit();
     }
   }
 
-  onClose(): void {
-    // ✅ Emit event instead of navigating
+  onCancel(): void {
     this.cancelled.emit();
   }
 
   private getGroup(urn: URN): Observable<ContactGroup | null> {
-    this.startInEditMode.set(false);
-    return from(this.contactsService.getGroup(urn)).pipe(
+    return from(this.state.getGroup(urn)).pipe(
       tap((group) => {
         if (group) {
           this.loadSubGroups(group.id);
@@ -130,12 +168,10 @@ export class ContactGroupPageComponent {
     );
   }
 
-  private getNewGroup(): Observable<ContactGroup> {
-    this.startInEditMode.set(true);
+  private getNewGroup(urn: URN): Observable<ContactGroup> {
     this.subGroups.set([]);
-    const newGroupUrn = URN.create('group', crypto.randomUUID(), 'contacts');
     return of({
-      id: newGroupUrn,
+      id: urn,
       name: '',
       scope: 'local',
       description: '',
@@ -145,7 +181,7 @@ export class ContactGroupPageComponent {
   }
 
   private async loadSubGroups(parentId: URN): Promise<void> {
-    const children = await this.contactsService.getGroupsByParent(parentId);
+    const children = await this.state.getGroupsByParent(parentId);
     this.subGroups.set(children);
   }
 }

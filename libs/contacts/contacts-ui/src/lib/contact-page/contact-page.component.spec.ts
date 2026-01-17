@@ -3,33 +3,67 @@ import { ContactPageComponent } from './contact-page.component';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { of } from 'rxjs';
-import { By } from '@angular/platform-browser';
 import { URN } from '@nx-platform-application/platform-types';
+import { Contact } from '@nx-platform-application/contacts-types';
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 
-// ng-mocks
+// MATERIAL MOCKS
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
+
+// NG-MOCKS
 import { MockComponent } from 'ng-mocks';
-import { ContactDetailComponent } from '../contact-detail/contact-detail.component';
+import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
+import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 
-const mockContactUrnString = 'urn:contacts:user:user-123';
+const mockUrnString = 'urn:contacts:user:123';
+const mockUrn = URN.parse(mockUrnString);
+
+const mockContact: Contact = {
+  id: mockUrn,
+  alias: 'Test User',
+} as any;
 
 describe('ContactPageComponent', () => {
   let fixture: ComponentFixture<ContactPageComponent>;
   let component: ContactPageComponent;
+  let stateService: any;
+  let snackBar: any;
+  let dialog: any;
 
-  beforeEach(async () => {
+  // Helper to setup the module with specific route params
+  const setupModule = async (routeId: string | null) => {
+    stateService = {
+      saveContact: vi.fn().mockResolvedValue(undefined),
+      deleteContact: vi.fn().mockResolvedValue(undefined),
+      getContact: vi.fn().mockResolvedValue(mockContact),
+      getLinkedIdentities: vi.fn().mockResolvedValue([]),
+      getGroupsForContact: vi.fn().mockResolvedValue([]),
+    };
+
+    snackBar = { open: vi.fn() };
+
+    dialog = {
+      open: vi.fn().mockReturnValue({
+        afterClosed: () => of(true),
+      }),
+    };
+
     await TestBed.configureTestingModule({
       imports: [
         ContactPageComponent,
-        MockComponent(ContactDetailComponent),
+        MockComponent(ContactFormComponent),
         MockComponent(ContactsPageToolbarComponent),
       ],
       providers: [
-        // ✅ 1. Removed MockProvider(Router) - Not needed anymore!
+        { provide: ContactsStateService, useValue: stateService },
+        { provide: MatSnackBar, useValue: snackBar },
+        { provide: MatDialog, useValue: dialog },
         {
           provide: ActivatedRoute,
           useValue: {
-            paramMap: of(convertToParamMap({ id: mockContactUrnString })),
+            paramMap: of(convertToParamMap(routeId ? { id: routeId } : {})),
           },
         },
       ],
@@ -38,44 +72,88 @@ describe('ContactPageComponent', () => {
     fixture = TestBed.createComponent(ContactPageComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  };
+
+  describe('Data Resolution', () => {
+    it('should resolve contactId from Route when Input is missing', async () => {
+      await setupModule(mockUrnString);
+      expect(component.contactId()?.urn.toString()).toBe(mockUrnString);
+      expect(component.contactId()?.isNew).toBe(false);
+    });
+
+    it('should prioritize selectedUrn Input over Route', async () => {
+      await setupModule(mockUrnString);
+      const inputUrn = URN.parse('urn:contacts:user:999');
+      fixture.componentRef.setInput('selectedUrn', inputUrn);
+      fixture.detectChanges();
+
+      expect(component.contactId()?.urn.toString()).toBe(inputUrn.toString());
+    });
+
+    it('should default to NEW mode if Route has no ID', async () => {
+      await setupModule(null); // No ID in route
+      expect(component.contactId()?.isNew).toBe(true);
+    });
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
+  describe('Save Logic', () => {
+    it('should call state.saveContact and show "updated" SnackBar for existing contact', async () => {
+      await setupModule(mockUrnString); // Existing
+
+      const emitSpy = vi.spyOn(component.saved, 'emit');
+      await component.onSave(mockContact);
+
+      expect(stateService.saveContact).toHaveBeenCalledWith(mockContact);
+      expect(snackBar.open).toHaveBeenCalledWith(
+        expect.stringContaining('updated'),
+        expect.any(String),
+        expect.any(Object),
+      );
+      expect(emitSpy).toHaveBeenCalledWith(mockContact);
+    });
+
+    it('should show "created" SnackBar for new contact', async () => {
+      await setupModule(null); // New
+
+      await component.onSave(mockContact);
+
+      expect(snackBar.open).toHaveBeenCalledWith(
+        expect.stringContaining('created'),
+        expect.any(String),
+        expect.any(Object),
+      );
+    });
   });
 
-  it('should emit (cancelled) on (close) from TOOLBAR', () => {
-    // ✅ 2. Spy on the Output
-    const spy = vi.spyOn(component.cancelled, 'emit');
+  describe('Delete Logic', () => {
+    beforeEach(async () => {
+      await setupModule(mockUrnString);
+    });
 
-    component.onClose();
+    it('should open Confirmation Dialog', async () => {
+      await component.onDelete();
+      expect(dialog.open).toHaveBeenCalledWith(
+        ConfirmationDialogComponent,
+        expect.any(Object),
+      );
+    });
 
-    expect(spy).toHaveBeenCalled();
-  });
+    it('should call state.deleteContact and emit (deleted) if confirmed', async () => {
+      const deleteSpy = vi.spyOn(component.deleted, 'emit');
+      await component.onDelete();
 
-  it('should emit (saved) on (saved) from CHILD', () => {
-    // ✅ 3. Spy on the Output
-    const spy = vi.spyOn(component.saved, 'emit');
+      expect(stateService.deleteContact).toHaveBeenCalledWith(mockContact.id);
+      expect(deleteSpy).toHaveBeenCalled();
+    });
 
-    const detail = fixture.debugElement.query(
-      By.directive(ContactDetailComponent),
-    );
-    expect(detail).toBeTruthy();
+    it('should NOT delete if dialog cancelled', async () => {
+      dialog.open.mockReturnValue({ afterClosed: () => of(false) });
+      const deleteSpy = vi.spyOn(component.deleted, 'emit');
 
-    detail.componentInstance.saved.emit();
+      await component.onDelete();
 
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should emit (cancelled) on (deleted) from CHILD', () => {
-    // Treating delete as a "close/cancel" action for the page context
-    const spy = vi.spyOn(component.cancelled, 'emit');
-
-    const detail = fixture.debugElement.query(
-      By.directive(ContactDetailComponent),
-    );
-    detail.componentInstance.deleted.emit();
-
-    expect(spy).toHaveBeenCalled();
+      expect(stateService.deleteContact).not.toHaveBeenCalled();
+      expect(deleteSpy).not.toHaveBeenCalled();
+    });
   });
 });

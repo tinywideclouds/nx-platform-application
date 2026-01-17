@@ -3,4 +3,6 @@
 */
 :host {
   display: block;
+  height: 100%; /* Fill the Viewer's slot exactly */
+  overflow: hidden; /* Kill the outer scrollbar */
 }
