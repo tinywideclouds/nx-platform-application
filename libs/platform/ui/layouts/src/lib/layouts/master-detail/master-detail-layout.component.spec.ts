@@ -13,7 +13,9 @@ describe('MasterDetailLayoutComponent', () => {
 
     fixture = TestBed.createComponent(MasterDetailLayoutComponent);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('showDetail', false); // Default state
+
+    // Initialize required signal input
+    fixture.componentRef.setInput('showDetail', false);
     fixture.detectChanges();
   });
 
@@ -21,35 +23,27 @@ describe('MasterDetailLayoutComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  describe('Mobile Behavior (Class Logic)', () => {
-    // Note: In CSS Container Queries, these classes are conditionally applied
-    // or overridden by media queries, but the Angular logic applies them to the DOM regardless.
-
-    it('should show Sidebar and hide Main when showDetail is false', () => {
+  describe('Mobile View Logic', () => {
+    it('should show Sidebar and hide Main when showDetail is false (List Mode)', () => {
       fixture.componentRef.setInput('showDetail', false);
       fixture.detectChanges();
 
       const sidebar = fixture.debugElement.query(By.css('.md-sidebar'));
       const main = fixture.debugElement.query(By.css('.md-main'));
 
-      // In narrow mode logic:
-      // Sidebar should NOT have 'hidden-on-narrow'
+      // .hidden-on-narrow is the class used by the CSS Container Query to toggle visibility
       expect(sidebar.classes['hidden-on-narrow']).toBeFalsy();
-      // Main SHOULD have 'hidden-on-narrow'
       expect(main.classes['hidden-on-narrow']).toBeTruthy();
     });
 
-    it('should hide Sidebar and show Main when showDetail is true', () => {
+    it('should hide Sidebar and show Main when showDetail is true (Detail Mode)', () => {
       fixture.componentRef.setInput('showDetail', true);
       fixture.detectChanges();
 
       const sidebar = fixture.debugElement.query(By.css('.md-sidebar'));
       const main = fixture.debugElement.query(By.css('.md-main'));
 
-      // In narrow mode logic:
-      // Sidebar SHOULD have 'hidden-on-narrow'
       expect(sidebar.classes['hidden-on-narrow']).toBeTruthy();
-      // Main should NOT have 'hidden-on-narrow'
       expect(main.classes['hidden-on-narrow']).toBeFalsy();
     });
   });

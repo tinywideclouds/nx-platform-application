@@ -19,7 +19,7 @@ export const SCENARIO_USERS = {
   BOB: URN.parse('urn:contacts:user:bob'),
 };
 
-@Injectable({ providedIn: 'root' })
+@Injectable()
 export class MessengerScenarioDriver {
   private router = inject(MockChatDataService);
   private live = inject(MockLiveService);

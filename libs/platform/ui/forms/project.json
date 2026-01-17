@@ -1,0 +1,32 @@
+{
+  "name": "platform-ui-forms",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ui/forms/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ui/forms",
+        "configFile": "libs/platform/ui/forms/vite.config.mts",
+        "main": "libs/platform/ui/forms/src/index.ts",
+        "assets": ["libs/platform/ui/forms/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/platform/ui/forms"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ui/forms",
+        "configFile": "libs/platform/ui/forms/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

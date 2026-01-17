@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contact-group-page-form/contact-group-form.component.ts
+
 import {
   Component,
   input,
@@ -6,166 +8,161 @@ import {
   inject,
   signal,
   computed,
+  ChangeDetectionStrategy,
 } from '@angular/core';
-
-import { toSignal } from '@angular/core/rxjs-interop';
-import {
-  ReactiveFormsModule,
-  FormBuilder,
-  FormGroup,
-  Validators,
-} from '@angular/forms';
+import { CommonModule } from '@angular/common';
 import {
   Contact,
   ContactGroup,
   ContactGroupMember,
 } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
+
+// SHARED
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
+
+import { FormValidators } from '@nx-platform-application/platform-ui-forms';
+
+// MATERIAL
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatCheckboxModule } from '@angular/material/checkbox'; // ✅ Material Checkbox
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+
+// PIPES
 import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
   selector: 'contacts-group-form',
   standalone: true,
   imports: [
-    ReactiveFormsModule,
-    // Note: No FormsModule here. strictly signals.
+    CommonModule,
     ContactMultiSelectorComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
     MatCheckboxModule,
     MatIconModule,
+    MatTooltipModule,
     ContactAvatarComponent,
   ],
   templateUrl: './contact-group-form.component.html',
   styleUrl: './contact-group-form.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactGroupFormComponent {
+  // --- INPUTS ---
   group = input<ContactGroup | null>(null);
-  allContacts = input.required<Contact[]>();
-
-  // ✅ NEW: To display recursive delete option
+  allContacts = input<Contact[]>([]);
+  startInEditMode = input(false);
   linkedChildrenCount = input(0);
 
-  startInEditMode = input(false);
-  readonly = input(false);
-
+  // --- OUTPUTS ---
   save = output<ContactGroup>();
-
-  // ✅ NEW: Emits true if recursive delete is requested
   delete = output<{ recursive: boolean }>();
 
-  private fb = inject(FormBuilder);
+  // --- UI STATE ---
   isEditing = signal(false);
+  deleteRecursive = signal(false);
 
-  // ✅ Pure Signal State for the checkbox
-  deleteRecursive = signal(true);
+  // --- FORM STATE ---
+  name = signal('');
+  nameTouched = signal(false);
 
-  // The form is kept identical to the original: it holds string IDs
-  form: FormGroup = this.fb.group({
-    id: [''],
-    name: ['', Validators.required],
-    description: [''],
-    contactIds: [[] as string[]],
-  });
+  description = signal('');
 
-  private contactIdsValue = toSignal(
-    this.form.get('contactIds')!.valueChanges,
-    { initialValue: this.form.get('contactIds')!.value },
+  // The selector component manages the IDs, we just hold the value
+  contactIds = signal<string[]>([]);
+
+  // --- COMPUTED VALIDATION ---
+  nameError = computed(() =>
+    !FormValidators.required(this.name()) ? 'Group name is required' : null,
   );
 
-  constructor() {
-    this.form.disable();
+  isValid = computed(() => !this.nameError());
 
-    effect(() => {
-      this.isEditing.set(this.startInEditMode());
-    });
-
-    effect(() => {
-      const currentGroup = this.group();
-      if (currentGroup) {
-        this.form.patchValue({
-          id: currentGroup.id.toString(),
-          name: currentGroup.name,
-          description: currentGroup.description,
-          contactIds: currentGroup.members.map((m) => m.contactId.toString()),
-        });
-      } else {
-        this.form.reset({
-          id: '',
-          name: '',
-          description: '',
-          contactIds: [],
-        });
-      }
-    });
-
-    effect(() => {
-      if (this.isEditing()) {
-        this.form.enable();
-      } else {
-        this.form.disable();
-        if (this.group()) {
-          const currentGroup = this.group()!;
-          this.form.reset({
-            id: currentGroup.id.toString(),
-            name: currentGroup.name,
-            description: currentGroup.description,
-            contactIds: currentGroup.members.map((id) => id.toString()),
-          });
-        }
-      }
-    });
-  }
-
-  groupMembers = computed(() => {
-    const membersMap = new Map(
-      this.allContacts().map((c) => [c.id.toString(), c]),
+  // ✅ NEW: Stage 1 Detection
+  hasAnyContent = computed(() => {
+    return (
+      !!this.name().trim() ||
+      !!this.description().trim() ||
+      this.contactIds().length > 0
     );
-    const contactIds = this.contactIdsValue() ?? [];
-    return contactIds
-      .map((id: string) => membersMap.get(id))
-      .filter((c: Contact | undefined): c is Contact => Boolean(c));
   });
 
-  onSave(): void {
-    if (this.form.valid) {
-      const formValue = this.form.value;
-      const originalGroup = this.group();
-      if (!originalGroup) return;
+  saveTooltip = computed(() => {
+    // Stage 1
+    if (!this.hasAnyContent()) return 'Enter group details';
+    // Stage 3
+    if (this.isValid()) return 'Save Group';
+    // Stage 2
+    return 'Missing: Group Name';
+  });
 
-      const selectedIdStrings = formValue.contactIds as string[];
-      const updatedMembers: ContactGroupMember[] = selectedIdStrings.map(
+  // --- DERIVED VIEW HELPERS ---
+  groupMembers = computed(() => {
+    const ids = this.contactIds();
+    const contacts = this.allContacts();
+    return contacts.filter((c) => ids.includes(c.id.toString()));
+  });
+
+  constructor() {
+    effect(
+      () => {
+        if (this.startInEditMode()) {
+          this.isEditing.set(true);
+        }
+      },
+      { allowSignalWrites: true },
+    );
+
+    effect(
+      () => {
+        const g = this.group();
+        if (g) {
+          this.name.set(g.name);
+          this.description.set(g.description || '');
+          this.contactIds.set(g.members.map((m) => m.contactId.toString()));
+        } else {
+          this.resetForm();
+        }
+      },
+      { allowSignalWrites: true },
+    );
+  }
+
+  onSave(): void {
+    this.nameTouched.set(true);
+
+    if (!this.isValid()) {
+      // Simple focus logic
+      document.getElementById('group-name-input')?.focus();
+      return;
+    }
+
+    if (this.group()) {
+      const originalGroup = this.group()!;
+
+      const updatedMembers: ContactGroupMember[] = this.contactIds().map(
         (idStr) => {
-          const idUrn = URN.parse(idStr);
-          const existingMember = originalGroup.members.find(
+          const existing = originalGroup.members.find(
             (m) => m.contactId.toString() === idStr,
           );
-          if (existingMember) return existingMember;
-          return {
-            contactId: idUrn,
-            status: 'added',
-          };
+          return existing || { contactId: URN.parse(idStr), status: 'added' };
         },
       );
 
       this.save.emit({
         ...originalGroup,
-        name: formValue.name,
-        description: formValue.description,
-        scope: originalGroup.scope || 'local',
+        name: this.name(),
+        description: this.description(),
         members: updatedMembers,
       });
     }
   }
 
-  // ✅ NEW: Delete Handler reads pure signal
   onDelete(): void {
     this.delete.emit({ recursive: this.deleteRecursive() });
   }
@@ -184,7 +181,10 @@ export class ContactGroupFormComponent {
     return (first + last).toUpperCase() || '?';
   }
 
-  getProfilePicture(contact: Contact): string | undefined {
-    return contact.serviceContacts['messenger']?.profilePictureUrl;
+  private resetForm() {
+    this.name.set('');
+    this.description.set('');
+    this.contactIds.set([]);
+    this.nameTouched.set(false);
   }
 }

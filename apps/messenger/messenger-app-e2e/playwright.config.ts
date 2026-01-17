@@ -2,8 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 import { nxE2EPreset } from '@nx/playwright/preset';
 import { workspaceRoot } from '@nx/devkit';
 
+const E2E_PORT = 4204;
+const baseURL = process.env['BASE_URL'] || `http://localhost:${E2E_PORT}`;
 // For CI, you may want to set BASE_URL to the deployed application.
-const baseURL = process.env['BASE_URL'] || 'http://localhost:4200';
 
 /**
  * Read environment variables from file.
@@ -24,10 +25,13 @@ export default defineConfig({
   },
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npx nx run messenger-app:serve',
-    url: 'http://localhost:4200',
-    reuseExistingServer: true,
+    // ✅ FORCE a specific port for testing using the 'mock' configuration
+    command: `nx serve messenger-app --configuration=mock --port ${E2E_PORT}`,
+    url: `http://localhost:${E2E_PORT}`,
+    // ✅ DO NOT reuse the user's running dev server. We want a clean, isolated test instance.
+    reuseExistingServer: false,
     cwd: workspaceRoot,
+    timeout: 120 * 1000,
   },
   projects: [
     {

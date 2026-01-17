@@ -22,6 +22,20 @@ import {
   AUTH_API_URL,
 } from '@nx-platform-application/platform-infrastructure-auth-access';
 
+// --- Mock Providers (App State Mocks) ---
+import { AppState } from '@nx-platform-application/messenger-state-app';
+import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { MockChatService } from './mocks/mock-chat.service';
+import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
+
+// --- Scenario Infrastructure Mocks ---
+import {
+  MockChatDataService,
+  MockChatSendService,
+  MockLiveService,
+  MockKeyService,
+} from '@nx-platform-application/lib-messenger-test-app-mocking';
+
 // --- Contacts Infrastructure & API ---
 import {
   ContactsQueryApi,
@@ -84,64 +98,75 @@ import {
   IdentityServerStrategy,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
-// --- TEST MOCKS (For Simulation) ---
-import {
-  MockChatDataService,
-  MockChatSendService,
-  MockLiveService,
-  MockKeyService,
-} from '@nx-platform-application/lib-messenger-test-app-mocking';
-
 // --- Provider Selection Logic ---
 
-// 1. Auth Provider (Always Real or Mocked at Adapter Level)
+// 1. Auth Provider
 const authProviders = [{ provide: IAuthService, useExisting: AuthService }];
 
-// 2. Messenger Infrastructure Providers (Real vs Mock)
-const messengerInfraProviders = environment.useMocks
+// 2. Existing Internal Mocks (State Layer)
+// Note: If you use the Scenario Driver, you usually want the REAL AppState but Mocked Infra.
+// I am keeping your existing logic here, but verify if you want to swap AppState too.
+const chatProvider = environment.useMocks
+  ? { provide: AppState, useClass: MockChatService }
+  : [];
+
+const contactsProvider = environment.useMocks
+  ? { provide: ContactsStorageService, useClass: MockContactsStorageService }
+  : [];
+
+// 3. Infrastructure Mocks (The Scenario Driver Engine)
+const infraMockProviders = environment.useMocks
   ? [
-      { provide: ChatDataService, useClass: MockChatDataService },
-      { provide: ChatSendService, useClass: MockChatSendService },
-      { provide: ChatLiveDataService, useClass: MockLiveService },
-      { provide: SecureKeyService, useClass: MockKeyService },
+      // ✅ STEP 1: Register Concrete Classes (So ScenarioDriver can inject them)
+      MockChatDataService,
+      MockChatSendService,
+      MockLiveService,
+      MockKeyService,
+
+      // ✅ STEP 2: Alias Tokens to use the EXISTING instances
+      // This ensures the App and the Test Driver talk to the SAME object.
+      { provide: ChatDataService, useExisting: MockChatDataService },
+      { provide: ChatSendService, useExisting: MockChatSendService },
+      { provide: ChatLiveDataService, useExisting: MockLiveService },
+      { provide: SecureKeyService, useExisting: MockKeyService },
     ]
-  : [
-      // Real Services (implicitly provided via @Injectable({providedIn: 'root'})
-      // but explicitly listed here if we need to override tokens, which we don't for these classes directly)
-      // However, to ensure consistency, we leave the default classes active.
-    ];
+  : [];
 
-// 3. Token Providers (Config)
-const tokenProviders = environment.useMocks
-  ? []
-  : [
-      {
-        provide: AUTH_API_URL,
-        useValue: environment.identityServiceUrl,
-      },
-      {
-        provide: ROUTING_SERVICE_URL,
-        useValue: environment.routingServiceUrl,
-      },
-      {
-        provide: KEY_SERVICE_URL,
-        useValue: environment.keyServiceUrl,
-      },
-      {
-        provide: WSS_URL_TOKEN,
-        useValue: environment.wssUrl,
-      },
-      {
-        provide: NOTIFICATION_SERVICE_URL,
-        useValue: environment.notificationServiceUrl,
-      },
-      {
-        provide: VAPID_PUBLIC_KEY,
-        useValue: environment.vapidPublicKey,
-      },
-    ];
+// 4. Token Providers
+const tokenProviders = [
+  // ✅ FIX: AUTH_API_URL is required by the Real AuthService, regardless of mocks
+  {
+    provide: AUTH_API_URL,
+    useValue: environment.identityServiceUrl,
+  },
+  // Only provide the Backend Service URLs if we are NOT using Infra Mocks
+  ...(environment.useMocks
+    ? []
+    : [
+        {
+          provide: ROUTING_SERVICE_URL,
+          useValue: environment.routingServiceUrl,
+        },
+        {
+          provide: KEY_SERVICE_URL,
+          useValue: environment.keyServiceUrl,
+        },
+        {
+          provide: WSS_URL_TOKEN,
+          useValue: environment.wssUrl,
+        },
+        {
+          provide: NOTIFICATION_SERVICE_URL,
+          useValue: environment.notificationServiceUrl,
+        },
+        {
+          provide: VAPID_PUBLIC_KEY,
+          useValue: environment.vapidPublicKey,
+        },
+      ]),
+];
 
-// 4. Cloud Providers (Storage + Config)
+// 5. Cloud Providers
 const cloudProviders = [
   {
     provide: PlatformStorageConfig,
@@ -196,8 +221,9 @@ export const appConfig: ApplicationConfig = {
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
     { provide: QuarantineStorage, useClass: DexieQuarantineStorage },
 
-    // --- Dynamic Infra Switching ---
-    ...messengerInfraProviders,
+    chatProvider,
+    contactsProvider,
+    ...infraMockProviders, // ✅ Added Infrastructure Mocks
     ...tokenProviders,
     ...cloudProviders,
 

@@ -6,6 +6,7 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
+
 import { IntegrationApiService } from '@nx-platform-application/platform-infrastructure-drive-integrations';
 
 import { SyncOptions, SyncResult } from './models/sync-options.interface';
@@ -19,9 +20,10 @@ export type SyncConnectionState =
 @Injectable({ providedIn: 'root' })
 export class CloudSyncService {
   private logger = inject(Logger);
-  private storage = inject(StorageService); // ✅ Injected here
+  private storage = inject(StorageService);
   private contactsSync = inject(ContactsSyncService);
   private chatSync = inject(ChatSyncService);
+
   private integrationApi = inject(IntegrationApiService);
 
   // --- STATE ---
@@ -37,8 +39,84 @@ export class CloudSyncService {
     () => this.connectionState() === 'auth_required',
   );
 
+  // --- ACTIONS ---
+
   /**
-   * Main Entry Point for Sync Operations
+   * Called by AppState on boot.
+   * Checks backend status via Infra layer to auto-connect returning users.
+   */
+  public async resumeSession(): Promise<void> {
+    this.connectionState.set('connecting');
+
+    try {
+      // 1. Check Server (Do we have a link?)
+      const status = await this.integrationApi.getStatus();
+
+      if (status.google) {
+        // 2. ✅ Activate the Local Driver (Without Popup)
+        // This sets the StorageService state so AssetUploads work
+        const activated = this.storage.resume('google');
+
+        if (activated) {
+          this.connectionState.set('connected');
+          this.logger.info(
+            '[CloudSync] Resumed session: Google Drive connected',
+          );
+        } else {
+          this.logger.warn(
+            '[CloudSync] Server linked, but Google Driver not found in app config.',
+          );
+          this.connectionState.set('idle');
+        }
+      } else {
+        this.connectionState.set('idle');
+      }
+    } catch (e) {
+      this.logger.warn('[CloudSync] Resume check failed', e);
+      this.connectionState.set('idle');
+    }
+  }
+
+  /**
+   * Manual trigger for the Auth Flow (Popup).
+   */
+  public async connect(providerId: string): Promise<boolean> {
+    this.connectionState.set('connecting');
+    try {
+      // Trigger the Driver's Auth Flow via Storage Domain
+      const success = await this.storage.connect(providerId);
+      if (success) {
+        this.connectionState.set('connected');
+        return true;
+      } else {
+        this.connectionState.set('auth_required');
+        return false;
+      }
+    } catch (e) {
+      this.logger.error('[CloudSync] Connection failed', e);
+      this.connectionState.set('auth_required');
+      return false;
+    }
+  }
+
+  /**
+   * Dual Disconnect (Server + Client).
+   */
+  public async revokePermission(): Promise<void> {
+    try {
+      // 1. Tell server to kill the refresh token
+      await this.integrationApi.disconnect('google');
+      // 2. Tell local driver to kill the access token
+      await this.storage.disconnect();
+
+      this.connectionState.set('idle');
+    } catch (e) {
+      this.logger.error('[CloudSync] Revoke failed', e);
+    }
+  }
+
+  /**
+   * Enhanced partial success handling.
    */
   public async syncNow(options: SyncOptions): Promise<SyncResult> {
     if (this.isSyncing()) {
@@ -46,6 +124,7 @@ export class CloudSyncService {
     }
 
     // ✅ FIX: Guard Clause - Check Storage Connection First
+    // This satisfies the test "should fail immediately if Storage is not connected"
     if (!this.storage.isConnected()) {
       this.logger.warn('[CloudSync] Attempted sync without storage connection');
       const errorResult = {
@@ -94,11 +173,9 @@ export class CloudSyncService {
     return result;
   }
 
-  // ... (rest of methods like connect, revokePermission, initResult unchanged)
-
   private initResult(): SyncResult {
     return {
-      success: false,
+      success: false, // Default to false until proven true
       contactsProcessed: false,
       messagesProcessed: false,
       errors: [],

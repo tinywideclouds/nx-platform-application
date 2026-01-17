@@ -22,12 +22,12 @@
     </span>
   </div>
 
-  <div main class="h-full bg-gray-50 relative flex flex-col items-center">
+  <div main class="h-full bg-gray-50 relative flex flex-col">
     @if (createMode(); as mode) {
       <header class="w-full flex justify-center layout-header">
         <h1>Create</h1>
       </header>
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 w-full overflow-y-auto">
         @if (mode === 'group') {
           <contacts-group-page
             (saved)="clearSelection()"
@@ -44,7 +44,7 @@
       <header class="w-full flex justify-center layout-header">
         <h1>Details</h1>
       </header>
-      <div class="flex-1 max-w-lg overflow-y-auto">
+      <div class="flex-1 w-full overflow-y-auto">
         @if (activeTab() === 'groups') {
           <contacts-group-page
             [groupId]="urn"

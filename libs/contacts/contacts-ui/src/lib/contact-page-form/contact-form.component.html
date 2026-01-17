@@ -1,62 +1,198 @@
-<form
-  [formGroup]="form"
-  (ngSubmit)="onSave()"
-  class="space-y-4 p-4 form-view-mode"
->
+<form class="space-y-4 p-4 form-view-mode" (submit)="$event.preventDefault()">
   <mat-form-field
     [floatLabel]="'always'"
     [hideRequiredMarker]="!isEditing()"
-    class="w-full"
+    class="w-full max-w-lg block"
+    [class.field-invalid]="firstNameTouched() && firstNameError()"
   >
     <mat-label>First Name</mat-label>
-    <input aria-label="first name" matInput formControlName="firstName" />
-    @if (form.get('firstName')?.hasError('required')) {
-      <mat-error>First name is required</mat-error>
+    <input
+      matInput
+      aria-label="first name"
+      [value]="firstName()"
+      (input)="firstName.set($any($event.target).value)"
+      (blur)="firstNameTouched.set(true)"
+      [readonly]="!isEditing()"
+    />
+    <mat-icon
+      matSuffix
+      [class]="getStatusColor('firstName')"
+      [matTooltip]="'First Name is required'"
+    >
+      {{ getStatusIcon('firstName') }}
+    </mat-icon>
+    @if (firstNameTouched() && firstNameError()) {
+      <mat-error>{{ firstNameError() }}</mat-error>
     }
   </mat-form-field>
 
   <mat-form-field
     [floatLabel]="'always'"
     [hideRequiredMarker]="!isEditing()"
-    class="w-full"
+    class="w-full max-w-lg block"
   >
     <mat-label>Surname</mat-label>
-    <input aria-label="surname" matInput formControlName="surname" />
+    <input
+      matInput
+      aria-label="surname"
+      [value]="surname()"
+      (input)="surname.set($any($event.target).value)"
+      (blur)="surnameTouched.set(true)"
+      [readonly]="!isEditing()"
+    />
+    <mat-icon matSuffix [class]="getStatusColor('surname')">
+      {{ getStatusIcon('surname') }}
+    </mat-icon>
   </mat-form-field>
 
   <mat-form-field
     [floatLabel]="'always'"
     [hideRequiredMarker]="!isEditing()"
-    class="w-full"
+    class="w-full max-w-lg block"
+    [class.field-invalid]="aliasTouched() && aliasError()"
   >
     <mat-label>Alias</mat-label>
-    <input aria-label="alias" matInput formControlName="alias" />
-    @if (form.get('alias')?.hasError('required')) {
-      <mat-error>Alias is required</mat-error>
+    <input
+      matInput
+      aria-label="alias"
+      [value]="alias()"
+      (input)="alias.set($any($event.target).value)"
+      (blur)="aliasTouched.set(true)"
+      [readonly]="!isEditing()"
+    />
+    <mat-icon
+      matSuffix
+      [class]="getStatusColor('alias')"
+      [matTooltip]="'Alias is required'"
+    >
+      {{ getStatusIcon('alias') }}
+    </mat-icon>
+    @if (aliasTouched() && aliasError()) {
+      <mat-error>{{ aliasError() }}</mat-error>
     }
   </mat-form-field>
 
   <mat-form-field
     [floatLabel]="'always'"
     [hideRequiredMarker]="!isEditing()"
-    class="w-full"
+    class="w-full max-w-lg block"
+    [class.field-invalid]="emailTouched() && emailError()"
   >
     <mat-label>Primary Email</mat-label>
-    <input aria-label="email" matInput formControlName="email" />
-    @if (form.get('email')?.hasError('required')) {
-      <mat-error>Email is required</mat-error>
-    }
-    @if (form.get('email')?.hasError('email')) {
-      <mat-error>Invalid email address</mat-error>
+    <input
+      matInput
+      aria-label="email"
+      [value]="email()"
+      (input)="email.set($any($event.target).value)"
+      (blur)="emailTouched.set(true)"
+      [readonly]="!isEditing()"
+    />
+    <mat-icon
+      matSuffix
+      [class]="getStatusColor('email')"
+      [matTooltip]="'Email is required'"
+    >
+      {{ getStatusIcon('email') }}
+    </mat-icon>
+    @if (emailTouched() && emailError()) {
+      <mat-error>{{ emailError() }}</mat-error>
     }
   </mat-form-field>
 
+  @if (emailAddresses().length > 0 || isEditing()) {
+    <div class="pt-2 max-w-lg">
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-sm font-medium text-gray-700"
+          >Additional Emails</label
+        >
+        @if (isEditing()) {
+          <button
+            type="button"
+            mat-icon-button
+            color="primary"
+            (click)="addEmailAddress()"
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        }
+      </div>
+      <div class="space-y-2">
+        @for (addr of emailAddresses(); track $index; let i = $index) {
+          <div class="flex gap-2 items-center">
+            <mat-form-field class="flex-1" subscriptSizing="dynamic">
+              <input
+                aria-label="emailAddresses"
+                matInput
+                [value]="addr"
+                (input)="updateEmailAddress(i, $any($event.target).value)"
+                [readonly]="!isEditing()"
+              />
+            </mat-form-field>
+            @if (isEditing()) {
+              <button
+                type="button"
+                mat-icon-button
+                color="warn"
+                (click)="removeEmailAddress(i)"
+              >
+                <mat-icon>remove_circle_outline</mat-icon>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (phoneNumbers().length > 0 || isEditing()) {
+    <div class="pt-4 max-w-lg">
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-sm font-medium text-gray-700">Phone Numbers</label>
+        @if (isEditing()) {
+          <button
+            type="button"
+            mat-icon-button
+            color="primary"
+            (click)="addPhoneNumber()"
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        }
+      </div>
+      <div class="space-y-2">
+        @for (phone of phoneNumbers(); track $index; let i = $index) {
+          <div class="flex gap-2 items-center">
+            <mat-form-field class="flex-1" subscriptSizing="dynamic">
+              <input
+                aria-label="phoneNumbers"
+                matInput
+                [value]="phone"
+                (input)="updatePhoneNumber(i, $any($event.target).value)"
+                [readonly]="!isEditing()"
+              />
+            </mat-form-field>
+            @if (isEditing()) {
+              <button
+                type="button"
+                mat-icon-button
+                color="warn"
+                (click)="removePhoneNumber(i)"
+              >
+                <mat-icon>remove_circle_outline</mat-icon>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+
   @if (linkedIdentities().length > 0) {
-    <div class="pt-2">
+    <div class="pt-4 max-w-lg">
       <label class="text-sm font-medium text-gray-700 block mb-2"
         >Linked Identities</label
       >
-      <mat-chip-listbox aria-label="Linked identities">
+      <mat-chip-listbox>
         @for (urn of linkedIdentities(); track urn.toString()) {
           <mat-chip data-testid="identity-chip" class="identity-chip">
             <mat-icon matChipAvatar>account_circle</mat-icon>
@@ -72,14 +208,15 @@
 
   @if (!readonly()) {
     @if (isEditing()) {
-      <div class="flex justify-between items-center pt-4">
+      <div
+        class="flex justify-between items-center pt-8 border-t border-gray-100 mt-4 max-w-lg"
+      >
         @if (contact() && !startInEditMode()) {
           <button
             type="button"
             mat-button
             color="warn"
             (click)="onDelete()"
-            class="!text-red-600"
             data-testid="delete-button"
           >
             <mat-icon>delete</mat-icon> Delete Contact
@@ -88,7 +225,7 @@
           <div></div>
         }
 
-        <div class="flex gap-2">
+        <div class="flex gap-2 items-center">
           <button
             type="button"
             (click)="onCancel()"
@@ -97,24 +234,29 @@
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            [disabled]="form.invalid"
-            mat-flat-button
-            color="primary"
-            data-testid="save-button"
-          >
-            Save
-          </button>
+
+          <div [matTooltip]="saveTooltip()">
+            <button
+              type="button"
+              (click)="onSave()"
+              mat-flat-button
+              color="primary"
+              data-testid="save-button"
+              [disabled]="!hasAnyContent()"
+              [class.opacity-50]="hasAnyContent() && !isValid()"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
     } @else {
-      <div class="flex justify-end gap-2 pt-4">
+      <div class="flex justify-end gap-2 pt-4 max-w-lg">
         <button
           type="button"
           mat-stroked-button
           color="primary"
-          (click)="isEditing.set(true)"
+          (click)="enterEditMode()"
           data-testid="edit-button"
         >
           <mat-icon>edit</mat-icon> Edit

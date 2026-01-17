@@ -1,61 +1,36 @@
 // libs/contacts/contacts-ui/src/lib/components/contact-page-form/contact-form.component.spec.ts
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ReactiveFormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
-import { vi } from 'vitest';
 import { ContactFormComponent } from './contact-form.component';
-import { Contact } from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-types';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatChipsModule } from '@angular/material/chips'; // <-- Import
+import { Temporal } from '@js-temporal/polyfill';
 
+// MOCK DATA
 const mockContact: Contact = {
   id: URN.parse('urn:contacts:user:user-123'),
   alias: 'johndoe',
   email: 'john@example.com',
   firstName: 'John',
   surname: 'Doe',
+  lastModified: Temporal.Now.instant().toString() as ISODateTimeString,
   phoneNumbers: ['+15550100'],
   emailAddresses: ['john@work.com'],
-  serviceContacts: {
-    messenger: {
-      id: URN.parse('urn:message:service:msg-uuid-1'),
-      alias: 'jd_messenger',
-      lastSeen: '2023-01-01T12:00:00Z' as ISODateTimeString,
-    },
-  },
+  serviceContacts: {},
 };
 
-// Mock linked identities
-const mockIdentities = [
-  URN.parse('urn:auth:google:bob@google.com'),
-  URN.parse('urn:auth:apple:bob@mac.com'),
-];
-
-describe('ContactFormComponent (Signal-based)', () => {
+describe('ContactFormComponent (Signals)', () => {
   let fixture: ComponentFixture<ContactFormComponent>;
   let component: ContactFormComponent;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        ContactFormComponent,
-        ReactiveFormsModule,
-        NoopAnimationsModule,
-        MatFormFieldModule,
-        MatInputModule,
-        MatIconModule,
-        MatButtonModule,
-        MatChipsModule,
-      ],
+      imports: [ContactFormComponent, NoopAnimationsModule],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContactFormComponent);
@@ -67,36 +42,69 @@ describe('ContactFormComponent (Signal-based)', () => {
     expect(component).toBeTruthy();
   });
 
-  // ... (Existing tests remain unchanged) ...
-
-  it('should display linked identities when provided', () => {
-    // 1. Set inputs
+  it('should initialize signals from contact input', () => {
     fixture.componentRef.setInput('contact', mockContact);
-    fixture.componentRef.setInput('linkedIdentities', mockIdentities);
     fixture.detectChanges();
 
-    // 2. Query for chips
-    const chips = fixture.debugElement.queryAll(
-      By.css('[data-testid="identity-chip"]')
-    );
-
-    // 3. Assert
-    expect(chips.length).toBe(2);
-
-    // Check content formatting
-    const firstChipText = chips[0].nativeElement.textContent;
-    expect(firstChipText).toContain('Google');
-    expect(firstChipText).toContain('bob@google.com');
+    expect(component.firstName()).toBe('John');
+    expect(component.email()).toBe('john@example.com');
+    expect(component.phoneNumbers()).toEqual(['+15550100']);
   });
 
-  it('should not display linked identities section if empty', () => {
-    fixture.componentRef.setInput('contact', mockContact);
-    fixture.componentRef.setInput('linkedIdentities', []);
+  it('should validate required fields (Traffic Light)', () => {
+    component.isEditing.set(true);
+
+    // 1. Empty & Untouched -> Amber (Pending)
+    component.firstName.set('');
+    component.firstNameTouched.set(false);
     fixture.detectChanges();
 
-    const chips = fixture.debugElement.queryAll(
-      By.css('[data-testid="identity-chip"]')
-    );
-    expect(chips.length).toBe(0);
+    expect(component.getStatusIcon('firstName')).toBe('priority_high');
+    expect(component.getStatusColor('firstName')).toContain('text-amber-500');
+
+    // 2. Empty & Touched -> Red (Error)
+    component.firstNameTouched.set(true);
+    fixture.detectChanges();
+
+    expect(component.getStatusIcon('firstName')).toBe('error');
+    expect(component.getStatusColor('firstName')).toContain('text-red-600');
+
+    // 3. Valid -> Green (Success)
+    component.firstName.set('Alice');
+    fixture.detectChanges();
+
+    expect(component.getStatusIcon('firstName')).toBe('check_circle');
+    expect(component.getStatusColor('firstName')).toContain('text-green-600');
+  });
+
+  it('should disable save button when invalid', () => {
+    fixture.componentRef.setInput('startInEditMode', true);
+    fixture.detectChanges();
+
+    // Invalid (empty)
+    component.firstName.set('');
+    fixture.detectChanges();
+
+    const saveBtn = fixture.debugElement.query(
+      By.css('[data-testid="save-button"]'),
+    ).nativeElement;
+    expect(saveBtn.disabled).toBe(true);
+  });
+
+  it('should manage array items (add/remove)', () => {
+    fixture.componentRef.setInput('startInEditMode', true);
+    fixture.detectChanges();
+
+    // Add
+    component.addPhoneNumber();
+    expect(component.phoneNumbers().length).toBe(1);
+
+    // Update
+    component.updatePhoneNumber(0, '+123');
+    expect(component.phoneNumbers()[0]).toBe('+123');
+
+    // Remove
+    component.removePhoneNumber(0);
+    expect(component.phoneNumbers().length).toBe(0);
   });
 });
