@@ -60,6 +60,7 @@
           [contacts]="filteredContacts()"
           [selectedId]="selectedId()"
           (contactSelected)="contactSelected.emit($event)"
+          (contactEditRequested)="contactEditRequested.emit($event)"
           (contactDeleted)="onDeleteContact($event)"
         />
       </div>

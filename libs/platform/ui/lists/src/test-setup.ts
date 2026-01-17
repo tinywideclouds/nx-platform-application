@@ -3,13 +3,15 @@ import '@angular/compiler';
 import '@analogjs/vitest-angular/setup-snapshots';
 import { provideZonelessChangeDetection, NgModule } from '@angular/core';
 import { getTestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
   BrowserTestingModule,
   platformBrowserTesting,
 } from '@angular/platform-browser/testing';
+import { vi } from 'vitest';
 
-// 1. Mock matchMedia (Fixes "window.matchMedia is not a function")
+// --- POLYFILLS FOR JSDOM ---
+
+// 1. Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query) => ({
@@ -24,7 +26,7 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// 2. Mock IntersectionObserver (Fixes physics engine tests)
+// 2. Mock IntersectionObserver
 const IntersectionObserverMock = vi.fn(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
@@ -36,20 +38,12 @@ Object.defineProperty(window, 'IntersectionObserver', {
   configurable: true,
   value: IntersectionObserverMock,
 });
-/**
- * Mock ResizeObserver for jsdom environment
- */
-const MockResizeObserver = vi.fn(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
 
-vi.stubGlobal('ResizeObserver', MockResizeObserver);
+// --- TEST BED SETUP ---
 
 // Create a small NgModule to provide the Zoneless detection
 @NgModule({
-  providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
+  providers: [provideZonelessChangeDetection()],
 })
 export class ZonelessTestModule {}
 

@@ -8,8 +8,10 @@ import {
   output,
   computed,
   model,
+  viewChild,
 } from '@angular/core';
 import { RouterModule } from '@angular/router';
+import { firstValueFrom } from 'rxjs'; // Modern Promise conversion
 
 // MATERIAL
 import { MatTabsModule, MatTabChangeEvent } from '@angular/material/tabs';
@@ -57,6 +59,10 @@ export class ContactsSidebarComponent {
   private state = inject(ContactsStateService);
   private dialog = inject(MatDialog);
 
+  // --- QUERIES ---
+  // We need access to the list to programmatically reset swipes
+  contactList = viewChild(ContactListComponent);
+
   // --- INPUTS ---
   selectedId = input<string | undefined>(undefined);
   tabIndex = input(0);
@@ -70,10 +76,11 @@ export class ContactsSidebarComponent {
   // --- OUTPUTS ---
   contactSelected = output<Contact>();
   groupSelected = output<ContactGroup>();
-  contactDeleted = output<void>(); // ✅ New Output to match Page strategy
+  contactDeleted = output<void>();
+  contactEditRequested = output<Contact>();
   tabChange = output<MatTabChangeEvent>();
 
-  // --- DATA (Direct from State Signals) ---
+  // --- DATA ---
   private rawContacts = this.state.contacts;
   private rawGroups = this.state.groups;
 
@@ -143,11 +150,15 @@ export class ContactsSidebarComponent {
       },
     });
 
-    const result = await ref.afterClosed().toPromise();
+    // Modern RxJS: Convert Observable to Promise
+    const result = await firstValueFrom(ref.afterClosed());
 
     if (result) {
       await this.state.deleteContact(contact.id);
-      this.contactDeleted.emit(); // ✅ Emit to parent
+      this.contactDeleted.emit();
+    } else {
+      // User cancelled - reset the UI state so the delete button hides
+      this.contactList()?.resetOpenItems();
     }
   }
 }

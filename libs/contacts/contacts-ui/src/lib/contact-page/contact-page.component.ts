@@ -7,15 +7,15 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
+import { Contact } from '@nx-platform-application/contacts-types';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
 
 // UI
-import { ContactFormComponent } from '../contact-page-form/contact-form.component'; // ✅ Direct Form usage
+import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips'; // ✅ For Groups List
+import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import {
@@ -50,50 +50,72 @@ export class ContactPageComponent {
   deleted = output<void>();
   cancelled = output<void>();
 
-  // --- ID RESOLUTION ---
+  // --- ROUTE & CONTEXT RESOLUTION ---
+
+  // 1. Reactive Sources
   private routeId$ = this.route.paramMap.pipe(map((p) => p.get('id')));
+  private modeParam$ = this.route.queryParamMap.pipe(map((p) => p.get('mode')));
   private inputId$ = toObservable(this.selectedUrn);
 
-  contactId = toSignal(
-    combineLatest([this.routeId$, this.inputId$]).pipe(
-      map(([routeId, inputId]) => {
-        if (inputId) return { urn: inputId, isNew: false };
+  // 2. The Unified "Source of Truth" for the Page State
+  // Combines Route Params, Inputs, and Query Params into one context object.
+  contactContext = toSignal(
+    combineLatest([this.routeId$, this.inputId$, this.modeParam$]).pipe(
+      map(([routeId, inputId, mode]) => {
+        const isEditMode = mode === 'edit';
+
+        // Case A: Input Binding (Master-Detail Selection)
+        if (inputId) {
+          return { urn: inputId, isNew: false, isEditMode };
+        }
+
+        // Case B: Route Parameter (Deep Link)
         if (routeId) {
           try {
-            return { urn: URN.parse(routeId), isNew: false };
+            return { urn: URN.parse(routeId), isNew: false, isEditMode };
           } catch {
-            return null;
+            return null; // Invalid URN in URL
           }
         }
+
+        // Case C: No ID (Create Mode)
+        // New items always start in edit mode.
         return {
           urn: URN.create('user', crypto.randomUUID(), 'contacts'),
           isNew: true,
+          isEditMode: true,
         };
       }),
     ),
     { initialValue: null },
   );
 
-  // --- DATA FETCHING (Moved from Detail) ---
+  // --- COMPUTED HELPERS ---
+  // These make the template cleaner (e.g., [startInEditMode]="isEditMode()")
+  isEditMode = computed(() => this.contactContext()?.isEditMode ?? false);
+  isNew = computed(() => this.contactContext()?.isNew ?? false);
+
+  // --- DATA FETCHING ---
 
   // 1. Contact Object
-  private contactStream$ = toObservable(this.contactId).pipe(
-    switchMap((data) => {
-      if (!data) return of(null);
-      if (data.isNew) return of(this.createEmptyContact(data.urn));
+  // Fetches data from state OR creates an empty shell if isNew is true.
+  private contactStream$ = toObservable(this.contactContext).pipe(
+    switchMap((ctx) => {
+      if (!ctx) return of(null);
+      if (ctx.isNew) return of(this.createEmptyContact(ctx.urn));
 
-      return from(this.state.getContact(data.urn)).pipe(
-        map((c) => c ?? this.createEmptyContact(data.urn)),
+      return from(this.state.getContact(ctx.urn)).pipe(
+        map((c) => c ?? this.createEmptyContact(ctx.urn)),
       );
     }),
   );
   contact = toSignal(this.contactStream$, { initialValue: null });
 
   // 2. Linked Identities
-  private linkedIdentitiesStream$ = toObservable(this.contactId).pipe(
-    switchMap((data) =>
-      data && !data.isNew
-        ? from(this.state.getLinkedIdentities(data.urn))
+  private linkedIdentitiesStream$ = toObservable(this.contactContext).pipe(
+    switchMap((ctx) =>
+      ctx && !ctx.isNew
+        ? from(this.state.getLinkedIdentities(ctx.urn))
         : of([]),
     ),
   );
@@ -102,10 +124,10 @@ export class ContactPageComponent {
   });
 
   // 3. Group Memberships
-  private groupsStream$ = toObservable(this.contactId).pipe(
-    switchMap((data) =>
-      data && !data.isNew
-        ? from(this.state.getGroupsForContact(data.urn))
+  private groupsStream$ = toObservable(this.contactContext).pipe(
+    switchMap((ctx) =>
+      ctx && !ctx.isNew
+        ? from(this.state.getGroupsForContact(ctx.urn))
         : of([]),
     ),
   );
@@ -116,8 +138,7 @@ export class ContactPageComponent {
   async onSave(contact: Contact): Promise<void> {
     await this.state.saveContact(contact);
 
-    const isNew = this.contactId()?.isNew ?? false;
-    const action = isNew ? 'created' : 'updated';
+    const action = this.isNew() ? 'created' : 'updated';
 
     this.snackBar.open(`Contact '${contact.alias}' ${action}`, 'Close', {
       duration: 3000,
@@ -157,6 +178,8 @@ export class ContactPageComponent {
   onCancel(): void {
     this.cancelled.emit();
   }
+
+  // --- PRIVATE HELPERS ---
 
   private createEmptyContact(id: URN): Contact {
     return {

@@ -2,12 +2,16 @@
   @if (contacts().length > 0) {
     @for (contact of contacts(); track trackContactById($index, contact)) {
       <contacts-list-item
+        @deleteAnimation
+        #item
         [contact]="contact"
         [class.bg-blue-50]="selectedId() === contact.id.toString()"
         [class.border-l-4]="selectedId() === contact.id.toString()"
         [class.border-blue-600]="selectedId() === contact.id.toString()"
+        (swipeStart)="onItemSwipeStart(item)"
         (select)="onSelect($event)"
-        (delete)="onDelete($event)"
+        (delete)="contactDeleted.emit($event)"
+        (edit)="contactEditRequested.emit($event)"
       />
     }
   } @else {

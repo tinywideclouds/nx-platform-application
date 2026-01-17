@@ -5,6 +5,7 @@
       [tabIndex]="tabIndex()"
       (contactSelected)="onContactSelect($event)"
       (contactDeleted)="clearSelection()"
+      (contactEditRequested)="onContactEdit($event)"
       (groupSelected)="onGroupSelect($event)"
       (tabChange)="onTabChange($event)"
     />

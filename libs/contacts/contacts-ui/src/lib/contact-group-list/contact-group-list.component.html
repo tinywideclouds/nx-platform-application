@@ -2,12 +2,17 @@
   @if (groups().length > 0) {
     @for (group of groups(); track trackGroupById($index, group)) {
       <contacts-group-list-item
+        @deleteAnimation
+        #item
         [group]="group"
         [badgeResolver]="badgeResolver()"
         [class.bg-blue-50]="selectedId() === group.id.toString()"
         [class.border-l-4]="selectedId() === group.id.toString()"
         [class.border-blue-600]="selectedId() === group.id.toString()"
+        (swipeStart)="onItemSwipeStart(item)"
         (select)="onSelect($event)"
+        (delete)="groupDeleted.emit($event)"
+        (edit)="groupEditRequested.emit($event)"
       />
     }
   } @else {

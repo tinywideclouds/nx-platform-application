@@ -102,7 +102,20 @@ export class ContactsViewerComponent {
       this.contactSelected.emit(contact);
       return;
     }
-    this.updateUrl({ selectedId: contact.id.toString(), new: null });
+    // Standard Select: Clear 'new' AND 'mode'
+    this.updateUrl({
+      selectedId: contact.id.toString(),
+      new: null,
+      mode: null, // [UPDATE] Clear edit mode
+    });
+  }
+
+  onContactEdit(contact: Contact): void {
+    this.updateUrl({
+      selectedId: contact.id.toString(),
+      mode: 'edit', // [NEW] Set edit mode
+      new: null,
+    });
   }
 
   onGroupSelect(group: ContactGroup): void {

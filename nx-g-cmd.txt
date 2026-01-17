@@ -227,3 +227,6 @@ nx g @nx/angular:library --name=lib-messenger-test-app-mocking --directory=libs/
 
 nx g @nx/angular:library --name=platform-ui-forms --directory=libs/platform/ui/forms --tags="scope:platform" 
 
+
+nx g @nx/angular:library --name=platform-ui-lists --directory=libs/platform/ui/lists --tags="scope:platform" 
+

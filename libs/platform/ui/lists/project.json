@@ -1,0 +1,32 @@
+{
+  "name": "platform-ui-lists",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ui/lists/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform", "type:ui"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ui/lists",
+        "configFile": "libs/platform/ui/lists/vite.config.mts",
+        "main": "libs/platform/ui/lists/src/index.ts",
+        "assets": ["libs/platform/ui/lists/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/platform/ui/lists"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ui/lists",
+        "configFile": "libs/platform/ui/lists/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

@@ -3,6 +3,7 @@
     @if (toolbar.mode() === 'full') {
       <div class="flex gap-2">
         <button
+          type="button"
           mat-button
           class="toolbar-tonal-button"
           (click)="onCancel()"
@@ -14,6 +15,7 @@
     } @else {
       <div class="flex gap-2">
         <button
+          type="button"
           mat-icon-button
           (click)="onCancel()"
           data-testid="close-button"
@@ -31,7 +33,7 @@
         <contacts-form
           [contact]="data"
           [linkedIdentities]="linkedIdentities()"
-          [startInEditMode]="contactId()?.isNew ?? false"
+          [startInEditMode]="isEditMode()"
           (save)="onSave($event)"
           (delete)="onDelete()"
           (cancel)="onCancel()"

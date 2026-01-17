@@ -1,49 +1,102 @@
-<div
-  class="flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+<lib-swipeable-item
+  #swipeItem
+  triggerIcon="delete_sweep"
+  triggerLabel="Delete Group"
+  triggerColorClass="bg-red-800"
+  (select)="onContentClick()"
+  (swipe)="delete.emit(group())"
+  (mouseleave)="onMouseLeave()"
+  (swipeStart)="swipeStart.emit()"
+  (secondaryPress)="menuTrigger.openMenu()"
 >
   <div
-    class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-gray-500 text-white"
+    item-content
+    class="w-full flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+    [class.bg-white]="!menuTrigger.menuOpen"
+    [class.bg-gray-100]="menuTrigger.menuOpen"
   >
-    <svg
-      class="w-6 h-6"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
+    <div
+      class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-gray-500 text-white"
     >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        stroke-width="2"
-        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm5-6a4 4 0 100-5.292M15 21h6v-1a6 6 0 00-9-5.197"
-      ></path>
-    </svg>
+      <svg
+        class="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm5-6a4 4 0 100-5.292M15 21h6v-1a6 6 0 00-9-5.197"
+        ></path>
+      </svg>
+    </div>
+
+    <div class="flex-1 min-w-0">
+      <div class="font-medium text-gray-900 truncate" data-testid="group-name">
+        {{ group().name }}
+      </div>
+      <div class="text-sm text-gray-500 truncate">
+        {{ memberCount() }} {{ memberCount() === 1 ? 'member' : 'members' }}
+      </div>
+    </div>
+
+    @if (badges().length > 0) {
+      <div class="flex items-center gap-1" data-testid="group-badges">
+        @for (badge of badges(); track badge.icon) {
+          <mat-icon
+            class="!w-5 !h-5 text-[20px]"
+            [color]="badge.color || 'primary'"
+            [matTooltip]="badge.tooltip || ''"
+            [matBadge]="badge.count"
+            [matBadgeHidden]="!badge.count"
+            matBadgeSize="small"
+            matBadgeColor="warn"
+          >
+            {{ badge.icon }}
+          </mat-icon>
+        }
+      </div>
+    }
+
+    <div
+      #menuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="contextMenu"
+      class="absolute right-4 top-1/2 -translate-y-1/2 w-1 h-1 invisible"
+      aria-hidden="true"
+    ></div>
   </div>
 
-  <div class="flex-1 min-w-0">
-    <div class="font-medium text-gray-900 truncate" data-testid="group-name">
-      {{ group().name }}
-    </div>
-    <div class="text-sm text-gray-500 truncate">
-      {{ memberCount() }} {{ memberCount() === 1 ? 'member' : 'members' }}
-    </div>
-  </div>
+  <button
+    item-action
+    type="button"
+    class="w-full h-full flex items-center justify-center bg-red-500 text-white active:bg-red-700 transition-colors"
+    (click)="onDeleteClick($event)"
+    aria-label="Delete Group"
+  >
+    <mat-icon class="text-white">delete_sweep</mat-icon>
+  </button>
+</lib-swipeable-item>
 
-  @if (badges().length > 0) {
-    <div class="flex items-center gap-1" data-testid="group-badges">
-      @for (badge of badges(); track badge.icon) {
-        <mat-icon
-          class="!w-5 !h-5 text-[20px]"
-          [color]="badge.color || 'primary'"
-          [matTooltip]="badge.tooltip || ''"
-          [matBadge]="badge.count"
-          [matBadgeHidden]="!badge.count"
-          matBadgeSize="small"
-          matBadgeColor="warn"
-        >
-          {{ badge.icon }}
-        </mat-icon>
-      }
-    </div>
-  }
-</div>
+<mat-menu #contextMenu="matMenu" [hasBackdrop]="false">
+  <div
+    class="outline-none"
+    (mouseenter)="onMenuEnter()"
+    (mouseleave)="onMenuLeave()"
+  >
+    <button type="button" mat-menu-item (click)="onEditClick()">
+      <mat-icon>edit</mat-icon>
+      <span>Edit</span>
+    </button>
+    <button type="button" mat-menu-item (click)="onDeleteClick()">
+      <mat-icon>delete</mat-icon>
+      <span>Delete</span>
+    </button>
+    <button type="button" mat-menu-item disabled>
+      <mat-icon>visibility</mat-icon>
+      <span>View</span>
+    </button>
+  </div>
+</mat-menu>

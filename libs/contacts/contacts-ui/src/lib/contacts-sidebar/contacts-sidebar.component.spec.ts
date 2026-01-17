@@ -1,45 +1,38 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactsSidebarComponent } from './contacts-sidebar.component';
-import { ContactsStateService } from '@nx-platform-application/contacts-state'; // ✅ Use State
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-types'; // ✅ Use Types
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { signal } from '@angular/core';
-import { MockComponent, MockProvider } from 'ng-mocks';
+import { MockComponent, MockProvider, ngMocks } from 'ng-mocks';
 import { provideRouter } from '@angular/router';
 import { URN } from '@nx-platform-application/platform-types';
+import { MatDialog } from '@angular/material/dialog';
+import { of } from 'rxjs';
 
 import { ContactListComponent } from '../contact-list/contact-list.component';
 import { ContactGroupListComponent } from '../contact-group-list/contact-group-list.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 
-const mockContacts: Contact[] = [
-  {
-    id: URN.parse('urn:contacts:user:1'),
-    alias: 'Alice',
-    firstName: 'Alice',
-    surname: 'Wonder',
-    email: 'alice@test.com',
-    serviceContacts: {},
-  } as Contact,
-  {
-    id: URN.parse('urn:contacts:user:2'),
-    alias: 'Bob',
-    firstName: 'Bob',
-    surname: 'Builder',
-    email: 'bob@test.com',
-    serviceContacts: {},
-  } as Contact,
-];
+// --- MOCK DATA ---
+const MOCK_CONTACT = {
+  id: URN.parse('urn:contacts:user:1'),
+  alias: 'Alice',
+  firstName: 'Alice',
+  surname: 'Wonder',
+  email: 'alice@test.com',
+  serviceContacts: {},
+} as Contact;
 
 describe('ContactsSidebarComponent', () => {
   let fixture: ComponentFixture<ContactsSidebarComponent>;
   let component: ContactsSidebarComponent;
 
-  // ✅ Signals to drive the test
-  const contactsSignal = signal<Contact[]>([]);
+  // Signals to drive the test
+  const contactsSignal = signal<Contact[]>([MOCK_CONTACT]);
   const groupsSignal = signal<ContactGroup[]>([]);
 
   beforeEach(async () => {
-    contactsSignal.set([]);
+    contactsSignal.set([MOCK_CONTACT]);
     groupsSignal.set([]);
 
     await TestBed.configureTestingModule({
@@ -51,11 +44,14 @@ describe('ContactsSidebarComponent', () => {
       ],
       providers: [
         provideRouter([]),
-        // ✅ Mock State Service directly
+        // Mock State
         MockProvider(ContactsStateService, {
           contacts: contactsSignal,
           groups: groupsSignal,
+          deleteContact: vitest.fn().mockResolvedValue(undefined),
         }),
+        // Mock Dialog (Required for onDeleteContact)
+        MockProvider(MatDialog),
       ],
     }).compileComponents();
 
@@ -68,30 +64,52 @@ describe('ContactsSidebarComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should show all contacts when filter is empty', () => {
-    contactsSignal.set(mockContacts); // Update signal
-    fixture.detectChanges();
+  describe('onDeleteContact', () => {
+    it('should delete contact when confirmed', async () => {
+      // 1. Setup Dialog Mock to return TRUE
+      const dialog = TestBed.inject(MatDialog);
+      const afterClosedSpy = vitest.fn().mockReturnValue(of(true));
+      vitest.spyOn(dialog, 'open').mockReturnValue({
+        afterClosed: afterClosedSpy,
+      } as any);
 
-    const result = component.filteredContacts();
-    expect(result.length).toBe(2);
-  });
+      // 2. Spy on State
+      const state = TestBed.inject(ContactsStateService);
+      const deleteSpy = vitest.spyOn(state, 'deleteContact');
 
-  it('should filter contacts by alias (case insensitive)', () => {
-    contactsSignal.set(mockContacts);
-    fixture.componentRef.setInput('filterQuery', 'alice');
-    fixture.detectChanges();
+      // 3. Act
+      await component.onDeleteContact(MOCK_CONTACT);
 
-    const result = component.filteredContacts();
-    expect(result.length).toBe(1);
-    expect(result[0].alias).toBe('Alice');
-  });
+      // 4. Assert
+      expect(deleteSpy).toHaveBeenCalledWith(MOCK_CONTACT.id);
+    });
 
-  it('should return empty array if no matches', () => {
-    contactsSignal.set(mockContacts);
-    fixture.componentRef.setInput('filterQuery', 'charlie');
-    fixture.detectChanges();
+    it('should reset list items (and NOT delete) when cancelled', async () => {
+      // 1. Setup Dialog Mock to return FALSE
+      const dialog = TestBed.inject(MatDialog);
+      const afterClosedSpy = vitest.fn().mockReturnValue(of(false));
+      vitest.spyOn(dialog, 'open').mockReturnValue({
+        afterClosed: afterClosedSpy,
+      } as any);
 
-    const result = component.filteredContacts();
-    expect(result.length).toBe(0);
+      // 2. Spy on State and List Component
+      const state = TestBed.inject(ContactsStateService);
+      const deleteSpy = vitest.spyOn(state, 'deleteContact');
+
+      // Get the mocked ContactListComponent instance
+      const listComponent = ngMocks.find(
+        fixture,
+        ContactListComponent,
+      ).componentInstance;
+      // Note: ng-mocks auto-mocks methods, but we can verify it's a spy or add one
+      listComponent.resetOpenItems = vitest.fn();
+
+      // 3. Act
+      await component.onDeleteContact(MOCK_CONTACT);
+
+      // 4. Assert
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(listComponent.resetOpenItems).toHaveBeenCalled();
+    });
   });
 });

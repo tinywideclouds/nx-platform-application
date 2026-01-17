@@ -1,7 +1,16 @@
-<div class="swipe-container group">
+<lib-swipeable-item
+  #swipeItem
+  (select)="onContentClick()"
+  (swipe)="delete.emit(contact())"
+  (swipeStart)="swipeStart.emit()"
+  (mouseleave)="onMouseLeave()"
+  (secondaryPress)="onContextMenu($event)"
+>
   <div
-    class="content-wrapper w-full bg-white flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
-    (click)="onContentClick()"
+    item-content
+    class="w-full flex items-center p-3 space-x-3 hover:bg-gray-100 transition-colors duration-150"
+    [class.bg-white]="!menuTrigger.menuOpen"
+    [class.bg-gray-100]="menuTrigger.menuOpen"
   >
     <contacts-avatar
       [profilePictureUrl]="profilePictureUrl()"
@@ -16,18 +25,43 @@
         {{ contact().email }}
       </div>
     </div>
+
+    <div
+      #menuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="contextMenu"
+      class="absolute right-4 top-1/2 -translate-y-1/2 w-1 h-1 invisible"
+      aria-hidden="true"
+    ></div>
   </div>
 
-  <div
-    class="action-wrapper bg-red-500 min-w-[80px] flex items-center justify-center"
+  <button
+    item-action
+    type="button"
+    class="w-full h-full flex items-center justify-center bg-red-500 text-white active:bg-red-700 transition-colors"
+    (click)="onDeleteClick($event)"
+    aria-label="Delete Contact"
   >
-    <button
-      type="button"
-      class="w-full h-full flex items-center justify-center text-white active:bg-red-700 transition-colors"
-      (click)="onDeleteClick($event)"
-      aria-label="Delete Contact"
-    >
-      <mat-icon class="text-white">delete</mat-icon>
+    <mat-icon class="text-white">delete</mat-icon>
+  </button>
+</lib-swipeable-item>
+
+<mat-menu #contextMenu="matMenu" [hasBackdrop]="false">
+  <div
+    class="outline-none"
+    (mouseenter)="onMenuEnter()"
+    (mouseleave)="onMenuLeave()"
+  >
+    <button type="button" mat-menu-item (click)="onEditClick()">
+      <mat-icon>edit</mat-icon>
+      <span>Edit</span>
+    </button>
+    <button type="button" mat-menu-item (click)="onDeleteClick()">
+      <mat-icon>delete</mat-icon>
+      <span>Delete</span>
+    </button>
+    <button type="button" mat-menu-item disabled>
+      <mat-icon>visibility</mat-icon>
+      <span>View</span>
     </button>
   </div>
-</div>
+</mat-menu>

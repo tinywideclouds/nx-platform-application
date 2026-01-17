@@ -1,0 +1,20 @@
+<div #container class="swipe-container relative group" (scroll)="onScroll()">
+  <div class="content-wrapper w-full cursor-pointer" (click)="onContentClick()">
+    <ng-content select="[item-content]"></ng-content>
+  </div>
+
+  <div class="action-wrapper min-w-[80px] flex items-center justify-center">
+    <ng-content select="[item-action]"></ng-content>
+  </div>
+
+  <div
+    #sentinel
+    class="sentinel-wrapper w-[120px] h-full flex-shrink-0 snap-align-none flex items-center justify-center text-white font-bold text-xs uppercase tracking-wider"
+    [ngClass]="triggerColorClass()"
+  >
+    <div class="flex flex-col items-center animate-pulse">
+      <mat-icon>{{ triggerIcon() }}</mat-icon>
+      <span class="mt-1">{{ triggerLabel() }}</span>
+    </div>
+  </div>
+</div>

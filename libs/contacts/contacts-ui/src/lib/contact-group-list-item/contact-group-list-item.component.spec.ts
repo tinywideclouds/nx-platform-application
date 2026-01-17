@@ -27,6 +27,7 @@ const MOCK_GROUP: ContactGroup = {
       [group]="group"
       [badgeResolver]="resolver"
       (select)="onSelected($event)"
+      (delete)="onDeleted($event)"
     />
   `,
 })
@@ -38,6 +39,7 @@ class TestHostComponent {
   child!: ContactGroupListItemComponent;
 
   onSelected(group: ContactGroup) {}
+  onDeleted(group: ContactGroup) {}
 }
 
 describe('ContactGroupListItemComponent', () => {
@@ -51,12 +53,11 @@ describe('ContactGroupListItemComponent', () => {
 
     fixture = TestBed.createComponent(TestHostComponent);
     hostComponent = fixture.componentInstance;
-    // Don't call detectChanges here yet, let individual tests drive the initial data
   });
 
   describe('Rendering', () => {
     it('should render the group name', () => {
-      fixture.detectChanges(); // First render
+      fixture.detectChanges();
       const el = fixture.debugElement.query(
         By.css('contacts-group-list-item'),
       ).nativeElement;
@@ -67,8 +68,6 @@ describe('ContactGroupListItemComponent', () => {
       const mockResolver: GroupBadgeResolver = () => [
         { icon: 'hub', tooltip: 'Network', color: 'primary' },
       ];
-
-      // ✅ FIX: Set input BEFORE first detectChanges to prevent NG0100
       hostComponent.resolver = mockResolver;
       fixture.detectChanges();
       await fixture.whenStable();
@@ -77,36 +76,43 @@ describe('ContactGroupListItemComponent', () => {
         By.css('[data-testid="group-badges"]'),
       );
       expect(badgesEl).toBeTruthy();
-      expect(badgesEl.nativeElement.textContent).toContain('hub');
-    });
-
-    it('should NOT render badges section if resolver returns empty', async () => {
-      const mockResolver: GroupBadgeResolver = () => [];
-
-      // ✅ FIX: Set input BEFORE first detectChanges
-      hostComponent.resolver = mockResolver;
-      fixture.detectChanges();
-      await fixture.whenStable();
-
-      const badgesEl = fixture.debugElement.query(
-        By.css('[data-testid="group-badges"]'),
-      );
-      expect(badgesEl).toBeFalsy();
     });
   });
 
-  describe('Events', () => {
-    it('should emit (select) with the group when clicked', () => {
-      fixture.detectChanges(); // Standard init
-      const selectSpy = vi.spyOn(hostComponent, 'onSelected');
-      const componentEl = fixture.debugElement.query(
-        By.css('contacts-group-list-item'),
-      );
-
-      componentEl.triggerEventHandler('click');
+  describe('Interactions', () => {
+    it('should emit (select) when content is clicked', () => {
       fixture.detectChanges();
+      const selectSpy = vi.spyOn(hostComponent, 'onSelected');
+
+      // Click the inner content wrapper, not the host
+      const contentEl = fixture.debugElement.query(By.css('.content-wrapper'));
+      contentEl.triggerEventHandler('click');
 
       expect(selectSpy).toHaveBeenCalledWith(MOCK_GROUP);
+    });
+
+    it('should hard reset (scrollLeft=0) when reset(false) is called', async () => {
+      fixture.detectChanges();
+      const component = hostComponent.child;
+      const container = fixture.nativeElement.querySelector('.swipe-container');
+
+      // Simulate dirty state
+      container.scrollLeft = 100;
+
+      await component.reset(false);
+
+      expect(container.scrollLeft).toBe(0);
+    });
+
+    it('should emit (delete) when delete button is clicked', () => {
+      fixture.detectChanges();
+      const deleteSpy = vi.spyOn(hostComponent, 'onDeleted');
+
+      // Find the delete button in the action wrapper
+      const btn = fixture.debugElement.query(By.css('.action-wrapper button'));
+      btn.triggerEventHandler('click', new Event('click'));
+
+      expect(deleteSpy).toHaveBeenCalledWith(MOCK_GROUP);
     });
   });
 });

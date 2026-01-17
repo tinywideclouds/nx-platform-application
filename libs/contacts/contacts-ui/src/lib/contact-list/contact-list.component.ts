@@ -1,11 +1,10 @@
-// libs/contacts/contacts-ui/src/lib/contact-list/contact-list.component.ts
-
 import {
   Component,
   input,
   output,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { trigger, transition, style, animate } from '@angular/animations';
 
 import { Contact } from '@nx-platform-application/contacts-types';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
@@ -17,26 +16,59 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
   templateUrl: './contact-list.component.html',
   styleUrl: './contact-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    trigger('deleteAnimation', [
+      transition(':leave', [
+        style({ height: '*', opacity: 1, overflow: 'hidden' }),
+        animate(
+          '300ms cubic-bezier(0.4, 0.0, 0.2, 1)',
+          style({ height: '0px', opacity: 0, paddingTop: 0, paddingBottom: 0 }),
+        ),
+      ]),
+    ]),
+  ],
 })
 export class ContactListComponent {
   contacts = input.required<Contact[]>();
-
-  /** * The ID of the currently selected contact (as a string).
-   * Used to apply active styling to the row.
-   */
   selectedId = input<string | undefined>(undefined);
 
   contactSelected = output<Contact>();
-
-  // New output for the bubbled event
   contactDeleted = output<Contact>();
+  contactEditRequested = output<Contact>();
 
-  onSelect(contact: Contact): void {
+  // Track the currently open component so we can close it
+  private activeItem: ContactListItemComponent | null = null;
+
+  async onSelect(contact: Contact) {
+    // FIX: Instant cleanup when clicking a row.
+    // This ensures the list is clean when/if we return to it.
+    await this.resetOpenItems(false);
     this.contactSelected.emit(contact);
   }
 
   onDelete(contact: Contact): void {
     this.contactDeleted.emit(contact);
+  }
+
+  // Accordion Logic: Close previous item when a new one opens
+  onItemSwipeStart(item: ContactListItemComponent): void {
+    if (this.activeItem && this.activeItem !== item) {
+      this.activeItem.reset();
+    }
+    this.activeItem = item;
+  }
+
+  /**
+   * Resets currently open item.
+   * @param animate - Pass false to snap instantly (e.g. before navigation)
+   */
+  resetOpenItems(animate = true): Promise<void> {
+    if (this.activeItem) {
+      const promise = this.activeItem.reset(animate);
+      this.activeItem = null;
+      return promise;
+    }
+    return Promise.resolve();
   }
 
   trackContactById(index: number, contact: Contact): string {

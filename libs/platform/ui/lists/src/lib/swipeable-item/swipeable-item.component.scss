@@ -1,0 +1,45 @@
+:host {
+  display: block;
+  overflow: hidden;
+  position: relative;
+}
+
+/* PHYSICS */
+.swipe-container {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.content-wrapper {
+  scroll-snap-align: start;
+  min-width: 100%;
+}
+
+.action-wrapper {
+  scroll-snap-align: end;
+}
+
+/* Sentinel: 
+   Visible when pulling past the action button.
+*/
+.sentinel-wrapper {
+  opacity: 1;
+}
+
+/* DESKTOP GUARD */
+@media (hover: hover) {
+  .swipe-container {
+    overflow-x: hidden;
+  }
+  .action-wrapper,
+  .sentinel-wrapper {
+    display: none;
+  }
+}
