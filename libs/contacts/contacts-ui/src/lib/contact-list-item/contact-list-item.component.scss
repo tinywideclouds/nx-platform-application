@@ -1,10 +1,39 @@
 /* libs/contacts/contacts-ui/src/lib/contact-list-item/contact-list-item.component.scss */
-
 :host {
-  /*
-   * Ensures the component takes up the full width
-   * of its container (e.g., when in a list),
-   * allowing the hover effect to span the entire row.
-   */
   display: block;
+  overflow: hidden;
+}
+
+/* PHYSICS ONLY */
+.swipe-container {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+
+  &::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+}
+
+.content-wrapper {
+  scroll-snap-align: start;
+  /* Use 'min-width: 100%' to ensure it fills the view before scrolling */
+  min-width: 100%;
+}
+
+.action-wrapper {
+  scroll-snap-align: end;
+}
+
+/* DESKTOP GUARD */
+@media (hover: hover) {
+  .swipe-container {
+    overflow-x: hidden; /* Lock scroll */
+  }
+
+  .action-wrapper {
+    display: none; /* Remove from layout */
+  }
 }

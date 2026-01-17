@@ -1,30 +1,33 @@
-<!-- libs/contacts/contacts-ui/src/lib/contact-list-item/contact-list-item.component.html -->
+<div class="swipe-container group">
+  <div
+    class="content-wrapper w-full bg-white flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+    (click)="onContentClick()"
+  >
+    <contacts-avatar
+      [profilePictureUrl]="profilePictureUrl()"
+      [initials]="initials()"
+    ></contacts-avatar>
 
-<div
-  class="flex items-center p-3 space-x-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
->
-  <!-- 
-    1. Avatar (with updated bindings) 
-    We now pass the primitive getters, not the whole contact.
-  -->
-  <contacts-avatar
-    [profilePictureUrl]="profilePictureUrl()"
-    [initials]="initials()"
-  ></contacts-avatar>
+    <div class="flex-1 min-w-0">
+      <div class="font-medium text-gray-900 truncate" data-testid="alias">
+        {{ contact().alias }}
+      </div>
+      <div class="text-sm text-gray-500 truncate">
+        {{ contact().email }}
+      </div>
+    </div>
+  </div>
 
-  <!-- 2. Text Content (This part is unchanged) -->
-  <div class="flex-1 min-w-0">
-    <!-- Alias/Name -->
-    <div
-      class="font-medium text-gray-900 truncate"
-      data-testid="alias"
+  <div
+    class="action-wrapper bg-red-500 min-w-[80px] flex items-center justify-center"
+  >
+    <button
+      type="button"
+      class="w-full h-full flex items-center justify-center text-white active:bg-red-700 transition-colors"
+      (click)="onDeleteClick($event)"
+      aria-label="Delete Contact"
     >
-      {{ contact().alias }}
-    </div>
-
-    <!-- Sub-text (e.g., primary email) -->
-    <div class="text-sm text-gray-500 truncate">
-      {{ contact().email }}
-    </div>
+      <mat-icon class="text-white">delete</mat-icon>
+    </button>
   </div>
 </div>

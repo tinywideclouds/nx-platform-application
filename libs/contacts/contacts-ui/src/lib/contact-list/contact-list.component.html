@@ -7,13 +7,11 @@
         [class.border-l-4]="selectedId() === contact.id.toString()"
         [class.border-blue-600]="selectedId() === contact.id.toString()"
         (select)="onSelect($event)"
+        (delete)="onDelete($event)"
       />
     }
   } @else {
-    <div
-      class="p-4 text-center text-gray-500"
-      data-testid="empty-list"
-    >
+    <div class="p-4 text-center text-gray-500" data-testid="empty-list">
       No contacts found.
     </div>
   }

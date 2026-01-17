@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/components/contacts-sidebar/contacts-sidebar.component.ts
+
 import {
   Component,
   ChangeDetectionStrategy,
@@ -14,12 +16,17 @@ import { MatTabsModule, MatTabChangeEvent } from '@angular/material/tabs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog } from '@angular/material/dialog';
 
 // SHARED UI
-import { ListFilterComponent } from '@nx-platform-application/platform-ui-toolkit';
+import {
+  ListFilterComponent,
+  ConfirmationDialogComponent,
+  ConfirmationData,
+} from '@nx-platform-application/platform-ui-toolkit';
 
 // DOMAIN
-import { ContactsStateService } from '@nx-platform-application/contacts-state'; // ✅ Switched to State
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 
 // UI COMPONENTS
@@ -47,7 +54,8 @@ import { GroupBadgeResolver } from './../models/group-badge.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContactsSidebarComponent {
-  private state = inject(ContactsStateService); // ✅ Inject State
+  private state = inject(ContactsStateService);
+  private dialog = inject(MatDialog);
 
   // --- INPUTS ---
   selectedId = input<string | undefined>(undefined);
@@ -62,6 +70,7 @@ export class ContactsSidebarComponent {
   // --- OUTPUTS ---
   contactSelected = output<Contact>();
   groupSelected = output<ContactGroup>();
+  contactDeleted = output<void>(); // ✅ New Output to match Page strategy
   tabChange = output<MatTabChangeEvent>();
 
   // --- DATA (Direct from State Signals) ---
@@ -115,5 +124,30 @@ export class ContactsSidebarComponent {
 
   onTabChange(event: MatTabChangeEvent) {
     this.tabChange.emit(event);
+  }
+
+  // --- ACTIONS ---
+
+  async onDeleteContact(contact: Contact): Promise<void> {
+    const ref = this.dialog.open<
+      ConfirmationDialogComponent,
+      ConfirmationData,
+      boolean
+    >(ConfirmationDialogComponent, {
+      data: {
+        title: 'Delete Contact?',
+        message: `Are you sure you want to delete <strong>${contact.alias}</strong>?`,
+        confirmText: 'Delete',
+        confirmColor: 'warn',
+        icon: 'delete',
+      },
+    });
+
+    const result = await ref.afterClosed().toPromise();
+
+    if (result) {
+      await this.state.deleteContact(contact.id);
+      this.contactDeleted.emit(); // ✅ Emit to parent
+    }
   }
 }

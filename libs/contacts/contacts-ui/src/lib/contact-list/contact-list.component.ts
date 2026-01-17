@@ -1,3 +1,5 @@
+// libs/contacts/contacts-ui/src/lib/contact-list/contact-list.component.ts
+
 import {
   Component,
   input,
@@ -26,8 +28,15 @@ export class ContactListComponent {
 
   contactSelected = output<Contact>();
 
+  // New output for the bubbled event
+  contactDeleted = output<Contact>();
+
   onSelect(contact: Contact): void {
     this.contactSelected.emit(contact);
+  }
+
+  onDelete(contact: Contact): void {
+    this.contactDeleted.emit(contact);
   }
 
   trackContactById(index: number, contact: Contact): string {

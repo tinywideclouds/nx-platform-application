@@ -4,6 +4,7 @@
       [selectedId]="selectedId()"
       [tabIndex]="tabIndex()"
       (contactSelected)="onContactSelect($event)"
+      (contactDeleted)="clearSelection()"
       (groupSelected)="onGroupSelect($event)"
       (tabChange)="onTabChange($event)"
     />
