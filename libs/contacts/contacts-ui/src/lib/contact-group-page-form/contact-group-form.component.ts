@@ -99,28 +99,22 @@ export class ContactGroupFormComponent {
   });
 
   constructor() {
-    effect(
-      () => {
-        if (this.startInEditMode()) {
-          this.isEditing.set(true);
-        }
-      },
-      { allowSignalWrites: true },
-    );
+    effect(() => {
+      if (this.startInEditMode()) {
+        this.isEditing.set(true);
+      }
+    });
 
-    effect(
-      () => {
-        const g = this.group();
-        if (g) {
-          this.name.set(g.name);
-          this.description.set(g.description || '');
-          this.contactIds.set(g.members.map((m) => m.contactId.toString()));
-        } else {
-          this.resetForm();
-        }
-      },
-      { allowSignalWrites: true },
-    );
+    effect(() => {
+      const g = this.group();
+      if (g) {
+        this.name.set(g.name);
+        this.description.set(g.description || '');
+        this.contactIds.set(g.members.map((m) => m.contactId.toString()));
+      } else {
+        this.resetForm();
+      }
+    });
   }
 
   onSave(): void {

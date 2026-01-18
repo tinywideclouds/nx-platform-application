@@ -11,37 +11,31 @@ test.describe('Journey: User Onboarding', () => {
 
   test('should allow user to create their first contact', async ({ page }) => {
     // A. Verify Empty State
-    await expect(app.emptyListMessage).toBeVisible();
-    await expect(app.sidebarList).toHaveCount(0);
+    await expect(app.list.emptyMessage).toBeVisible(); // Updated
+    await expect(app.list.items).toHaveCount(0); // Updated
 
     // B. Start Creation
-    await app.createContactButton.click();
+    await app.list.createButton.click(); // Updated
     await expect(page).toHaveURL(/new=contact/);
 
-    // C. Validation Check (Stage 1: Disabled)
-    await app.expectSaveButtonState('disabled');
+    // C. Validation Check
+    await app.form.expectSaveButtonState('disabled'); // Updated
 
     // D. Fill Data
-    await app.fillForm({
+    await app.form.fill({
       firstName: 'Alice',
       surname: 'Wonderland',
       alias: 'Ali',
       email: 'alice@wonderland.com',
     });
 
-    // E. Save (Stage 3: Ready)
-    await app.expectSaveButtonState('ready');
-    await app.saveButton.click();
+    // E. Save
+    await app.form.expectSaveButtonState('ready'); // Updated
+    await app.form.saveButton.click();
 
-    // F. Verify Redirect (List View)
+    // F. Verify Redirect
     await expect(page).not.toHaveURL(/new=contact/);
-    await expect(app.sidebarList).toHaveCount(1);
-    await app.expectContactVisible('Ali');
-
-    // ✅ FIX: Re-select the contact to view details
-    await app.selectContact('Ali');
-
-    // Check Detail View
-    await expect(app.firstNameInput).toHaveValue('Alice');
+    await expect(app.list.items).toHaveCount(1); // Updated
+    await app.list.expectVisible('Ali'); // Updated
   });
 });

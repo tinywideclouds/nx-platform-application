@@ -43,238 +43,111 @@ export class ContactFormComponent {
   private el = inject(ElementRef);
 
   // --- INPUTS ---
-  contact = input<Contact | null>(null);
-  linkedIdentities = input<URN[]>([]);
+  contact = input.required<Contact>();
+  linkedIdentities = input<any[]>([]);
   startInEditMode = input(false);
-  readonly = input(false);
 
-  // --- OUTPUTS (Strict Contract) ---
+  // --- OUTPUTS ---
   save = output<Contact>();
   delete = output<void>();
   cancel = output<void>();
 
-  // --- UI STATE ---
-  isEditing = signal(false);
-
   // --- FORM STATE (Signals) ---
+  // We initialize these in the constructor effect
   firstName = signal('');
-  firstNameTouched = signal(false);
-
   surname = signal('');
-  surnameTouched = signal(false);
-
   alias = signal('');
-  aliasTouched = signal(false);
-
   email = signal('');
-  emailTouched = signal(false);
 
-  emailAddresses = signal<string[]>([]);
   phoneNumbers = signal<string[]>([]);
 
-  // --- COMPUTED VALIDATION ---
+  // Touched States
+  firstNameTouched = signal(false);
+  aliasTouched = signal(false);
+  emailTouched = signal(false);
+
+  // --- UX-09: THE BREADCRUMB TRAIL (Modified State) ---
+  // Compares current signal value vs the 'contact' input (Source of Truth)
+  firstNameModified = computed(
+    () => this.firstName() !== this.contact().firstName,
+  );
+  surnameModified = computed(
+    () => this.surname() !== (this.contact().surname || ''),
+  );
+  aliasModified = computed(() => this.alias() !== this.contact().alias);
+  emailModified = computed(() => this.email() !== this.contact().email);
+
+  // --- VALIDATION ---
   firstNameError = computed(() =>
-    !FormValidators.required(this.firstName())
-      ? 'First name is required'
-      : null,
+    !this.firstName() ? 'First Name is required' : null,
   );
 
-  aliasError = computed(() =>
-    !FormValidators.required(this.alias()) ? 'Alias is required' : null,
-  );
+  aliasError = computed(() => (!this.alias() ? 'Alias is required' : null));
 
   emailError = computed(() => {
-    if (!FormValidators.required(this.email())) return 'Email is required';
-    if (!FormValidators.email(this.email())) return 'Invalid email address';
+    if (!this.email()) return 'Email is required';
+    if (!FormValidators.isValidEmail(this.email()))
+      return 'Invalid email format';
     return null;
   });
 
-  hasArrayErrors = computed(() => {
-    return this.emailAddresses().some((e) => !FormValidators.email(e));
-  });
+  isValid = computed(
+    () => !this.firstNameError() && !this.aliasError() && !this.emailError(),
+  );
 
-  isValid = computed(() => {
-    return (
-      !this.firstNameError() &&
-      !this.aliasError() &&
-      !this.emailError() &&
-      !this.hasArrayErrors()
-    );
-  });
+  hasAnyContent = computed(
+    () =>
+      !!this.firstName() ||
+      !!this.surname() ||
+      !!this.alias() ||
+      !!this.email(),
+  );
 
-  // Stage 1 Detection
-  hasAnyContent = computed(() => {
-    return (
-      !!this.firstName().trim() ||
-      !!this.surname().trim() ||
-      !!this.alias().trim() ||
-      !!this.email().trim() ||
-      this.emailAddresses().length > 0 ||
-      this.phoneNumbers().length > 0
-    );
-  });
-
+  // Computed Tooltip for the Save Button
   saveTooltip = computed(() => {
-    if (!this.hasAnyContent()) return 'Enter contact details';
-    if (this.isValid()) return 'Save Contact';
-
-    if (this.firstNameError()) return 'Missing: First Name';
-    if (this.aliasError()) return 'Missing: Alias';
-    if (this.emailError()) return 'Invalid: Primary Email';
-
-    return 'Please complete required fields';
+    if (!this.hasAnyContent()) return 'Form is empty';
+    if (!this.isValid()) return 'Please fix errors before saving';
+    return 'Save Contact';
   });
 
+  // --- SYNC LOGIC ---
   constructor() {
-    effect(
-      () => {
-        if (this.startInEditMode()) {
-          this.isEditing.set(true);
-        }
-      },
-      { allowSignalWrites: true },
-    );
-
+    // Reset form when the Contact Input changes (Navigation)
     effect(
       () => {
         const c = this.contact();
-        if (c) {
-          this.firstName.set(c.firstName ?? '');
-          this.surname.set(c.surname ?? '');
-          this.alias.set(c.alias ?? '');
-          this.email.set(c.email ?? '');
-          this.emailAddresses.set([...(c.emailAddresses ?? [])]);
-          this.phoneNumbers.set([...(c.phoneNumbers ?? [])]);
-        } else {
-          this.resetForm();
-        }
+        // Use untracked if strictly needed, but here we want to react to 'c'
+        this.firstName.set(c.firstName || '');
+        this.surname.set(c.surname || '');
+        this.alias.set(c.alias || '');
+        this.email.set(c.email || '');
+        this.phoneNumbers.set([...(c.phoneNumbers || [])]);
+
+        // Reset interaction state
+        this.firstNameTouched.set(false);
+        this.aliasTouched.set(false);
+        this.emailTouched.set(false);
       },
       { allowSignalWrites: true },
     );
   }
 
-  // --- ACTIONS ---
+  // --- UI HELPERS ---
+  isEditing = computed(
+    () =>
+      this.startInEditMode() ||
+      this.firstNameModified() || // Auto-switch to "Edit UI" if modified
+      this.surnameModified() ||
+      this.aliasModified() ||
+      this.emailModified(),
+  );
 
-  // [RESTORED] Handles transition to edit mode + scrolling
-  enterEditMode(): void {
-    this.isEditing.set(true);
-    this.el.nativeElement.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    });
-  }
-
-  addEmailAddress(): void {
-    this.emailAddresses.update((list) => [...list, '']);
-  }
-
-  removeEmailAddress(index: number): void {
-    this.emailAddresses.update((list) => list.filter((_, i) => i !== index));
-  }
-
-  updateEmailAddress(index: number, value: string): void {
-    this.emailAddresses.update((list) => {
-      const copy = [...list];
-      copy[index] = value;
-      return copy;
-    });
-  }
-
-  addPhoneNumber(): void {
-    this.phoneNumbers.update((list) => [...list, '']);
-  }
-
-  removePhoneNumber(index: number): void {
-    this.phoneNumbers.update((list) => list.filter((_, i) => i !== index));
-  }
-
-  updatePhoneNumber(index: number, value: string): void {
-    this.phoneNumbers.update((list) => {
-      const copy = [...list];
-      copy[index] = value;
-      return copy;
-    });
-  }
-
-  onSave(): void {
-    this.firstNameTouched.set(true);
-    this.aliasTouched.set(true);
-    this.emailTouched.set(true);
-
-    if (!this.isValid()) {
-      this.jumpToFirstError();
-      return;
-    }
-
-    if (this.contact()) {
-      const updated: Contact = {
-        ...this.contact()!,
-        firstName: this.firstName(),
-        surname: this.surname(),
-        alias: this.alias(),
-        email: this.email(),
-        emailAddresses: this.emailAddresses(),
-        phoneNumbers: this.phoneNumbers(),
-      };
-      this.save.emit(updated);
-
-      // ✅ FIX: If editing an existing contact, exit edit mode now.
-      // If creating a new contact, we don't care because the component will be destroyed/navigated.
-      if (!this.startInEditMode()) {
-        this.isEditing.set(false);
-      }
-    }
-  }
-
-  onDelete(): void {
-    this.delete.emit();
-  }
-
-  onCancel(): void {
-    // If creating new, emit cancel (Page handles navigation)
-    if (this.startInEditMode()) {
-      this.cancel.emit();
-      return;
-    }
-    // If editing existing, just exit edit mode
-    this.isEditing.set(false);
-
-    // Reset form to original value
-    const c = this.contact();
-    if (c) {
-      this.firstName.set(c.firstName ?? '');
-      this.surname.set(c.surname ?? '');
-      this.alias.set(c.alias ?? '');
-      this.email.set(c.email ?? '');
-      this.emailAddresses.set([...(c.emailAddresses ?? [])]);
-      this.phoneNumbers.set([...(c.phoneNumbers ?? [])]);
-    }
-  }
-
-  private jumpToFirstError() {
-    const invalidInput = this.el.nativeElement.querySelector(
-      '.field-invalid input',
-    );
-    if (invalidInput) {
-      invalidInput.focus();
-    }
-  }
-
-  private resetForm() {
-    this.firstName.set('');
-    this.surname.set('');
-    this.alias.set('');
-    this.email.set('');
-    this.emailAddresses.set([]);
-    this.phoneNumbers.set([]);
-    this.firstNameTouched.set(false);
-    this.aliasTouched.set(false);
-    this.emailTouched.set(false);
-  }
-
+  /**
+   * UX-04: The Traffic Light System
+   * Now enhanced with UX-09 (Modified) logic if needed,
+   * but we handle the "Blue Bar" in CSS/HTML mostly.
+   */
   getStatusIcon(field: 'firstName' | 'surname' | 'alias' | 'email'): string {
-    if (!this.isEditing()) return '';
-
     let value = '';
     let error: string | null = null;
     let touched = false;
@@ -320,17 +193,36 @@ export class ContactFormComponent {
       case 'error':
         return 'text-red-600';
       case 'priority_high':
-        return 'text-amber-500 font-bold';
+        return 'text-amber-500';
       default:
-        return '';
+        return 'text-gray-400';
     }
   }
 
-  getProviderName(urn: URN): string {
-    return urn.toString().split(':')[2] || 'Unknown';
+  // --- ACTIONS ---
+  onSave(): void {
+    if (!this.isValid()) return;
+
+    const updated: Contact = {
+      ...this.contact(),
+      firstName: this.firstName(),
+      surname: this.surname(),
+      alias: this.alias(),
+      email: this.email(),
+      phoneNumbers: this.phoneNumbers(),
+    };
+    this.save.emit(updated);
   }
 
-  getProviderId(urn: URN): string {
-    return urn.toString().split(':')[3] || 'Unknown';
+  onDelete(): void {
+    this.delete.emit();
+  }
+
+  onCancel(): void {
+    this.cancel.emit();
+  }
+
+  addPhoneNumber(): void {
+    this.phoneNumbers.update((nums) => [...nums, '']);
   }
 }
