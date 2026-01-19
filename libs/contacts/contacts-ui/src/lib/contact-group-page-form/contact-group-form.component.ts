@@ -14,8 +14,8 @@ import {
   ContactGroupMember,
 } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
-
-import { FormValidators } from '@nx-platform-application/platform-ui-forms';
+import { computedError } from '@nx-platform-application/platform-ui-forms';
+import { GroupNameSchema } from '../schemas/contact-group.schema';
 
 // MATERIAL
 import { MatButtonModule } from '@angular/material/button';
@@ -23,13 +23,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
-import { MatTooltipModule } from '@angular/material/tooltip';
-
-// PIPES
-import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 // SHARED
 import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact-multi-selector.component';
+import { ContactAvatarComponent } from '../contact-avatar/contact-avatar.component';
 
 @Component({
   selector: 'contacts-group-form',
@@ -37,13 +34,12 @@ import { ContactMultiSelectorComponent } from '../contact-multi-selector/contact
   imports: [
     CommonModule,
     ContactMultiSelectorComponent,
+    ContactAvatarComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
     MatCheckboxModule,
     MatIconModule,
-    MatTooltipModule,
-    ContactAvatarComponent,
   ],
   templateUrl: './contact-group-form.component.html',
   styleUrl: './contact-group-form.component.scss',
@@ -53,44 +49,27 @@ export class ContactGroupFormComponent {
   // --- INPUTS ---
   group = input<ContactGroup | null>(null);
   allContacts = input<Contact[]>([]);
-  startInEditMode = input(false);
+  isEditing = input(false); // [NEW] Controlled by parent
   linkedChildrenCount = input(0);
 
   // --- OUTPUTS ---
   save = output<ContactGroup>();
   delete = output<{ recursive: boolean }>();
-  cancel = output<void>();
-
-  // --- UI STATE ---
-  isEditing = signal(false);
-  deleteRecursive = signal(false);
+  errorsChange = output<number>(); // [NEW] Report errors to parent
 
   // --- FORM STATE ---
   name = signal('');
   nameTouched = signal(false);
   description = signal('');
   contactIds = signal<string[]>([]);
+  deleteRecursive = signal(false);
 
-  // --- COMPUTED VALIDATION ---
-  nameError = computed(() =>
-    !FormValidators.required(this.name()) ? 'Group name is required' : null,
-  );
+  // --- VALIDATION ---
+  nameError = computedError(GroupNameSchema, this.name);
 
   isValid = computed(() => !this.nameError());
 
-  hasAnyContent = computed(() => {
-    return (
-      !!this.name().trim() ||
-      !!this.description().trim() ||
-      this.contactIds().length > 0
-    );
-  });
-
-  saveTooltip = computed(() => {
-    if (!this.hasAnyContent()) return 'Enter group details';
-    if (this.isValid()) return 'Save Group';
-    return 'Missing: Group Name';
-  });
+  errorCount = computed(() => (this.isValid() ? 0 : 1));
 
   groupMembers = computed(() => {
     const ids = this.contactIds();
@@ -99,12 +78,7 @@ export class ContactGroupFormComponent {
   });
 
   constructor() {
-    effect(() => {
-      if (this.startInEditMode()) {
-        this.isEditing.set(true);
-      }
-    });
-
+    // Reset form when group changes
     effect(() => {
       const g = this.group();
       if (g) {
@@ -115,9 +89,15 @@ export class ContactGroupFormComponent {
         this.resetForm();
       }
     });
+
+    // Report validation status
+    effect(() => {
+      this.errorsChange.emit(this.errorCount());
+    });
   }
 
-  onSave(): void {
+  // [NEW] Triggered by Parent Toolbar
+  triggerSave(): void {
     this.nameTouched.set(true);
 
     if (!this.isValid()) {
@@ -128,6 +108,7 @@ export class ContactGroupFormComponent {
     if (this.group()) {
       const originalGroup = this.group()!;
 
+      // Merge new members while preserving existing member metadata
       const updatedMembers: ContactGroupMember[] = this.contactIds().map(
         (idStr) => {
           const existing = originalGroup.members.find(
@@ -137,40 +118,17 @@ export class ContactGroupFormComponent {
         },
       );
 
-      const updatedGroup = {
+      this.save.emit({
         ...originalGroup,
         name: this.name(),
         description: this.description(),
         members: updatedMembers,
-      };
-
-      this.save.emit(updatedGroup);
-
-      // ✅ FIX: Consistency - Exit Edit Mode after saving updates
-      if (!this.startInEditMode()) {
-        this.isEditing.set(false);
-      }
+      });
     }
   }
 
   onDelete(): void {
     this.delete.emit({ recursive: this.deleteRecursive() });
-  }
-
-  onCancel(): void {
-    if (this.startInEditMode()) {
-      this.cancel.emit();
-      return;
-    }
-    this.isEditing.set(false);
-
-    // Reset to original values
-    const g = this.group();
-    if (g) {
-      this.name.set(g.name);
-      this.description.set(g.description || '');
-      this.contactIds.set(g.members.map((m) => m.contactId.toString()));
-    }
   }
 
   trackContactById(index: number, contact: Contact): string {

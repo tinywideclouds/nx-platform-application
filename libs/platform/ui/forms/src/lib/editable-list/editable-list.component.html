@@ -1,0 +1,160 @@
+<div class="flex flex-col gap-2">
+  <h3 class="text-sm font-semibold text-gray-500">{{ label() }}</h3>
+
+  <mat-list
+    role="list"
+    class="bg-white rounded border border-gray-200 overflow-hidden"
+    *ngIf="rows().length > 0"
+  >
+    @for (row of rows(); track row.id; let last = $last) {
+      <mat-list-item
+        role="listitem"
+        class="transition-colors border-l-[4px]"
+        [class.border-transparent]="row.status === 'unchanged'"
+        [class.border-green-500]="row.status === 'new'"
+        [class.border-blue-500]="row.status === 'modified'"
+        [class.border-red-500]="row.status === 'deleted'"
+        [class.bg-red-50]="row.status === 'deleted'"
+        [class.hover:bg-gray-50]="row.status !== 'deleted'"
+      >
+        @if (editingId() !== row.id) {
+          <div class="flex items-center w-full h-full pr-2">
+            <span
+              class="text-sm truncate flex-grow"
+              [class.line-through]="row.status === 'deleted'"
+              [class.text-gray-400]="row.status === 'deleted'"
+            >
+              {{ row.value }}
+            </span>
+
+            @if (row.status !== 'unchanged' && row.status !== 'deleted') {
+              <span
+                class="text-[10px] font-bold uppercase tracking-wider text-white px-1.5 py-0.5 rounded-sm mx-2"
+                [class.bg-green-500]="row.status === 'new'"
+                [class.bg-blue-500]="row.status === 'modified'"
+              >
+                {{ row.status }}
+              </span>
+            }
+
+            @if (!readonly()) {
+              <div class="flex gap-1 items-center">
+                @if (row.status === 'deleted') {
+                  <button
+                    mat-icon-button
+                    color="primary"
+                    (click)="restore(row.id)"
+                    matTooltip="Undo Delete"
+                  >
+                    <mat-icon>undo</mat-icon>
+                  </button>
+                }
+                @if (row.status !== 'deleted') {
+                  <button
+                    mat-icon-button
+                    color="primary"
+                    (click)="startEdit(row.id, row.value)"
+                    matTooltip="Edit"
+                  >
+                    <mat-icon class="scale-75">edit</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    color="warn"
+                    (click)="remove(row.id)"
+                    matTooltip="Delete"
+                  >
+                    <mat-icon class="scale-75">delete</mat-icon>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (editingId() === row.id) {
+          <div class="flex items-center gap-2 w-full pr-2 py-1">
+            <mat-form-field
+              appearance="outline"
+              density="compact"
+              subscriptSizing="dynamic"
+              class="flex-grow w-full"
+            >
+              <input
+                aria-label="save"
+                matInput
+                [value]="editingValue()"
+                (input)="onEditingInput($event)"
+                (keyup.enter)="saveEdit()"
+                autoFocus
+              />
+            </mat-form-field>
+
+            @if (isEditingValid()) {
+              <button
+                mat-icon-button
+                color="primary"
+                (click)="saveEdit()"
+                matTooltip="Apply"
+              >
+                <mat-icon>check_circle</mat-icon>
+              </button>
+            } @else {
+              <button
+                mat-icon-button
+                color="warn"
+                [matTooltip]="editingError() || 'Invalid input'"
+              >
+                <mat-icon>error</mat-icon>
+              </button>
+            }
+
+            <button mat-icon-button (click)="cancelEdit()" matTooltip="Cancel">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        }
+      </mat-list-item>
+      <mat-divider *ngIf="!last"></mat-divider>
+    }
+  </mat-list>
+
+  @if (!readonly()) {
+    <div class="flex items-center gap-2 w-full pr-2 py-1">
+      <mat-form-field
+        appearance="outline"
+        density="compact"
+        subscriptSizing="dynamic"
+        class="flex-grow w-full"
+      >
+        <input
+          matInput
+          [value]="stagingValue()"
+          (input)="onStagingInput($event)"
+          (keyup.enter)="add()"
+          placeholder="Add new {{ label() | lowercase }}..."
+        />
+      </mat-form-field>
+
+      @if (isStagingValid() || stagingValue().length === 0) {
+        <button
+          mat-icon-button
+          color="primary"
+          [disabled]="!isStagingValid()"
+          (click)="add()"
+          matTooltip="Add to list"
+        >
+          <mat-icon>add_circle</mat-icon>
+        </button>
+      } @else {
+        <button
+          mat-icon-button
+          color="warn"
+          [matTooltip]="stagingError() || 'Invalid format'"
+        >
+          <mat-icon>priority_high</mat-icon>
+        </button>
+      }
+    </div>
+  }
+</div>

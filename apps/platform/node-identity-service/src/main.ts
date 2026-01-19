@@ -7,7 +7,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { Firestore } from '@google-cloud/firestore';
-import { FirestoreStore } from '@google-cloud/connect-firestore';
 import { pinoHttp } from 'pino-http';
 
 import { logger } from '@nx-platform-application/node-logger';
@@ -17,6 +16,8 @@ import { createMainRouter } from './routes/index.js';
 import { generateJwks, jwksRouter } from './routes/jwt/jwks.js';
 
 import { e2eRoutes } from './routes/e2e/e2e.routes.js';
+
+import { FirestoreStore } from './session/firestore.js';
 import { validateJwtConfiguration } from './internal/services/jwt-validator.service.js';
 import { centralErrorHandler } from './internal/middleware/error.middleware.js';
 
@@ -117,9 +118,11 @@ async function startServer() {
       }),
     );
 
+    const options = {};
+
     const firestoreSessionStore = new FirestoreStore({
-      dataset: db,
-      kind: 'express-sessions',
+      db,
+      collectionName: 'express-sessions',
     });
 
     app.use(

@@ -1,4 +1,12 @@
-import { Component, inject, input, output, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  input,
+  output,
+  computed,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { map, switchMap } from 'rxjs/operators';
@@ -16,12 +24,14 @@ import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import {
   ConfirmationDialogComponent,
   ConfirmationData,
 } from '@nx-platform-application/platform-ui-toolkit';
+import { boolean } from 'valibot';
 
 @Component({
   selector: 'contacts-page',
@@ -31,6 +41,7 @@ import {
     ContactsPageToolbarComponent,
     MatButtonModule,
     MatIconModule,
+    MatTooltipModule,
     MatChipsModule,
   ],
   templateUrl: './contact-page.component.html',
@@ -42,44 +53,35 @@ export class ContactPageComponent {
   private dialog = inject(MatDialog);
   private state = inject(ContactsStateService);
 
-  // --- INPUTS ---
+  @ViewChild(ContactFormComponent) formComponent!: ContactFormComponent;
+
   selectedUrn = input<URN | undefined>(undefined);
 
-  // --- OUTPUTS ---
+  // OUTPUTS
   saved = output<Contact>();
   deleted = output<void>();
   cancelled = output<void>();
+  editRequested = output<Contact>();
 
-  // --- ROUTE & CONTEXT RESOLUTION ---
+  // Tracks the number of active errors for button labeling
+  formErrorCount = signal(0);
 
-  // 1. Reactive Sources
   private routeId$ = this.route.paramMap.pipe(map((p) => p.get('id')));
   private modeParam$ = this.route.queryParamMap.pipe(map((p) => p.get('mode')));
   private inputId$ = toObservable(this.selectedUrn);
 
-  // 2. The Unified "Source of Truth" for the Page State
-  // Combines Route Params, Inputs, and Query Params into one context object.
   contactContext = toSignal(
     combineLatest([this.routeId$, this.inputId$, this.modeParam$]).pipe(
       map(([routeId, inputId, mode]) => {
         const isEditMode = mode === 'edit';
-
-        // Case A: Input Binding (Master-Detail Selection)
-        if (inputId) {
-          return { urn: inputId, isNew: false, isEditMode };
-        }
-
-        // Case B: Route Parameter (Deep Link)
+        if (inputId) return { urn: inputId, isNew: false, isEditMode };
         if (routeId) {
           try {
             return { urn: URN.parse(routeId), isNew: false, isEditMode };
           } catch {
-            return null; // Invalid URN in URL
+            return null;
           }
         }
-
-        // Case C: No ID (Create Mode)
-        // New items always start in edit mode.
         return {
           urn: URN.create('user', crypto.randomUUID(), 'contacts'),
           isNew: true,
@@ -90,20 +92,14 @@ export class ContactPageComponent {
     { initialValue: null },
   );
 
-  // --- COMPUTED HELPERS ---
-  // These make the template cleaner (e.g., [startInEditMode]="isEditMode()")
+  isMobile = input(false);
   isEditMode = computed(() => this.contactContext()?.isEditMode ?? false);
   isNew = computed(() => this.contactContext()?.isNew ?? false);
 
-  // --- DATA FETCHING ---
-
-  // 1. Contact Object
-  // Fetches data from state OR creates an empty shell if isNew is true.
   private contactStream$ = toObservable(this.contactContext).pipe(
     switchMap((ctx) => {
       if (!ctx) return of(null);
       if (ctx.isNew) return of(this.createEmptyContact(ctx.urn));
-
       return from(this.state.getContact(ctx.urn)).pipe(
         map((c) => c ?? this.createEmptyContact(ctx.urn)),
       );
@@ -111,7 +107,6 @@ export class ContactPageComponent {
   );
   contact = toSignal(this.contactStream$, { initialValue: null });
 
-  // 2. Linked Identities
   private linkedIdentitiesStream$ = toObservable(this.contactContext).pipe(
     switchMap((ctx) =>
       ctx && !ctx.isNew
@@ -123,7 +118,6 @@ export class ContactPageComponent {
     initialValue: [],
   });
 
-  // 3. Group Memberships
   private groupsStream$ = toObservable(this.contactContext).pipe(
     switchMap((ctx) =>
       ctx && !ctx.isNew
@@ -133,13 +127,28 @@ export class ContactPageComponent {
   );
   groups = toSignal(this.groupsStream$, { initialValue: [] });
 
-  // --- ACTIONS ---
+  enableEditMode(): void {
+    const contact = this.contact();
+    if (contact) {
+      this.editRequested.emit(contact);
+    }
+  }
+
+  triggerFormSave(): void {
+    if (this.formComponent) {
+      this.formComponent.triggerSave();
+    }
+  }
+
+  onCancel(): void {
+    this.cancelled.emit();
+  }
 
   async onSave(contact: Contact): Promise<void> {
     await this.state.saveContact(contact);
 
+    // UI Feedback
     const action = this.isNew() ? 'created' : 'updated';
-
     this.snackBar.open(`Contact '${contact.alias}' ${action}`, 'Close', {
       duration: 3000,
       horizontalPosition: 'end',
@@ -174,12 +183,6 @@ export class ContactPageComponent {
       this.deleted.emit();
     }
   }
-
-  onCancel(): void {
-    this.cancelled.emit();
-  }
-
-  // --- PRIVATE HELPERS ---
 
   private createEmptyContact(id: URN): Contact {
     return {

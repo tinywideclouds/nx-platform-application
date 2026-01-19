@@ -1,14 +1,10 @@
-<div class="md-container">
-  <!-- SIDEBAR SLOT -->
-  <div class="md-sidebar" [class.hidden-on-narrow]="showDetail()">
+<div #container class="md-container" [class.is-narrow]="isNarrow()">
+  <div class="md-sidebar" [class.hidden]="shouldHideSidebar()">
     <ng-content select="[sidebar]"></ng-content>
   </div>
 
-  <!-- MAIN/DETAIL SLOT -->
-  <div class="md-main" [class.hidden-on-narrow]="!showDetail()">
-    <!-- NEW: Mobile-Only Header Slot -->
-    <!-- The layout controls visibility based on container width -->
-    <div class="md-mobile-header">
+  <div class="md-main" [class.hidden]="shouldHideMain()">
+    <div class="md-mobile-header" [class.hidden]="!isNarrow()">
       <ng-content select="[mobile-header]"></ng-content>
     </div>
 

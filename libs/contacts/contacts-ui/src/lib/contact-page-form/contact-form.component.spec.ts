@@ -1,110 +1,134 @@
-// libs/contacts/contacts-ui/src/lib/components/contact-page-form/contact-form.component.spec.ts
-
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 import { ContactFormComponent } from './contact-form.component';
 import { Contact } from '@nx-platform-application/contacts-types';
 import {
-  ISODateTimeString,
   URN,
+  ISODateTimeString,
 } from '@nx-platform-application/platform-types';
+import { EditableListComponent } from '@nx-platform-application/platform-ui-forms';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { Temporal } from '@js-temporal/polyfill';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MockComponent } from 'ng-mocks';
 
-// MOCK DATA
 const mockContact: Contact = {
   id: URN.parse('urn:contacts:user:user-123'),
   alias: 'johndoe',
   email: 'john@example.com',
   firstName: 'John',
   surname: 'Doe',
-  lastModified: Temporal.Now.instant().toString() as ISODateTimeString,
-  phoneNumbers: ['+15550100'],
-  emailAddresses: ['john@work.com'],
+  lastModified: '2024-01-01T00:00:00Z' as ISODateTimeString,
+  phoneNumbers: [],
+  emailAddresses: [],
   serviceContacts: {},
 };
 
-describe('ContactFormComponent (Signals)', () => {
+describe('ContactFormComponent (Passive Architecture)', () => {
   let fixture: ComponentFixture<ContactFormComponent>;
   let component: ContactFormComponent;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ContactFormComponent, NoopAnimationsModule],
-    }).compileComponents();
+    })
+      // [UPDATE] Isolate the Unit: Mock complex child components
+      .overrideComponent(ContactFormComponent, {
+        remove: { imports: [EditableListComponent] },
+        add: { imports: [MockComponent(EditableListComponent)] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(ContactFormComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
-  });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
+    // Mock ElementRef for focus management
+    fixture.nativeElement.querySelector = vi
+      .fn()
+      .mockReturnValue({ focus: vi.fn() });
 
-  it('should initialize signals from contact input', () => {
+    // Initialize Inputs
     fixture.componentRef.setInput('contact', mockContact);
-    fixture.detectChanges();
+    fixture.componentRef.setInput('isEditing', true);
+    fixture.componentRef.setInput('isNew', false);
 
-    expect(component.firstName()).toBe('John');
-    expect(component.email()).toBe('john@example.com');
-    expect(component.phoneNumbers()).toEqual(['+15550100']);
+    fixture.detectChanges();
+    await fixture.whenStable(); // Ensure effect() in constructor settles
   });
 
-  it('should validate required fields (Traffic Light)', () => {
-    component.isEditing.set(true);
+  describe('Initialization', () => {
+    it('should initialize signals from contact input', () => {
+      expect(component.firstName()).toBe('John');
+      expect(component.email()).toBe('john@example.com');
+    });
 
-    // 1. Empty & Untouched -> Amber (Pending)
-    component.firstName.set('');
-    component.firstNameTouched.set(false);
-    fixture.detectChanges();
+    it('should emit error count when validation state changes', () => {
+      const errorSpy = vi.spyOn(component.errorsChange, 'emit');
 
-    expect(component.getStatusIcon('firstName')).toBe('priority_high');
-    expect(component.getStatusColor('firstName')).toContain('text-amber-500');
+      // 1. Trigger INVALID state
+      component.email.set('invalid-email');
+      fixture.detectChanges();
 
-    // 2. Empty & Touched -> Red (Error)
-    component.firstNameTouched.set(true);
-    fixture.detectChanges();
+      expect(errorSpy).toHaveBeenCalledWith(1);
 
-    expect(component.getStatusIcon('firstName')).toBe('error');
-    expect(component.getStatusColor('firstName')).toContain('text-red-600');
+      // 2. Trigger VALID state
+      component.email.set('valid@test.com');
+      fixture.detectChanges();
 
-    // 3. Valid -> Green (Success)
-    component.firstName.set('Alice');
-    fixture.detectChanges();
-
-    expect(component.getStatusIcon('firstName')).toBe('check_circle');
-    expect(component.getStatusColor('firstName')).toContain('text-green-600');
+      expect(errorSpy).toHaveBeenCalledWith(0);
+    });
   });
 
-  it('should disable save button when invalid', () => {
-    fixture.componentRef.setInput('startInEditMode', true);
-    fixture.detectChanges();
+  describe('Breadcrumb Logic (Modification)', () => {
+    it('should mark field as modified when value differs from original', () => {
+      expect(component.firstNameModified()).toBe(false);
 
-    // Invalid (empty)
-    component.firstName.set('');
-    fixture.detectChanges();
+      component.firstName.set('Jonathan');
+      fixture.detectChanges();
 
-    const saveBtn = fixture.debugElement.query(
-      By.css('[data-testid="save-button"]'),
-    ).nativeElement;
-    expect(saveBtn.disabled).toBe(true);
+      expect(component.firstNameModified()).toBe(true);
+    });
+
+    it('should SUPPRESS modification flag if isNew is true', async () => {
+      fixture.componentRef.setInput('isNew', true);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      component.firstName.set('Jonathan');
+      fixture.detectChanges();
+
+      expect(component.firstNameModified()).toBe(false);
+    });
   });
 
-  it('should manage array items (add/remove)', () => {
-    fixture.componentRef.setInput('startInEditMode', true);
-    fixture.detectChanges();
+  describe('Validation & Saving (The Active Save)', () => {
+    it('should emit (save) when valid and triggerSave() is called', () => {
+      const saveSpy = vi.spyOn(component.save, 'emit');
 
-    // Add
-    component.addPhoneNumber();
-    expect(component.phoneNumbers().length).toBe(1);
+      component.email.set('valid@test.com');
+      fixture.detectChanges();
 
-    // Update
-    component.updatePhoneNumber(0, '+123');
-    expect(component.phoneNumbers()[0]).toBe('+123');
+      component.triggerSave();
 
-    // Remove
-    component.removePhoneNumber(0);
-    expect(component.phoneNumbers().length).toBe(0);
+      expect(component.isValid()).toBe(true);
+      expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('should NOT emit (save) when invalid', () => {
+      const saveSpy = vi.spyOn(component.save, 'emit');
+
+      component.email.set('not-an-email');
+      fixture.detectChanges();
+
+      component.triggerSave();
+
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it('should mark all fields as touched when triggerSave() is called', () => {
+      expect(component.firstNameTouched()).toBe(false);
+
+      component.triggerSave();
+
+      expect(component.firstNameTouched()).toBe(true);
+    });
   });
 });

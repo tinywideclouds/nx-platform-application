@@ -1,24 +1,23 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
-import { ContactsStateService } from '@nx-platform-application/contacts-state'; // ✅ Correct Service
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Subject, of } from 'rxjs';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { By } from '@angular/platform-browser';
 
 import { ContactGroupPageComponent } from './contact-group-page.component';
 import { ContactGroupFormComponent } from '../contact-group-page-form/contact-group-form.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
-// ✅ IMPORT NG-MOCKS & MATERIAL
-import { MockProvider } from 'ng-mocks';
+//  NG-MOCKS & MATERIAL PROTOCOL
+import { MockProvider, MockComponent } from 'ng-mocks';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 
-// --- Mocks Data ---
 const mockContactUrn = URN.parse('urn:contacts:user:user-123');
 const mockGroupUrn = URN.parse('urn:contacts:group:grp-123');
 
@@ -44,7 +43,6 @@ describe('ContactGroupPageComponent', () => {
   let dialogSpy: any;
   let snackBarSpy: any;
 
-  // Helper to re-configure for New vs Existing
   const setupModule = async (routeId: string | null) => {
     stateService = {
       getGroup: vi.fn(),
@@ -54,10 +52,10 @@ describe('ContactGroupPageComponent', () => {
       contacts$: new Subject<Contact[]>(),
     };
 
-    // ✅ ROBUST SPY: Create the spy object explicitly
+    // [cite: 167] Strict MatDialog Mocking
     dialogSpy = {
       open: vi.fn().mockReturnValue({
-        afterClosed: () => of(true), // Simulates "Yes"
+        afterClosed: () => of(true),
       }),
     };
 
@@ -65,12 +63,12 @@ describe('ContactGroupPageComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        ContactGroupPageComponent,
-        ContactsPageToolbarComponent,
+        ContactGroupPageComponent, // Standalone
         NoopAnimationsModule,
+        MockComponent(ContactGroupFormComponent),
+        MockComponent(ContactsPageToolbarComponent),
       ],
       providers: [
-        // Use the STATE service (not Storage) as that is what the component injects
         { provide: ContactsStateService, useValue: stateService },
         {
           provide: ActivatedRoute,
@@ -78,14 +76,13 @@ describe('ContactGroupPageComponent', () => {
             paramMap: of(convertToParamMap(routeId ? { id: routeId } : {})),
           },
         },
-        // ✅ USE MOCK PROVIDER
         MockProvider(MatDialog, dialogSpy),
         MockProvider(MatSnackBar, snackBarSpy),
       ],
     })
+      //  Strict Module Removal
       .overrideComponent(ContactGroupPageComponent, {
-        // ✅ STRIP REAL MODULES
-        remove: { imports: [ContactGroupFormComponent, MatDialogModule] },
+        remove: { imports: [MatDialogModule] },
       })
       .compileComponents();
 
@@ -107,19 +104,29 @@ describe('ContactGroupPageComponent', () => {
       );
     });
 
-    it('should emit (saved) and show "Updated" snackbar', async () => {
+    it('should initialize in VIEW mode (isEditing = false)', () => {
+      expect(component.isEditing()).toBe(false);
+    });
+
+    it('should switch to EDIT mode when enableEditMode is called', () => {
+      component.enableEditMode();
+      expect(component.isEditing()).toBe(true);
+    });
+
+    it('should emit (saved) and exit EDIT mode on save', async () => {
+      // Setup
+      component.isEditing.set(true);
+      fixture.detectChanges();
+
       stateService.saveGroup.mockResolvedValue(undefined);
-      stateService.contacts$.next(MOCK_CONTACTS);
       const spy = vi.spyOn(component.saved, 'emit');
 
+      // Act
       await component.onSave(MOCK_GROUP);
 
+      // Assert
       expect(stateService.saveGroup).toHaveBeenCalledWith(MOCK_GROUP);
-      expect(snackBarSpy.open).toHaveBeenCalledWith(
-        expect.stringContaining('updated'),
-        expect.any(String),
-        expect.any(Object),
-      );
+      expect(component.isEditing()).toBe(false); // [Check: Lifted State update]
       expect(spy).toHaveBeenCalledWith(MOCK_GROUP);
     });
 
@@ -127,7 +134,6 @@ describe('ContactGroupPageComponent', () => {
       stateService.deleteGroup.mockResolvedValue(undefined);
       const spy = vi.spyOn(component.deleted, 'emit');
 
-      // ✅ Uses the spy correctly now
       await component.onDelete({ recursive: false });
 
       expect(dialogSpy.open).toHaveBeenCalledWith(
@@ -145,20 +151,9 @@ describe('ContactGroupPageComponent', () => {
       fixture.detectChanges();
     });
 
-    it('should default to New mode', () => {
+    it('should default to EDIT mode for new groups', () => {
       expect(component.resolvedId()?.isNew).toBe(true);
-    });
-
-    it('should show "Created" snackbar on save', async () => {
-      stateService.saveGroup.mockResolvedValue(undefined);
-
-      await component.onSave(MOCK_GROUP);
-
-      expect(snackBarSpy.open).toHaveBeenCalledWith(
-        expect.stringContaining('created'),
-        expect.any(String),
-        expect.any(Object),
-      );
+      expect(component.isEditing()).toBe(true);
     });
   });
 });

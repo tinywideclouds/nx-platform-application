@@ -1,4 +1,7 @@
-<platform-master-detail-layout [showDetail]="!!selectedId() || !!createMode()">
+<platform-master-detail-layout
+  [showDetail]="!!selectedId() || !!createMode()"
+  (isNarrowChange)="isMobile.set($event)"
+>
   <div sidebar class="h-full bg-white">
     <contacts-sidebar
       [selectedId]="selectedId()"
@@ -38,6 +41,7 @@
           />
         } @else {
           <contacts-page
+            [isMobile]="isMobile()"
             (saved)="onEntitySaved($event)"
             (deleted)="clearSelection()"
             (cancelled)="clearSelection()"
@@ -56,9 +60,11 @@
         } @else {
           <contacts-page
             [selectedUrn]="urn"
+            [isMobile]="isMobile()"
+            (editRequested)="onContactEdit($event)"
             (saved)="onEntitySaved($event)"
             (deleted)="clearSelection()"
-            (cancelled)="clearSelection()"
+            (cancelled)="onEditCancel()"
           />
         }
       </div>

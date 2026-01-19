@@ -5,6 +5,8 @@ import {
   output,
   signal,
   computed,
+  ViewChild,
+  effect,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { ContactsStateService } from '@nx-platform-application/contacts-state';
@@ -15,13 +17,14 @@ import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { map, switchMap, tap } from 'rxjs/operators';
 import { from, of, combineLatest, Observable } from 'rxjs';
 
+// UI
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
-
 import {
   ConfirmationDialogComponent,
   ConfirmationData,
@@ -35,6 +38,7 @@ import {
     MatIconModule,
     MatChipsModule,
     MatDialogModule,
+    MatTooltipModule,
     ContactGroupFormComponent,
     ContactsPageToolbarComponent,
   ],
@@ -47,20 +51,27 @@ export class ContactGroupPageComponent {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
-  // --- STRICT CONTRACT ---
+  @ViewChild(ContactGroupFormComponent)
+  formComponent!: ContactGroupFormComponent;
+
+  // --- INPUTS ---
+  groupId = input<URN | undefined>(undefined);
+  // [NEW] Layout Awareness
+  isMobile = input(false);
+
+  // --- OUTPUTS ---
   saved = output<ContactGroup>();
   deleted = output<void>();
   cancelled = output<void>();
 
-  groupId = input<URN | undefined>(undefined);
-
-  // Internal State
+  // --- UI STATE ---
+  // [NEW] Lifted from the form
+  isEditing = signal(false);
+  formErrorCount = signal(0);
   subGroups = signal<ContactGroup[]>([]);
   linkedChildrenCount = computed(() => this.subGroups().length);
 
-  allContacts = toSignal(this.state.contacts$, {
-    initialValue: [] as Contact[],
-  });
+  allContacts = toSignal(this.state.contacts$, { initialValue: [] });
 
   // --- ID RESOLUTION ---
   private routeId$ = this.route.paramMap.pipe(map((p) => p.get('id')));
@@ -69,9 +80,7 @@ export class ContactGroupPageComponent {
   resolvedId = toSignal(
     combineLatest([this.routeId$, this.inputId$]).pipe(
       map(([routeId, inputId]) => {
-        // 1. Input Priority (Viewer)
         if (inputId) return { urn: inputId, isNew: false };
-        // 2. Route Fallback
         if (routeId) {
           try {
             return { urn: URN.parse(routeId), isNew: false };
@@ -79,7 +88,6 @@ export class ContactGroupPageComponent {
             return null;
           }
         }
-        // 3. Creation Mode
         return {
           urn: URN.create('group', crypto.randomUUID(), 'contacts'),
           isNew: true,
@@ -89,26 +97,47 @@ export class ContactGroupPageComponent {
     { initialValue: null },
   );
 
-  // --- COMPUTED UI STATE ---
-  // ✅ FIXED: Restored as computed property so template works
-  startInEditMode = computed(() => this.resolvedId()?.isNew ?? false);
-
-  // --- DATA FETCHING ---
   private groupStream$ = toObservable(this.resolvedId).pipe(
     switchMap((data) => {
       if (!data) return of(null);
-      // Reactively choose fetch method based on ID state
-      if (data.isNew) return this.getNewGroup(data.urn);
-      return this.getGroup(data.urn);
+
+      // Auto-enable edit mode for new groups
+      if (data.isNew) {
+        this.isEditing.set(true);
+        return this.getNewGroup(data.urn);
+      } else {
+        this.isEditing.set(false);
+        return this.getGroup(data.urn);
+      }
     }),
   );
 
   groupToEdit = toSignal(this.groupStream$, { initialValue: null });
 
+  // --- ACTIONS ---
+
+  enableEditMode(): void {
+    this.isEditing.set(true);
+  }
+
+  triggerFormSave(): void {
+    if (this.formComponent) {
+      this.formComponent.triggerSave();
+    }
+  }
+
+  onCancel(): void {
+    if (this.isEditing() && !this.resolvedId()?.isNew) {
+      this.isEditing.set(false);
+    } else {
+      this.cancelled.emit();
+    }
+  }
+
   async onSave(group: ContactGroup): Promise<void> {
     await this.state.saveGroup(group);
 
-    const isNew = this.startInEditMode();
+    const isNew = this.resolvedId()?.isNew;
     const action = isNew ? 'created' : 'updated';
 
     this.snackBar.open(`Group '${group.name}' ${action}`, 'Close', {
@@ -117,10 +146,13 @@ export class ContactGroupPageComponent {
       verticalPosition: 'bottom',
     });
 
+    this.isEditing.set(false);
     this.saved.emit(group);
   }
 
-  async onDelete(options: { recursive: boolean }): Promise<void> {
+  async onDelete(
+    options: { recursive: boolean } = { recursive: false },
+  ): Promise<void> {
     const group = this.groupToEdit();
     if (!group) return;
 
@@ -138,31 +170,22 @@ export class ContactGroupPageComponent {
       },
     });
 
-    const result = await ref.afterClosed().toPromise();
-
-    if (result) {
+    if (await ref.afterClosed().toPromise()) {
       if (options.recursive && this.subGroups().length > 0) {
-        const promises = this.subGroups().map((child) =>
-          this.state.deleteGroup(child.id),
+        await Promise.all(
+          this.subGroups().map((child) => this.state.deleteGroup(child.id)),
         );
-        await Promise.all(promises);
       }
-
       await this.state.deleteGroup(group.id);
       this.deleted.emit();
     }
   }
 
-  onCancel(): void {
-    this.cancelled.emit();
-  }
-
+  // --- DATA FETCHING ---
   private getGroup(urn: URN): Observable<ContactGroup | null> {
     return from(this.state.getGroup(urn)).pipe(
       tap((group) => {
-        if (group) {
-          this.loadSubGroups(group.id);
-        }
+        if (group) this.loadSubGroups(group.id);
       }),
       map((group) => group ?? null),
     );

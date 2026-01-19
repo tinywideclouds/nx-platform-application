@@ -29,7 +29,10 @@ export const createUserApiRoutes = (db: Firestore) => {
   router.get('/auth/refresh-token', ensureAuthenticated, async (req, res) => {
     // CHANGED: Use the shared 'User' type.
     const user = req.user as User;
-    const newInternalToken = await generateToken(user, 're-issued-token-placeholder');
+    const newInternalToken = await generateToken(
+      user,
+      're-issued-token-placeholder',
+    );
     res.json({ token: newInternalToken });
   });
 
@@ -49,7 +52,7 @@ export const createUserApiRoutes = (db: Firestore) => {
     '/users/by-email/:email',
     internalAuthMiddleware,
     async (req, res, next) => {
-      const { email } = req.params;
+      const { email } = req.params as { email: string };
       if (email == undefined) {
         res.status(400).json({ error: 'malformed request no email' });
         return;
@@ -67,7 +70,7 @@ export const createUserApiRoutes = (db: Firestore) => {
         // CHANGED: Pass the error to the central error handler for a consistent response.
         return next(error);
       }
-    }
+    },
   );
 
   return router;

@@ -5,6 +5,7 @@ import {
   computed,
   input,
   output,
+  signal,
 } from '@angular/core';
 
 import { ActivatedRoute, Router } from '@angular/router';
@@ -33,7 +34,7 @@ import { ContactPageComponent } from '../contact-page/contact-page.component';
     MatIconModule,
     MasterDetailLayoutComponent,
     ContactsSidebarComponent,
-    ContactPageComponent, // ✅ Unified Page
+    ContactPageComponent,
     ContactGroupPageComponent,
   ],
   templateUrl: './contacts-viewer.component.html',
@@ -51,6 +52,9 @@ export class ContactsViewerComponent {
   // --- OUTPUTS ---
   contactSelected = output<Contact>();
   groupSelected = output<ContactGroup>();
+
+  // UI state
+  isMobile = signal(true);
 
   // --- ROUTER STATE ---
   private queryParams = toSignal(this.route.queryParamMap);
@@ -106,16 +110,33 @@ export class ContactsViewerComponent {
     this.updateUrl({
       selectedId: contact.id.toString(),
       new: null,
-      mode: null, // [UPDATE] Clear edit mode
+      mode: null,
     });
   }
 
   onContactEdit(contact: Contact): void {
     this.updateUrl({
       selectedId: contact.id.toString(),
-      mode: 'edit', // [NEW] Set edit mode
+      mode: 'edit',
       new: null,
     });
+  }
+
+  /**
+   * Handles the 'cancelled' event from the child page.
+   * Logic:
+   * - If Editing: Just exit edit mode (stay on page).
+   * - If Viewing: Close the page (go to list).
+   */
+  onEditCancel(): void {
+    const params = this.queryParams();
+    const isEditing = params?.get('mode') === 'edit';
+
+    if (isEditing) {
+      this.updateUrl({ mode: null });
+    } else {
+      this.clearSelection();
+    }
   }
 
   onGroupSelect(group: ContactGroup): void {
@@ -129,11 +150,16 @@ export class ContactsViewerComponent {
   // --- NAVIGATION HANDLERS ---
 
   onEntitySaved(entity: Contact | ContactGroup): void {
-    this.updateUrl({ selectedId: entity.id.toString(), new: null });
+    // Saved: Ensure we exit edit/create mode and view the entity
+    this.updateUrl({
+      selectedId: entity.id.toString(),
+      new: null,
+      mode: null,
+    });
   }
 
   clearSelection(): void {
-    this.updateUrl({ selectedId: null, new: null });
+    this.updateUrl({ selectedId: null, new: null, mode: null });
   }
 
   private updateUrl(params: any) {

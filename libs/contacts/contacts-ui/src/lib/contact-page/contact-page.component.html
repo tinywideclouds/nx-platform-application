@@ -1,45 +1,101 @@
 <div class="h-full flex flex-col bg-white">
-  <contacts-page-toolbar title="Contact" #toolbar>
-    @if (toolbar.mode() === 'full') {
-      <div class="flex gap-2">
-        <button
-          type="button"
-          mat-button
-          class="toolbar-tonal-button"
-          (click)="onCancel()"
-          data-testid="close-button"
-        >
-          Close
-        </button>
-      </div>
-    } @else {
-      <div class="flex gap-2">
-        <button
-          type="button"
-          mat-icon-button
-          (click)="onCancel()"
-          data-testid="close-button"
-          aria-label="Close"
-        >
-          <mat-icon>close</mat-icon>
-        </button>
-      </div>
-    }
+  <contacts-page-toolbar [title]="isNew() ? 'New Contact' : 'Contact'" #toolbar>
+    <div class="flex items-center gap-2">
+      @if (isEditMode()) {
+        @if (toolbar.mode() === 'full') {
+          <button
+            type="button"
+            mat-button
+            (click)="onCancel()"
+            data-testid="cancel-button"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            mat-flat-button
+            [color]="formErrorCount() > 0 ? 'warn' : 'primary'"
+            (click)="triggerFormSave()"
+            data-testid="save-button"
+          >
+            @if (formErrorCount() > 0) {
+              Issues ({{ formErrorCount() }})
+            } @else {
+              Save
+            }
+          </button>
+        } @else {
+          @if (!isMobile()) {
+            <button
+              type="button"
+              mat-icon-button
+              (click)="onCancel()"
+              aria-label="Cancel Edit"
+            >
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+
+          <button
+            type="button"
+            mat-icon-button
+            (click)="triggerFormSave()"
+            [color]="formErrorCount() > 0 ? 'warn' : 'primary'"
+            [matTooltip]="formErrorCount() > 0 ? 'Issues' : 'Save'"
+          >
+            @if (formErrorCount() > 0) {
+              <mat-icon>warning</mat-icon>
+            } @else {
+              <mat-icon>save</mat-icon>
+            }
+          </button>
+        }
+      } @else {
+        @if (toolbar.mode() === 'full') {
+          <button
+            type="button"
+            mat-stroked-button
+            (click)="enableEditMode()"
+            data-testid="edit-button"
+          >
+            Edit
+          </button>
+
+          @if (!isMobile()) {
+            <button
+              type="button"
+              mat-button
+              class="toolbar-tonal-button"
+              (click)="onCancel()"
+              data-testid="close-button"
+            >
+              Close
+            </button>
+          }
+        } @else {
+          <button type="button" (click)="enableEditMode()" matTooltip="Edit">
+            <mat-icon>edit</mat-icon>
+          </button>
+        }
+      }
+    </div>
   </contacts-page-toolbar>
 
   <div class="flex-grow overflow-y-auto flex justify-center">
     @if (contact(); as data) {
-      <div class="w-full max-w-lg pb-10">
+      <div class="w-full max-w-5xl px-6 py-8 pb-20">
         <contacts-form
           [contact]="data"
           [linkedIdentities]="linkedIdentities()"
-          [startInEditMode]="isEditMode()"
+          [isEditing]="isEditMode()"
+          [isNew]="isNew()"
+          (errorsChange)="formErrorCount.set($event)"
           (save)="onSave($event)"
           (delete)="onDelete()"
-          (cancel)="onCancel()"
         />
 
-        @if (groups().length > 0) {
+        @if (!isEditMode() && groups().length > 0) {
           <div
             class="mt-6 mx-4 p-4 border rounded-md bg-gray-50 border-gray-100"
           >

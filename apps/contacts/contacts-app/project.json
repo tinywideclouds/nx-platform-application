@@ -24,7 +24,6 @@
       "options": {
         "outputPath": "dist/apps/contacts/contacts-app",
         "browser": "apps/contacts/contacts-app/src/main.ts",
-
         "tsConfig": "apps/contacts/contacts-app/tsconfig.app.json",
         "assets": [
           {

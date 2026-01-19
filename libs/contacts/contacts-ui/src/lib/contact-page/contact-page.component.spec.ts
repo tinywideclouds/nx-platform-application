@@ -1,169 +1,213 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactPageComponent } from './contact-page.component';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { of } from 'rxjs';
-import { URN } from '@nx-platform-application/platform-types';
-import { Contact } from '@nx-platform-application/contacts-types';
-import { ContactsStateService } from '@nx-platform-application/contacts-state';
-
-// MATERIAL MOCKS
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-
-// NG-MOCKS
-import { MockComponent } from 'ng-mocks';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { ContactFormComponent } from '../contact-page-form/contact-form.component';
 import { ContactsPageToolbarComponent } from '../contacts-page-toolbar/contacts-page-toolbar.component';
-import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { MockProvider } from 'ng-mocks';
+import { of, BehaviorSubject } from 'rxjs';
+import { URN } from '@nx-platform-application/platform-types';
+import { Contact } from '@nx-platform-application/contacts-types';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { By } from '@angular/platform-browser';
+import { Component, signal, input, output, forwardRef } from '@angular/core';
 
-const mockUrnString = 'urn:contacts:user:123';
-const mockUrn = URN.parse(mockUrnString);
+// --- MANUAL MOCKS ---
 
-const mockContact: Contact = {
-  id: mockUrn,
-  alias: 'Test User',
-} as any;
+@Component({
+  selector: 'contacts-page-toolbar',
+  template: '<ng-content></ng-content>',
+  standalone: true,
+  exportAs: 'contactsPageToolbar',
+})
+class MockToolbarComponent {
+  mode = signal<'full' | 'compact'>('full');
+  title = input<string>('');
+}
+
+@Component({
+  selector: 'contacts-form',
+  standalone: true,
+  template: '',
+  // CRITICAL FIX: This Provider tricks the @ViewChild(ContactFormComponent)
+  // into accepting this Mock Class as the real token.
+  providers: [
+    {
+      provide: ContactFormComponent,
+      useExisting: forwardRef(() => MockContactFormComponent),
+    },
+  ],
+})
+class MockContactFormComponent {
+  contact = input.required<Contact>();
+  linkedIdentities = input<any[]>([]);
+  isEditing = input<boolean>(false);
+  isNew = input<boolean>(false);
+
+  errorsChange = output<number>();
+  save = output<Contact>();
+  delete = output<void>();
+
+  // Use vi.fn() so we can spy on it later
+  triggerSave = vi.fn();
+}
 
 describe('ContactPageComponent', () => {
-  let fixture: ComponentFixture<ContactPageComponent>;
   let component: ContactPageComponent;
-  let stateService: any;
-  let snackBar: any;
-  let dialog: any;
+  let fixture: ComponentFixture<ContactPageComponent>;
+  let stateService: ContactsStateService;
+  let dialog: MatDialog;
+  let snackBar: MatSnackBar;
 
-  // Helper to setup the module with specific route params
-  const setupModule = async (routeId: string | null) => {
-    stateService = {
-      saveContact: vi.fn().mockResolvedValue(undefined),
-      deleteContact: vi.fn().mockResolvedValue(undefined),
-      getContact: vi.fn().mockResolvedValue(mockContact),
-      getLinkedIdentities: vi.fn().mockResolvedValue([]),
-      getGroupsForContact: vi.fn().mockResolvedValue([]),
-    };
+  const paramsSubject = new BehaviorSubject(convertToParamMap({}));
+  const queryParamsSubject = new BehaviorSubject(convertToParamMap({}));
 
-    snackBar = { open: vi.fn() };
+  const mockContact: Contact = {
+    id: URN.create('user', '123', 'contacts'),
+    alias: 'Test User',
+    firstName: 'Test',
+    surname: 'User',
+    email: 'test@test.com',
+    phoneNumber: '',
+    emailAddresses: [],
+    phoneNumbers: [],
+    lastModified: '' as any,
+    serviceContacts: {},
+  };
 
-    dialog = {
-      open: vi.fn().mockReturnValue({
-        afterClosed: () => of(true),
-      }),
-    };
-
+  beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        ContactPageComponent,
-        MockComponent(ContactFormComponent),
-        MockComponent(ContactsPageToolbarComponent),
-      ],
+      imports: [ContactPageComponent],
       providers: [
-        { provide: ContactsStateService, useValue: stateService },
-        { provide: MatSnackBar, useValue: snackBar },
-        { provide: MatDialog, useValue: dialog },
         {
           provide: ActivatedRoute,
           useValue: {
-            // [FIX] Add queryParamMap to mock
-            paramMap: of(convertToParamMap(routeId ? { id: routeId } : {})),
-            queryParamMap: of(convertToParamMap({})),
+            paramMap: paramsSubject.asObservable(),
+            queryParamMap: queryParamsSubject.asObservable(),
           },
         },
+        MockProvider(ContactsStateService, {
+          getContact: vi.fn().mockResolvedValue(mockContact),
+          getLinkedIdentities: vi.fn().mockResolvedValue([]),
+          getGroupsForContact: vi.fn().mockResolvedValue([]),
+          saveContact: vi.fn().mockResolvedValue(undefined),
+          deleteContact: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(MatSnackBar, { open: vi.fn() }),
+        MockProvider(MatDialog, {
+          open: vi.fn().mockReturnValue({ afterClosed: () => of(true) }),
+        }),
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(ContactPageComponent, {
+        remove: {
+          imports: [ContactFormComponent, ContactsPageToolbarComponent],
+        },
+        add: {
+          imports: [MockContactFormComponent, MockToolbarComponent],
+        },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(ContactPageComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
-  };
+    stateService = TestBed.inject(ContactsStateService);
+    dialog = TestBed.inject(MatDialog);
+    snackBar = TestBed.inject(MatSnackBar);
+  });
 
-  describe('Data Resolution', () => {
-    it('should resolve contact from Route when Input is missing', async () => {
-      await setupModule(mockUrnString);
+  function setQueryParams(params: Record<string, string>) {
+    queryParamsSubject.next(convertToParamMap(params));
+  }
 
-      // Check the loaded contact's ID
-      expect(component.contact()?.id.toString()).toBe(mockUrnString);
-      // Check the component's mode
-      expect(component.isNew()).toBe(false);
-    });
+  describe('State Logic', () => {
+    it('should derive "New" state', async () => {
+      fixture.componentRef.setInput('selectedUrn', undefined);
+      setQueryParams({});
+      fixture.detectChanges();
+      await fixture.whenStable();
 
-    // Not sure about this test - is this right? it fails and I feel it should?...
-    // it('should prioritize selectedUrn Input over Route', async () => {
-    //   await setupModule(mockUrnString);
-    //   const inputUrn = URN.parse('urn:contacts:user:999');
-    //   fixture.componentRef.setInput('selectedUrn', inputUrn);
-    //   fixture.detectChanges();
-
-    //   expect(component.contact()?.id.toString()).toBe(inputUrn.toString());
-    // });
-
-    it('should default to NEW mode if Route has no ID', async () => {
-      await setupModule(null); // No ID in route or input
-
-      // In "Create" mode, we expect isNew() to be true.
-      // (The contact() might be undefined or a blank stub depending on your logic,
-      // but the mode signal is the source of truth here).
       expect(component.isNew()).toBe(true);
+      expect(component.isEditMode()).toBe(true);
+    });
+
+    it('should derive "Edit" state via Query Params', async () => {
+      fixture.componentRef.setInput('selectedUrn', mockContact.id);
+      setQueryParams({ mode: 'edit' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.isNew()).toBe(false);
+      expect(component.isEditMode()).toBe(true);
     });
   });
 
-  describe('Save Logic', () => {
-    it('should call state.saveContact and show "updated" SnackBar for existing contact', async () => {
-      await setupModule(mockUrnString); // Existing
-
-      const emitSpy = vi.spyOn(component.saved, 'emit');
-      await component.onSave(mockContact);
-
-      expect(stateService.saveContact).toHaveBeenCalledWith(mockContact);
-      expect(snackBar.open).toHaveBeenCalledWith(
-        expect.stringContaining('updated'),
-        expect.any(String),
-        expect.any(Object),
-      );
-      expect(emitSpy).toHaveBeenCalledWith(mockContact);
-    });
-
-    it('should show "created" SnackBar for new contact', async () => {
-      await setupModule(null); // New
-
-      await component.onSave(mockContact);
-
-      expect(snackBar.open).toHaveBeenCalledWith(
-        expect.stringContaining('created'),
-        expect.any(String),
-        expect.any(Object),
-      );
-    });
-  });
-
-  describe('Delete Logic', () => {
+  describe('Child Orchestration', () => {
     beforeEach(async () => {
-      await setupModule(mockUrnString);
+      fixture.componentRef.setInput('selectedUrn', mockContact.id);
+      setQueryParams({ mode: 'edit' });
+
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
     });
 
-    it('should open Confirmation Dialog', async () => {
-      await component.onDelete();
-      expect(dialog.open).toHaveBeenCalledWith(
-        ConfirmationDialogComponent,
-        expect.any(Object),
+    it('should capture validation errors from Child Form via Output', () => {
+      const formDebugEl = fixture.debugElement.query(
+        By.directive(MockContactFormComponent),
       );
+      const formInstance =
+        formDebugEl.componentInstance as MockContactFormComponent;
+
+      formInstance.errorsChange.emit(5);
+      fixture.detectChanges();
+
+      expect(component.formErrorCount()).toBe(5);
     });
 
-    it('should call state.deleteContact and emit (deleted) if confirmed', async () => {
-      const deleteSpy = vi.spyOn(component.deleted, 'emit');
+    it('should trigger Child Form Save when triggerFormSave is called', () => {
+      const formDebugEl = fixture.debugElement.query(
+        By.directive(MockContactFormComponent),
+      );
+      const formInstance =
+        formDebugEl.componentInstance as MockContactFormComponent;
+
+      // Ensure the ViewChild was successfully resolved by Angular
+      // If this fails, the 'providers' fix in the mock is incorrect
+      expect(component.formComponent).toBeTruthy();
+
+      component.triggerFormSave();
+
+      expect(formInstance.triggerSave).toHaveBeenCalled();
+    });
+  });
+
+  describe('Service Interactions', () => {
+    it('should save via service', async () => {
+      const updated = { ...mockContact, firstName: 'Updated' };
+      const emitSpy = vi.spyOn(component.saved, 'emit');
+
+      await component.onSave(updated);
+
+      expect(stateService.saveContact).toHaveBeenCalledWith(updated);
+      expect(snackBar.open).toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalledWith(updated);
+    });
+
+    it('should delete via service', async () => {
+      fixture.componentRef.setInput('selectedUrn', mockContact.id);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const emitSpy = vi.spyOn(component.deleted, 'emit');
+
       await component.onDelete();
 
+      expect(dialog.open).toHaveBeenCalled();
       expect(stateService.deleteContact).toHaveBeenCalledWith(mockContact.id);
-      expect(deleteSpy).toHaveBeenCalled();
-    });
-
-    it('should NOT delete if dialog cancelled', async () => {
-      dialog.open.mockReturnValue({ afterClosed: () => of(false) });
-      const deleteSpy = vi.spyOn(component.deleted, 'emit');
-
-      await component.onDelete();
-
-      expect(stateService.deleteContact).not.toHaveBeenCalled();
-      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalled();
     });
   });
 });

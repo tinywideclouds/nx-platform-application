@@ -1,46 +1,95 @@
 <div class="h-full flex flex-col bg-white">
-  <contacts-page-toolbar title="Contact Group" #toolbar>
-    @if (toolbar.mode() === 'full') {
-      <div class="flex gap-2">
-        <button
-          type="button"
-          mat-button
-          class="toolbar-tonal-button"
-          (click)="onCancel()"
-          data-testid="close-button"
-        >
-          Close
-        </button>
-      </div>
-    } @else {
-      <div class="flex gap-2">
-        <button
-          type="button"
-          mat-icon-button
-          (click)="onCancel()"
-          data-testid="close-button"
-          aria-label="Close"
-        >
-          <mat-icon>close</mat-icon>
-        </button>
-      </div>
-    }
+  <contacts-page-toolbar
+    [title]="isEditing() ? 'Edit Group' : 'Contact Group'"
+    #toolbar
+  >
+    <div class="flex items-center gap-2">
+      @if (isEditing()) {
+        @if (toolbar.mode() === 'full') {
+          <button mat-button (click)="onCancel()">Cancel</button>
+
+          <button
+            type="button"
+            mat-flat-button
+            [color]="formErrorCount() > 0 ? 'warn' : 'primary'"
+            (click)="triggerFormSave()"
+          >
+            @if (formErrorCount() > 0) {
+              Issues ({{ formErrorCount() }})
+            } @else {
+              Save
+            }
+          </button>
+        } @else {
+          <button
+            type="button"
+            mat-icon-button
+            (click)="onCancel()"
+            aria-label="Cancel"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+
+          <button
+            type="button"
+            mat-icon-button
+            (click)="triggerFormSave()"
+            [color]="formErrorCount() > 0 ? 'warn' : 'primary'"
+          >
+            @if (formErrorCount() > 0) {
+              <mat-icon>warning</mat-icon>
+            } @else {
+              <mat-icon>save</mat-icon>
+            }
+          </button>
+        }
+      } @else {
+        @if (toolbar.mode() === 'full') {
+          <button type="button" mat-stroked-button (click)="enableEditMode()">
+            Edit
+          </button>
+
+          @if (!isMobile()) {
+            <button
+              type="button"
+              mat-button
+              class="toolbar-tonal-button"
+              (click)="onCancel()"
+            >
+              Close
+            </button>
+          }
+        } @else {
+          <button mat-icon-button (click)="enableEditMode()" matTooltip="Edit">
+            <mat-icon>edit</mat-icon>
+          </button>
+
+          @if (!isMobile()) {
+            <button type="button" mat-icon-button (click)="onCancel()">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        }
+      }
+    </div>
   </contacts-page-toolbar>
 
-  <div class="flex-grow overflow-y-auto">
+  <div class="flex-grow overflow-y-auto flex justify-center">
     @if (groupToEdit(); as group) {
-      <contacts-group-form
-        [group]="group"
-        [allContacts]="allContacts()"
-        [startInEditMode]="startInEditMode()"
-        [linkedChildrenCount]="linkedChildrenCount()"
-        (save)="onSave($event)"
-        (delete)="onDelete($event)"
-        (cancel)="onCancel()"
-      />
+      <div class="w-full max-w-5xl px-6 py-8 pb-20">
+        <contacts-group-form
+          [group]="group"
+          [allContacts]="allContacts()"
+          [isEditing]="isEditing()"
+          [linkedChildrenCount]="linkedChildrenCount()"
+          (errorsChange)="formErrorCount.set($event)"
+          (save)="onSave($event)"
+          (delete)="onDelete($event)"
+        />
+      </div>
     } @else {
-      <div class="p-4 flex justify-center">
-        <div class="animate-pulse bg-gray-200 h-10 w-full rounded"></div>
+      <div class="p-8 text-center text-gray-500 animate-pulse">
+        Loading group...
       </div>
     }
   </div>

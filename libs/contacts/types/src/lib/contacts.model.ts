@@ -14,6 +14,7 @@ export interface ServiceContact extends Resource {
 export interface Contact extends User {
   firstName: string;
   surname: string;
+  phoneNumber?: string;
   phoneNumbers: string[];
   emailAddresses: string[];
   serviceContacts: Record<string, ServiceContact>;

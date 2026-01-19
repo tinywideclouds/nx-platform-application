@@ -1,84 +1,119 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { Router, ActivatedRoute, convertToParamMap } from '@angular/router';
-import { Subject } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { By } from '@angular/platform-browser';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-
 import { ContactsViewerComponent } from './contacts-viewer.component';
+import {
+  ActivatedRoute,
+  ParamMap,
+  Router,
+  convertToParamMap,
+} from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTabChangeEvent } from '@angular/material/tabs';
+
+// Types
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 
-import { ContactsSidebarComponent } from '../contacts-sidebar/contacts-sidebar.component';
-import { ContactGroupPageComponent } from '../contact-group-page/contact-group-page.component';
-import { ContactPageComponent } from '../contact-page/contact-page.component';
+// Test Utils
+import { BehaviorSubject, of } from 'rxjs';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { Component, input, output } from '@angular/core';
+import { By } from '@angular/platform-browser';
 
-// --- STUBS ---
+// --- MANUAL MOCKS ---
 
-@Component({ selector: 'contacts-sidebar', standalone: true, template: '' })
-class StubSidebarComponent {
-  @Input() selectedId: string | undefined;
-  @Input() tabIndex = 0;
-  @Output() contactSelected = new EventEmitter<Contact>();
-  @Output() groupSelected = new EventEmitter<ContactGroup>();
-  @Output() tabChange = new EventEmitter<any>();
+@Component({
+  selector: 'platform-master-detail-layout',
+  template:
+    '<ng-content select="[sidebar]"></ng-content><ng-content select="[main]"></ng-content>',
+  standalone: true,
+})
+class MockLayoutComponent {
+  showDetail = input<boolean>(false);
+  isNarrowChange = output<boolean>();
 }
 
-@Component({ selector: 'contacts-page', standalone: true, template: '' })
-class StubContactPageComponent {
-  @Input() selectedUrn: URN | undefined;
-  @Output() saved = new EventEmitter<Contact>();
-  @Output() deleted = new EventEmitter<void>();
-  @Output() cancelled = new EventEmitter<void>();
+@Component({
+  selector: 'contacts-sidebar',
+  template: '',
+  standalone: true,
+})
+class MockSidebarComponent {
+  selectedId = input<string | null>(null);
+  tabIndex = input<number>(0);
+  contactSelected = output<Contact>();
+  groupSelected = output<ContactGroup>();
+  contactEditRequested = output<Contact>();
+  contactDeleted = output<void>();
+  tabChange = output<MatTabChangeEvent>();
 }
 
-@Component({ selector: 'contacts-group-page', standalone: true, template: '' })
-class StubContactGroupPageComponent {
-  @Input() groupId: URN | undefined;
-  @Output() saved = new EventEmitter<ContactGroup>();
-  @Output() deleted = new EventEmitter<void>();
-  @Output() cancelled = new EventEmitter<void>();
+@Component({
+  selector: 'contacts-page',
+  template: '',
+  standalone: true,
+})
+class MockContactPageComponent {
+  selectedUrn = input<URN>();
+  isMobile = input<boolean>(false);
+  saved = output<Contact>();
+  deleted = output<void>();
+  cancelled = output<void>();
+  editRequested = output<Contact>();
 }
 
-const mockContact: Contact = { id: URN.parse('urn:contacts:user:123') } as any;
+@Component({
+  selector: 'contacts-group-page',
+  template: '',
+  standalone: true,
+})
+class MockGroupPageComponent {
+  groupId = input<URN>();
+  saved = output<ContactGroup>();
+  deleted = output<void>();
+  cancelled = output<void>();
+}
 
 describe('ContactsViewerComponent', () => {
   let component: ContactsViewerComponent;
   let fixture: ComponentFixture<ContactsViewerComponent>;
   let router: Router;
-  let queryParamsSubject = new Subject<any>();
+
+  // FIX: Declare here, but initialize in beforeEach to prevent state leaks
+  let queryParamsSubject: BehaviorSubject<ParamMap>;
 
   beforeEach(async () => {
+    // FIX: Fresh subject for every test
+    queryParamsSubject = new BehaviorSubject(convertToParamMap({}));
+
+    // Robust Route Mock
+    const mockActivatedRoute = {
+      queryParamMap: queryParamsSubject.asObservable(),
+      paramMap: of(convertToParamMap({})),
+      snapshot: {
+        paramMap: convertToParamMap({}),
+        queryParamMap: convertToParamMap({}),
+      },
+      data: of({}),
+      url: of([]),
+    };
+
     await TestBed.configureTestingModule({
-      imports: [ContactsViewerComponent, NoopAnimationsModule],
+      imports: [ContactsViewerComponent],
       providers: [
-        {
-          provide: ActivatedRoute,
-          useValue: {
-            queryParamMap: queryParamsSubject.pipe(
-              map((params) => convertToParamMap(params)),
-            ),
-            queryParams: queryParamsSubject.asObservable(),
-            snapshot: { queryParams: {}, queryParamMap: convertToParamMap({}) },
-          },
-        },
+        { provide: ActivatedRoute, useValue: mockActivatedRoute },
+        { provide: Router, useValue: { navigate: vi.fn() } },
       ],
     })
       .overrideComponent(ContactsViewerComponent, {
-        remove: {
+        set: {
           imports: [
-            ContactsSidebarComponent,
-            ContactPageComponent,
-            ContactGroupPageComponent,
-          ],
-        },
-        add: {
-          imports: [
-            StubSidebarComponent,
-            StubContactPageComponent,
-            StubContactGroupPageComponent,
+            MatButtonModule,
+            MatIconModule,
+            MockLayoutComponent,
+            MockSidebarComponent,
+            MockContactPageComponent,
+            MockGroupPageComponent,
           ],
         },
       })
@@ -87,55 +122,114 @@ describe('ContactsViewerComponent', () => {
     fixture = TestBed.createComponent(ContactsViewerComponent);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate').mockImplementation(() =>
-      Promise.resolve(true),
-    );
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
+  function setQueryParams(params: Record<string, string | null>) {
+    const cleanParams: Record<string, string> = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== null) cleanParams[k] = v;
+    });
+    queryParamsSubject.next(convertToParamMap(cleanParams));
+    fixture.detectChanges();
+  }
+
+  describe('Child Component Rendering', () => {
+    it('should render Contact Page when a Contact URN is selected', () => {
+      const id = URN.create('user', '123', 'contacts').toString();
+      fixture.componentRef.setInput('selectedId', id);
+      fixture.detectChanges();
+
+      const page = fixture.debugElement.query(
+        By.directive(MockContactPageComponent),
+      );
+      expect(page).toBeTruthy();
+      expect(page.componentInstance.selectedUrn().toString()).toBe(id);
+    });
+
+    it('should render Group Page when createMode is "group"', () => {
+      setQueryParams({ new: 'group' });
+      const page = fixture.debugElement.query(
+        By.directive(MockGroupPageComponent),
+      );
+      expect(page).toBeTruthy();
+    });
   });
 
-  it('should navigate to specific ID (View Mode) when Contact Page emits (saved)', () => {
-    queryParamsSubject.next({ new: 'contact' });
-    fixture.detectChanges();
+  describe('Orchestration & Navigation', () => {
+    it('should navigate to update URL when Sidebar emits tab change', () => {
+      const sidebar = fixture.debugElement.query(
+        By.directive(MockSidebarComponent),
+      );
+      (sidebar.componentInstance as MockSidebarComponent).tabChange.emit({
+        index: 1,
+      } as MatTabChangeEvent);
 
-    const page = fixture.debugElement.query(
-      By.directive(StubContactPageComponent),
-    );
-    expect(page).toBeTruthy();
+      expect(router.navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: expect.objectContaining({ tab: 'groups' }),
+        }),
+      );
+    });
 
-    page.componentInstance.saved.emit(mockContact);
+    it('should handle "Saved" event from Contact Page', () => {
+      // 1. Setup State: Clean Params + Selected ID
+      const id = URN.create('user', '123', 'contacts').toString();
+      fixture.componentRef.setInput('selectedId', id);
+      setQueryParams({}); // Ensure 'tab' is not 'groups'
+      fixture.detectChanges();
 
-    expect(router.navigate).toHaveBeenCalledWith(
-      [],
-      expect.objectContaining({
-        queryParams: { selectedId: 'urn:contacts:user:123', new: null },
-      }),
-    );
-  });
+      // 2. Query Page (Should exist now)
+      const page = fixture.debugElement.query(
+        By.directive(MockContactPageComponent),
+      );
+      expect(page).toBeTruthy(); // Sanity check
 
-  it('should clear selection when Contact Page emits (deleted)', () => {
-    // 1. Setup Input State (Manually simulate the Router binding input)
-    fixture.componentRef.setInput('selectedId', 'urn:contacts:user:123');
-    fixture.detectChanges();
+      // 3. Emit Saved
+      const contact = { id: URN.create('user', '123', 'contacts') } as Contact;
+      (page.componentInstance as MockContactPageComponent).saved.emit(contact);
 
-    // 2. Query Page
-    const page = fixture.debugElement.query(
-      By.directive(StubContactPageComponent),
-    );
-    expect(page).toBeTruthy(); // Ensure page exists
+      expect(router.navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: expect.objectContaining({
+            selectedId: contact.id.toString(),
+            new: null,
+          }),
+        }),
+      );
+    });
 
-    // 3. Simulate Delete
-    page.componentInstance.deleted.emit();
+    it('should handle "Deleted" event (Clear Selection)', () => {
+      const id = URN.create('user', '123', 'contacts').toString();
+      fixture.componentRef.setInput('selectedId', id);
+      setQueryParams({});
+      fixture.detectChanges();
 
-    // 4. Expect Navigation
-    expect(router.navigate).toHaveBeenCalledWith(
-      [],
-      expect.objectContaining({
-        queryParams: { selectedId: null, new: null },
-      }),
-    );
+      const page = fixture.debugElement.query(
+        By.directive(MockContactPageComponent),
+      );
+      (page.componentInstance as MockContactPageComponent).deleted.emit();
+
+      expect(router.navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: expect.objectContaining({ selectedId: null }),
+        }),
+      );
+    });
+
+    it('should handle "Cancelled" event logic', () => {
+      setQueryParams({ mode: null });
+      component.onEditCancel();
+
+      expect(router.navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: expect.objectContaining({ selectedId: null }),
+        }),
+      );
+    });
   });
 });
