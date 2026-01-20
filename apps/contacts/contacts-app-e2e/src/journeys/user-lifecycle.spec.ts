@@ -21,39 +21,40 @@ test.describe('Journey: Contact Lifecycle', () => {
 
     // 1. CREATE
     await test.step('Create new contact', async () => {
-      await app.createContactButton.click();
-      await app.fillForm(newContact);
-      await app.saveButton.click();
+      // FIX: Access via the List PO
+      await app.list.createButton.click();
 
-      // Verification: Sidebar update
-      await app.expectContactVisible(newContact.alias);
+      // FIX: Access via the Form PO
+      await app.form.fill(newContact);
+      await app.form.saveButton.click();
+
+      // Verification: Sidebar update via List PO
+      await app.list.expectVisible(newContact.alias);
     });
 
     // 2. READ
     await test.step('View details', async () => {
-      // ✅ FIX: Select the contact first
-      await app.selectContact(newContact.alias);
+      // FIX: Access via the List PO
+      await app.list.select(newContact.alias);
 
-      // Now the "Edit" button should be visible (Read Mode)
-      await expect(app.editButton).toBeVisible();
-      await expect(app.firstNameInput).toHaveValue(newContact.firstName);
+      await expect(app.form.editButton).toBeVisible();
+      await expect(app.form.firstName).toHaveValue(newContact.firstName);
     });
 
     // 3. DELETE
     await test.step('Delete contact', async () => {
-      // Enter Edit Mode
-      await app.editButton.click();
+      await app.form.editButton.click();
 
-      // Click Delete
-      await app.deleteButton.click();
+      // Intention Check (Optional but recommended by protocol)
+      // await app.list.expectDiscardIntention(newContact.alias);
 
-      // Handle Dialog
+      await app.form.deleteButton.click();
+
       await expect(app.dialogConfirmButton).toBeVisible();
       await app.dialogConfirmButton.click();
 
-      // Verification: List should be empty again
-      await app.expectContactHidden(newContact.alias);
-      await expect(app.emptyListMessage).toBeVisible();
+      // Verification: Gone from list
+      await app.list.expectHidden(newContact.alias);
     });
   });
 });

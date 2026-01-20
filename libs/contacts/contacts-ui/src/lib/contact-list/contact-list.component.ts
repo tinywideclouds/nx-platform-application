@@ -4,10 +4,10 @@ import {
   output,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { trigger, transition, style, animate } from '@angular/animations';
 
 import { Contact } from '@nx-platform-application/contacts-types';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
+import { DiscardIntention } from '@nx-platform-application/platform-ux-intention';
 
 @Component({
   selector: 'contacts-list',
@@ -16,17 +16,7 @@ import { ContactListItemComponent } from '../contact-list-item/contact-list-item
   templateUrl: './contact-list.component.html',
   styleUrl: './contact-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    trigger('deleteAnimation', [
-      transition(':leave', [
-        style({ height: '*', opacity: 1, overflow: 'hidden' }),
-        animate(
-          '300ms cubic-bezier(0.4, 0.0, 0.2, 1)',
-          style({ height: '0px', opacity: 0, paddingTop: 0, paddingBottom: 0 }),
-        ),
-      ]),
-    ]),
-  ],
+  animations: [DiscardIntention],
 })
 export class ContactListComponent {
   contacts = input.required<Contact[]>();

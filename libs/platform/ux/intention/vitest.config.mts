@@ -1,4 +1,4 @@
-// libs/platform/ui/lists/vitest.config.mts
+// libs/platform/ux/intention/vitest.config.mts
 
 /// <reference types='vitest' />
 import angular from '@analogjs/vite-plugin-angular';
@@ -8,14 +8,14 @@ import { join } from 'path';
 
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/platform/ui/lists',
+  cacheDir: '../../../../node_modules/.vite/libs/platform/ux/intention',
 
   plugins: [
     angular({ tsconfig: join(__dirname, 'tsconfig.test.json') }),
     nxViteTsPaths(),
   ],
   test: {
-    name: 'platform-ui-lists',
+    name: 'platform-ui-intention',
     globals: true,
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
@@ -23,12 +23,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/platform/ui/lists/index.html',
+        '../../../../dist/test-reports/platform/ux/intention/index.html',
       ),
     },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
-      reportsDirectory: '../../../../coverage/libs/platform/ui/lists',
+      reportsDirectory: '../../../../coverage/libs/platform/ux/intention',
       provider: 'v8',
     },
   },

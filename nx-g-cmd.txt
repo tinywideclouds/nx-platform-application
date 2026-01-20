@@ -218,15 +218,17 @@ nx g @nx/angular:library --name=platform-ui-qr-codes --directory=libs/platform/u
 
 nx g @nx/angular:library --name=platform-ui-layouts --directory=libs/platform/ui/layouts --tags="scope:platform" 
 
-
 nx g @nx/angular:library --name=lib-contacts-app-mocking --directory=libs/contacts/app-mocking --tags="scope:contacts" 
-
 
 nx g @nx/angular:library --name=lib-messenger-test-app-mocking --directory=libs/messenger/test/app-mocking --tags="scope:messenger" 
 
-
 nx g @nx/angular:library --name=platform-ui-forms --directory=libs/platform/ui/forms --tags="scope:platform" 
 
-
 nx g @nx/angular:library --name=platform-ui-lists --directory=libs/platform/ui/lists --tags="scope:platform" 
+
+
+nx g @nx/angular:library --name=platform-ux-physics --directory=libs/platform/ux/physics --tags="scope:platform" 
+
+nx g @nx/workspace:move --project=platform-ux-physics     --destination=libs/platform/ux/intention --importPath=@nx-platform-application/platform-ux-intention
+
 

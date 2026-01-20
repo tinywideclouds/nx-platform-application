@@ -8,7 +8,21 @@ import {
 import { EditableListComponent } from '@nx-platform-application/platform-ui-forms';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { MockComponent } from 'ng-mocks';
+import { Component, input, output } from '@angular/core';
+
+// [OPTIMIZATION] Define Mock Class statically to avoid JIT overhead in beforeEach
+@Component({
+  selector: 'lib-editable-list',
+  standalone: true,
+  template: '',
+})
+class MockEditableListComponent {
+  label = input<string>('');
+  items = input<string[]>([]);
+  itemsChange = output<string[]>();
+  readonly = input<boolean>(false);
+  schema = input<any>();
+}
 
 const mockContact: Contact = {
   id: URN.parse('urn:contacts:user:user-123'),
@@ -30,10 +44,9 @@ describe('ContactFormComponent (Passive Architecture)', () => {
     await TestBed.configureTestingModule({
       imports: [ContactFormComponent, NoopAnimationsModule],
     })
-      // [UPDATE] Isolate the Unit: Mock complex child components
       .overrideComponent(ContactFormComponent, {
         remove: { imports: [EditableListComponent] },
-        add: { imports: [MockComponent(EditableListComponent)] },
+        add: { imports: [MockEditableListComponent] },
       })
       .compileComponents();
 
@@ -50,8 +63,9 @@ describe('ContactFormComponent (Passive Architecture)', () => {
     fixture.componentRef.setInput('isEditing', true);
     fixture.componentRef.setInput('isNew', false);
 
+    // [OPTIMIZATION] detectChanges() is enough for Signals.
+    // removed: await fixture.whenStable();
     fixture.detectChanges();
-    await fixture.whenStable(); // Ensure effect() in constructor settles
   });
 
   describe('Initialization', () => {
@@ -90,7 +104,6 @@ describe('ContactFormComponent (Passive Architecture)', () => {
     it('should SUPPRESS modification flag if isNew is true', async () => {
       fixture.componentRef.setInput('isNew', true);
       fixture.detectChanges();
-      await fixture.whenStable();
 
       component.firstName.set('Jonathan');
       fixture.detectChanges();

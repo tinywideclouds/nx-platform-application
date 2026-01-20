@@ -1,0 +1,32 @@
+{
+  "name": "platform-ux-intention",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ux/intention/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform", "layer:ui"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ux/intention",
+        "configFile": "libs/platform/ux/intention/vite.config.mts",
+        "main": "libs/platform/ux/intention/src/index.ts",
+        "assets": ["libs/platform/ux/intention/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/platform/ux/intention"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ux/intention",
+        "configFile": "libs/platform/ux/intention/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

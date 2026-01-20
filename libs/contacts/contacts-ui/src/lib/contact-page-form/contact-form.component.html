@@ -43,8 +43,20 @@
         matInput
         [value]="surname()"
         (input)="surname.set($any($event.target).value)"
+        (blur)="surnameTouched.set(true)"
         [readonly]="!isEditing()"
       />
+
+      @if (isEditing()) {
+        <mat-icon
+          matSuffix
+          [class]="getStatusColor('surname')"
+          [matTooltip]="getStatusTooltip('surname')"
+        >
+          {{ getStatusIcon('surname') }}
+        </mat-icon>
+      }
+
       @if (surnameModified()) {
         <mat-hint class="text-blue-600 text-xs font-medium">Modified</mat-hint>
       }
@@ -114,37 +126,49 @@
       }
     </mat-form-field>
 
-    <mat-form-field
-      [floatLabel]="'always'"
-      class="w-full"
-      [hideRequiredMarker]="!isEditing()"
-      [class.field-invalid]="!!phoneError() && phoneNumberTouched()"
-    >
-      <mat-label>Phone</mat-label>
-      <input
-        aria-label="Phone"
-        matInput
-        [value]="phoneNumber()"
-        (input)="phoneNumber.set($any($event.target).value)"
-        (blur)="phoneNumberTouched.set(true)"
-        [readonly]="!isEditing()"
-      />
-      @if (isEditing()) {
-        <mat-icon
-          matSuffix
-          [class]="getStatusColor('phoneNumber')"
-          [matTooltip]="getStatusTooltip('phoneNumber')"
-        >
-          {{ getStatusIcon('phoneNumber') }}
-        </mat-icon>
-      }
-      @if (phoneModified()) {
-        <mat-hint class="text-blue-600 text-xs font-medium">Modified</mat-hint>
-      }
-      @if (phoneNumberTouched() && phoneError()) {
-        <mat-error>{{ phoneError() }}</mat-error>
-      }
-    </mat-form-field>
+    @if (isEditing() || phoneNumber()) {
+      <mat-form-field
+        [floatLabel]="'always'"
+        class="w-full"
+        [hideRequiredMarker]="!isEditing()"
+        [class.field-invalid]="!!phoneError() && phoneNumberTouched()"
+      >
+        <mat-label>Phone</mat-label>
+        <input
+          aria-label="Phone"
+          matInput
+          type="tel"
+          class="placeholder:text-gray-300"
+          placeholder="+353 87 123 4567"
+          [value]="phoneNumber()"
+          (input)="phoneNumber.set($any($event.target).value)"
+          (blur)="phoneNumberTouched.set(true)"
+          [readonly]="!isEditing()"
+        />
+        @if (isEditing()) {
+          <mat-hint align="start" class="text-xs text-gray-400">
+            Optional. Digits & '+' only.
+          </mat-hint>
+        }
+        @if (isEditing()) {
+          <mat-icon
+            matSuffix
+            [class]="getStatusColor('phoneNumber')"
+            [matTooltip]="getStatusTooltip('phoneNumber')"
+          >
+            {{ getStatusIcon('phoneNumber') }}
+          </mat-icon>
+        }
+        @if (phoneModified()) {
+          <mat-hint class="text-blue-600 text-xs font-medium"
+            >Modified</mat-hint
+          >
+        }
+        @if (phoneNumberTouched() && phoneError()) {
+          <mat-error>{{ phoneError() }}</mat-error>
+        }
+      </mat-form-field>
+    }
   </div>
 
   @if (isEditing() || emailAddresses().length || phoneNumbers().length) {
@@ -167,6 +191,33 @@
           [readonly]="!isEditing()"
         >
         </lib-editable-list>
+      </div>
+    </div>
+  }
+
+  @if (!isEditing()) {
+    <div class="mt-6 pt-6 border-t border-gray-100 animate-fade-in">
+      <div class="flex flex-wrap gap-2">
+        @if (!phoneNumber()) {
+          <mat-chip-option (click)="triggerEditMode()" color="accent">
+            <mat-icon matChipAvatar>add_call</mat-icon>
+            Add Phone Number
+          </mat-chip-option>
+        }
+
+        @if (phoneNumber() && phoneNumbers().length === 0) {
+          <mat-chip-option (click)="triggerEditMode()">
+            <mat-icon matChipAvatar>playlist_add</mat-icon>
+            Add Backup Phone
+          </mat-chip-option>
+        }
+
+        @if (email() && emailAddresses().length === 0) {
+          <mat-chip-option (click)="triggerEditMode()">
+            <mat-icon matChipAvatar>forward_to_inbox</mat-icon>
+            Add Backup Email
+          </mat-chip-option>
+        }
       </div>
     </div>
   }

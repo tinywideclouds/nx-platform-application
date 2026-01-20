@@ -214,6 +214,9 @@
       ],
       "@nx-platform-application/platform-ui-toolkit": [
         "libs/platform/ui/toolkit/src/index.ts"
+      ],
+      "@nx-platform-application/platform-ux-intention": [
+        "libs/platform/ux/intention/src/index.ts"
       ]
     }
   },

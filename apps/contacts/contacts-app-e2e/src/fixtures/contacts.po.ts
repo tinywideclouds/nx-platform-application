@@ -9,6 +9,10 @@ export class ContactsPage {
   readonly list: ContactListPO;
   readonly form: ContactFormPO;
 
+  // Layout Elements (FIX: Added these to satisfy layout.spec.ts)
+  readonly sidebar: Locator;
+  readonly mainPane: Locator;
+
   // Global / Overlay Elements
   readonly dialogConfirmButton: Locator;
 
@@ -17,10 +21,14 @@ export class ContactsPage {
     this.list = new ContactListPO(page);
     this.form = new ContactFormPO(page);
 
-    // Standard Material Confirm Button (usually 'warn' color in delete dialogs)
-    this.dialogConfirmButton = page.locator(
-      'mat-dialog-container button[color="warn"]',
-    );
+    // FIX: Targets <div sidebar> and <div main> from MasterDetailLayout
+    this.sidebar = page.locator('[sidebar]');
+    this.mainPane = page.locator('[main]');
+
+    // Standard Material Confirm Button
+    this.dialogConfirmButton = page
+      .locator('mat-dialog-container')
+      .getByRole('button', { name: /delete/i });
   }
 
   async goto(scenario: string = 'populated') {

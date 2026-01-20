@@ -19,18 +19,18 @@ export class ContactFormPO {
     this.page = page;
 
     // Locators matched to your aria-labels in the component
-    this.firstName = page.locator('input[aria-label="first name"]');
-    this.surname = page.locator('input[aria-label="surname"]');
-    this.alias = page.locator('input[aria-label="alias"]');
-    this.email = page.locator('input[aria-label="email"]');
+    this.firstName = page.getByLabel('First Name');
+    this.surname = page.getByLabel('Surname');
+    this.alias = page.getByLabel('Alias');
+    this.email = page.getByLabel('Email');
 
     this.saveButton = page.getByTestId('save-button');
     this.cancelButton = page.getByTestId('cancel-button');
-    this.deleteButton = page.getByTestId('delete-button');
-    // Assuming edit button appears in read-mode toolbar
+    this.deleteButton = page.getByRole('button', { name: /delete/i });
+
     this.editButton = page
-      .getByTestId('edit-contact-button')
-      .or(page.locator('button[aria-label="Edit Contact"]'));
+      .getByTestId('edit-button')
+      .or(page.getByRole('button', { name: 'Edit' }));
   }
 
   async fill(data: {
@@ -55,18 +55,20 @@ export class ContactFormPO {
 
     // Checks for the matSuffix icon
     const icon = field.locator('mat-icon[matSuffix]');
+
     if ((await icon.count()) === 0) return null;
-    return await icon.textContent();
+
+    // FIX: Trim whitespace to handle " priority_high " vs "priority_high"
+    const text = await icon.textContent();
+    return text ? text.trim() : null;
   }
 
-  async expectSaveButtonState(state: 'disabled' | 'semi-active' | 'ready') {
+  async expectSaveButtonState(state: 'disabled' | 'ready') {
+    await expect(this.saveButton).toBeEnabled();
     if (state === 'disabled') {
-      await expect(this.saveButton).toBeDisabled();
+      await expect(this.saveButton).toContainText(/Issues/);
     } else {
-      await expect(this.saveButton).toBeEnabled();
-      if (state === 'ready') {
-        await expect(this.saveButton).not.toHaveClass(/opacity-50/);
-      }
+      await expect(this.saveButton).toHaveText('Save');
     }
   }
 }

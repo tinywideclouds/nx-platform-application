@@ -7,9 +7,14 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+import {
+  expectIntention,
+  DISCARD_TRIGGER_NAME,
+} from '@nx-platform-application/platform-ux-intention';
 
 import { ContactListComponent } from './contact-list.component';
 import { ContactListItemComponent } from '../contact-list-item/contact-list-item.component';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 const MOCK_CONTACTS: Contact[] = [
   {
@@ -66,6 +71,7 @@ describe('ContactListComponent', () => {
         TestHostComponent,
         ContactListComponent,
         ContactListItemComponent,
+        NoopAnimationsModule, // Required for the animation trigger to exist safely
       ],
     }).compileComponents();
 
@@ -80,14 +86,43 @@ describe('ContactListComponent', () => {
   });
 
   it('should highlight the selected contact based on input', () => {
-    // Select the first contact
     hostComponent.selectedId = 'urn:contacts:user:user-123';
     fixture.detectChanges();
 
     const items = fixture.debugElement.queryAll(By.css('contacts-list-item'));
-
-    // Check classes on the first item
     expect(items[0].nativeElement.classList).toContain('bg-blue-50');
     expect(items[0].nativeElement.classList).toContain('border-l-4');
+  });
+
+  // describe('Physics & Intentions', () => {
+  //   it('should have animations configured', () => {
+  //     // Access the compiled component definition
+  //     // We cast to 'any' because ɵcmp is internal, but stable in Ivy
+  //     const componentDef = (ContactListComponent as any).ɵcmp;
+
+  //     // 1. Verify animations exist in the metadata
+  //     // In Angular's compiled output, animations are stored in `data.animation`
+  //     const animations = componentDef?.data?.animation;
+
+  //     // 2. The Defensive Assertion
+  //     // Fails only if 'animations: []' is removed or empty
+  //     expect(animations).toBeDefined();
+  //     expect(animations.length).toBeGreaterThan(0);
+  //   });
+
+  //   it('should explicitly include the "discard" animation', () => {
+  //     const animations =
+  //       (ContactListComponent as any).ɵcmp.data.animation || [];
+  //     const hasFade = animations.some((a: any) => a.name === 'discard');
+
+  //     expect(hasFade).toBe(true);
+  //   });
+  // });
+
+  describe('Physics & Intentions', () => {
+    it('should enforce the "Discard" intention', () => {
+      // One line. Readable. Fails with a clear error message.
+      expectIntention(ContactListComponent, DISCARD_TRIGGER_NAME);
+    });
   });
 });

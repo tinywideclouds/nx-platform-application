@@ -1,4 +1,6 @@
+/* The item identifies itself to the transition engine */
 :host {
   display: block;
   overflow: hidden;
+  view-transition-class: contact-row-exit;
 }

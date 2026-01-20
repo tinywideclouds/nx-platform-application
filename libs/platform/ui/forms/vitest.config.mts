@@ -1,4 +1,4 @@
-// libs/platform/ui/auth/vitest.config.mts
+// libs/platform/ui/forms/vitest.config.mts
 
 /// <reference types='vitest' />
 import angular from '@analogjs/vite-plugin-angular';
@@ -8,14 +8,14 @@ import { join } from 'path';
 
 export default defineConfig({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/platform/ui/auth',
+  cacheDir: '../../../../node_modules/.vite/libs/platform/ui/forms',
 
   plugins: [
     angular({ tsconfig: join(__dirname, 'tsconfig.test.json') }),
     nxViteTsPaths(),
   ],
   test: {
-    name: 'platform-ui-auth',
+    name: 'platform-ui-forms',
     globals: true,
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
@@ -23,12 +23,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/platform/ui/auth/index.html',
+        '../../../../dist/test-reports/platform/ui/forms/index.html',
       ),
     },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
-      reportsDirectory: '../../../../coverage/libs/platform/ui/auth',
+      reportsDirectory: '../../../../coverage/libs/platform/ui/forms',
       provider: 'v8',
     },
   },

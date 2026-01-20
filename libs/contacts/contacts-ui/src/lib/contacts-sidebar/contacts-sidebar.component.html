@@ -10,39 +10,49 @@
       }
       @if (showAddActions()) {
         @if (toolbar.mode() === 'full') {
-          <a
+          <button
+            type="button"
             mat-stroked-button
             color="primary"
             routerLink="."
             [queryParams]="{ new: 'contact' }"
             queryParamsHandling="merge"
-            >New Contact</a
           >
-          <a
+            New Contact
+          </button>
+          <button
+            type="button"
             mat-stroked-button
             color="primary"
             routerLink="."
             [queryParams]="{ new: 'group' }"
             queryParamsHandling="merge"
-            >New Group</a
           >
+            New Group
+          </button>
         } @else {
-          <a
+          <button
+            type="button"
+            aria-label="New Contact"
             mat-icon-button
             color="primary"
             routerLink="."
             [queryParams]="{ new: 'contact' }"
             queryParamsHandling="merge"
-            ><mat-icon>person_add</mat-icon></a
           >
-          <a
+            <mat-icon>person_add</mat-icon>
+          </button>
+          <button
+            type="button"
+            aria-label="New Group"
             mat-icon-button
             color="primary"
             routerLink="."
             [queryParams]="{ new: 'group' }"
             queryParamsHandling="merge"
-            ><mat-icon>group_add</mat-icon></a
           >
+            <mat-icon>group_add</mat-icon>
+          </button>
         }
       }
     </div>

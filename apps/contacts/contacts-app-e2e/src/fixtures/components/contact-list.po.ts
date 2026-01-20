@@ -10,17 +10,32 @@ export class ContactListPO {
     this.page = page;
     this.items = page.locator('contacts-list-item');
     this.emptyMessage = page.getByTestId('empty-list');
-    // Assuming the Floating Action Button (FAB) or Toolbar button has this ID/Label
-    this.createButton = page
-      .getByTestId('create-contact-button')
-      .or(page.locator('button[aria-label="Create Contact"]'));
+
+    // FIX: "User-First" Selector.
+    // matches <button>New Contact</button>
+    // matches <button aria-label="New Contact"><icon/></button>
+    // matches <button>Create Contact</button> (from your empty state)
+    this.createButton = page.getByRole('button', {
+      name: /new contact|create contact/i,
+    });
+  }
+
+  async select(alias: string) {
+    await this.items.filter({ hasText: alias }).click();
   }
 
   /**
-   * Selects a contact by their alias (visible text in the list)
+   * INTENTION CHECK: The "Polished Exit"
+   * Verifies that the row is physically capable of animating before we delete it.
    */
-  async select(alias: string) {
-    await this.items.filter({ hasText: alias }).click();
+  async expectDiscardIntention(alias: string) {
+    const row = this.items.filter({ hasText: alias });
+
+    // 1. Verify row exists
+    await expect(row).toBeVisible();
+
+    // 2. Verify Angular Animation Trigger is present
+    await expect(row).toHaveClass(/ng-trigger-discard/);
   }
 
   async expectVisible(alias: string) {

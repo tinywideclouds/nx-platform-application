@@ -2,7 +2,7 @@
   @if (contacts().length > 0) {
     @for (contact of contacts(); track trackContactById($index, contact)) {
       <contacts-list-item
-        @deleteAnimation
+        @discard
         #item
         [contact]="contact"
         [class.bg-blue-50]="selectedId() === contact.id.toString()"
