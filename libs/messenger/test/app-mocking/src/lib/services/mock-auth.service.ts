@@ -1,23 +1,40 @@
 import { Injectable, signal, computed, Signal } from '@angular/core';
-import { Observable, BehaviorSubject, of } from 'rxjs';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { Observable, of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import {
   IAuthService,
   AuthStatusResponse,
 } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { User, URN } from '@nx-platform-application/platform-types';
+import { MockServerAuthState } from '../scenarios.const';
 
-@Injectable()
+@Injectable({ providedIn: 'root' }) // ✅ Fixes Injection Error
 export class MockAuthService implements IAuthService {
-  // --- STATE ---
-  // Writable signal for internal test manipulation
+  // --- INTERNAL STATE ---
   private readonly _currentUser = signal<User | null>({
     id: URN.parse('urn:contacts:user:me'),
     alias: 'Me',
     email: 'me@example.com',
   });
 
-  // --- IAuthService Implementation ---
+  // --- CONFIGURATION API (Driver) ---
+  public loadScenario(config: MockServerAuthState) {
+    console.log('[MockAuthService] 🔄 Configuring Session:', config);
+    if (config.authenticated) {
+      this._currentUser.set(
+        config.user || {
+          id: URN.parse('urn:contacts:user:me'),
+          alias: 'Me',
+          email: 'me@example.com',
+        },
+      );
+    } else {
+      this._currentUser.set(null);
+    }
+  }
 
+  // --- IAuthService Implementation ---
   public readonly currentUser: Signal<User | null> =
     this._currentUser.asReadonly();
 
@@ -25,13 +42,17 @@ export class MockAuthService implements IAuthService {
     () => !!this.currentUser(),
   );
 
-  // Immediately emit a valid session for E2E speed
   public readonly sessionLoaded$: Observable<AuthStatusResponse | null> =
-    new BehaviorSubject<AuthStatusResponse | null>({
-      authenticated: true,
-      user: this._currentUser()!,
-      token: 'mock-offline-token',
-    });
+    toObservable(this._currentUser).pipe(
+      map((user) => {
+        if (!user) return null;
+        return {
+          authenticated: true,
+          user: user,
+          token: 'mock-offline-token',
+        };
+      }),
+    );
 
   public getJwtToken(): string | null {
     return this._currentUser() ? 'mock-offline-token' : null;
@@ -49,13 +70,8 @@ export class MockAuthService implements IAuthService {
     return of(null);
   }
 
-  public logout(): Observable<unknown> {
-    this._currentUser.set(null);
-    return of(true);
-  }
-
-  // --- Helper for Scenarios ---
-  public setMockUser(user: User | null): void {
-    this._currentUser.set(user);
+  public logout(): Observable<void> {
+    this.loadScenario({ authenticated: false });
+    return of(void 0);
   }
 }

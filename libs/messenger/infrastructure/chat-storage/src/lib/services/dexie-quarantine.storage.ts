@@ -44,4 +44,8 @@ export class DexieQuarantineStorage implements QuarantineStorage {
       .equals(senderId.toString())
       .delete();
   }
+
+  async clear(): Promise<void> {
+    await this.db.quarantined_messages.clear();
+  }
 }

@@ -42,7 +42,6 @@ export class ChatIdentityFacade {
     try {
       this.onboardingState.set('CHECKING');
 
-      // Ensure session is loaded before checking keys
       await firstValueFrom(this.authService.sessionLoaded$);
 
       const currentUser = this.authService.currentUser();
@@ -71,21 +70,44 @@ export class ChatIdentityFacade {
         }
       }
 
-      // 1. Offline Mode: We have keys, but can't verify against server
+      // 1. Offline Mode
       if (localKeys && !isServerReachable) {
         this.myKeys.set(localKeys);
         this.onboardingState.set('OFFLINE_READY');
         return;
       }
 
-      // 2. New User / First Time Setup: No keys anywhere
-      if (!localKeys && !serverKeys && isServerReachable) {
+      // 2. New User OR Missing Server Keys
+      if (!serverKeys && isServerReachable) {
+        if (localKeys) {
+          // ✅ SELF-HEALING: We have keys, server lost them. Re-upload.
+          this.logger.info(
+            '[IdentityFacade] Local keys found but Server is empty. Re-uploading...',
+          );
+
+          // Use the service to derive public keys from our local private ones
+          const restoredPublicKeys =
+            await this.cryptoService.loadMyPublicKeys(senderUrn);
+
+          if (restoredPublicKeys) {
+            await this.keyService.storeKeys(senderUrn, restoredPublicKeys);
+            this.myKeys.set(localKeys);
+            this.onboardingState.set('READY');
+            return;
+          } else {
+            this.logger.error(
+              '[IdentityFacade] CRITICAL: Private keys exist but Public keys cannot be recovered.',
+            );
+            // Fallthrough to GENERATING
+          }
+        }
+
         this.onboardingState.set('GENERATING');
         await this.performFirstTimeSetup(senderUrn, currentUser.email);
         return;
       }
 
-      // 3. Consistency Check: Ensure local keys match server keys
+      // 3. Consistency Check
       const isConsistent = await this.checkIntegrity(
         senderUrn,
         localKeys,

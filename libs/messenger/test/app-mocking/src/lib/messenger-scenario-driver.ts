@@ -1,235 +1,232 @@
 import { Injectable, inject } from '@angular/core';
-import { Temporal } from '@js-temporal/polyfill';
 import {
   URN,
-  QueuedMessage,
   ISODateTimeString,
+  serializePublicKeysToJson,
 } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
-  OutboundTask,
-  RecipientProgress,
   TransportMessage,
 } from '@nx-platform-application/messenger-types';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
+
+// Real Storage
 import {
   ChatStorageService,
   OutboxStorage,
   QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
-
-// ✅ NEW IMPORTS for Full Wipe
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-
-// Mocks
+import { KeyStorageService } from '@nx-platform-application/messenger-infrastructure-key-storage';
+import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
-  MockLiveService,
-  MockChatDataService,
-} from './services/mock-network.service';
+  MessengerCryptoService,
+  CryptoEngine,
+  PrivateKeys,
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+
+// Scenario-Aware Mocks
+import { MockAuthService } from './services/mock-auth.service';
 import { MockKeyService } from './services/mock-key.service';
+import { MockChatDataService } from './services/mock-chat-data.service';
+import { MockLiveService } from './services/mock-live.service';
+import { MockChatSendService } from './services/mock-chat-send.service';
+import { MockPushNotificationService } from './services/mock-push-notification.service';
+
 import {
   MESSENGER_SCENARIOS,
-  SCENARIO_USERS,
   MockMessageDef,
-  MockOutboxDef,
-  MockQuarantineDef,
+  MessengerScenarioData,
+  SCENARIO_USERS,
 } from './scenarios.const';
 
 @Injectable({ providedIn: 'root' })
 export class MessengerScenarioDriver {
-  private router = inject(MockChatDataService);
-  private live = inject(MockLiveService);
-  private keys = inject(MockKeyService);
+  // --- MOCKS ---
+  private authMock = inject(MockAuthService);
+  private keyMock = inject(MockKeyService);
+  private chatDataMock = inject(MockChatDataService);
+  private liveMock = inject(MockLiveService);
+  private sendMock = inject(MockChatSendService);
+  private pushMock = inject(MockPushNotificationService);
 
-  // --- STORAGE SERVICES (For Wiping/Seeding) ---
+  // --- REAL STORAGE ---
   private chatStorage = inject(ChatStorageService);
   private outboxStorage = inject(OutboxStorage);
-  private quarantineStorage = inject(QuarantineStorage);
-
-  // ✅ NEW: Added for wiping contacts and keys
   private contactsStorage = inject(ContactsStorageService);
-  private cryptoService = inject(MessengerCryptoService);
+  private publicKeysStorage = inject(KeyStorageService);
+  private messengerCrypto = inject(MessengerCryptoService);
+  private quarantineStorage = inject(QuarantineStorage);
+  private keyCache = inject(KeyCacheService);
 
-  // Low-level crypto for seeding
   private crypto = inject(CryptoEngine);
 
+  private readonly STORAGE_KEY = 'messenger_active_scenario';
+
   constructor() {
-    // ✅ EXPOSE TO WINDOW
-    // This allows you to run `await window.messengerDriver.loadScenario('active-chat')` in the console
     (window as any).messengerDriver = this;
-    console.log(
-      '[MessengerScenarioDriver] initialized and attached to window.messengerDriver',
-    );
   }
 
-  /**
-   * INSTANT LOAD: Wipes ALL DBs (Chat, Contacts, Keys) and seeds a scenario.
-   */
+  public async initialize(): Promise<void> {
+    // 1. Determine Target Scenario
+    // Priority: URL > Default ('active-user')
+    // We intentionally DO NOT read from localStorage here.
+    const params = new URLSearchParams(window.location.search);
+    const urlScenario = params.get('scenario');
+
+    let activeKey = 'active-user';
+
+    if (
+      urlScenario &&
+      MESSENGER_SCENARIOS[urlScenario as keyof typeof MESSENGER_SCENARIOS]
+    ) {
+      console.log(`[Driver] 🎯 URL Override detected: "${urlScenario}"`);
+      activeKey = urlScenario;
+    } else {
+      console.log(`[Driver] 🎲 Defaulting to: "${activeKey}" (Fresh Start)`);
+    }
+
+    // 2. ENFORCE STATE (The Fix)
+    // We actively overwrite whatever was in storage.
+    // This wipes the "sticky" 'new-user' state from previous runs.
+    localStorage.setItem(this.STORAGE_KEY, activeKey);
+
+    // 3. Load
+    await this.loadScenario(activeKey);
+  }
+
   async loadScenario(key: string): Promise<void> {
-    const data = MESSENGER_SCENARIOS[key as keyof typeof MESSENGER_SCENARIOS];
-    if (!data) {
-      console.warn(`[ScenarioDriver] Unknown scenario: "${key}"`);
+    const scenario =
+      MESSENGER_SCENARIOS[key as keyof typeof MESSENGER_SCENARIOS];
+    if (!scenario) {
+      console.error(`Unknown scenario: ${key}`);
       return;
     }
 
-    console.log(`[ScenarioDriver] 🔄 Loading "${key}"...`);
+    console.log(`[Driver] 🎬 Activating Scenario: "${key}"`);
+    localStorage.setItem(this.STORAGE_KEY, key);
 
-    // 1. WIPE EVERYTHING (The Fix for "Ghost Data")
-    // We run these in parallel to ensure a complete clean slate
-    await Promise.all([
-      this.chatStorage.clearDatabase(), // Wipes Messages, Convos, Settings
-      this.contactsStorage.clearDatabase(), // ✅ Wipes Contacts & Groups
-      this.cryptoService.clearKeys(), // ✅ Wipes Identity Keys
-      this.outboxStorage.clearAll(), // ✅ Wipes Pending Tasks
-      //this.quarantineStorage.deleteQuarantinedMessages(),    // (Usually covered by chatStorage, but good to be safe if method exists)
-    ]);
+    await this.wipeDevice();
+    this.configureMocks(scenario.remote_server);
+    await this.seedLocalDevice(scenario.local_device);
 
-    console.log('[ScenarioDriver] 🧹 Database Wiped.');
-
-    // 2. Seed Messages
-    if (data.messages) {
-      for (const msgDef of data.messages) {
-        await this.seedMessage(msgDef);
-      }
-    }
-
-    // 3. Seed Outbox
-    if (data.outbox) {
-      for (const taskDef of data.outbox) {
-        await this.seedOutbox(taskDef);
-      }
-    }
-
-    // 4. Seed Quarantine
-    if (data.quarantine) {
-      for (const qDef of data.quarantine) {
-        await this.seedQuarantine(qDef);
-      }
-    }
-
-    // 5. Force Reload (Optional)
-    // If the app state is already running, we might need to nudge it to reload data.
-    // For now, we rely on the user reloading or the app reacting to DB changes if wired up.
-    // But typically, `loadScenario` is followed by a page reload OR the app listens to changes.
-    // Given we just wiped keys, the Identity Facade might need a reset signal if it's already running.
-
-    console.log(`[ScenarioDriver] ✅ Scenario Loaded.`);
+    console.log(`[Driver] ✅ Scenario Loaded.`);
   }
 
-  // --- SEEDERS ---
+  // --- INTERNAL STEPS ---
 
-  private async seedMessage(def: MockMessageDef): Promise<void> {
+  private configureMocks(config: MessengerScenarioData['remote_server']) {
+    this.authMock.loadScenario(config.auth);
+    this.keyMock.loadScenario(config.identity);
+    this.chatDataMock.loadScenario(config.network);
+    this.liveMock.loadScenario(config.network);
+    this.sendMock.loadScenario(config.send);
+  }
+
+  private async wipeDevice() {
+    console.log('[Driver] 🧹 Wiping Device Storage...');
+
+    await this.chatStorage.clearDatabase();
+    await this.contactsStorage.clearDatabase();
+    await this.publicKeysStorage.clearDatabase();
+    await this.messengerCrypto.clearKeys();
+
+    await Promise.all([
+      this.outboxStorage.clearAll(),
+      this.quarantineStorage.clear(),
+      this.keyCache.clear(),
+    ]);
+  }
+
+  private async seedLocalDevice(config: MessengerScenarioData['local_device']) {
+    // 1. Notifications
+    this.pushMock.loadScenario(config.notifications);
+
+    // 2. Identity
+    if (config.identity?.seeded) {
+      await this.seedLocalIdentity();
+    }
+
+    // 3. Contacts
+    if (config.contacts && config.contacts.length > 0) {
+      console.log(
+        `[Driver] Seeding ${config.contacts.length} local contacts...`,
+      );
+      await this.contactsStorage.bulkUpsert(config.contacts);
+    }
+
+    // 4. Messages
+    for (const msg of config.messages) {
+      await this.seedMessageToStorage(msg);
+    }
+
+    // 5. Quarantine
+    if (config.quarantine) {
+      for (const msg of config.quarantine) {
+        await this.seedQuarantineMessage(msg);
+      }
+    }
+  }
+
+  private async seedLocalIdentity() {
+    console.log('[Driver] 🌱 Seeding Local Identity...');
+    const myUrn = SCENARIO_USERS.ME;
+
+    // Generate real keys using the engine (MockCryptoEngine in test mode)
+    const encPair = await this.crypto.generateEncryptionKeys();
+    const sigPair = await this.crypto.generateSigningKeys();
+
+    const privateKeys: PrivateKeys = {
+      encKey: encPair.privateKey,
+      sigKey: sigPair.privateKey,
+    };
+
+    await this.messengerCrypto.storeMyKeys(myUrn, privateKeys);
+
+    // Derive public keys using service logic
+    const publicKeys = await this.messengerCrypto.loadMyPublicKeys(myUrn);
+    if (!publicKeys) throw new Error('Failed to derive public keys');
+
+    const serialized = serializePublicKeysToJson(publicKeys);
+    const now = new Date().toISOString() as ISODateTimeString;
+    await this.publicKeysStorage.storeKey(myUrn.toString(), serialized, now);
+
+    console.log('[Driver] ✅ Identity Seeded.');
+  }
+
+  private async seedMessageToStorage(def: MockMessageDef) {
     const dummyKey = (await this.crypto.generateEncryptionKeys()).publicKey;
     const encrypted = await this.crypto.encrypt(
       dummyKey,
       new TextEncoder().encode(def.text),
     );
-
     const message: ChatMessage = {
       id: def.id,
-      conversationUrn: URN.parse('urn:messenger:convo:seed'), // Simplified
+      conversationUrn: URN.parse('urn:messenger:convo:seed'),
       senderId: def.senderUrn,
       sentTimestamp: def.sentAt as ISODateTimeString,
-      typeId: URN.parse('urn:message:type:text'),
+      typeId: MessageTypeText,
       payloadBytes: encrypted.encryptedData,
       status: def.status,
       receiptMap: {},
       tags: [],
       textContent: def.text,
     };
-
     await this.chatStorage.saveMessage(message);
   }
 
-  private async seedOutbox(def: MockOutboxDef): Promise<void> {
-    const recipients: RecipientProgress[] = def.recipientUrns.map((urn) => ({
-      urn,
-      status: 'pending',
-      attempts: 0,
-    }));
-
+  private async seedQuarantineMessage(def: MockMessageDef) {
     const dummyKey = (await this.crypto.generateEncryptionKeys()).publicKey;
     const encrypted = await this.crypto.encrypt(
       dummyKey,
       new TextEncoder().encode(def.text),
     );
-
-    const task: OutboundTask = {
-      id: def.id,
-      messageId: def.messageId,
-      conversationUrn: URN.parse('urn:messenger:convo:seed'),
-      typeId: URN.parse('urn:message:type:text'),
-      payload: encrypted.encryptedData,
-      tags: [],
-      recipients,
-      status: def.status,
-      createdAt: Temporal.Now.instant().toString() as ISODateTimeString,
-    };
-
-    await this.outboxStorage.addTask(task);
-  }
-
-  private async seedQuarantine(def: MockQuarantineDef): Promise<void> {
-    const dummyKey = (await this.crypto.generateEncryptionKeys()).publicKey;
-    const encrypted = await this.crypto.encrypt(
-      dummyKey,
-      new TextEncoder().encode(def.text),
-    );
-
     const transportMsg: TransportMessage = {
       senderId: def.senderUrn,
       sentTimestamp: def.sentAt as ISODateTimeString,
       typeId: MessageTypeText,
       payloadBytes: encrypted.encryptedData,
     };
-
     await this.quarantineStorage.saveQuarantinedMessage(transportMsg);
-  }
-
-  // --- NETWORK SIMULATION ---
-
-  async simulateIncomingMessage(
-    sender: URN,
-    text: string,
-    recipient: URN = SCENARIO_USERS.ME,
-  ): Promise<void> {
-    console.log(`[Scenario] 📨 Incoming: "${text}" from ${sender}`);
-
-    const senderKeys = await this.crypto.generateSigningKeys();
-    let myEncryptionKeys;
-    try {
-      myEncryptionKeys = await this.crypto.generateEncryptionKeys();
-    } catch (e) {
-      myEncryptionKeys = await this.crypto.generateEncryptionKeys();
-    }
-
-    const payloadBytes = new TextEncoder().encode(text);
-    const encryptedPayload = await this.crypto.encrypt(
-      myEncryptionKeys.publicKey,
-      payloadBytes,
-    );
-
-    const envelope = {
-      recipientId: recipient,
-      encryptedSymmetricKey: new Uint8Array(0),
-      encryptedData: encryptedPayload.encryptedData,
-      signature: new Uint8Array(0),
-      isEphemeral: false,
-    };
-
-    const queuedMsg: QueuedMessage = {
-      id: `msg-${Date.now()}`,
-      envelope: envelope as any,
-    };
-
-    this.router.enqueue(queuedMsg);
-    this.live.triggerPoke();
-  }
-
-  async simulateNewUser(): Promise<void> {
-    console.log('[Scenario] 👶 Simulating New User');
-    await this.loadScenario('empty'); // Re-use the full wipe logic
   }
 }

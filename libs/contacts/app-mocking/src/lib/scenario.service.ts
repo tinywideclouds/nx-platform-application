@@ -3,7 +3,7 @@ import {
   ContactsStorageService,
   GatekeeperStorage,
 } from '@nx-platform-application/contacts-storage';
-import { SCENARIOS } from '@nx-platform-application/contacts-app-mocking';
+import { SCENARIOS } from './data/scenarios.const';
 
 /**
  * Service responsible for wiping and seeding the database

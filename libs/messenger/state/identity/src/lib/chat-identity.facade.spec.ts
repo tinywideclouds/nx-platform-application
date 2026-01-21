@@ -21,7 +21,6 @@ describe('ChatIdentityFacade', () => {
   let keyWorker: ChatKeyService;
   let pairing: DevicePairingService;
 
-  // Use a strictly valid 4-part URN
   const mockUrn = URN.parse('urn:contacts:user:me');
 
   const mockAuth = {
@@ -79,7 +78,7 @@ describe('ChatIdentityFacade', () => {
       expect(facade.onboardingState()).toBe('REQUIRES_LINKING');
     });
 
-    it('should generate new keys if user is brand new', async () => {
+    it('should generate new keys if user is brand new (No local, No remote)', async () => {
       vi.spyOn(crypto, 'loadMyKeys').mockResolvedValue(null);
       vi.spyOn(keyCache, 'getPublicKey').mockRejectedValue(
         new KeyNotFoundError('not found'),
@@ -96,13 +95,35 @@ describe('ChatIdentityFacade', () => {
         'me@test.com',
       );
     });
+
+    // ✅ NEW TEST CASE: Self-Healing
+    it('should RE-UPLOAD keys if Local exists but Server is 404 (Orphaned Identity)', async () => {
+      const mockLocalKeys = { encKey: 'local-priv' } as any;
+      const mockPublicKeys = { encKey: 'local-pub' } as any;
+
+      // 1. Setup: Local Keys exist
+      vi.spyOn(crypto, 'loadMyKeys').mockResolvedValue(mockLocalKeys);
+      // 2. Setup: Server returns 404
+      vi.spyOn(keyCache, 'getPublicKey').mockRejectedValue(
+        new KeyNotFoundError('not found'),
+      );
+      // 3. Setup: Recovery of Public Keys using the service method
+      vi.spyOn(crypto, 'loadMyPublicKeys').mockResolvedValue(mockPublicKeys);
+
+      // 4. Action
+      await facade.initialize();
+
+      // 5. Verification
+      expect(keyWorker.resetIdentityKeys).not.toHaveBeenCalled();
+      expect(keyCache.storeKeys).toHaveBeenCalledWith(mockUrn, mockPublicKeys);
+      expect(facade.onboardingState()).toBe('READY');
+      expect(facade.myKeys()).toBe(mockLocalKeys);
+    });
   });
 
   describe('Device Pairing', () => {
     it('should start target link session only if in REQUIRES_LINKING state', async () => {
       facade.onboardingState.set('REQUIRES_LINKING');
-
-      // Satisfy DevicePairingSession interface including 'mode'
       const mockSession: DevicePairingSession = {
         sessionId: 's1',
         qrPayload: 'qr',

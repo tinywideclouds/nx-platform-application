@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy, inject } from '@angular/core';
+import { Injectable, inject, DestroyRef } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   BehaviorSubject,
@@ -8,30 +8,27 @@ import {
   retry,
   Subject,
   Subscription,
-  tap,
   timer,
 } from 'rxjs';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WSS_URL_TOKEN } from './live-data.config';
 import { ConnectionStatus } from '@nx-platform-application/platform-types';
 import { AppLifecycleService } from '@nx-platform-application/platform-infrastructure-browser-lifecycle';
+// ✅ Import Interface
+import { IChatLiveDataService } from './live-data.interface';
 
 @Injectable({
   providedIn: 'root',
 })
-export class ChatLiveDataService implements OnDestroy {
+export class ChatLiveDataService implements IChatLiveDataService {
   private readonly logger = inject(Logger);
   private readonly lifecycle = inject(AppLifecycleService);
+  private readonly destroyRef = inject(DestroyRef); // ✅ Modern Cleanup
   private readonly baseApiUrl =
     inject(WSS_URL_TOKEN, { optional: true }) ?? 'api/connect';
 
-  // FIX 1: Strictly type the subject as 'void' to match the deserializer
   private socket$?: WebSocketSubject<void>;
-
   private subscription?: Subscription;
-  private resumeSub: Subscription;
-
-  // Refactor: Store the provider function
   private tokenProvider?: () => string;
 
   private readonly statusSubject = new BehaviorSubject<ConnectionStatus>(
@@ -45,16 +42,22 @@ export class ChatLiveDataService implements OnDestroy {
   constructor() {
     this.logger.info('ChatLiveDataService initialized');
 
-    this.resumeSub = this.lifecycle.resumed$.subscribe(() => {
+    // ✅ Co-located Subscription & Cleanup
+    const resumeSub = this.lifecycle.resumed$.subscribe(() => {
       this.handleAppResume();
+    });
+
+    this.destroyRef.onDestroy(() => {
+      resumeSub.unsubscribe();
+      this.disconnect();
+      this.statusSubject.complete();
+      this.messageSubject.complete();
     });
   }
 
   private handleAppResume(): void {
     if (this.statusSubject.value === 'connected' && this.tokenProvider) {
-      this.logger.info(
-        '[ChatLive] App resumed. Force-cycling connection to ensure health...',
-      );
+      this.logger.info('[ChatLive] App resumed. Force-cycling connection...');
       this.disconnect();
       this.connect(this.tokenProvider);
     }
@@ -62,50 +65,31 @@ export class ChatLiveDataService implements OnDestroy {
 
   public connect(tokenProvider: () => string): void {
     this.tokenProvider = tokenProvider;
+    if (this.subscription) return;
 
-    if (this.subscription) {
-      return;
-    }
     this.logger.info('connecting websocket', this.baseApiUrl);
     this.statusSubject.next('connecting');
 
     const stream$ = defer(() => {
-      this.logger.info(
-        `WSS: Creating WebSocket connection to: ${this.baseApiUrl}`,
-      );
-
       const currentToken = this.tokenProvider ? this.tokenProvider() : '';
-
-      // FIX 2: Explicitly genericize the factory to <void>
       const localSocket = webSocket<void>({
         url: this.baseApiUrl,
         protocol: [currentToken],
-
-        // FIX 3: Deserializer guarantees void return, matching the type
-        deserializer: ({ data }) => {
+        deserializer: () => {
           return;
         },
-
         serializer: (value) => JSON.stringify(value),
-
         openObserver: {
           next: () => {
             if (this.socket$ === localSocket) {
-              this.logger.debug('WSS: Connection OPENED.');
               this.statusSubject.next('connected');
             }
           },
         },
         closeObserver: {
-          next: (closeEvent) => {
-            if (this.socket$ !== localSocket) return;
-
-            this.logger.debug(
-              `WSS: Connection CLOSED. Code: ${closeEvent.code}, Clean: ${closeEvent.wasClean}`,
-            );
-
+          next: () => {
             if (
-              this.statusSubject.value !== 'reconnection' &&
+              this.socket$ === localSocket &&
               this.statusSubject.value !== 'disconnected'
             ) {
               this.statusSubject.next('disconnected');
@@ -113,51 +97,22 @@ export class ChatLiveDataService implements OnDestroy {
           },
         },
       });
-
       this.socket$ = localSocket;
       return localSocket;
     }).pipe(
-      tap({
-        error: (err) => {
-          this.logger.error('ChatLiveDataService: WebSocket error', err);
-          this.statusSubject.next('error');
-        },
-      }),
       retry({
-        delay: (error, retryCount) => {
-          this.statusSubject.next('reconnection');
-          const delay = Math.min(1000 * 2 ** retryCount, 30000);
-          this.logger.warn(
-            `WebSocket retry attempt ${retryCount}, delay ${delay}ms`,
-          );
-          return timer(delay);
-        },
+        delay: (err, count) => timer(Math.min(1000 * 2 ** count, 30000)),
       }),
       catchError((err) => {
-        this.logger.error(
-          'ChatLiveDataService: Unrecoverable WebSocket error',
-          err,
-        );
+        this.logger.error('ChatLiveDataService: Unrecoverable Error', err);
         return EMPTY;
       }),
     );
 
     this.subscription = stream$.subscribe({
-      next: () => {
-        this.logger.info('ChatLiveDataService: Received "poke"');
-        this.messageSubject.next();
-      },
-      complete: () => {
-        this.logger.info('ChatLiveDataService: Stream complete');
-        if (this.statusSubject.value !== 'disconnected') {
-          this.statusSubject.next('disconnected');
-        }
-        this.resetState();
-      },
-      error: () => {
-        this.statusSubject.next('disconnected');
-        this.resetState();
-      },
+      next: () => this.messageSubject.next(),
+      complete: () => this.resetState(),
+      error: () => this.resetState(),
     });
   }
 
@@ -166,26 +121,20 @@ export class ChatLiveDataService implements OnDestroy {
       this.subscription.unsubscribe();
       this.subscription = undefined;
     }
-
     if (this.socket$) {
       this.socket$.complete();
       this.socket$ = undefined;
     }
-
     if (this.statusSubject.value !== 'disconnected') {
       this.statusSubject.next('disconnected');
     }
   }
 
-  ngOnDestroy(): void {
-    this.disconnect();
-    this.statusSubject.complete();
-    this.messageSubject.complete();
-    this.resumeSub.unsubscribe();
-  }
-
   private resetState(): void {
     this.subscription = undefined;
     this.socket$ = undefined;
+    if (this.statusSubject.value !== 'disconnected') {
+      this.statusSubject.next('disconnected');
+    }
   }
 }

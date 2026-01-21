@@ -7,11 +7,12 @@ import {
   serializeEnvelopeToJson,
 } from '@nx-platform-application/platform-types';
 import { ROUTING_SERVICE_URL } from './chat-data.config';
+import { IChatSendService } from './chat-send.interface';
 
 @Injectable({
   providedIn: 'root',
 })
-export class ChatSendService {
+export class ChatSendService implements IChatSendService {
   private readonly http = inject(HttpClient);
   private readonly baseApiUrl =
     inject(ROUTING_SERVICE_URL, { optional: true }) ?? '/api';

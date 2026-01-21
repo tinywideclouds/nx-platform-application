@@ -12,10 +12,12 @@ import {
 
 import { KEY_SERVICE_URL } from './key-access.config';
 
+import { ISecureKeyService } from './secure-key.interface';
+
 @Injectable({
   providedIn: 'root',
 })
-export class SecureKeyService {
+export class SecureKeyService implements ISecureKeyService {
   private readonly http = inject(HttpClient);
   private readonly logger = inject(Logger);
   private readonly keyCache = new Map<string, PublicKeys>();

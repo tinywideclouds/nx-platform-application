@@ -22,7 +22,7 @@ import {
 } from '@nx-platform-application/platform-infrastructure-storage';
 
 // 1. Import Service
-import { ScenarioService } from './services/scenario.service';
+import { ScenarioService } from '@nx-platform-application/contacts-app-mocking';
 
 // 2. Factory
 export function initializeScenario(scenarioService: ScenarioService) {

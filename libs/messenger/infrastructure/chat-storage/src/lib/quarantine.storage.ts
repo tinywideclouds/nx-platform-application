@@ -34,4 +34,6 @@ export abstract class QuarantineStorage {
    * Deletes all messages from a specific sender (e.g., after Accept or Block).
    */
   abstract deleteQuarantinedMessages(senderId: URN): Promise<void>;
+
+  abstract clear(): Promise<void>;
 }

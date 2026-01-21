@@ -6,6 +6,7 @@ import {
   QueuedMessage,
   deserializeJsonToQueuedMessages,
 } from '@nx-platform-application/platform-types';
+import { IChatDataService } from './chat-data.interface';
 import { ROUTING_SERVICE_URL } from './chat-data.config';
 
 interface QueuedMessageRawResponse {
@@ -18,7 +19,7 @@ interface QueuedMessageRawResponse {
 @Injectable({
   providedIn: 'root',
 })
-export class ChatDataService {
+export class ChatDataService implements IChatDataService {
   private readonly http = inject(HttpClient);
   private readonly baseApiUrl =
     inject(ROUTING_SERVICE_URL, { optional: true }) ?? '/api';
