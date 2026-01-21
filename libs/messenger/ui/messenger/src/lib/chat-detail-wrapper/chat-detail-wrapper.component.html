@@ -18,7 +18,7 @@
     @if (isGroup()) {
       <messenger-chat-group-detail [groupId]="contactId()" />
     } @else {
-      <contacts-detail [readonly]="true" [contactId]="contactId()" />
+      <contacts-page [selectedUrn]="contactId()" />
     }
   </div>
 

@@ -65,8 +65,7 @@
       <contacts-group-form
         [group]="g"
         [allContacts]="allContacts()"
-        [startInEditMode]="false"
-        [readonly]="true"
+        [isEditing]="false"
         (save)="onSave($event)"
       />
     </div>

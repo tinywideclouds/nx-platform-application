@@ -6,7 +6,7 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
 
 // UI Imports
-import { ContactDetailComponent } from '@nx-platform-application/contacts-ui';
+import { ContactPageComponent } from '@nx-platform-application/contacts-ui';
 import { ChatGroupDetailComponent } from '../chat-group-detail/chat-group-detail.component';
 import { ChatShareContactFooterComponent } from '../chat-share-contact-footer/chat-share-contact-footer.component';
 import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
@@ -17,7 +17,7 @@ import { MatIconModule } from '@angular/material/icon';
   standalone: true,
   imports: [
     CommonModule,
-    ContactDetailComponent,
+    ContactPageComponent,
     ChatGroupDetailComponent,
     ChatShareContactFooterComponent,
     MatIconModule,

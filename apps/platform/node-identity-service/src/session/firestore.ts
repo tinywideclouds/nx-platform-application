@@ -35,6 +35,11 @@ export class FirestoreStore extends Store {
       }
 
       const data = doc.data() as SessionDoc;
+
+      if (!data.sess) {
+        return callback(null, null);
+      }
+
       const now = Timestamp.now();
 
       // Manual expiry check (in case Firestore TTL background process hasn't run yet)

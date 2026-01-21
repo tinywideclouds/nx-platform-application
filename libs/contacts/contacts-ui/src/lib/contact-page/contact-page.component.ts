@@ -56,6 +56,7 @@ export class ContactPageComponent {
   @ViewChild(ContactFormComponent) formComponent!: ContactFormComponent;
 
   selectedUrn = input<URN | undefined>(undefined);
+  isMobile = input(false);
 
   // OUTPUTS
   saved = output<Contact>();
@@ -92,7 +93,6 @@ export class ContactPageComponent {
     { initialValue: null },
   );
 
-  isMobile = input(false);
   isEditMode = computed(() => this.contactContext()?.isEditMode ?? false);
   isNew = computed(() => this.contactContext()?.isNew ?? false);
 
