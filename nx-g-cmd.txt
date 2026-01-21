@@ -231,4 +231,7 @@ nx g @nx/angular:library --name=platform-ux-physics --directory=libs/platform/ux
 
 nx g @nx/workspace:move --project=platform-ux-physics     --destination=libs/platform/ux/intention --importPath=@nx-platform-application/platform-ux-intention
 
+nx g @nx/angular:library --name=lib-messenger-app-mocking --directory=libs/messenger/app-mocking --tags="scope:messenger" 
+
+
 

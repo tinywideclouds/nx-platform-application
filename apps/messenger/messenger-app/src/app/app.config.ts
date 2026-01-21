@@ -18,22 +18,18 @@ import { environment } from './environments/environment';
 import {
   authInterceptor,
   IAuthService,
-  AuthService,
+  AuthService, // Real Implementation
   AUTH_API_URL,
 } from '@nx-platform-application/platform-infrastructure-auth-access';
 
-// --- Mock Providers (App State Mocks) ---
-import { AppState } from '@nx-platform-application/messenger-state-app';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { MockChatService } from './mocks/mock-chat.service';
-import { MockContactsStorageService } from './mocks/mock-contacts-storage.service';
-
-// --- Scenario Infrastructure Mocks ---
+// --- Mock Infrastructure (Test Lib) ---
 import {
   MockChatDataService,
   MockChatSendService,
   MockLiveService,
   MockKeyService,
+  MockCryptoEngine,
+  MockAuthService,
 } from '@nx-platform-application/lib-messenger-test-app-mocking';
 
 // --- Contacts Infrastructure & API ---
@@ -46,6 +42,7 @@ import {
 } from '@nx-platform-application/contacts-api';
 
 import { GroupNetworkStorage } from '@nx-platform-application/contacts-storage';
+
 import { ContactsFacadeService } from '@nx-platform-application/contacts-state';
 
 // --- Service Tokens ---
@@ -98,33 +95,30 @@ import {
   IdentityServerStrategy,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
-// --- Provider Selection Logic ---
+// --- PROVIDER SELECTION LOGIC ---
 
-// 1. Auth Provider
-const authProviders = [{ provide: IAuthService, useExisting: AuthService }];
+// 1. Auth Provider: Real vs Mock
+// This enables fully offline E2E tests (no backend required).
+const authProviders = environment.useMocks
+  ? [{ provide: IAuthService, useClass: MockAuthService }]
+  : [{ provide: IAuthService, useExisting: AuthService }];
 
-// 2. Existing Internal Mocks (State Layer)
-// Note: If you use the Scenario Driver, you usually want the REAL AppState but Mocked Infra.
-// I am keeping your existing logic here, but verify if you want to swap AppState too.
-const chatProvider = environment.useMocks
-  ? { provide: AppState, useClass: MockChatService }
-  : [];
+// 2. Crypto Provider: Real vs Mock
+// Mocks allow reading seeded data as plain text.
+const cryptoProvider = environment.useMocks
+  ? { provide: CryptoEngine, useClass: MockCryptoEngine }
+  : CryptoEngine;
 
-const contactsProvider = environment.useMocks
-  ? { provide: ContactsStorageService, useClass: MockContactsStorageService }
-  : [];
-
-// 3. Infrastructure Mocks (The Scenario Driver Engine)
+// 3. Infrastructure Mocks (Network & Keys)
 const infraMockProviders = environment.useMocks
   ? [
-      // ✅ STEP 1: Register Concrete Classes (So ScenarioDriver can inject them)
+      // Register Concrete Mocks
       MockChatDataService,
       MockChatSendService,
       MockLiveService,
       MockKeyService,
 
-      // ✅ STEP 2: Alias Tokens to use the EXISTING instances
-      // This ensures the App and the Test Driver talk to the SAME object.
+      // Alias Tokens to Mocks
       { provide: ChatDataService, useExisting: MockChatDataService },
       { provide: ChatSendService, useExisting: MockChatSendService },
       { provide: ChatLiveDataService, useExisting: MockLiveService },
@@ -133,13 +127,12 @@ const infraMockProviders = environment.useMocks
   : [];
 
 // 4. Token Providers
+// Only provide real URLs if NOT mocking (mocks don't use them)
 const tokenProviders = [
-  // ✅ FIX: AUTH_API_URL is required by the Real AuthService, regardless of mocks
   {
     provide: AUTH_API_URL,
     useValue: environment.identityServiceUrl,
   },
-  // Only provide the Backend Service URLs if we are NOT using Infra Mocks
   ...(environment.useMocks
     ? []
     : [
@@ -205,25 +198,27 @@ export const appConfig: ApplicationConfig = {
       registrationStrategy: 'registerWhenStable:30000',
     }),
 
-    ...authProviders,
+    // --- DOMAIN / APPLICATION LAYERS ---
+    ...authProviders, // ✅ Injected: Real or Mock Auth
     provideMessengerIdentity(),
 
-    // --- Contacts API Ports ---
+    // --- CONTACTS API PORTS ---
     { provide: ContactsQueryApi, useExisting: ContactsFacadeService },
     { provide: AddressBookApi, useExisting: ContactsFacadeService },
     { provide: AddressBookManagementApi, useExisting: ContactsFacadeService },
     { provide: GatekeeperApi, useExisting: ContactsFacadeService },
     { provide: GroupNetworkStorageApi, useClass: GroupNetworkStorage },
 
-    // --- Chat Domain Ports ---
+    // --- CHAT STORAGE PORTS ---
+    // Always use Real Storage (Dexie).
     { provide: HistoryReader, useExisting: ChatStorageService },
     { provide: ConversationStorage, useExisting: ChatStorageService },
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
     { provide: QuarantineStorage, useClass: DexieQuarantineStorage },
 
-    chatProvider,
-    contactsProvider,
-    ...infraMockProviders, // ✅ Added Infrastructure Mocks
+    // --- INFRASTRUCTURE ---
+    cryptoProvider, // ✅ Injected: Real or Mock Crypto
+    ...infraMockProviders, // ✅ Injected: Network/Key Mocks if needed
     ...tokenProviders,
     ...cloudProviders,
 
@@ -239,8 +234,6 @@ export const appConfig: ApplicationConfig = {
       deps: [IAuthService],
       multi: true,
     },
-
-    CryptoEngine,
 
     importProvidersFrom(MatCardModule, MatButtonModule),
   ],
