@@ -1,5 +1,3 @@
-// libs/platform/ng/console-logger/src/lib/services/logger.ts
-
 import { Injectable, Inject, Optional } from '@angular/core';
 import { LogLevel, LOGGER_CONFIG, LoggerConfig } from '../logger.models';
 
@@ -12,6 +10,8 @@ import { LogLevel, LOGGER_CONFIG, LoggerConfig } from '../logger.models';
 })
 export class Logger {
   private currentLevel: LogLevel;
+  // ✅ NEW: Internal state for narrative logging
+  private prefix = '';
 
   constructor(@Optional() @Inject(LOGGER_CONFIG) config: LoggerConfig | null) {
     // Default to WARN if no config is provided via DI.
@@ -20,6 +20,21 @@ export class Logger {
 
   public setLevel(level: LogLevel): void {
     this.currentLevel = level;
+  }
+
+  /**
+   * ✅ NEW: Factory method for "Child Loggers"
+   * Returns a NEW instance that inherits the current log level
+   * but prepends the specific string to all messages.
+   *
+   * Example: logger.withPrefix('[Mock:Router]')
+   */
+  public withPrefix(prefix: string): Logger {
+    // We manually instantiate so we don't need to mess with DI
+    const childLogger = new Logger({ level: this.currentLevel });
+    // Add a space for readability: "[Prefix] Message"
+    childLogger.prefix = `${prefix} `;
+    return childLogger;
   }
 
   private shouldLog(level: LogLevel): boolean {
@@ -33,58 +48,50 @@ export class Logger {
 
   public debug(message: string, ...optionalParams: unknown[]): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
-      console.debug(message, ...optionalParams);
+      console.debug(this.format(message), ...optionalParams);
     }
   }
 
   public info(message: string, ...optionalParams: unknown[]): void {
     if (this.shouldLog(LogLevel.INFO)) {
-      console.info(message, ...optionalParams);
+      console.info(this.format(message), ...optionalParams);
     }
   }
 
   public warn(message: string, ...optionalParams: unknown[]): void {
     if (this.shouldLog(LogLevel.WARN)) {
-      console.warn(message, ...optionalParams);
+      console.warn(this.format(message), ...optionalParams);
     }
   }
 
   public error(message: string, ...optionalParams: unknown[]): void {
     if (this.shouldLog(LogLevel.ERROR)) {
-      console.error(message, ...optionalParams);
+      console.error(this.format(message), ...optionalParams);
     }
   }
 
-  // --- Grouping Methods (New) ---
+  // --- Grouping Methods ---
 
-  /**
-   * Creates a new inline group in the console.
-   * Gated by LogLevel.DEBUG to prevent production noise.
-   */
   public group(label: string): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
-      console.group(label);
+      console.group(this.format(label));
     }
   }
 
-  /**
-   * Creates a new collapsed group in the console.
-   * Ideal for tracing complex logic loops without cluttering the stream.
-   * Gated by LogLevel.DEBUG.
-   */
   public groupCollapsed(label: string): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
-      console.groupCollapsed(label);
+      console.groupCollapsed(this.format(label));
     }
   }
 
-  /**
-   * Exits the current inline group.
-   * Gated by LogLevel.DEBUG.
-   */
   public groupEnd(): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
       console.groupEnd();
     }
+  }
+
+  // ✅ NEW: Helper to safely apply prefix
+  private format(message: string): string {
+    return this.prefix ? `${this.prefix}${message}` : message;
   }
 }

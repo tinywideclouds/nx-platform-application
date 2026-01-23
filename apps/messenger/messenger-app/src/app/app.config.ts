@@ -59,6 +59,7 @@ import {
   MockKeyService,
   MockVaultDriver,
   MockPushNotificationService,
+  MockIntegrationApiService,
   MockCryptoEngine,
   MessengerScenarioDriver,
 } from '@nx-platform-application/lib-messenger-test-app-mocking';
@@ -66,6 +67,7 @@ import {
 // --- OTHER ---
 import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { provideMessengerIdentity } from '@nx-platform-application/messenger-domain-identity-adapter';
+import { IntegrationApiService } from '@nx-platform-application/platform-infrastructure-drive-integrations';
 import {
   ChatStorageService,
   DexieOutboxStorage,
@@ -179,7 +181,7 @@ const cloudProviders = environment.useMocks
       },
       // ✅ MOCK DRIVER: Replaces GoogleDriveDriver
       { provide: VaultDrivers, useClass: MockVaultDriver, multi: true },
-      // Note: We don't need GOOGLE_TOKEN_STRATEGY in mock mode as MockVault doesn't use it
+      { provide: IntegrationApiService, useClass: MockIntegrationApiService },
     ]
   : [
       // 🚀 REAL CONFIGURATION

@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { MockChatSendService } from './mock-chat-send.service';
 import { SecureEnvelope, URN } from '@nx-platform-application/platform-types';
 import { firstValueFrom } from 'rxjs';
-import { MockChatSendConfig } from '../scenarios.const';
 
 describe('MockChatSendService', () => {
   let service: MockChatSendService;
@@ -51,6 +50,24 @@ describe('MockChatSendService', () => {
       await expect(
         firstValueFrom(service.sendMessage(MOCK_ENVELOPE)),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('Director Integration', () => {
+    it('should emit to outboundMessage$ stream when message is sent', async () => {
+      // 1. Setup Listener
+      const emissionPromise = firstValueFrom(service.outboundMessage$);
+
+      // 2. Action
+      service.sendMessage(MOCK_ENVELOPE).subscribe();
+
+      // 3. Assert
+      const event = await emissionPromise;
+      expect(event).toBeDefined();
+      expect(event.envelope).toBe(MOCK_ENVELOPE);
+      expect(event.envelope.recipientId.toString()).toBe(
+        'urn:contacts:user:alice',
+      );
     });
   });
 });

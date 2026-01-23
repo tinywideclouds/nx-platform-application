@@ -1,51 +1,47 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError, delay } from 'rxjs';
+import { Observable, timer, map } from 'rxjs';
+import { Subject } from 'rxjs';
 import { SecureEnvelope } from '@nx-platform-application/platform-types';
-import { IChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MockChatSendConfig } from '../scenarios.const';
+
+import { MockChatSendConfig } from '../types';
+
+export interface OutboundEvent {
+  envelope: SecureEnvelope;
+}
 
 @Injectable({ providedIn: 'root' })
-export class MockChatSendService implements IChatSendService {
-  // --- INTERNAL STATE ---
+export class MockChatSendService {
+  // ✅ NEW: Event Stream for the Director
+  public readonly outboundMessage$ = new Subject<OutboundEvent>();
+
   private config: MockChatSendConfig = {
     shouldFail: false,
-    latencyMs: 200,
+    latencyMs: 500,
   };
 
-  // --- CONFIGURATION API (Scenario Driver) ---
-
   loadScenario(config: MockChatSendConfig) {
-    console.log('[MockChatSendService] 🔄 Configuring Send Behavior:', config);
-    // Merge with defaults to ensure safety
-    this.config = {
-      shouldFail: false,
-      latencyMs: 200,
-      ...config,
-    };
+    this.config = config;
   }
 
-  // --- IChatSendService Implementation ---
-
+  /**
+   * MOCK IMPLEMENTATION: IChatSendService
+   * Signature: abstract sendMessage(envelope: SecureEnvelope): Observable<void>;
+   */
   sendMessage(envelope: SecureEnvelope): Observable<void> {
-    const { shouldFail, errorMsg, latencyMs } = this.config;
+    // 1. Fire Event immediately so Director knows intent
+    this.outboundMessage$.next({ envelope });
 
-    console.log(
-      `[MockChatSendService] 🚀 Sending (${shouldFail ? 'FAIL' : 'OK'})...`,
-      {
-        recipient: envelope.recipientId.toString(),
-        payloadSize: envelope.encryptedData.length,
-      },
+    // 2. Simulate Network Latency
+    const delay = this.config.latencyMs ?? 500;
+
+    return timer(delay).pipe(
+      map(() => {
+        // 3. Simulate Failure if Configured
+        if (this.config.shouldFail) {
+          throw new Error(this.config.errorMsg || 'Mock Network Error');
+        }
+        console.log(`[MockSend] 🚀 Sent envelope to ${envelope.recipientId}`);
+      }),
     );
-
-    // 1. Simulate Failure
-    if (shouldFail) {
-      // We still delay the error to simulate network round-trip failing
-      return throwError(
-        () => new Error(errorMsg || 'Simulated Network Error'),
-      ).pipe(delay(latencyMs || 200));
-    }
-
-    // 2. Simulate Success
-    return of(void 0).pipe(delay(latencyMs || 200));
   }
 }

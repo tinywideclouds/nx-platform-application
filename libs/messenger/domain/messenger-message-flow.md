@@ -180,3 +180,51 @@ To ensure performance on mobile devices, we enforce strict limits on group featu
 | **Size Limit**       | < 10 Members            | < 50 Members            | > 50 Members                  |
 | **Receipt Tracking** | Full (Individual Names) | Full (Individual Names) | **Binary** (Sent/Failed only) |
 | **Local Ghosts**     | Enabled (Appears in DM) | **Disabled**            | **Disabled**                  |
+
+### Looking at the payload bytes:
+
+The core issue with the existing documentation wasn't a lack of detail, but rather a specific **contradiction regarding the "Zero Overhead" handling of text messages** compared to the strict requirements of your `TextParserStrategy`.
+
+Here is the breakdown of why the documentation led to the wrong implementation:
+
+### 1. The "Zero Overhead" Trap
+
+In `messenger-message-flow.md`, the table explicitly states:
+
+> **Text** | `urn:message:content:text` | **Raw UTF-8 Bytes (Zero overhead)**
+
+This strongly implies that for text messages, the system expects **Layer 1 (The Inner Application Layer)** to be skipped entirely. It suggests that `payloadBytes` in the Transport layer should just be the raw bytes of the string "Hello".
+
+However, your `TextParserStrategy` strictly enforces the opposite:
+
+```typescript
+conversationId: context.conversationId!, // Validator in main service ensures this exists
+
+```
+
+The strategy uses the non-null assertion operator (`!`), crashing if `conversationId` is missing. Since `conversationId` lives _inside_ the JSON envelope (Layer 1), following the "Zero Overhead" documentation guarantees a crash.
+
+### 2. Conditional vs. Mandatory Wrapping
+
+The `MessageMetadataService` is documented and implemented to support optional wrapping:
+
+> "Only wraps if metadata is provided. Otherwise, returns the original bytes for lean signaling."
+
+This reinforced the idea that a simple "Hello" message (with no tags) should be sent raw. The documentation failed to clarify that **in a Sealed Sender model, the `conversationId` IS the metadata** required for routing. Therefore, _every_ message sent to the mock requires wrapping, even if it has no "extra" tags.
+
+### 3. Missing "Wire Format" Specification
+
+While the architecture documents describe the _logical_ flow (UI -> Domain -> Network), there is no single source of truth for the **Byte-Level Wire Format**.
+
+- `TransportMessage` defines `payloadBytes: Uint8Array` but doesn't specify _what_ those bytes must contain (JSON vs Raw).
+- The "Russian Doll" structure was described conceptually but not defined as a strict protocol (e.g., "Layer 1 MUST be JSON").
+
+### Visualizing the Disconnect
+
+The documentation described the "Optimized" flow (A), but the code enforces the "Sealed" flow (B).
+
+### Summary of Documentation Failures
+
+1. **Misleading Optimization Claim:** The documentation promised "Zero Overhead" for text, which is factually incorrect for this specific Sealed Sender implementation.
+2. **Implicit Context:** The docs assumed the `conversationId` might be inferred from the context (e.g., the sender), but the `TextParserStrategy` explicitly demands it be present in the parsed context (Layer 1).
+3. **Ambiguity in Mocking:** The documentation focuses on _creating_ messages (where the app handles wrapping automatically) but lacks a guide for _injecting_ messages (where the mock must manually construct the wrap).

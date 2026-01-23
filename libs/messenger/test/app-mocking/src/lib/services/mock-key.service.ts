@@ -1,20 +1,23 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   PublicKeys,
   URN,
   KeyNotFoundError,
 } from '@nx-platform-application/platform-types';
 import { ISecureKeyService } from '@nx-platform-application/messenger-infrastructure-key-access';
-import { MockServerIdentityState, SCENARIO_USERS } from '../scenarios.const';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MockServerIdentityState } from '../types';
+import { SCENARIO_USERS } from '../scenarios.const';
 
 @Injectable({ providedIn: 'root' })
 export class MockKeyService implements ISecureKeyService {
-  // ✅ FIX: Use a Map to simulate a real Key Table
+  private crypto = inject(CryptoEngine);
+  // Simulates the server-side key database
   private keyStore = new Map<string, PublicKeys>();
 
   // --- CONFIGURATION API (Test Driver) ---
 
-  loadScenario(config: MockServerIdentityState) {
+  async loadScenario(config: MockServerIdentityState): Promise<void> {
     console.log('[MockKeyService] 🔄 Configuring Identity Store:', config);
     this.keyStore.clear();
 
@@ -29,11 +32,11 @@ export class MockKeyService implements ISecureKeyService {
           sigKey: new Uint8Array([9, 9, 9]),
         });
       } else {
-        // Happy Path: Server has valid keys (matching defaults)
-        this.keyStore.set(myUrn, this.generateDefaultKeys());
+        // Happy Path: Server has valid keys
+        const keys = await this.generateDefaultKeys();
+        this.keyStore.set(myUrn, keys);
       }
     }
-    // If hasMyKey is false, we simply do NOT add 'me' to the map.
   }
 
   // --- RUNTIME API (Application) ---
@@ -53,9 +56,11 @@ export class MockKeyService implements ISecureKeyService {
     }
 
     // 3. Scenario Logic: "Others" (Alice, Bob)
-    // For mocked chats, we assume Alice/Bob always exist to prevent 404s breaking the UI.
-    // We auto-generate a dummy key for them on the fly.
-    return this.generateDefaultKeys();
+    // For mocked chats, we assume Alice/Bob always exist.
+    // We auto-generate a VALID key pair for them on the fly.
+    const newKeys = await this.generateDefaultKeys();
+    this.keyStore.set(urnString, newKeys);
+    return newKeys;
   }
 
   async storeKeys(userUrn: URN, keys: PublicKeys): Promise<void> {
@@ -63,19 +68,34 @@ export class MockKeyService implements ISecureKeyService {
       `[MockKeyService] ☁️ Storing Keys for: ${userUrn.toString()}`,
       keys,
     );
-
-    // ✅ FIX: Actually store the key for the specific user
     this.keyStore.set(userUrn.toString(), keys);
   }
 
   clearCache(): void {
-    // No-op for mock (or could clear an internal cache if we simulated client-side caching)
+    this.keyStore.clear();
   }
 
-  private generateDefaultKeys(): PublicKeys {
+  // --- HELPERS ---
+
+  private async generateDefaultKeys(): Promise<PublicKeys> {
+    // 1. Generate keys using the App's CryptoEngine (ensures correct algorithm/params)
+    const encPair = await this.crypto.generateEncryptionKeys();
+    const sigPair = await this.crypto.generateSigningKeys();
+
+    // 2. Export to SPKI bytes using Native Browser API
+    // (CryptoEngine abstracts operations, but we need raw bytes for the interface)
+    const encPublic = await window.crypto.subtle.exportKey(
+      'spki',
+      encPair.publicKey,
+    );
+    const sigPublic = await window.crypto.subtle.exportKey(
+      'spki',
+      sigPair.publicKey,
+    );
+
     return {
-      encKey: new Uint8Array([10, 20, 30]),
-      sigKey: new Uint8Array([40, 50, 60]),
+      encKey: new Uint8Array(encPublic),
+      sigKey: new Uint8Array(sigPublic),
     };
   }
 }

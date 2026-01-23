@@ -64,6 +64,55 @@ describe('Logger', () => {
     });
   });
 
+  describe('Prefix Logic', () => {
+    beforeEach(() => {
+      setupSpies();
+      TestBed.configureTestingModule({
+        providers: [
+          Logger,
+          {
+            provide: LOGGER_CONFIG,
+            useValue: { level: LogLevel.DEBUG },
+          },
+        ],
+      });
+      service = TestBed.inject(Logger);
+    });
+
+    it('should create a child logger that inherits the parent log level', () => {
+      const child = service.withPrefix('[Child]');
+      // Verify behavior by logging
+      child.debug('should be visible');
+      expect(debugSpy).toHaveBeenCalledWith('[Child] should be visible');
+    });
+
+    it('should format messages with the prefix', () => {
+      const child = service.withPrefix('[Mock:Driver]');
+      child.info('Scenario loaded');
+      expect(infoSpy).toHaveBeenCalledWith('[Mock:Driver] Scenario loaded');
+    });
+
+    it('should not affect the parent logger', () => {
+      const child = service.withPrefix('[Child]');
+      child.warn('Child Warning');
+      service.warn('Parent Warning');
+
+      expect(warnSpy).toHaveBeenCalledWith('[Child] Child Warning');
+      expect(warnSpy).toHaveBeenCalledWith('Parent Warning');
+    });
+
+    it('should support nested prefixes if chained manually (optional behavior check)', () => {
+      const parent = service.withPrefix('[Parent]');
+      const child = parent.withPrefix('[Child]');
+
+      child.info('Nested');
+      // Our implementation appends the new prefix to a fresh logger,
+      // but does NOT stack them recursively in the current simple implementation.
+      // It just sets the new prefix.
+      expect(infoSpy).toHaveBeenCalledWith('[Child] Nested');
+    });
+  });
+
   describe('Grouping Logic (WARN Level - Suppressed)', () => {
     beforeEach(() => {
       setupSpies();

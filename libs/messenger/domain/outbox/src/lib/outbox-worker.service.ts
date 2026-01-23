@@ -41,12 +41,12 @@ export class OutboxWorkerService {
     console.info('starting outbox processing');
     try {
       do {
-        if (this.pendingTrigger) {
-          console.log('draining pending trigger');
-        }
+        // if (this.pendingTrigger) {
+        //   console.log('draining pending trigger');
+        // }
         this.pendingTrigger = false; // Reset flag at start of loop
         const pendingTasks = await this.repo.getPendingTasks();
-        console.log(`found ${pendingTasks.length} pending tasks`);
+        // console.log(`found ${pendingTasks.length} pending tasks`);
         for (const task of pendingTasks) {
           await this.processTask(task, senderUrn, myKeys);
         }

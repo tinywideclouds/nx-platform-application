@@ -17,7 +17,7 @@
       }
     },
     "test": {
-      "executor": "@nx/vitest:test",
+      "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "reportsDirectory": "coverage/libs/platform/tools/console-logger",

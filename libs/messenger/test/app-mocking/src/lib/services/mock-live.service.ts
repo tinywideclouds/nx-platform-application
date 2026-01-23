@@ -1,50 +1,45 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { ConnectionStatus } from '@nx-platform-application/platform-types';
 import { IChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
-import { MockServerNetworkState } from '../scenarios.const';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { MockServerNetworkState } from '../types';
 
 @Injectable({ providedIn: 'root' })
 export class MockLiveService implements IChatLiveDataService {
+  private logger = inject(Logger).withPrefix('[Mock:Live]');
+
   // --- PUBLIC API ---
   public readonly status$ = new BehaviorSubject<ConnectionStatus>('connecting');
   public readonly incomingMessage$ = new Subject<void>();
 
   // --- CONFIGURATION API (Scenario Driver) ---
 
-  /**
-   * ✅ SCENARIO AWARE:
-   * Determines connection behavior based on the network state.
-   */
   loadScenario(config: MockServerNetworkState) {
-    console.log('[MockLiveService] 🔄 Configuring Connection...');
-
-    // Reset to connecting state first
+    this.logger.info('🔄 Configuring Connection...');
     this.status$.next('connecting');
 
-    // Logic: If we have pending messages, we delay the "Connected" event.
-    // This ensures the App has time to fully boot and subscribe to the
-    // stream before we trigger the "Fetch Messages" effect.
+    // ✅ TYPE SAFE: config.queuedMessages is now ScenarioItem[], but length check works identically.
     if (config.queuedMessages.length > 0) {
-      console.log(
-        '[MockLiveService] ⏳ Delaying connection (waiting for app boot)...',
-      );
+      this.logger.info('⏳ Delaying connection (waiting for app boot)...');
       setTimeout(() => {
-        console.log('[MockLiveService] 🟢 Connected.');
+        this.logger.info('🟢 Connected.');
         this.status$.next('connected');
       }, 500);
     } else {
-      // Happy Path: Instant connection
-      console.log('[MockLiveService] 🟢 Connected immediately.');
+      this.logger.info('🟢 Connected immediately.');
       this.status$.next('connected');
     }
   }
 
-  // --- IChatLiveDataService Implementation ---
+  // --- DIRECTOR API ---
+  trigger() {
+    this.logger.info('🔔 Triggering Inbound Signal...');
+    this.incomingMessage$.next();
+  }
 
+  // --- IChatLiveDataService Implementation ---
   connect(tokenProvider: () => string): void {
-    // In Mock Mode, connection is usually handled by the Scenario Loader.
-    // However, if the app explicitly requests a reconnect, we can honor it.
     if (this.status$.value === 'disconnected') {
       this.status$.next('connecting');
       setTimeout(() => this.status$.next('connected'), 200);
@@ -52,7 +47,7 @@ export class MockLiveService implements IChatLiveDataService {
   }
 
   disconnect(): void {
-    console.log('[MockLiveService] 🔴 Disconnected.');
+    this.logger.info('🔴 Disconnected.');
     this.status$.next('disconnected');
   }
 }
