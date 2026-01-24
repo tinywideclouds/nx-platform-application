@@ -61,6 +61,7 @@ export class ConversationService {
   // PUBLIC COMPUTED: Applies the "Lurker Filter"
   public readonly messages = computed(() => {
     const raw = this._rawMessages();
+
     const status = this.membershipStatus();
     const currentUrn = this.selectedConversation();
     const me = this.myUrn();

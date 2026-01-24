@@ -1,5 +1,3 @@
-// libs/messenger/ui-chat/src/lib/message-renderer/message-renderer.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
@@ -7,21 +5,24 @@ import {
   output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ContentPayload } from '@nx-platform-application/messenger-domain-message-content';
-import { ChatImageMessageComponent } from '../chat-image-message/chat-image-message.component';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
+import { MessageContentPipe } from '../message-content.pipe';
+import { ChatImageMessageComponent } from '@nx-platform-application/messenger-ui-chat';
 
 @Component({
   selector: 'chat-message-renderer',
   standalone: true,
-  imports: [CommonModule, ChatImageMessageComponent],
+  imports: [CommonModule, ChatImageMessageComponent, MessageContentPipe],
   templateUrl: './message-renderer.component.html',
+  styleUrl: './message-renderer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessageRendererComponent {
-  // The discriminated union (kind: 'text' | 'image')
-  payload = input.required<ContentPayload | null>();
+  // ✅ SOURCE OF TRUTH: The Full Message Object
+  // This allows us to pass 'id', 'timestamp', 'senderId' to any child bubble that needs it.
+  message = input.required<ChatMessage>();
 
-  // Emitted when user clicks a link or interacts with content (future proofing)
+  // Emitted when user clicks a special link (urn:...)
   action = output<string>();
 
   onLinkClick(event: MouseEvent): void {

@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { Temporal } from '@js-temporal/polyfill';
 import { Firestore } from '@google-cloud/firestore';
 import { logger } from '@nx-platform-application/node-logger';
 import { User } from '@nx-platform-application/platform-types';
@@ -16,6 +17,8 @@ import {
   revokeToken,
 } from '../../internal/services/google.service.js';
 
+export type DriveProvider = 'google-drive' | 'dropbox' | 'microsoft-drive';
+
 export const createIntegrationsRouter = (db: Firestore) => {
   const router = Router();
 
@@ -24,7 +27,7 @@ export const createIntegrationsRouter = (db: Firestore) => {
 
   // --- 1. LINK (The Handshake) ---
   router.post(
-    '/google/link',
+    '/drive/google/link',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { code } = req.body;
@@ -51,18 +54,20 @@ export const createIntegrationsRouter = (db: Firestore) => {
           );
         }
 
+        const now = Temporal.Now.instant();
+
         // 3. Save the "Forever Key" to Firestore
         if (tokens.refreshToken) {
-          await saveIntegration(db, userId, 'google', {
+          await saveIntegration(db, userId, 'google-drive', {
             refreshToken: tokens.refreshToken,
-            linkedAt: new Date().toISOString(),
+            linkedAt: now.toString(),
             scope: tokens.scope,
             status: 'active',
           });
         }
 
         logger.info(
-          { userId, provider: 'google' },
+          { userId, provider: 'google-drive' },
           '[Integrations] Link successful',
         );
 
@@ -79,14 +84,14 @@ export const createIntegrationsRouter = (db: Firestore) => {
 
   // --- 2. REFRESH (The Silent Loop) ---
   router.get(
-    '/google/token',
+    '/drive/google/token',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const user = req.user as User;
         const userId = user.id.toString();
 
         // 1. Fetch the stored secret
-        const integration = await getIntegration(db, userId, 'google');
+        const integration = await getIntegration(db, userId, 'google-drive');
 
         if (!integration || !integration.refreshToken) {
           res.status(404).json({ error: 'Integration not found or invalid' });
@@ -111,7 +116,7 @@ export const createIntegrationsRouter = (db: Firestore) => {
               { userId },
               '[Integrations] Refresh token invalid. Auto-cleaning.',
             );
-            await deleteIntegration(db, userId, 'google');
+            await deleteIntegration(db, userId, 'google-drive');
             res
               .status(401)
               .json({ error: 'Integration expired. Please reconnect.' });
@@ -127,13 +132,13 @@ export const createIntegrationsRouter = (db: Firestore) => {
 
   // --- 3. DISCONNECT (The Kill Switch) ---
   router.delete(
-    '/google',
+    '/drive/google',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const user = req.user as User;
         const userId = user.id.toString();
 
-        const integration = await getIntegration(db, userId, 'google');
+        const integration = await getIntegration(db, userId, 'google-drive');
 
         if (integration && integration.refreshToken) {
           // Fire and forget revocation (best effort)
@@ -141,9 +146,12 @@ export const createIntegrationsRouter = (db: Firestore) => {
         }
 
         // Always delete from DB to ensure "Disconnected" state
-        await deleteIntegration(db, userId, 'google');
+        await deleteIntegration(db, userId, 'google-drive');
 
-        logger.info({ userId, provider: 'google' }, '[Integrations] Unlinked');
+        logger.info(
+          { userId, provider: 'google-drive' },
+          '[Integrations] Unlinked',
+        );
         res.status(200).json({ status: 'unlinked' });
       } catch (error) {
         next(error);
@@ -163,7 +171,7 @@ export const createIntegrationsRouter = (db: Firestore) => {
 
         // Return a clean boolean map: { google: true, dropbox: false }
         res.json({
-          google: !!map['google'],
+          googleDrive: !!map['google-drive'],
           dropbox: !!map['dropbox'], // Future proofing
         });
       } catch (error) {

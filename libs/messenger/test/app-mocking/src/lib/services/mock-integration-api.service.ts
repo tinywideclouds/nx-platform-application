@@ -6,7 +6,7 @@ export class MockIntegrationApiService {
   async getStatus(): Promise<IntegrationStatus> {
     console.log('[MockIntegrationApi] getStatus: Returning disconnected state');
     // Default to "No Integrations" to prevent the UI from trying to resume cloud sessions
-    return { google: false, dropbox: false };
+    return { googleDrive: false, dropbox: false };
   }
 
   async disconnect(provider: string): Promise<void> {

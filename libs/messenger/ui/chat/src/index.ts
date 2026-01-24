@@ -5,6 +5,6 @@ export * from './lib/chat-window-header/chat-window-header.component';
 export * from './lib/chat-typing-indicator/chat-typing-indicator.component';
 export * from './lib/chat-message-divider/chat-message-divider.component';
 export * from './lib/chat-message-input/chat-message-input.component';
-export * from './lib/message-renderer/message-renderer.component';
 export * from './lib/chat-group-intro/chat-group-intro.component';
+export * from './lib/chat-image-message/chat-image-message.component';
 export * from './lib/chat-invite-message/chat-invite-message.component';

@@ -5,22 +5,29 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
+// ✅ Define the Enriched Type
+export type EnrichedPayload = ContentPayload & { messageId: string };
+
 @Pipe({
   name: 'messageContent',
   standalone: true,
-  pure: true, // Crucial: Only re-runs if 'msg' reference changes
+  pure: true,
 })
 export class MessageContentPipe implements PipeTransform {
   private parser = inject(MessageContentParser);
 
-  transform(msg: ChatMessage): ContentPayload | null {
+  transform(msg: ChatMessage): EnrichedPayload | null {
     if (!msg.payloadBytes) return null;
 
     try {
-      // This is now safe because the pipe memoizes the result.
-      // We won't re-parse on every change detection cycle.
       const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-      return parsed.kind === 'content' ? parsed.payload : null;
+      if (parsed.kind !== 'content') return null;
+
+      // ✅ CLEVER PART: Spread the payload AND the ID into one object
+      return {
+        ...parsed.payload,
+        messageId: msg.id,
+      };
     } catch (e) {
       return null;
     }

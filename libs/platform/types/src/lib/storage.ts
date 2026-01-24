@@ -1,6 +1,6 @@
 export interface IntegrationStatus {
-  google: boolean;
-  dropbox: boolean; // Future-proofing
+  googleDrive: boolean;
+  dropbox: boolean;
 }
 
 export interface StorageOption {

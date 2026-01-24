@@ -11,15 +11,24 @@ export interface WriteOptions {
 
 export type Visibility = 'public' | 'private';
 
+export type DriveProvider = 'google-drive' | 'dropbox' | 'microsoft-drive';
+
 export interface AssetResult {
   resourceId: string;
-  provider: 'google-drive' | 'dropbox' | 'microsoft-drive';
+  provider: DriveProvider;
+}
+
+export interface DriverCapabilities {
+  canDownload: boolean; // Supports .downloadAsset()
+  canEmbed: boolean; // Supports .getEmbedUrl() (Iframe safe)
+  canLinkExternal: boolean; // Supports .getWebUrl() (New Tab)
 }
 
 export abstract class VaultProvider {
   abstract readonly providerId: string;
   abstract readonly displayName: string;
 
+  abstract readonly capabilities: DriverCapabilities;
   /**
    * AUTHENTICATION
    * Triggers the provider's specific login flow (e.g. Google Popup).
@@ -69,6 +78,7 @@ export abstract class VaultProvider {
   ): Promise<AssetResult>;
 
   abstract getDriveLink(assetId: string, preview?: boolean): Promise<string>;
+  abstract getEmbedLink(assetId: string, preview?: boolean): Promise<string>;
   abstract downloadAsset(assetId: string): Promise<string>;
 
   abstract fileExists(path: string): Promise<boolean>;

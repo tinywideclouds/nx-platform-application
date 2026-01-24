@@ -233,5 +233,7 @@ nx g @nx/workspace:move --project=platform-ux-physics     --destination=libs/pla
 
 nx g @nx/angular:library --name=lib-messenger-app-mocking --directory=libs/messenger/app-mocking --tags="scope:messenger" 
 
+nx g @nx/angular:library --name=platform-ui-pipes --directory=libs/platform/ui/pipes --tags="scope:platform"   
+
 
 

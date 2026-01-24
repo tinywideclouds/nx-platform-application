@@ -1,7 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
-import { AssetResult } from '@nx-platform-application/platform-infrastructure-storage';
+import {
+  AssetResult,
+  DriverCapabilities,
+  VaultProvider,
+  VaultDrivers,
+} from '@nx-platform-application/platform-infrastructure-storage';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { AssetStorageService } from '@nx-platform-application/messenger-infrastructure-asset-storage';
 import {
@@ -17,7 +22,7 @@ import {
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { ImageProcessingService } from '@nx-platform-application/platform-tools-image-processing';
 
-const driveImage = 'drive-image';
+const driveImage = 'driveImage';
 
 @Injectable({ providedIn: 'root' })
 export class ChatMediaFacade {
@@ -31,6 +36,52 @@ export class ChatMediaFacade {
   // Logic Injections
   private readonly storageServiceInfra = inject(StorageService);
   private readonly imageProcessor = inject(ImageProcessingService);
+
+  // Inject the "Menu" of drivers
+  private drivers = inject(VaultDrivers);
+
+  /**
+   * Helper to find the correct driver for an asset.
+   */
+  private getDriver(providerId: string): VaultProvider | undefined {
+    return this.drivers.find((d) => d.providerId === providerId);
+  }
+
+  /**
+   * Returns the capabilities for a specific asset.
+   * The UI uses this to show/hide the "Enhance" or "Quick View" buttons.
+   */
+  public getCapabilities(providerId: string): DriverCapabilities {
+    const driver = this.getDriver(providerId);
+    return driver
+      ? driver.capabilities
+      : {
+          canDownload: false,
+          canEmbed: false,
+          canLinkExternal: false,
+        };
+  }
+
+  async getEmbedLink(providerId: string, resourceId: string): Promise<string> {
+    const driver = this.getDriver(providerId);
+    if (!driver || !driver.capabilities.canEmbed)
+      throw new Error('Embed not supported');
+    return driver.getEmbedLink(resourceId);
+  }
+
+  async getDriveLink(providerId: string, resourceId: string): Promise<string> {
+    const driver = this.getDriver(providerId);
+    if (!driver || !driver.capabilities.canLinkExternal)
+      throw new Error('Embed not supported');
+    return driver.getDriveLink(resourceId);
+  }
+
+  async getDownload(providerId: string, resourceId: string): Promise<string> {
+    const driver = this.getDriver(providerId);
+    if (!driver || !driver.capabilities.canDownload)
+      throw new Error('Embed not supported');
+    return driver.downloadAsset(resourceId);
+  }
 
   public async sendImage(
     recipient: URN,
@@ -58,7 +109,7 @@ export class ChatMediaFacade {
 
       // 2. Generate "Chat Quality" Inline Image (Unified Path)
       const inlineBlob = await this.imageProcessor.resize(file, {
-        width: 120,
+        width: 64,
         quality: 0.7,
         format: 'image/png',
       });
@@ -149,6 +200,34 @@ export class ChatMediaFacade {
     } catch (e) {
       this.logger.error(`[MediaFacade] Error during background upload flow`, e);
       throw e;
+    }
+  }
+
+  /**
+   * Generates a High-Res thumbnail from a source Blob and patches the local message.
+   */
+  async upgradeInlineImage(messageId: string, sourceBlob: Blob): Promise<void> {
+    try {
+      // 1. Resize (Client-side computation)
+      // 720px is a great balance for "HD Thumbnail"
+      const resizedBlob = await this.imageProcessor.resize(sourceBlob, {
+        width: 720,
+        format: 'image/png',
+        quality: 0.85,
+      });
+
+      // 2. Encode to Base64 (for inline storage/display)
+      const base64 = await this.imageProcessor.toBase64(resizedBlob);
+
+      await this.patchLocalMessage(messageId, {
+        inlineImage: base64, // Overwrites the low-res placeholder
+      });
+
+      // ✅ FIX 2: Tell the ConversationService to refresh this message in the UI
+      await this.conversationService.reloadMessages([messageId]);
+    } catch (e) {
+      console.error('[ChatFacade] Failed to upgrade thumbnail', e);
+      throw e; // Re-throw so component can handle UI state
     }
   }
 

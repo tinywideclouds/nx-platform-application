@@ -10,6 +10,7 @@ import { StorageService } from '@nx-platform-application/platform-domain-storage
 import { IntegrationApiService } from '@nx-platform-application/platform-infrastructure-drive-integrations';
 
 import { SyncOptions, SyncResult } from './models/sync-options.interface';
+import { DriveProvider } from '@nx-platform-application/platform-infrastructure-storage';
 
 export type SyncConnectionState =
   | 'idle'
@@ -52,10 +53,10 @@ export class CloudSyncService {
       // 1. Check Server (Do we have a link?)
       const status = await this.integrationApi.getStatus();
 
-      if (status.google) {
+      if (status.googleDrive) {
         // 2. ✅ Activate the Local Driver (Without Popup)
         // This sets the StorageService state so AssetUploads work
-        const activated = this.storage.resume('google');
+        const activated = this.storage.resume('google-drive');
 
         if (activated) {
           this.connectionState.set('connected');
@@ -80,7 +81,7 @@ export class CloudSyncService {
   /**
    * Manual trigger for the Auth Flow (Popup).
    */
-  public async connect(providerId: string): Promise<boolean> {
+  public async connect(providerId: DriveProvider): Promise<boolean> {
     this.connectionState.set('connecting');
     try {
       // Trigger the Driver's Auth Flow via Storage Domain

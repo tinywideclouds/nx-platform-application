@@ -97,7 +97,7 @@
             (retry)="onRetryMessage(msg)"
           >
             <chat-message-renderer
-              [payload]="msg | messageContent"
+              [message]="msg"
               (action)="onContentAction($event)"
             />
           </chat-message-bubble>

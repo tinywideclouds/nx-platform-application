@@ -17,6 +17,14 @@
         "assets": ["libs/platform/ui/qr-codes/*.md"]
       }
     },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/platform/ui/qr-codes"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ui/qr-codes",
+        "configFile": "libs/platform/ui/qr-codes/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

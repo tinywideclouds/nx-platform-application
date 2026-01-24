@@ -5,6 +5,7 @@ import {
   WriteOptions,
   AssetResult,
   Visibility,
+  DriveProvider,
 } from '../vault.provider';
 import { PlatformStorageConfig } from '../vault.tokens';
 import { GOOGLE_TOKEN_STRATEGY } from './google-token.strategy';
@@ -32,7 +33,8 @@ declare const google: any;
 
 @Injectable()
 export class GoogleDriveDriver implements VaultProvider {
-  readonly providerId = 'google';
+  // ✅ ID matches Backend Route ('google-drive')
+  readonly providerId: DriveProvider = 'google-drive';
   readonly displayName = 'Google Drive';
 
   private logger = inject(Logger);
@@ -41,6 +43,16 @@ export class GoogleDriveDriver implements VaultProvider {
 
   private readonly DISCOVERY_DOC =
     'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+
+  // Singleton Promise to prevent double-loading scripts
+  private initPromise: Promise<void> | null = null;
+
+  // ✅ New Capabilities from your update
+  readonly capabilities = {
+    canDownload: true,
+    canEmbed: true,
+    canLinkExternal: true,
+  };
 
   public isAuthenticated(): boolean {
     return this.strategy.isAuthenticated();
@@ -51,95 +63,41 @@ export class GoogleDriveDriver implements VaultProvider {
       this.logger.warn(
         '[GoogleDriveDriver] No config provided. Driver disabled.',
       );
-      return;
     }
-    this.initializeScripts();
-  }
-
-  async link(persist: boolean): Promise<boolean> {
-    return this.strategy.connect(persist);
-  }
-
-  async unlink(): Promise<void> {
-    await this.strategy.disconnect();
   }
 
   // =================================================================
-  // 1. DATA PLANE: BINARY ASSETS (IMAGES/VIDEOS)
+  // 1. STATELESS OPERATIONS (Fast, No Auth Required or Cached)
   // =================================================================
 
-  async uploadAsset(
-    blob: Blob,
-    filename: string,
-    visibility: Visibility = 'public',
-    mimeType: string | undefined,
-  ): Promise<AssetResult> {
-    await this.ensureReady();
-
-    // 1. Resolve folder
-    const assetsFolderId = await this.resolvePath('assets', true);
-
-    // Default to binary if no mimeType provided
-    const finalMimeType = mimeType || 'application/octet-stream';
-
-    const uploadId = await this.performResumableUpload(
-      blob,
-      filename,
-      finalMimeType,
-      assetsFolderId,
-    );
-
-    this.logger.info('[Drive] Set got upload id:', filename, uploadId);
-
-    if (visibility === 'public') {
-      // 2. Mark as Public (Required for API Key access later)
-      const permissions = await gapi.client.drive.permissions.create({
-        fileId: uploadId,
-        resource: { role: 'reader', type: 'anyone' },
-      });
-      this.logger.debug('[Drive] Set public read permissions:', permissions);
-    }
-
-    // 3. Return standard result (IDs only)
-    return {
-      resourceId: uploadId,
-      provider: 'google-drive',
-    };
+  async getEmbedLink(resourceId: string): Promise<string> {
+    return `https://drive.google.com/file/d/${resourceId}/preview`;
   }
 
-  /**
-   * Generates the interaction URL based on the requested mode.
-   * - Preview: Embeddable iframe URL
-   * - Standard: Full web viewer URL
-   */
   async getDriveLink(assetId: string, preview?: boolean): Promise<string> {
     if (!assetId) return '';
-    // /preview = Iframe-friendly "clean" viewer
-    // /view = Standard Google Drive UI
     const mode = preview ? 'preview' : 'view';
     return `https://drive.google.com/file/d/${assetId}/${mode}`;
   }
 
   /**
-   * Downloads the raw asset data using the API Key (No User Auth required).
-   * This bypasses 403s on "Hotlinking" by acting as an API fetch.
+   * ✅ NEW FEATURE: Blob Download
+   * Uses API Key to bypass CORS/Auth blocks for image previews.
    */
   async downloadAsset(assetId: string): Promise<string> {
     if (!assetId) return '';
     const apiKey = this.config?.googleApiKey;
 
-    // 1. Check if we have a valid cache in the Browser's "Cache Storage"
+    // 1. Check Browser Cache (Performance)
     const cacheName = 'drive-assets-v1';
     const requestUrl = `https://www.googleapis.com/drive/v3/files/${assetId}?alt=media&key=${apiKey}`;
 
-    // Try cache first
     try {
       if ('caches' in window) {
         const cache = await caches.open(cacheName);
         const cachedResponse = await cache.match(requestUrl);
 
         if (cachedResponse) {
-          // HIT: Serve instantly from disk.
           const blob = await cachedResponse.blob();
           return URL.createObjectURL(blob);
         }
@@ -148,12 +106,12 @@ export class GoogleDriveDriver implements VaultProvider {
       this.logger.warn('[Drive] Cache check failed', e);
     }
 
-    // 2. MISS: Fetch from network
+    // 2. Network Fetch (Uses API Key)
     try {
       const response = await fetch(requestUrl, { method: 'GET' });
       if (!response.ok) throw new Error(response.statusText);
 
-      // 3. Clone and Store in Cache for next time
+      // 3. Store in Cache
       if ('caches' in window) {
         const cache = await caches.open(cacheName);
         cache.put(requestUrl, response.clone());
@@ -168,8 +126,57 @@ export class GoogleDriveDriver implements VaultProvider {
   }
 
   // =================================================================
-  // 2. DATA PLANE: JSON STRUCTURES
+  // 2. STATEFUL OPERATIONS (Auth Required)
   // =================================================================
+
+  async link(persist: boolean): Promise<boolean> {
+    if (persist) {
+      await this.ensureReady();
+    }
+    return this.strategy.connect(persist);
+  }
+
+  async unlink(): Promise<void> {
+    await this.strategy.disconnect();
+  }
+
+  async uploadAsset(
+    blob: Blob,
+    filename: string,
+    visibility: Visibility = 'public',
+    mimeType: string | undefined,
+  ): Promise<AssetResult> {
+    await this.ensureReady();
+
+    const assetsFolderId = await this.resolvePath('assets', true);
+    const finalMimeType = mimeType || 'application/octet-stream';
+
+    // Uses the FIXED performResumableUpload below
+    const uploadId = await this.performResumableUpload(
+      blob,
+      filename,
+      finalMimeType,
+      assetsFolderId,
+    );
+
+    this.logger.info('[Drive] Upload complete:', filename, uploadId);
+
+    if (visibility === 'public') {
+      try {
+        await gapi.client.drive.permissions.create({
+          fileId: uploadId,
+          resource: { role: 'reader', type: 'anyone' },
+        });
+      } catch (e) {
+        this.logger.warn('[Drive] Failed to set public permission', e);
+      }
+    }
+
+    return {
+      resourceId: uploadId,
+      provider: 'google-drive',
+    };
+  }
 
   async writeJson(
     path: string,
@@ -220,10 +227,6 @@ export class GoogleDriveDriver implements VaultProvider {
     }
   }
 
-  // =================================================================
-  // 3. CONTROL PLANE
-  // =================================================================
-
   async fileExists(path: string): Promise<boolean> {
     await this.ensureReady();
     const fileName = path.split('/').pop() || '';
@@ -241,7 +244,7 @@ export class GoogleDriveDriver implements VaultProvider {
       const folderId = await this.resolvePath(path, false);
       if (!folderId && path) return [];
 
-      let query = `'${folderId || 'root'}' in parents and trashed = false`;
+      const query = `'${folderId || 'root'}' in parents and trashed = false`;
       const response = await gapi.client.drive.files.list({
         q: query,
         fields: 'files(name)',
@@ -258,9 +261,50 @@ export class GoogleDriveDriver implements VaultProvider {
   }
 
   // =================================================================
-  // 4. PRIVATE HELPERS
+  // 3. PRIVATE HELPERS
   // =================================================================
 
+  /**
+   * ✅ CRITICAL FIX: The Bridge
+   * Ensures scripts are loaded AND the Strategy token is given to GAPI.
+   */
+  private async ensureReady(): Promise<void> {
+    // 1. Load Scripts (Singleton)
+    if (!this.initPromise) {
+      this.initPromise = this.initializeScripts();
+    }
+    await this.initPromise;
+
+    // This prevents the 404 error during app initialization.
+    if (this.strategy.isAuthenticated()) {
+      try {
+        const token = await this.strategy.getAccessToken();
+        if (token && gapi?.client) {
+          gapi.client.setToken({ access_token: token });
+        }
+      } catch (e) {
+        // Safe to ignore here; means token is expired or revoked.
+      }
+    }
+  }
+
+  private async initializeScripts() {
+    await Promise.all([this.loadGapiScript(), this.loadGisScript()]);
+    // Initialize GAPI Client
+    await new Promise<void>((resolve) => {
+      gapi.load('client', async () => {
+        await gapi.client.init({ discoveryDocs: [this.DISCOVERY_DOC] });
+        resolve();
+      });
+    });
+    // Init Strategy if needed
+    if ((this.strategy as any).init) (this.strategy as any).init();
+  }
+
+  /**
+   * ✅ CRITICAL FIX: Upload Auth
+   * Fetches token from Strategy directly, ignoring GAPI internal state.
+   */
   private async performResumableUpload(
     blob: Blob,
     filename: string,
@@ -268,10 +312,9 @@ export class GoogleDriveDriver implements VaultProvider {
     parentId?: string,
     existingFileId?: string,
   ): Promise<string> {
-    // console.log('Performing resumable upload to Google Drive:');
-    // Commented out to reduce noise, usually better to stick to logger
+    // Get token from source of truth
+    const accessToken = await this.strategy.getAccessToken();
 
-    const accessToken = gapi.client.getToken().access_token;
     const baseUrl = 'https://www.googleapis.com/upload/drive/v3/files';
     const url = existingFileId
       ? `${baseUrl}/${existingFileId}?uploadType=resumable`
@@ -281,7 +324,7 @@ export class GoogleDriveDriver implements VaultProvider {
     const metadata: any = { name: filename, mimeType: mimeType };
     if (parentId && !existingFileId) metadata.parents = [parentId];
 
-    // 1. Init
+    // 1. Init (Start Session)
     const initResponse = await fetch(url, {
       method: method,
       headers: {
@@ -295,10 +338,11 @@ export class GoogleDriveDriver implements VaultProvider {
 
     if (!initResponse.ok)
       throw new Error(`[Drive] Init failed: ${initResponse.statusText}`);
+
     const uploadUrl = initResponse.headers.get('Location');
     if (!uploadUrl) throw new Error('[Drive] No upload location received');
 
-    // 2. Upload
+    // 2. Upload (Send Bytes)
     const uploadResponse = await fetch(uploadUrl, {
       method: 'PUT',
       headers: { 'Content-Length': blob.size.toString() },
@@ -307,25 +351,16 @@ export class GoogleDriveDriver implements VaultProvider {
 
     if (!uploadResponse.ok)
       throw new Error(`[Drive] Upload failed: ${uploadResponse.statusText}`);
+
     const result = await uploadResponse.json();
     return result.id;
-  }
-
-  private async ensureReady() {
-    if (!gapi?.client) await this.initializeScripts();
-    const token = await this.strategy.getAccessToken();
-    gapi.client.setToken({ access_token: token });
-  }
-
-  private async initializeScripts() {
-    await Promise.all([this.loadGapiScript(), this.loadGisScript()]);
-    if ((this.strategy as any).init) (this.strategy as any).init();
   }
 
   private async findFile(
     name: string,
     parentId?: string,
   ): Promise<GoogleFile | null> {
+    // Helper relies on ensureReady being called upstream
     const q = [
       `name = '${name}'`,
       `trashed = false`,
@@ -376,34 +411,23 @@ export class GoogleDriveDriver implements VaultProvider {
     return resp.result.id;
   }
 
+  // --- SCRIPT LOADERS ---
   private loadGapiScript(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
+    if (typeof gapi !== 'undefined') return Promise.resolve();
     return new Promise((resolve) => {
-      if (typeof gapi !== 'undefined') {
-        this.initGapiClient(resolve);
-        return;
-      }
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
-      script.onload = () => this.initGapiClient(resolve);
+      script.onload = () => resolve();
       document.body.appendChild(script);
-    });
-  }
-
-  private initGapiClient(resolve: () => void) {
-    gapi.load('client', async () => {
-      await gapi.client.init({ discoveryDocs: [this.DISCOVERY_DOC] });
-      resolve();
     });
   }
 
   private loadGisScript(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
+    if (typeof google !== 'undefined' && google.accounts)
+      return Promise.resolve();
     return new Promise((resolve) => {
-      if (typeof google !== 'undefined' && google.accounts) {
-        resolve();
-        return;
-      }
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
       script.onload = () => resolve();

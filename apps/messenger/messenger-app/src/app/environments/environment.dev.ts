@@ -10,6 +10,8 @@ export const environment = {
   notificationServiceUrl: '/api/notifications',
   enableServiceWorker: true,
   wssUrl: 'ws://localhost:4200/connect',
+
+  googelApiKey: 'AIzaSyAZJFTrjKDaYEVB6HVfZa22pt90TbUw7M4',
   googleClientId:
     '885150127230-v1co0gles0clk1ara7h63qirvcjd59g8.apps.googleusercontent.com',
   vapidPublicKey:

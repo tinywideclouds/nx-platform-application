@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   VaultProvider,
+  DriverCapabilities,
   WriteOptions,
   AssetResult,
   Visibility,
@@ -14,6 +15,12 @@ export class MockVaultDriver implements VaultProvider {
   // In-memory "Cloud"
   private fileSystem = new Map<string, any>();
   private authenticated = false;
+
+  readonly capabilities: DriverCapabilities = {
+    canDownload: true, // We have the API key to fetch blobs
+    canEmbed: true, // We use the /preview endpoint
+    canLinkExternal: true, // We use the /view endpoint
+  };
 
   isAuthenticated(): boolean {
     return this.authenticated;
@@ -79,6 +86,10 @@ export class MockVaultDriver implements VaultProvider {
   }
 
   async getDriveLink(assetId: string, preview?: boolean): Promise<string> {
+    return `https://mock-drive.local/preview/${assetId}`;
+  }
+
+  async getEmbedLink(assetId: string, preview?: boolean): Promise<string> {
     return `https://mock-drive.local/preview/${assetId}`;
   }
 

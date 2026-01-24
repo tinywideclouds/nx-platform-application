@@ -4,7 +4,7 @@
   "sourceRoot": "libs/messenger/ui/chat/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "type:ui"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

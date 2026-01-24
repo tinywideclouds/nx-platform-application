@@ -1,0 +1,32 @@
+{
+  "name": "platform-ui-pipes",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/ui/pipes/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:platform"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/platform/ui/pipes",
+        "configFile": "libs/platform/ui/pipes/vite.config.mts",
+        "main": "libs/platform/ui/pipes/src/index.ts",
+        "assets": ["libs/platform/ui/pipes/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/platform/ui/pipes"],
+      "options": {
+        "reportsDirectory": "coverage/libs/platform/ui/pipes",
+        "configFile": "libs/platform/ui/pipes/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

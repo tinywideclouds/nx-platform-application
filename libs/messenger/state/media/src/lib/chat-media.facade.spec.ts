@@ -85,7 +85,7 @@ describe('ChatMediaFacade', () => {
       mockFile,
       mockKeys,
       mockUrn,
-      'drive-image',
+      'driveImage',
     );
 
     // Assert 1: Upload
@@ -97,7 +97,7 @@ describe('ChatMediaFacade', () => {
       expect.objectContaining({
         messageId: 'm1',
         assets: {
-          'drive-image': {
+          driveImage: {
             url: 'https://cloud.com/img.png',
             provider: 'google',
           },
@@ -114,7 +114,7 @@ describe('ChatMediaFacade', () => {
     expect(parser.serialize).toHaveBeenCalledWith(
       expect.objectContaining({
         assets: {
-          'drive-image': {
+          driveImage: {
             url: 'https://cloud.com/img.png',
             provider: 'google',
           },
@@ -143,7 +143,7 @@ describe('ChatMediaFacade', () => {
         mockFile,
         mockKeys,
         mockUrn,
-        'drive-image',
+        'driveImage',
       ),
     ).rejects.toThrow('Network Fail');
 

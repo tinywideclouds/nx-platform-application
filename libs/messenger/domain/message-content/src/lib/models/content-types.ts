@@ -67,6 +67,9 @@ export interface ImageContent {
 
   assets?: Record<string, AssetResult>;
 
+  messageId?: string;
+  id?: string;
+
   /** Optional display name (e.g. "sunset.jpg") */
   displayName?: string;
 

@@ -46,10 +46,10 @@ export class MessengerSyncCardComponent {
 
   async onReconnect() {
     // connect() returns boolean promise, but the signal will update automatically
-    const success = await this.cloudSync.connect('google');
+    const success = await this.cloudSync.connect('google-drive');
     if (success) {
       this.cloudSync.syncNow({
-        providerId: 'google',
+        providerId: 'google-drive',
         syncContacts: true,
         syncMessages: true,
       });

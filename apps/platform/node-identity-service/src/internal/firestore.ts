@@ -25,7 +25,7 @@ interface UserProfileData {
 
 // --- NEW TYPES (Integration Isolation) ---
 
-export type IntegrationProvider = 'google' | 'dropbox' | 'apple';
+export type IntegrationProvider = 'google-drive' | 'dropbox' | 'apple';
 
 export interface IntegrationDoc {
   provider: IntegrationProvider;

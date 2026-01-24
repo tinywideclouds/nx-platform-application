@@ -1,5 +1,27 @@
 :host {
   display: block;
+  // Optional: Ensure the host itself doesn't overflow on tiny screens
+  max-width: 100%;
+}
+
+.chat-image {
+  // 1. "Retina" Math:
+  // Source is 720px. Displaying at 360px = 2.0 Pixel Density.
+  // This guarantees sharp rendering on iPhones/Macs/High-DPI.
+  width: auto;
+  max-width: 360px;
+
+  // 2. Vertical Constraint:
+  // Prevents tall portrait images (screenshots) from breaking the flow.
+  max-height: 400px;
+
+  // 3. Layout safety
+  min-width: 150px;
+  min-height: 150px;
+
+  // 4. Visuals
+  border-radius: 0.375rem;
+  transition: filter 0.3s ease;
 }
 
 .image-container {

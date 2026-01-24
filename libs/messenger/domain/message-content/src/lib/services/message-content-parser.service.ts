@@ -61,7 +61,7 @@ export class MessageContentParser {
       }
 
       if (typeId.equals(MessageTypeReadReceipt)) {
-        console.log('parsing read receipt signal');
+        // console.log('parsing read receipt signal');
         const data = JSON.parse(
           this.decoder.decode(content),
         ) as ReadReceiptData;
@@ -71,7 +71,7 @@ export class MessageContentParser {
         };
       }
 
-      console.log('searching for strategy to parse typeId:', typeId.toString());
+      // console.log('searching for strategy to parse typeId:', typeId.toString());
       // 3. Delegate Content Parsing to Strategies
       const strategy = this.strategies.find((s) => s.supports(typeId));
 

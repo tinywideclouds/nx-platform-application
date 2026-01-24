@@ -5,13 +5,13 @@ import {
   WritableSignal,
   DestroyRef,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { switchMap, EMPTY, interval } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { URN } from '@nx-platform-application/platform-types';
-import { ConversationSummary } from '@nx-platform-application/messenger-types';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+import { ConversationSummary } from '@nx-platform-application/messenger-types';
 
 // Infrastructure
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
@@ -89,7 +89,6 @@ export class ChatDataService {
    * Manually triggers ingestion (e.g. after a refresh pull).
    */
   public async runIngestionCycle(): Promise<void> {
-    console.log('running ingestion cycle');
     return this.runExclusive(async () => {
       const keys = this.identity.myKeys();
       const user = this.authService.currentUser();
@@ -110,7 +109,7 @@ export class ChatDataService {
           this.logger.info(
             `[DataOrchestrator] Ingested ${result.messages.length} messages.`,
           );
-          await this.conversationService.upsertMessages(result.messages, myUrn);
+          this.conversationService.upsertMessages(result.messages, myUrn);
           // Optimization: Only refresh sidebar if real content arrived
           await this.refreshActiveConversations();
         }
@@ -130,11 +129,6 @@ export class ChatDataService {
 
         // 4. Process Patches (Signals)
         if (result.patchedMessageIds.length > 0) {
-          console.warn(
-            '[TIME TRACE] Patched Messages to reload:',
-            result.patchedMessageIds,
-            new Date().toISOString(),
-          );
           this.logger.info(
             `[DataOrchestrator] Reloading ${result.patchedMessageIds.length} patched messages.`,
           );

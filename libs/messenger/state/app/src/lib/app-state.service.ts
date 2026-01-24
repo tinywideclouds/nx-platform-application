@@ -188,7 +188,7 @@ export class AppState {
   public async connectCloud(): Promise<void> {
     // This MUST be called from a button click handler in the UI
     // 'google' is hardcoded here, but could be passed in
-    await this.syncService.connect('google');
+    await this.syncService.connect('google-drive');
   }
 
   private initResumptionTriggers(): void {

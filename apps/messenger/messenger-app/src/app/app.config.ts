@@ -177,9 +177,11 @@ const cloudProviders = environment.useMocks
       // ✅ MOCK CONFIGURATION
       {
         provide: PlatformStorageConfig,
-        useValue: { googleClientId: 'MOCK_CLIENT_ID' },
+        useValue: {
+          googleClientId: environment.googleClientId,
+          googleApiKey: 'MOCK_CLIENT_ID',
+        },
       },
-      // ✅ MOCK DRIVER: Replaces GoogleDriveDriver
       { provide: VaultDrivers, useClass: MockVaultDriver, multi: true },
       { provide: IntegrationApiService, useClass: MockIntegrationApiService },
     ]
@@ -189,7 +191,8 @@ const cloudProviders = environment.useMocks
         provide: PlatformStorageConfig,
         useValue: {
           googleClientId: environment.googleClientId,
-        } as PlatformStorageConfig,
+          googleApiKey: environment.googelApiKey,
+        },
       },
       { provide: GOOGLE_TOKEN_STRATEGY, useClass: IdentityServerStrategy },
       { provide: VaultDrivers, useClass: GoogleDriveDriver, multi: true },

@@ -206,6 +206,9 @@
       "@nx-platform-application/platform-ui-lists": [
         "libs/platform/ui/lists/src/index.ts"
       ],
+      "@nx-platform-application/platform-ui-pipes": [
+        "libs/platform/ui/pipes/src/index.ts"
+      ],
       "@nx-platform-application/platform-ui-qr-codes": [
         "libs/platform/ui/qr-codes/src/index.ts"
       ],

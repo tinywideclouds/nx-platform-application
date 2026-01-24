@@ -39,14 +39,13 @@ import {
   ChatMessageBubbleComponent,
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
-  MessageRendererComponent,
   ChatInviteMessageComponent,
   InviteViewModel,
-  ChatMessageInputComponent, // <-- Direct Import
+  ChatMessageInputComponent,
 } from '@nx-platform-application/messenger-ui-chat';
 
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
-import { MessageContentPipe } from '../message-content.pipe';
+import { MessageRendererComponent } from '../message-renderer/message-renderer.component';
 
 @Component({
   selector: 'messenger-chat-conversation',
@@ -64,7 +63,6 @@ import { MessageContentPipe } from '../message-content.pipe';
     ChatInviteMessageComponent,
     ChatMessageInputComponent,
     ContactNamePipe,
-    MessageContentPipe,
   ],
   providers: [DatePipe],
   templateUrl: './chat-conversation.component.html',
@@ -92,9 +90,6 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
-  // readonly MSG_TYPE_TEXT = MESSAGE_TYPE_TEXT;
-  // readonly MSG_TYPE_INVITE = MESSAGE_TYPE_GROUP_INVITE;
-  // readonly MSG_TYPE_IMAGE = MESSAGE_TYPE_IMAGE;
   readonly TEXT_MESSAGE = TEXT_MESSAGE_TYPE;
   readonly IMAGE_MESSAGE = IMAGE_MESSAGE_TYPE;
   readonly GROUP_INVITE_MESSAGE = GROUP_INVITE_TYPE;
@@ -111,9 +106,6 @@ export class ChatConversationComponent {
       }
     });
   }
-
-  // --- VIEW HELPERS ---
-  // ... (Existing helpers: getTypeId, getReadCursors, showTypingIndicator, etc. remain unchanged) ...
 
   getTypeId(msg: ChatMessage): string {
     return msg.typeId.entityId;
@@ -174,27 +166,27 @@ export class ChatConversationComponent {
     }
   }
 
-  getContentPayload(msg: ChatMessage): ContentPayload | null {
-    if (msg.typeId.equals(MessageTypeText) && msg.textContent) {
-      return { kind: 'text', text: msg.textContent };
-    }
-    if (!msg.payloadBytes || (msg.payloadBytes as any).length === 0) {
-      return null;
-    }
-    try {
-      const bytes =
-        msg.payloadBytes instanceof Uint8Array
-          ? msg.payloadBytes
-          : new Uint8Array(Object.values(msg.payloadBytes));
-      const decoded = new TextDecoder().decode(bytes);
-      if (msg.typeId.equals(MessageTypeText)) {
-        return { kind: 'text', text: decoded };
-      }
-      return JSON.parse(decoded);
-    } catch (e) {
-      return null;
-    }
-  }
+  // getContentPayload(msg: ChatMessage): ContentPayload | null {
+  //   if (msg.typeId.equals(MessageTypeText) && msg.textContent) {
+  //     return { kind: 'text', text: msg.textContent };
+  //   }
+  //   if (!msg.payloadBytes || (msg.payloadBytes as any).length === 0) {
+  //     return null;
+  //   }
+  //   try {
+  //     const bytes =
+  //       msg.payloadBytes instanceof Uint8Array
+  //         ? msg.payloadBytes
+  //         : new Uint8Array(Object.values(msg.payloadBytes));
+  //     const decoded = new TextDecoder().decode(bytes);
+  //     if (msg.typeId.equals(MessageTypeText)) {
+  //       return { kind: 'text', text: decoded };
+  //     }
+  //     return JSON.parse(decoded);
+  //   } catch (e) {
+  //     return null;
+  //   }
+  // }
 
   isBroadcast(msg: ChatMessage): boolean {
     return (

@@ -23,7 +23,6 @@ export class TextParserStrategy implements ContentParserStrategy {
 
   parse(_: URN, content: Uint8Array, context: ParsingContext): ParsedMessage {
     const decodedText = this.decoder.decode(content);
-    console.log('decoded text', decodedText);
     return {
       kind: 'content',
       conversationId: context.conversationId!, // Validator in main service ensures this exists

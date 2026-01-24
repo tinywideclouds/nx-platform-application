@@ -17,13 +17,14 @@ export class IntegrationApiService {
    */
   public async getStatus(): Promise<IntegrationStatus> {
     try {
+      console.info('checking drive status');
       return await firstValueFrom(
         this.http.get<IntegrationStatus>(`${this.API_BASE}/status`),
       );
     } catch (e) {
       this.logger.warn('[IntegrationApi] Failed to check status', e);
       // Fail safe: assume nothing is connected so we don't block the UI
-      return { google: false, dropbox: false };
+      return { googleDrive: false, dropbox: false };
     }
   }
 
@@ -33,9 +34,14 @@ export class IntegrationApiService {
    */
   public async disconnect(provider: 'google'): Promise<void> {
     try {
-      await firstValueFrom(this.http.delete(`${this.API_BASE}/${provider}`));
+      await firstValueFrom(
+        this.http.delete(`${this.API_BASE}/drive/${provider}`),
+      );
     } catch (e) {
-      this.logger.error(`[IntegrationApi] Failed to disconnect ${provider}`, e);
+      this.logger.error(
+        `[IntegrationApi] Failed to disconnect drive: ${provider}`,
+        e,
+      );
       throw e;
     }
   }

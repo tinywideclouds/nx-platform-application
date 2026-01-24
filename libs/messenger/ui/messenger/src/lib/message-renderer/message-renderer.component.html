@@ -1,4 +1,4 @@
-@if (payload(); as p) {
+@if (message() | messageContent; as p) {
   @switch (p.kind) {
     @case ('text') {
       <div
@@ -18,5 +18,5 @@
     }
   }
 } @else {
-  <div class="text-xs text-gray-400 italic">[Message Deleted or Corrupted]</div>
+  <div class="text-xs text-gray-400 italic">[Corrupted Message]</div>
 }

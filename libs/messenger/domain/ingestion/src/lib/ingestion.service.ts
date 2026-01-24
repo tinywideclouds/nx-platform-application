@@ -268,8 +268,8 @@ export class IngestionService {
         break;
       }
       case 'asset-reveal': {
-        console.log('handling asset reveal signal');
         const patch = payload.data as AssetRevealData;
+        console.log('handling asset reveal signal', patch.assets);
         const patchedId = await this.handleAssetReveal(patch);
         if (patchedId) {
           accumulator.patchedMessageIds.push(patchedId);
@@ -291,10 +291,14 @@ export class IngestionService {
     if (!msg) return null;
 
     try {
-      if (!msg.payloadBytes) return null;
+      if (!msg.payloadBytes) {
+        return null;
+      }
 
       const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-      if (parsed.kind !== 'content') return null;
+      if (parsed.kind !== 'content') {
+        return null;
+      }
 
       const newPayload = {
         ...parsed.payload,

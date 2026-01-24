@@ -6,12 +6,14 @@ import {
   PLATFORM_ID,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   Visibility,
   VaultProvider,
   VaultDrivers,
   AssetResult,
+  DriveProvider,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
 const STORAGE_KEY_PROVIDER = 'tinywide_active_storage_provider';
@@ -21,14 +23,14 @@ export class StorageService {
   private logger = inject(Logger);
   private platformId = inject(PLATFORM_ID);
 
-  // Inject the "Menu" of available drivers (Google, Dropbox, etc.)
+  // Inject the "Menu" of available drivers (Google-Drive, Dropbox, etc.)
   private drivers =
     inject<VaultProvider[]>(VaultDrivers, { optional: true }) || [];
 
   // --- STATE ---
 
-  // Tracks which provider is currently active (e.g. 'google', 'dropbox', or null)
-  public readonly activeProviderId = signal<string | null>(null);
+  // Tracks which provider is currently active (e.g. 'google-drive', 'dropbox', or null)
+  public readonly activeProviderId = signal<DriveProvider | null>(null);
 
   // Computed helper for UI convenience
   public readonly isConnected = computed(() => !!this.activeProviderId());
@@ -45,14 +47,14 @@ export class StorageService {
   private async restoreSession() {
     if (!isPlatformBrowser(this.platformId)) return;
 
-    const savedId = localStorage.getItem(STORAGE_KEY_PROVIDER);
+    const savedId = localStorage.getItem(STORAGE_KEY_PROVIDER) as DriveProvider;
 
     if (savedId) {
       this.logger.info(
         `[StorageService] Found saved session for '${savedId}'. Restoring...`,
       );
       // We don't use connect() here because we might want different error handling for restoration
-      const success = await this.connect(savedId);
+      const success = await this.connect(savedId, false);
       if (!success) {
         this.clearSession(); // Invalid session ID, clean it up
       }
@@ -63,7 +65,10 @@ export class StorageService {
    * USER ACTION: Connect
    * Triggers the interactive login flow for a specific provider.
    */
-  async connect(providerId: string): Promise<boolean> {
+  async connect(
+    providerId: DriveProvider,
+    interactive = true,
+  ): Promise<boolean> {
     const driver = this.getDriver(providerId);
 
     if (!driver) {
@@ -76,7 +81,7 @@ export class StorageService {
     try {
       // 1. Authenticate/Link
       // We pass 'true' to persist the session within the driver (e.g. OIDC tokens)
-      const linked = await driver.link(true);
+      const linked = await driver.link(interactive);
 
       if (linked) {
         // 2. Update State
@@ -101,7 +106,7 @@ export class StorageService {
    * detects a valid server-side integration.
    * [RESTORED] Required by CloudSyncService.
    */
-  resume(providerId: string): boolean {
+  resume(providerId: DriveProvider): boolean {
     const driver = this.getDriver(providerId);
 
     if (!driver) {
@@ -163,7 +168,8 @@ export class StorageService {
     }
 
     try {
-      const uniqueName = `${Date.now()}_${filename}`;
+      const now = Temporal.Now.instant().toString();
+      const uniqueName = `${now}_${filename}`;
       return await driver.uploadAsset(
         blob,
         uniqueName,
