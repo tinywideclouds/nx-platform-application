@@ -1,22 +1,17 @@
 @if (message() | messageContent; as p) {
   @switch (p.kind) {
     @case ('text') {
-      <div
-        class="whitespace-pre-wrap break-words text-sm leading-relaxed"
-        (click)="onLinkClick($event)"
-      >
-        {{ p.text }}
+      <div class="text-sm leading-relaxed px-1">
+        <chat-text-renderer [parts]="p.parts" />
       </div>
     }
 
     @case ('image') {
-      <chat-image-message [content]="p" />
+      <chat-image-message [message]="p" />
     }
 
     @default {
       <div class="text-xs text-red-400 italic">[Unsupported Content]</div>
     }
   }
-} @else {
-  <div class="text-xs text-gray-400 italic">[Corrupted Message]</div>
 }

@@ -7,8 +7,8 @@
   matBadgeColor="accent"
 >
   <img
-    alt="inline image"
-    [src]="displaySrc()"
+    alt="image"
+    [src]="displaySrc() | safeUrl"
     [alt]="altText()"
     class="chat-image block object-cover"
     loading="lazy"
@@ -16,10 +16,11 @@
 
   @if (mediaLinks()) {
     <div
-      class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm"
+      class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm z-10"
     >
       @if (capabilities().canEmbed) {
         <button
+          type="button"
           (click)="openPreview()"
           class="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors"
           title="Quick View"
@@ -30,6 +31,7 @@
 
       @if (capabilities().canLinkExternal) {
         <button
+          type="button"
           (click)="openExternal()"
           class="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors"
           title="Open in Drive"
@@ -40,81 +42,63 @@
     </div>
   }
 
-  @if (content().caption; as caption) {
+  @if (activePreviewUrl()) {
+    <div class="absolute inset-0 z-20 bg-black">
+      <button
+        (click)="closePreview()"
+        class="absolute top-2 right-2 text-white bg-black/50 rounded-full p-1 hover:bg-black/80 z-30"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+      <iframe
+        title="preview frame"
+        [src]="activePreviewUrl() | safeResourceUrl"
+        class="w-full h-full border-0"
+        allow="autoplay"
+      >
+      </iframe>
+    </div>
+
     <div
-      class="bg-black/40 text-white text-xs p-2 absolute bottom-0 w-full backdrop-blur-sm"
+      class="absolute bottom-0 inset-x-0 p-8 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out z-30"
     >
-      {{ caption }}
+      <button
+        type="button"
+        (click)="updateThumbnail()"
+        [disabled]="isUpdatingThumbnail()"
+        class="flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white font-medium shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
+      >
+        @if (isUpdatingThumbnail()) {
+          <mat-icon class="animate-spin">sync</mat-icon>
+          <span>Processing...</span>
+        } @else {
+          <mat-icon>photo_size_select_large</mat-icon>
+          <span>Set as HD Thumbnail</span>
+        }
+      </button>
     </div>
   }
 
-  @if (activePreviewUrl(); as url) {
+  @if (capabilities().canDownload && !activePreviewUrl()) {
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-      (click)="closePreview()"
+      class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
     >
-      <div
-        class="relative w-full max-w-4xl h-[80vh] bg-white rounded-lg overflow-hidden shadow-2xl"
-        (click)="$event.stopPropagation()"
+      <button
+        type="button"
+        (click)="downloadOriginal($event)"
+        class="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-sm transition-colors"
+        title="Download Original"
       >
-        <div class="absolute top-0 right-0 p-2 z-10">
-          <button
-            (click)="closePreview()"
-            class="bg-black/50 text-white rounded-full p-1 hover:bg-black/70"
-          >
-            <mat-icon>close</mat-icon>
-          </button>
-        </div>
+        <mat-icon>download</mat-icon>
+      </button>
+    </div>
+  }
 
-        @if (preferDownload) {
-          <img
-            [src]="activePreviewUrl() | safeUrl"
-            class="w-full h-full object-contain rounded shadow-2xl bg-black/90"
-            alt="Preview"
-          />
-        } @else {
-          <iframe
-            title="image frame"
-            [src]="url | safeResourceUrl"
-            class="w-full h-full border-0"
-            allow="autoplay"
-          >
-          </iframe>
-        }
-
-        <div
-          class="absolute bottom-0 inset-x-0 p-8 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out"
-        >
-          <button
-            (click)="updateThumbnail()"
-            [disabled]="isUpdatingThumbnail()"
-            class="flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white font-medium shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
-          >
-            <mat-icon
-              class="animate-spin"
-              *ngIf="isUpdatingThumbnail(); else staticIcon"
-              >sync</mat-icon
-            >
-            <ng-template #staticIcon
-              ><mat-icon>photo_size_select_large</mat-icon></ng-template
-            >
-
-            <span>{{
-              isUpdatingThumbnail() ? 'Processing...' : 'Set as HD Thumbnail'
-            }}</span>
-          </button>
-        </div>
-
-        @if (capabilities().canDownload) {
-          <button
-            (click)="downloadOriginal($event)"
-            class="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors"
-            title="Quick View"
-          >
-            <mat-icon>download</mat-icon>
-          </button>
-        }
-      </div>
+  @if (parts().length > 0) {
+    <div
+      class="bg-black/60 text-white text-xs p-2 absolute bottom-0 w-full backdrop-blur-md z-10"
+    >
+      <chat-text-renderer [parts]="parts()" />
     </div>
   }
 </div>

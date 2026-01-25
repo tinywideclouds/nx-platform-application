@@ -7,12 +7,20 @@ import {
 import { CommonModule } from '@angular/common';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { MessageContentPipe } from '../message-content.pipe';
-import { ChatImageMessageComponent } from '@nx-platform-application/messenger-ui-chat';
+import {
+  ChatImageMessageComponent,
+  ChatTextRendererComponent,
+} from '@nx-platform-application/messenger-ui-chat';
 
 @Component({
   selector: 'chat-message-renderer',
   standalone: true,
-  imports: [CommonModule, ChatImageMessageComponent, MessageContentPipe],
+  imports: [
+    CommonModule,
+    ChatImageMessageComponent,
+    ChatTextRendererComponent,
+    MessageContentPipe,
+  ],
   templateUrl: './message-renderer.component.html',
   styleUrl: './message-renderer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

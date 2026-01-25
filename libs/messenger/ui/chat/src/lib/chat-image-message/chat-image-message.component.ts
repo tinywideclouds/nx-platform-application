@@ -9,13 +9,16 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatBadgeModule } from '@angular/material/badge';
-import { ImageContent } from '@nx-platform-application/messenger-domain-message-content';
+import { MatSnackBar } from '@angular/material/snack-bar';
+
+// Domain / UI Imports
 import {
   SafeResourceUrlPipe,
   SafeUrlPipe,
 } from '@nx-platform-application/platform-ui-pipes';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { DisplayMessage } from '../models';
+import { ChatTextRendererComponent } from '../chat-text-renderer/chat-text-renderer.component';
 
 @Component({
   selector: 'chat-image-message',
@@ -26,13 +29,15 @@ import { MatSnackBar } from '@angular/material/snack-bar';
     MatBadgeModule,
     SafeResourceUrlPipe,
     SafeUrlPipe,
+    ChatTextRendererComponent,
   ],
   templateUrl: './chat-image-message.component.html',
   styleUrls: ['./chat-image-message.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatImageMessageComponent {
-  content = input.required<ImageContent & { messageId: string }>();
+  // ✅ UPDATE: Accepts the simplified DisplayMessage
+  message = input.required<DisplayMessage>();
 
   private facade = inject(ChatMediaFacade);
   private snackBar = inject(MatSnackBar);
@@ -42,16 +47,23 @@ export class ChatImageMessageComponent {
 
   isUpdatingThumbnail = signal(false);
 
+  // ✅ HELPER: Access the image-specific data safely
+  // We assume the parent component only renders this if kind === 'image'
+  private imgData = computed(() => this.message().image!);
+
+  // ✅ HELPER: Expose parts for the template (Caption)
+  parts = computed(() => this.message().parts);
+
   // The inline image is always used for display
-  displaySrc = computed(() => this.content().inlineImage);
+  displaySrc = computed(() => this.imgData().src);
 
   private driveAsset = computed(() => {
-    const assets = this.content().assets;
+    const assets = this.imgData().assets;
     // We cast to any because the key is dynamic, but we know we look for 'driveImage'
     return assets ? (assets as any).driveImage : null;
   });
 
-  // --- NEW: CAPABILITIES ---
+  // --- CAPABILITIES ---
   // What can we do with this specific image? (e.g. Google supports all, Dropbox might support less)
   capabilities = computed(() => {
     const asset = this.driveAsset();
@@ -61,7 +73,7 @@ export class ChatImageMessageComponent {
     return providerCapabilities;
   });
 
-  // --- NEW: PREVIEW STATE ---
+  // --- PREVIEW STATE ---
   // If set, we show the modal overlay with the iframe
   activePreviewUrl = signal<string | null>(null);
 
@@ -93,10 +105,10 @@ export class ChatImageMessageComponent {
   // this is preview logic so we put it between the preview open/close methods
   async updateThumbnail() {
     const previewUrl = this.activePreviewUrl();
-    const messageId = this.content().messageId;
+    const messageId = this.message().id;
 
     if (!messageId) {
-      console.warn('no mesage id found cannot patch image');
+      console.warn('no message id found cannot patch image');
     }
 
     if (!previewUrl || !messageId) return;
@@ -165,7 +177,7 @@ export class ChatImageMessageComponent {
   // Checks if the 'original' asset exists in the record
   // This will flip from FALSE -> TRUE when the background patch arrives
   mediaLinks = computed(() => {
-    const assets = this.content().assets;
+    const assets = this.imgData().assets;
     if (!assets) return false;
 
     const mediaMap = (assets as any).driveImage;
@@ -174,5 +186,5 @@ export class ChatImageMessageComponent {
     return !!(assets && mediaMap);
   });
 
-  altText = computed(() => this.content().displayName || 'Image Attachment');
+  altText = computed(() => 'Image Attachment');
 }
