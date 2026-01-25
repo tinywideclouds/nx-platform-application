@@ -50,6 +50,7 @@ vite.config.*.timestamp*
 vitest.config.*.timestamp*
 .angular
 /apps/platform/node-identity-service/util/
+/apps/messenger/messenger-app/src/app/environments/environment.dev.ts
 
 **/.env
 **/.env.serve.development
