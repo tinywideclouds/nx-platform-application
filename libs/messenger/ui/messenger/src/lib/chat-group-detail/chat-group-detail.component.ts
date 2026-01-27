@@ -3,22 +3,36 @@ import {
   inject,
   input,
   computed,
+  signal,
+  effect,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { toSignal, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap } from 'rxjs';
-
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
+import { toSignal } from '@angular/core/rxjs-interop'; // ✅ Required for template signal call
 import { URN } from '@nx-platform-application/platform-types';
+
+import {
+  AddressBookApi,
+  AddressBookManagementApi,
+  ContactsQueryApi,
+  ContactSummary,
+} from '@nx-platform-application/contacts-api';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
+import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
 
 // UI Imports
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatButtonModule } from '@angular/material/button';
-// ✅ REUSE: The form component from contacts-ui
+import { MatListModule } from '@angular/material/list';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+
 import { ContactGroupFormComponent } from '@nx-platform-application/contacts-ui';
+
+interface RosterMember extends ContactSummary {
+  isSaved: boolean;
+  memberStatus?: string; // ✅ Optional: Only for Network Groups
+}
 
 @Component({
   selector: 'messenger-chat-group-detail',
@@ -26,9 +40,11 @@ import { ContactGroupFormComponent } from '@nx-platform-application/contacts-ui'
   imports: [
     CommonModule,
     MatIconModule,
-    MatProgressBarModule,
     MatButtonModule,
-    ContactGroupFormComponent, // ✅ Imported
+    MatListModule,
+    MatTooltipModule,
+    MatProgressBarModule,
+    ContactGroupFormComponent,
   ],
   templateUrl: './chat-group-detail.component.html',
   styleUrl: './chat-group-detail.component.scss',
@@ -37,49 +53,108 @@ import { ContactGroupFormComponent } from '@nx-platform-application/contacts-ui'
 export class ChatGroupDetailComponent {
   groupId = input.required<URN>();
 
-  private contactsService = inject(ContactsStorageService);
+  private addressBook = inject(AddressBookApi);
+  private contactsQuery = inject(ContactsQueryApi);
+  private addressBookManager = inject(AddressBookManagementApi);
+  private directory = inject(DirectoryQueryApi);
 
-  // --- Data Loading ---
+  group = signal<ContactGroup | null>(null);
+  roster = signal<RosterMember[]>([]);
+  isLoading = signal<boolean>(true);
 
-  private group$ = toObservable(this.groupId).pipe(
-    switchMap((id) => this.contactsService.getGroup(id)),
-  );
-  group = toSignal(this.group$);
+  // ✅ FIX: Converted to Signal for Template Usage
+  allContacts = toSignal(this.addressBook.contacts$, {
+    initialValue: [] as Contact[],
+  });
 
-  // The Form Component needs the full contact list to resolve member IDs
-  // In a real app with 10k contacts, we'd optimize this, but for now it matches the ContactPage pattern
-  private allContacts$ = this.contactsService.contacts$;
-  allContacts = toSignal(this.allContacts$, { initialValue: [] as Contact[] });
+  constructor() {
+    effect(() => {
+      const id = this.groupId();
+      this.loadData(id);
+    });
+  }
 
-  // --- Computed State ---
+  private async loadData(id: URN): Promise<void> {
+    this.isLoading.set(true);
+    try {
+      const groupData = await this.addressBook.getGroup(id);
+      this.group.set(groupData ?? null);
 
-  isNetworkGroup = computed(() => {
+      if (groupData) {
+        const summaries = await this.contactsQuery.getGroupParticipants(id);
+
+        let memberState: Record<string, string> = {};
+
+        // Only fetch state for Network Groups
+        if (this.isNetworkGroup(groupData)) {
+          const dirGroup = await this.directory.getGroup(id);
+          if (dirGroup) {
+            memberState = dirGroup.memberState;
+          }
+        }
+
+        const enriched: RosterMember[] = await Promise.all(
+          summaries.map(async (s) => {
+            const status = memberState[s.id.toString()]; // Undefined for local
+            const saved = await this.addressBook.getContact(s.id);
+            return {
+              ...s,
+              memberStatus: status, // ✅ Optional
+              isSaved: !!saved,
+            };
+          }),
+        );
+
+        this.roster.set(enriched);
+      }
+    } catch (err) {
+      console.error('Failed to load group details', err);
+      this.group.set(null);
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  private isNetworkGroup(g: ContactGroup): boolean {
+    return (
+      (g as any).scope === 'messenger' || g.id.namespace.startsWith('messenger')
+    );
+  }
+
+  isNetworkGroupSig = computed(() => {
     const g = this.group();
-    if (!g) return false;
-    return g.scope === 'messenger' || g.id.namespace.startsWith('messenger');
+    return g ? this.isNetworkGroup(g) : false;
   });
 
   stats = computed(() => {
-    const g = this.group();
-    if (!g) return { total: 0, joined: 0, pending: 0, progress: 0 };
+    // Stats are irrelevant for Local Groups (always 100%)
+    if (!this.isNetworkGroupSig()) return null;
 
-    const total = g.members.length;
-    const joined = g.members.filter((m) => m.status === 'joined').length;
-    const pending = g.members.filter(
-      (m) => m.status === 'invited' || m.status === 'added',
-    ).length;
+    const members = this.roster();
+    const total = members.length;
+    const joined = members.filter((m) => m.memberStatus === 'joined').length;
+    const pending = members.filter((m) => m.memberStatus === 'invited').length;
 
     const progress = total > 0 ? (joined / total) * 100 : 0;
-
     return { total, joined, pending, progress };
   });
 
-  // --- Actions ---
+  async promote(urn: URN): Promise<void> {
+    try {
+      await this.addressBookManager.linkIdentity(
+        URN.parse(`urn:contacts:user:${crypto.randomUUID()}`),
+        { directoryUrn: urn },
+      );
 
-  // Since this is just a "Detail View" inside the chat, we disable editing here.
-  // We could add an "Edit" button that navigates to the full Contacts section if needed.
+      this.roster.update((list) =>
+        list.map((m) => (m.id.equals(urn) ? { ...m, isSaved: true } : m)),
+      );
+    } catch (err) {
+      console.error('Failed to promote contact', err);
+    }
+  }
+
   onSave(group: ContactGroup): void {
-    // Read-only view in this context
-    console.warn('Editing disabled in Chat Detail view');
+    this.addressBookManager.saveGroup(group);
   }
 }

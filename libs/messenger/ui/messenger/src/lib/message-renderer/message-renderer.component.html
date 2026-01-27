@@ -10,6 +10,15 @@
       <chat-image-message [message]="p" />
     }
 
+    @case ('system') {
+      <chat-system-message [icon]="p.system?.icon">
+        <span class="font-bold text-gray-800">
+          {{ message().senderId | contactName }}
+        </span>
+        {{ p.system?.text }}
+      </chat-system-message>
+    }
+
     @default {
       <div class="text-xs text-red-400 italic">[Unsupported Content]</div>
     }

@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { PendingListComponent } from './pending-list.component';
-import { PendingIdentity } from '@nx-platform-application/contacts-storage';
+import { PendingIdentity } from '@nx-platform-application/contacts-infrastructure-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
@@ -44,10 +44,10 @@ describe('PendingListComponent', () => {
     fixture.detectChanges();
 
     const urnDisplay = fixture.debugElement.query(
-      By.css('[data-testid="urn-display"]')
+      By.css('[data-testid="urn-display"]'),
     );
     const vouchBadge = fixture.debugElement.query(
-      By.css('[data-testid="vouch-badge"]')
+      By.css('[data-testid="vouch-badge"]'),
     );
 
     expect(urnDisplay.nativeElement.textContent).toContain('google:stranger');
@@ -59,11 +59,11 @@ describe('PendingListComponent', () => {
     fixture.detectChanges();
 
     const vouchBadge = fixture.debugElement.query(
-      By.css('[data-testid="vouch-badge"]')
+      By.css('[data-testid="vouch-badge"]'),
     );
     expect(vouchBadge).toBeTruthy();
     expect(vouchBadge.nativeElement.textContent).toContain(
-      'Vouched by user:bob'
+      'Vouched by user:bob',
     );
   });
 
@@ -73,7 +73,7 @@ describe('PendingListComponent', () => {
 
     const blockSpy = vi.spyOn(component.block, 'emit');
     const btn = fixture.debugElement.query(
-      By.css('[data-testid="block-button"]')
+      By.css('[data-testid="block-button"]'),
     );
     btn.nativeElement.click();
 
@@ -86,7 +86,7 @@ describe('PendingListComponent', () => {
 
     const approveSpy = vi.spyOn(component.approve, 'emit');
     const btn = fixture.debugElement.query(
-      By.css('[data-testid="approve-button"]')
+      By.css('[data-testid="approve-button"]'),
     );
     btn.nativeElement.click();
 

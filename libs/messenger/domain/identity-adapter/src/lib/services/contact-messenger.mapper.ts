@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { IdentityResolver } from '../interfaces/identity-resolver.interface';
@@ -55,8 +55,13 @@ export class ContactMessengerMapper implements IdentityResolver {
       }
     }
 
-    // 2. Auth Lookup
-    if (handle.namespace === 'auth') {
+    // 2. Auth/Identity Lookup
+    // TODO ### recheck this logic later
+    // if (handle.namespace === 'auth') {
+    //   const contact = await this.contactsService.findContactByAuthUrn(handle);
+    //   if (contact) return contact.id;
+    // }
+    if (handle.namespace === 'auth' || handle.namespace === 'identity') {
       const contact = await this.contactsService.findContactByAuthUrn(handle);
       if (contact) return contact.id;
     }

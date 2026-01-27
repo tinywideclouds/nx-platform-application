@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/app-mocking/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:contacts"],
+  "tags": ["scope:contacts", "layer:infrastructure"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

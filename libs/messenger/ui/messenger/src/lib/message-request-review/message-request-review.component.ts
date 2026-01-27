@@ -10,7 +10,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { PendingIdentity } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
@@ -29,8 +28,8 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessageRequestReviewComponent {
-  // --- INPUTS ---
-  requests = input.required<PendingIdentity[]>();
+  // ✅ FIX: Accept simple URNs (PendingIdentity is gone)
+  requests = input.required<URN[]>();
 
   /**
    * Content for the "Peek" functionality.

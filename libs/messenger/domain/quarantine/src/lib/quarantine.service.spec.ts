@@ -1,27 +1,35 @@
 import { TestBed } from '@angular/core/testing';
 import { QuarantineService } from './quarantine.service';
-import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { URN } from '@nx-platform-application/platform-types';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
+import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 import { QuarantineStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+// ✅ CORRECT IMPORTS
+import { AddressBookApi } from '@nx-platform-application/contacts-api';
+import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
 
 describe('QuarantineService (Gatekeeper)', () => {
   let service: QuarantineService;
   let storage: QuarantineStorage;
-  let contacts: ContactsStateService;
-  let resolver: IdentityResolver;
+  let addressBook: AddressBookApi;
+  let directory: DirectoryQueryApi;
+  let metadata: MessageMetadataService;
 
   const handleUrn = URN.parse('urn:lookup:email:stranger@test.com');
   const contactUrn = URN.parse('urn:contacts:user:canonical-id');
+  const groupUrn = URN.parse('urn:messenger:group:123');
+
   const transportMsg = {
     senderId: handleUrn,
     payloadBytes: new Uint8Array([1]),
   } as TransportMessage;
+
+  const mockContact = { id: contactUrn, alias: 'Friend' };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -32,14 +40,19 @@ describe('QuarantineService (Gatekeeper)', () => {
         MockProvider(QuarantineStorage, {
           saveQuarantinedMessage: vi.fn(),
           getQuarantinedSenders: vi.fn(),
-          getQuarantinedMessages: vi.fn(),
-          deleteQuarantinedMessages: vi.fn(),
-        }),
-        MockProvider(ContactsStateService, {
-          isTrusted: vi.fn(),
         }),
         MockProvider(IdentityResolver, {
-          resolveToContact: vi.fn(),
+          resolveToContact: vi.fn().mockResolvedValue(contactUrn),
+        }),
+        MockProvider(MessageMetadataService, {
+          unwrap: vi.fn(),
+        }),
+        // ✅ API Mocks
+        MockProvider(AddressBookApi, {
+          getContact: vi.fn(),
+        }),
+        MockProvider(DirectoryQueryApi, {
+          getGroup: vi.fn(),
         }),
         MockProvider(Logger),
       ],
@@ -47,21 +60,37 @@ describe('QuarantineService (Gatekeeper)', () => {
 
     service = TestBed.inject(QuarantineService);
     storage = TestBed.inject(QuarantineStorage);
-    contacts = TestBed.inject(ContactsStateService);
-    resolver = TestBed.inject(IdentityResolver);
+    addressBook = TestBed.inject(AddressBookApi);
+    directory = TestBed.inject(DirectoryQueryApi);
+    metadata = TestBed.inject(MessageMetadataService);
   });
 
-  describe('process (The Gate)', () => {
-    it('should REJECT immediately if sender is in Blocked Set', async () => {
+  describe('process', () => {
+    it('should REJECT immediately if sender is Blocked', async () => {
       const blockedSet = new Set([handleUrn.toString()]);
       const result = await service.process(transportMsg, blockedSet);
+
       expect(result).toBeNull();
       expect(storage.saveQuarantinedMessage).not.toHaveBeenCalled();
     });
 
-    it('should DETAIN (Quarantine) if sender is not trusted', async () => {
-      vi.mocked(resolver.resolveToContact).mockResolvedValue(contactUrn);
-      vi.mocked(contacts.isTrusted).mockResolvedValue(false);
+    it('should ALLOW if sender is in Address Book (Contact)', async () => {
+      // Simulate Contact Exists
+      vi.mocked(addressBook.getContact).mockResolvedValue(mockContact as any);
+
+      const result = await service.process(transportMsg, new Set());
+
+      expect(result).toEqual(contactUrn);
+      expect(storage.saveQuarantinedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should DETAIN if stranger sends a Direct Message', async () => {
+      // Not in Address Book
+      vi.mocked(addressBook.getContact).mockResolvedValue(undefined);
+      // Is DM (No Conversation ID)
+      vi.mocked(metadata.unwrap).mockReturnValue({
+        content: new Uint8Array([]),
+      });
 
       const result = await service.process(transportMsg, new Set());
 
@@ -69,21 +98,25 @@ describe('QuarantineService (Gatekeeper)', () => {
       expect(storage.saveQuarantinedMessage).toHaveBeenCalledWith(transportMsg);
     });
 
-    it('should ALLOW and return Canonical URN if sender is trusted', async () => {
-      vi.mocked(resolver.resolveToContact).mockResolvedValue(contactUrn);
-      vi.mocked(contacts.isTrusted).mockResolvedValue(true);
+    it('should ALLOW if stranger is a valid Member of the Group', async () => {
+      // Not in Address Book
+      vi.mocked(addressBook.getContact).mockResolvedValue(undefined);
+
+      // Is Group Message
+      vi.mocked(metadata.unwrap).mockReturnValue({
+        conversationId: groupUrn,
+        content: new Uint8Array([]),
+      });
+
+      // Is Member of Group in Directory
+      vi.mocked(directory.getGroup).mockResolvedValue({
+        memberState: { [contactUrn.toString()]: 'joined' },
+      } as any);
 
       const result = await service.process(transportMsg, new Set());
 
       expect(result).toEqual(contactUrn);
       expect(storage.saveQuarantinedMessage).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Management Ops', () => {
-    it('should delegate retrieval to storage', async () => {
-      await service.getPendingRequests();
-      expect(storage.getQuarantinedSenders).toHaveBeenCalled();
     });
   });
 });

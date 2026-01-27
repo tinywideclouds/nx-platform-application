@@ -23,7 +23,7 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 
 // FEATURE COMPONENTS
 import { ContactsSidebarComponent } from '../contacts-sidebar/contacts-sidebar.component';
-import { ContactGroupPageComponent } from '../contact-group-page/contact-group-page.component';
+import { ContactGroupPageComponent } from '../contact-group/contact-group.component';
 import { ContactPageComponent } from '../contact-page/contact-page.component';
 
 @Component({

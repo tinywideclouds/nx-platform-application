@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/api/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:contacts", "type:public-api"],
+  "tags": ["scope:contacts", "layer:state", "type:public-api"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

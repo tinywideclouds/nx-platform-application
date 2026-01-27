@@ -21,7 +21,10 @@ import {
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-import { AddressBookApi } from '@nx-platform-application/contacts-api';
+// ❌ REMOVED: AddressBookApi (Local Templates only)
+// ✅ ADDED: DirectoryQueryApi (Consensus Groups)
+import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
+
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 
@@ -41,7 +44,9 @@ export class ConversationService {
   private historyReader = inject(HistoryReader);
   private storage = inject(ConversationStorage);
   private chatSync = inject(ChatSyncService);
-  private addressBook = inject(AddressBookApi);
+
+  // ✅ Architecture Swap
+  private directory = inject(DirectoryQueryApi);
 
   private keyService = inject(ChatKeyService);
   private mapper = inject(MessageViewMapper);
@@ -73,6 +78,7 @@ export class ConversationService {
     if (status === 'joined') return raw;
 
     // 3. Lurker (Invited/Unknown): Shield Content
+    // Only show Invites and Responses (System Traffic) or my own messages
     return raw.filter(
       (m) =>
         m.typeId.equals(MessageGroupInviteResponse) ||
@@ -142,27 +148,27 @@ export class ConversationService {
         return;
       }
 
-      // LOGIC: Determine Group Status
+      // LOGIC: Determine Group Status via Directory Consensus
       if (urn.entityType === 'group') {
-        const group = await this.addressBook.getGroup(urn);
+        const group = await this.directory.getGroup(urn);
+
         if (group && myUrn) {
-          const me = group.members.find((m) => m.contactId.equals(myUrn));
-          if (me) {
-            const s = me.status;
-            if (s === 'joined' || s === 'added') {
-              this.membershipStatus.set('joined');
-            } else if (s === 'invited') {
-              this.membershipStatus.set('invited');
-            } else {
-              this.membershipStatus.set('unknown');
-            }
+          // Check the Consensus Roster Map
+          const status = group.memberState[myUrn.toString()];
+
+          if (status === 'joined') {
+            this.membershipStatus.set('joined');
+          } else if (status === 'invited') {
+            this.membershipStatus.set('invited');
           } else {
             this.membershipStatus.set('unknown');
           }
         } else {
-          this.membershipStatus.set('invited');
+          // If we don't have the group definition, we are unknown
+          this.membershipStatus.set('unknown');
         }
       } else {
+        // Direct Messages are always "Joined" (if 1:1)
         this.membershipStatus.set('joined');
       }
 

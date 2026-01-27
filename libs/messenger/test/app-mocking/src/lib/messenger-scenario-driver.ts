@@ -5,6 +5,7 @@ import { MessageTypeText } from '@nx-platform-application/messenger-domain-messa
 // ✅ NEW WORLD SERVICES (The Sources of Truth)
 import { IdentitySetupService } from './world/identity-setup.service';
 import { WorldMessagingService } from './world/world-messaging.service';
+import { MockDirectoryService } from './services/mock-directory.service';
 
 import { ScenarioDirectorService } from './driver-services/scenario-director.service';
 
@@ -22,7 +23,7 @@ import {
   OutboxStorage,
   QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import { KeyStorageService } from '@nx-platform-application/messenger-infrastructure-key-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
@@ -48,6 +49,7 @@ export class MessengerScenarioDriver {
   private liveMock = inject(MockLiveService);
   private sendMock = inject(MockChatSendService);
   private pushMock = inject(MockPushNotificationService);
+  private directoryMock = inject(MockDirectoryService);
 
   // --- INFRASTRUCTURE LAYER (Access for Wiping) ---
   private chatStorage = inject(ChatStorageService);
@@ -104,6 +106,11 @@ export class MessengerScenarioDriver {
     this.liveMock.loadScenario(scenario.remote_server.network);
     this.sendMock.loadScenario(scenario.remote_server.send);
     this.pushMock.loadScenario(scenario.local_device.notifications);
+
+    // ✅ NEW: Seed Directory
+    this.directoryMock.loadScenario(
+      scenario.remote_server.directory || { groups: [], entities: [] },
+    );
 
     // Config the Chat Data Service (Wait mode, etc), but don't load messages yet
     // We will inject messages via the World Service next.

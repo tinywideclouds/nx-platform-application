@@ -16,6 +16,7 @@ export const NEW_USER: MessengerScenarioData = {
     identity: { hasMyKey: false }, // Remote 404
     network: { queuedMessages: [] },
     send: { shouldFail: false },
+    directory: { groups: [], entities: [] },
   },
 };
 
@@ -34,5 +35,6 @@ export const FRESH_LOGIN: MessengerScenarioData = {
     identity: { hasMyKey: true },
     network: { queuedMessages: [] },
     send: { shouldFail: false },
+    directory: { groups: [], entities: [] },
   },
 };

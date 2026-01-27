@@ -1,75 +1,173 @@
 <div class="h-full bg-white overflow-y-auto flex flex-col">
   @if (group(); as g) {
-    <div class="p-6 pb-2 text-center">
+    <div class="p-6 pb-4 text-center border-b border-gray-100">
       <div
-        class="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"
+        class="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors duration-300"
+        [class.bg-purple-50]="isNetworkGroupSig()"
+        [class.text-purple-600]="isNetworkGroupSig()"
+        [class.bg-gray-100]="!isNetworkGroupSig()"
+        [class.text-gray-600]="!isNetworkGroupSig()"
       >
         <mat-icon class="!w-10 !h-10 text-[40px]">
-          {{ isNetworkGroup() ? 'hub' : 'groups' }}
+          {{ isNetworkGroupSig() ? 'hub' : 'list_alt' }}
         </mat-icon>
       </div>
 
-      @if (isNetworkGroup()) {
+      <h2 class="text-xl font-bold text-gray-900 mb-2 truncate px-4">
+        {{ g.name }}
+      </h2>
+
+      @if (isNetworkGroupSig()) {
         <span
-          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mb-2"
+          class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800"
         >
+          <div
+            class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"
+          ></div>
           Network Group
         </span>
       } @else {
         <span
-          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mb-2"
+          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600"
         >
-          Local List
+          Broadcast List
         </span>
       }
     </div>
 
-    @if (isNetworkGroup()) {
-      <div class="mx-4 p-4 bg-gray-50 rounded-lg border border-gray-100 mb-4">
-        <h3
-          class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
-        >
-          Network Status
-        </h3>
-
-        <div class="flex items-end justify-between mb-2">
-          <span class="text-xl font-bold text-gray-900"
-            >{{ stats().joined
-            }}<span class="text-gray-400 text-sm"
-              >/{{ stats().total }}</span
-            ></span
+    @if (isNetworkGroupSig()) {
+      <div class="p-4">
+        @if (stats(); as s) {
+          <div
+            class="p-4 bg-gray-50 rounded-xl border border-gray-200 mb-6 shadow-sm"
           >
-          <span class="text-xs font-medium text-green-600">Active</span>
+            <div class="flex items-end justify-between mb-2">
+              <div>
+                <span
+                  class="block text-xs font-bold text-gray-400 uppercase tracking-wider"
+                  >Group Health</span
+                >
+                <span class="text-lg font-bold text-gray-900">
+                  {{ s.joined }}
+                  <span class="text-gray-400 text-sm"
+                    >/ {{ s.total }} Active</span
+                  >
+                </span>
+              </div>
+              <span
+                class="text-xs font-bold"
+                [class.text-green-600]="s.progress > 80"
+                [class.text-yellow-600]="s.progress <= 80"
+              >
+                {{ s.progress | number: '1.0-0' }}% Response
+              </span>
+            </div>
+
+            <mat-progress-bar
+              mode="determinate"
+              [value]="s.progress"
+              class="rounded-full h-2"
+            ></mat-progress-bar>
+          </div>
+        }
+
+        <div class="flex items-center justify-between mb-2 px-1">
+          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+            Participants
+          </h3>
+          <span class="text-xs text-gray-400"
+            >{{ roster().length }} members</span
+          >
         </div>
 
-        <mat-progress-bar
-          mode="determinate"
-          [value]="stats().progress"
-          class="rounded h-2"
-        ></mat-progress-bar>
+        <mat-list>
+          @for (member of roster(); track member.id.toString()) {
+            <mat-list-item
+              class="!px-2 h-auto py-2 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              <div matListItemAvatar class="relative mt-1">
+                @if (member.profilePictureUrl) {
+                  <img
+                    alt="profile picture"
+                    [src]="member.profilePictureUrl"
+                    class="w-10 h-10 rounded-full object-cover border border-gray-200"
+                  />
+                } @else {
+                  <div
+                    class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-sm"
+                  >
+                    {{ member.alias.charAt(0).toUpperCase() }}
+                  </div>
+                }
 
-        <div class="mt-3 flex gap-4 text-xs text-gray-500">
-          <div class="flex items-center gap-1">
-            <div class="w-2 h-2 rounded-full bg-green-500"></div>
-            {{ stats().joined }} Joined
-          </div>
-          <div class="flex items-center gap-1">
-            <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
-            {{ stats().pending }} Pending
-          </div>
-        </div>
+                @if (member.memberStatus === 'invited') {
+                  <div
+                    class="absolute -bottom-1 -right-1 bg-amber-400 text-white rounded-full p-0.5 border-2 border-white shadow-sm"
+                    matTooltip="Invited (Pending)"
+                  >
+                    <mat-icon
+                      class="text-[10px] w-3 h-3 flex items-center justify-center font-bold"
+                      >hourglass_empty</mat-icon
+                    >
+                  </div>
+                }
+              </div>
+
+              <div matListItemTitle class="font-medium text-sm text-gray-900">
+                {{ member.alias }}
+              </div>
+
+              <div matListItemLine class="text-xs mt-0.5">
+                @if (member.isSaved) {
+                  <span
+                    class="text-green-600 flex items-center gap-1 font-medium"
+                  >
+                    <mat-icon class="text-[12px] w-3 h-3"
+                      >check_circle</mat-icon
+                    >
+                    Contact
+                  </span>
+                } @else {
+                  <span class="text-gray-400 flex items-center gap-1">
+                    <mat-icon class="text-[12px] w-3 h-3">public</mat-icon>
+                    Network Guest
+                  </span>
+                }
+              </div>
+
+              <div matListItemMeta>
+                @if (!member.isSaved) {
+                  <button
+                    mat-icon-button
+                    color="primary"
+                    (click)="promote(member.id)"
+                    matTooltip="Add to Contacts"
+                    class="!w-8 !h-8 flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-full"
+                  >
+                    <mat-icon class="text-[18px]">person_add</mat-icon>
+                  </button>
+                }
+              </div>
+            </mat-list-item>
+          }
+        </mat-list>
+      </div>
+    } @else {
+      <div class="flex-grow px-4 pb-4">
+        <contacts-group-form
+          [group]="g"
+          [allContacts]="allContacts()"
+          [isEditing]="true"
+          (save)="onSave($event)"
+        />
       </div>
     }
-
-    <div class="flex-grow">
-      <contacts-group-form
-        [group]="g"
-        [allContacts]="allContacts()"
-        [isEditing]="false"
-        (save)="onSave($event)"
-      />
-    </div>
   } @else {
-    <div class="p-8 text-center text-gray-500">Loading group details...</div>
+    <div class="h-full flex flex-col items-center justify-center text-gray-400">
+      <mat-icon class="text-[48px] w-12 h-12 mb-4 opacity-20 animate-pulse"
+        >hub</mat-icon
+      >
+      <p class="text-sm font-medium">Loading details...</p>
+    </div>
   }
 </div>

@@ -4,100 +4,94 @@ import {
   PendingIdentity,
   BlockedIdentity,
 } from '@nx-platform-application/contacts-types';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import { Temporal } from '@js-temporal/polyfill';
 
-// --- CONSTANTS (Exported for E2E Assertions) ---
+import {
+  idAliceContact,
+  idBobContact,
+  idBobMessenger,
+  groupWork as dirGroupWork,
+} from '@nx-platform-application/directory-app-mocking';
 
-export const MOCK_ALICE: Contact = {
-  id: URN.parse('urn:contacts:user:alice'),
-  alias: 'Alice',
+const now = Temporal.Now.instant().toString() as ISODateTimeString;
+
+// --- Contacts ---
+
+export const mockAlice: Contact = {
+  id: idAliceContact,
+  alias: 'Alice (Work)',
   firstName: 'Alice',
   surname: 'Wonderland',
   email: 'alice@wonderland.com',
   phoneNumbers: ['+15550100'],
   emailAddresses: ['alice@wonderland.com'],
   serviceContacts: {},
-  lastModified: new Date().toISOString() as any,
+  lastModified: now,
 };
 
-export const MOCK_BOB: Contact = {
-  id: URN.parse('urn:contacts:user:bob'),
-  alias: 'Bob',
+export const mockBob: Contact = {
+  id: idBobContact,
+  alias: 'Bob (Builder)',
   firstName: 'Bob',
   surname: 'Builder',
   email: 'bob@build.com',
   phoneNumbers: [],
   emailAddresses: [],
   serviceContacts: {},
-  lastModified: new Date().toISOString() as any,
+  lastModified: now,
 };
 
-export const MOCK_GROUP_WORK: ContactGroup = {
+// --- Groups ---
+
+export const mockGroupWork: ContactGroup = {
   id: URN.parse('urn:contacts:group:work'),
+  directoryId: dirGroupWork.id,
   name: 'Work Friends',
   description: 'Lunch crew distribution list',
-  scope: 'local',
-  members: [
-    {
-      contactId: MOCK_ALICE.id,
-      status: 'added',
-      joinedAt: new Date().toISOString() as any,
-    },
-    {
-      contactId: MOCK_BOB.id,
-      status: 'added',
-      joinedAt: new Date().toISOString() as any,
-    },
-  ],
+  // ✅ FIX: Actually added the members!
+  memberUrns: [idAliceContact, idBobContact],
+  lastModified: now,
 };
 
-export const MOCK_GROUP_PROJECT: ContactGroup = {
-  id: URN.parse('urn:contacts:group:project-x'),
-  name: 'Project X',
-  description: 'Top Secret Network Chat',
-  scope: 'messenger',
-  members: [
-    {
-      contactId: MOCK_ALICE.id,
-      status: 'joined',
-      joinedAt: new Date().toISOString() as any,
-    },
-  ],
-};
+// --- Scenario Data ---
 
-export const MOCK_PENDING_STRANGER: PendingIdentity = {
-  urn: URN.parse('urn:auth:google:stranger'),
-  firstSeenAt: new Date().toISOString() as any,
-  note: 'Met at the conference',
-};
-
-export const MOCK_BLOCKED_SPAMMER: BlockedIdentity = {
-  urn: URN.parse('urn:auth:email:spammer@spam.com'),
-  blockedAt: new Date().toISOString() as any,
-  scopes: ['messenger'],
-  reason: 'Spam',
-};
-
-// --- SCENARIO DEFINITIONS ---
+export interface IdentityLinkMock {
+  contactId: URN;
+  authUrn: URN;
+  scope: string;
+}
 
 export interface ScenarioData {
   contacts: Contact[];
   groups: ContactGroup[];
+  links: IdentityLinkMock[];
   pending: PendingIdentity[];
   blocked: BlockedIdentity[];
 }
 
-export const SCENARIOS: Record<string, ScenarioData> = {
+export const scenarios: Record<string, ScenarioData> = {
   empty: {
     contacts: [],
     groups: [],
+    links: [],
     pending: [],
     blocked: [],
   },
   populated: {
-    contacts: [MOCK_ALICE, MOCK_BOB],
-    groups: [MOCK_GROUP_WORK, MOCK_GROUP_PROJECT],
-    pending: [MOCK_PENDING_STRANGER],
-    blocked: [MOCK_BLOCKED_SPAMMER],
+    contacts: [mockAlice, mockBob],
+    groups: [mockGroupWork],
+    links: [
+      {
+        contactId: mockBob.id,
+        authUrn: idBobMessenger,
+        scope: 'messenger',
+      },
+    ],
+    pending: [],
+    blocked: [],
   },
 };

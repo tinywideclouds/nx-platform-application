@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { CloudSyncService } from './cloud-sync.service';
-import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
+import { ContactsSyncService } from '@nx-platform-application/contacts-domain-sync';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { IntegrationApiService } from '@nx-platform-application/platform-infrastructure-drive-integrations'; // 👈 Import this

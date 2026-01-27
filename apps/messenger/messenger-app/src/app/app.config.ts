@@ -3,7 +3,6 @@ import {
   APP_INITIALIZER,
   provideZonelessChangeDetection,
   importProvidersFrom,
-  inject,
 } from '@angular/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
@@ -27,19 +26,19 @@ import {
 // --- INFRASTRUCTURE ---
 import {
   IChatDataService,
-  ChatDataService, // Concrete Class
+  ChatDataService,
   IChatSendService,
-  ChatSendService, // Concrete Class
+  ChatSendService,
   ROUTING_SERVICE_URL,
 } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   IChatLiveDataService,
-  ChatLiveDataService, // Concrete Class
+  ChatLiveDataService,
   WSS_URL_TOKEN,
 } from '@nx-platform-application/messenger-infrastructure-live-data';
 import {
   ISecureKeyService,
-  SecureKeyService, // Concrete Class
+  SecureKeyService,
   KEY_SERVICE_URL,
 } from '@nx-platform-application/messenger-infrastructure-key-access';
 
@@ -62,6 +61,7 @@ import {
   MockIntegrationApiService,
   MockCryptoEngine,
   MessengerScenarioDriver,
+  MockDirectoryService, // ✅ Imported Mock Directory
 } from '@nx-platform-application/lib-messenger-test-app-mocking';
 
 // --- OTHER ---
@@ -77,15 +77,21 @@ import {
   OutboxStorage,
   QuarantineStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+
 import {
   ContactsQueryApi,
   AddressBookApi,
   AddressBookManagementApi,
-  GatekeeperApi,
-  GroupNetworkStorageApi,
 } from '@nx-platform-application/contacts-api';
-import { GroupNetworkStorage } from '@nx-platform-application/contacts-storage';
-import { ContactsFacadeService } from '@nx-platform-application/contacts-state';
+
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
+
+// ✅ NEW: Directory APIs
+import {
+  DirectoryQueryApi,
+  DirectoryMutationApi,
+} from '@nx-platform-application/directory-api';
+
 import {
   LOGGER_CONFIG,
   LogLevel,
@@ -108,7 +114,6 @@ export function initializeAuthFactory(authService: IAuthService) {
 
 // --- PROVIDERS ---
 
-// 1. Auth: Override Interface AND Concrete Class
 const authProviders = environment.useMocks
   ? [
       { provide: IAuthService, useExisting: MockAuthService },
@@ -120,7 +125,6 @@ const cryptoProvider = environment.useMocks
   ? { provide: CryptoEngine, useClass: MockCryptoEngine }
   : CryptoEngine;
 
-// 2. Notifications: Override Concrete Class
 const notificationProviders = environment.useMocks
   ? [
       {
@@ -130,16 +134,12 @@ const notificationProviders = environment.useMocks
     ]
   : [];
 
-// 3. Infrastructure: Override Interface AND Concrete Class
-// This prevents Angular from instantiating the real services via @Injectable({providedIn: 'root'})
 const infraProviders = environment.useMocks
   ? [
-      // Interfaces
       { provide: IChatDataService, useExisting: MockChatDataService },
       { provide: IChatSendService, useExisting: MockChatSendService },
       { provide: IChatLiveDataService, useExisting: MockLiveService },
       { provide: ISecureKeyService, useExisting: MockKeyService },
-      // Concrete Classes (Fixes the leak)
       { provide: ChatDataService, useExisting: MockChatDataService },
       { provide: ChatSendService, useExisting: MockChatSendService },
       { provide: ChatLiveDataService, useExisting: MockLiveService },
@@ -152,7 +152,18 @@ const infraProviders = environment.useMocks
       { provide: ISecureKeyService, useClass: SecureKeyService },
     ];
 
-// 4. Tokens: Exclude real tokens in mock mode
+// ✅ Directory Providers Logic
+const directoryProviders = environment.useMocks
+  ? [
+      { provide: DirectoryQueryApi, useExisting: MockDirectoryService },
+      { provide: DirectoryMutationApi, useExisting: MockDirectoryService },
+      MockDirectoryService, // Ensure Class is available for Driver
+    ]
+  : [
+      // TODO: Add Real HTTP Directory Service here when ready
+      // { provide: DirectoryQueryApi, useClass: HttpDirectoryService },
+    ];
+
 const tokenProviders = [
   { provide: AUTH_API_URL, useValue: environment.identityServiceUrl },
   ...(environment.useMocks
@@ -174,7 +185,6 @@ const tokenProviders = [
 
 const cloudProviders = environment.useMocks
   ? [
-      // ✅ MOCK CONFIGURATION
       {
         provide: PlatformStorageConfig,
         useValue: {
@@ -186,7 +196,6 @@ const cloudProviders = environment.useMocks
       { provide: IntegrationApiService, useClass: MockIntegrationApiService },
     ]
   : [
-      // 🚀 REAL CONFIGURATION
       {
         provide: PlatformStorageConfig,
         useValue: {
@@ -212,7 +221,8 @@ export const appConfig: ApplicationConfig = {
     ...authProviders,
     cryptoProvider,
     ...notificationProviders,
-    ...infraProviders, // ✅ Now forces Mocks for concrete classes
+    ...infraProviders,
+    ...directoryProviders, // ✅ Added Directory Mocks
     provideMessengerIdentity(),
 
     { provide: HistoryReader, useExisting: ChatStorageService },
@@ -220,11 +230,9 @@ export const appConfig: ApplicationConfig = {
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
     { provide: QuarantineStorage, useClass: DexieQuarantineStorage },
 
-    { provide: ContactsQueryApi, useExisting: ContactsFacadeService },
-    { provide: AddressBookApi, useExisting: ContactsFacadeService },
-    { provide: AddressBookManagementApi, useExisting: ContactsFacadeService },
-    { provide: GatekeeperApi, useExisting: ContactsFacadeService },
-    { provide: GroupNetworkStorageApi, useClass: GroupNetworkStorage },
+    { provide: ContactsQueryApi, useExisting: ContactsStateService },
+    { provide: AddressBookApi, useExisting: ContactsStateService },
+    { provide: AddressBookManagementApi, useExisting: ContactsStateService },
 
     ...tokenProviders,
     ...cloudProviders,

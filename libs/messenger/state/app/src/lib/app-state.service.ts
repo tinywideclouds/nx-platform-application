@@ -407,7 +407,7 @@ export class AppState {
     try {
       await Promise.all([
         this.storageService.clearDatabase(),
-        this.addressBookManager.clearData(),
+        this.addressBookManager.clearDatabase(),
         this.keyService.clear(),
         this.cryptoService.clearKeys(),
         this.outboxWorker.clearAllTasks(),
@@ -460,7 +460,7 @@ export class AppState {
   }
 
   public async clearLocalContacts(): Promise<void> {
-    await this.addressBookManager.clearData();
+    await this.addressBookManager.clearDatabase();
     this.chatService.refreshActiveConversations();
   }
 
@@ -470,6 +470,33 @@ export class AppState {
 
   public async loadMoreMessages(): Promise<void> {
     return this.conversationService.loadMoreMessages();
+  }
+
+  /**
+   * Provisions a Network group based on a Local Group (Address Book)
+   * @returns The URN of the new Network Group, or null if upgrade failed/cancelled.
+   */
+  public async provisionNetworkGroup(localGroupUrn: URN): Promise<URN | null> {
+    const keys = this.identity.myKeys();
+    const me = this.currentUserUrn();
+
+    if (!keys || !me) {
+      this.logger.warn(
+        '[AppState] Cannot upgrade group: Missing keys or identity.',
+      );
+      return null;
+    }
+
+    try {
+      return await this.groupProtocol.provisionNetworkGroup(
+        localGroupUrn,
+        keys,
+        me,
+      );
+    } catch (e) {
+      this.logger.error('[AppState] Group Upgrade Failed', e);
+      return null;
+    }
   }
 
   private loadUiSettings(): void {

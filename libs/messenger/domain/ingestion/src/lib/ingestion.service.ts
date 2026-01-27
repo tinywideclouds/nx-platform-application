@@ -14,16 +14,20 @@ import {
   MessengerCryptoService,
   PrivateKeys,
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { GroupNetworkStorageApi } from '@nx-platform-application/contacts-api';
+
+// ❌ REMOVED: GroupNetworkStorageApi
+// ✅ ADDED: DirectoryMutationApi
+import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
+
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
   ReadReceiptData,
   AssetRevealData,
-  MessageTypingIndicator,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
+import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
 
 export interface IngestionResult {
   messages: ChatMessage[];
@@ -38,8 +42,12 @@ export class IngestionService {
   private cryptoService = inject(MessengerCryptoService);
   private storageService = inject(ChatStorageService);
   private quarantineService = inject(QuarantineService);
-  private groupStorage = inject(GroupNetworkStorageApi);
   private parser = inject(MessageContentParser);
+
+  // ✅ FIX: Switched to Directory Mutation
+  private directoryMutation = inject(DirectoryMutationApi);
+
+  private groupProtocol = inject(GroupProtocolService);
   private logger = inject(Logger);
 
   async process(
@@ -48,7 +56,6 @@ export class IngestionService {
     blockedSet: Set<string>,
     batchSize = 50,
   ): Promise<IngestionResult> {
-    // 1. Initialize Accumulator
     const finalResult: IngestionResult = {
       messages: [],
       typingIndicators: [],
@@ -58,13 +65,11 @@ export class IngestionService {
 
     let hasMore = true;
 
-    // 2. Iterative Loop (Replacing Recursion)
     while (hasMore) {
       const queue = await firstValueFrom(
         this.dataService.getMessageBatch(batchSize),
       );
 
-      // Stop if network returns nothing
       if (!queue || queue.length === 0) {
         break;
       }
@@ -73,7 +78,6 @@ export class IngestionService {
 
       for (const item of queue) {
         try {
-          // Mutate finalResult directly (Pass-by-reference)
           await this.processSingleMessage(
             item,
             myKeys,
@@ -86,18 +90,14 @@ export class IngestionService {
             `[Ingestion] Failed to process msg ${item.id}`,
             error,
           );
-          // Still ACK to flush poison pills
           processedIds.push(item.id);
         }
       }
 
-      // ACK the current batch
       if (processedIds.length > 0) {
         await firstValueFrom(this.dataService.acknowledge(processedIds));
       }
 
-      // 3. Check Termination Condition
-      // If we received fewer messages than requested, the server queue is empty.
       if (queue.length < batchSize) {
         hasMore = false;
       }
@@ -132,22 +132,17 @@ export class IngestionService {
     );
   }
 
-  // ✅ REFACTOR: Clean, Type-Safe Routing
   private async routeAndProcess(
     transport: TransportMessage,
     queueId: string,
     canonicalSenderUrn: URN,
     accumulator: IngestionResult,
   ): Promise<void> {
-    // 1. INTENT: Check Transport URN properties
     const typeId = transport.typeId;
     const isSignal = typeId.entityType === 'signal';
 
-    // 2. PARSE: Extract data
     const parsed = this.parser.parse(typeId, transport.payloadBytes);
 
-    // 3. ROUTE: Signal Path (High Priority)
-    // Strictly guards against saving "Ghost Messages" to the DB.
     if (isSignal) {
       if (parsed.kind === 'signal') {
         await this.handleSignal(
@@ -160,16 +155,9 @@ export class IngestionService {
           `[Ingestion] Signal Mismatch: Transport=Signal, Parser=${parsed.kind}`,
         );
       }
-      console.warn(
-        '[TIME TRACE] handled signal: not saved, ',
-        typeId.toString(),
-        new Date().toISOString(),
-      );
       return;
     }
 
-    // 4. ROUTE: Content Path
-    // Only reachable if Transport says "Not a Signal".
     if (parsed.kind === 'content') {
       await this.handleContent(
         parsed,
@@ -181,7 +169,6 @@ export class IngestionService {
       return;
     }
 
-    // 5. DEAD END: Unrecognized
     this.logger.warn(
       `[Ingestion] Dropped Unhandled: Transport=${typeId.toString()}, Parser=${
         parsed.kind
@@ -202,18 +189,23 @@ export class IngestionService {
         ? parsed.conversationId
         : canonicalSenderUrn;
 
+    if (parsed.kind === 'content' && parsed.payload.kind === 'group-invite') {
+      await this.groupProtocol.processIncomingInvite(parsed.payload.data);
+    }
+
     if (parsed.payload.kind === 'group-system') {
       const data = parsed.payload.data;
       try {
         const groupUrn = URN.parse(data.groupUrn);
+        // ✅ FIX: Use Directory API to update roster status
         if (data.status === 'joined') {
-          await this.groupStorage.updateGroupMemberStatus(
+          await this.directoryMutation.updateMemberStatus(
             groupUrn,
             canonicalSenderUrn,
             'joined',
           );
         } else if (data.status === 'declined') {
-          await this.groupStorage.updateGroupMemberStatus(
+          await this.directoryMutation.updateMemberStatus(
             groupUrn,
             canonicalSenderUrn,
             'declined',
@@ -252,7 +244,6 @@ export class IngestionService {
         break;
       }
       case 'read-receipt': {
-        console.log('handling read receipt signal');
         const rr = payload.data as ReadReceiptData;
         const ids = rr?.messageIds || [];
         if (ids.length > 0) {
@@ -269,7 +260,6 @@ export class IngestionService {
       }
       case 'asset-reveal': {
         const patch = payload.data as AssetRevealData;
-        console.log('handling asset reveal signal', patch.assets);
         const patchedId = await this.handleAssetReveal(patch);
         if (patchedId) {
           accumulator.patchedMessageIds.push(patchedId);

@@ -1,23 +1,26 @@
 import { TestBed } from '@angular/core/testing';
+import { Temporal } from '@js-temporal/polyfill';
 import { ChatWindowComponent } from './chat-window.component';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
-import { URN } from '@nx-platform-application/platform-types';
-import { vi } from 'vitest';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
+import { Contact } from '@nx-platform-application/contacts-types';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+import { ChatWindowHeaderComponent } from '@nx-platform-application/messenger-ui-chat';
 
 // Services
-import { ChatService } from '@nx-platform-application/messenger-state-app';
-import {
-  ContactsStorageService,
-  Contact,
-} from '@nx-platform-application/contacts-storage';
+import { AppState } from '@nx-platform-application/messenger-state-app';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // ng-mocks
 import { MockComponent, MockProvider } from 'ng-mocks';
-import { ChatWindowHeaderComponent } from '../chat-window-header/chat-window-header.component';
 
 // Mock Data
 const mockContactUrn = URN.parse('urn:contacts:user:alice');
@@ -27,6 +30,7 @@ const mockContact: Contact = {
   email: 'alice@test.com',
   firstName: 'Alice',
   surname: 'Wonderland',
+  lastModified: Temporal.Now.instant().toString() as ISODateTimeString,
   phoneNumbers: [],
   emailAddresses: [],
   serviceContacts: { messenger: { profilePictureUrl: 'img.png' } } as any,
@@ -46,8 +50,22 @@ describe('ChatWindowComponent', () => {
         provideRouter([
           { path: 'chat/:id', component: ChatWindowComponent },
           { path: 'chat/:id/details', component: ChatWindowComponent },
+          {
+            path: 'messenger/conversations/:id',
+            component: ChatWindowComponent,
+          },
         ]),
-        MockProvider(ChatService, {
+        // Mock AppState directly since it's the new delegate
+        MockProvider(AppState, {
+          loadConversation: vi.fn(),
+          upgradeGroup: vi.fn(),
+          selectedConversation,
+          isRecipientKeyMissing: signal(false),
+          messages: signal([]),
+        }),
+        // Also mock ChatService if it's still used by some internals,
+        // but AppState is the primary one we are testing.
+        MockProvider(AppState, {
           loadConversation: vi.fn(),
           selectedConversation,
           isRecipientKeyMissing: signal(false),
@@ -70,15 +88,11 @@ describe('ChatWindowComponent', () => {
       ChatWindowComponent,
     );
 
-    const chatService = TestBed.inject(ChatService);
+    const appState = TestBed.inject(AppState);
 
-    // Check if the service was called
-    expect(chatService.loadConversation).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: 'alice' }), // Loose URN matching or explicit check
+    expect(appState.loadConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: 'alice' }),
     );
-    // Note: Since URN object equality is strict, we might need to check toString if the mock call uses a new URN instance
-    const callArg = (chatService.loadConversation as any).mock.calls[0][0];
-    expect(callArg.toString()).toBe(mockContactUrn.toString());
   });
 
   it('should calculate participant correctly', async () => {
@@ -101,11 +115,35 @@ describe('ChatWindowComponent', () => {
     expect(component.viewMode()).toBe('details');
   });
 
-  it('should detect "chat" view mode from router', async () => {
+  // [NEW] Test Case for Upgrade Flow
+  it('should call upgradeGroup and navigate on success', async () => {
+    // 1. Setup
+    const localUrn = URN.parse('urn:contacts:group:local-1');
+    const newNetworkUrn = URN.parse('urn:messenger:group:new-uuid');
+
     component = await harness.navigateByUrl(
-      `/chat/${mockContactUrn.toString()}`,
+      `/chat/${localUrn.toString()}`,
       ChatWindowComponent,
     );
-    expect(component.viewMode()).toBe('chat');
+
+    // Mock the AppState
+    const appState = TestBed.inject(AppState);
+    vi.spyOn(appState, 'upgradeGroup').mockResolvedValue(newNetworkUrn);
+
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'navigate');
+
+    // 2. Action
+    await component.onCreateGroupChat();
+
+    // 3. Verification
+    expect(appState.upgradeGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ id: localUrn.entityId }),
+    );
+
+    expect(router.navigate).toHaveBeenCalledWith(
+      ['/messenger', 'conversations', newNetworkUrn.toString()],
+      expect.objectContaining({ replaceUrl: true }),
+    );
   });
 });

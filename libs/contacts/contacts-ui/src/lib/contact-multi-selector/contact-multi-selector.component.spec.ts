@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Component, signal } from '@angular/core';
-import { Contact } from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-infrastructure-storage';
 import { URN } from '@nx-platform-application/platform-types'; // <-- 1. Import URN
 import { FormsModule } from '@angular/forms';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations'; // <-- 2. Import
@@ -83,7 +83,7 @@ describe('ContactMultiSelectorComponent', () => {
     componentEl = fixture.nativeElement;
 
     componentInstance = fixture.debugElement.query(
-      By.directive(ContactMultiSelectorComponent)
+      By.directive(ContactMultiSelectorComponent),
     ).componentInstance;
 
     fixture.detectChanges();
@@ -107,7 +107,7 @@ describe('ContactMultiSelectorComponent', () => {
 
   it('should check boxes based on "selectedIds" input', () => {
     const checkboxes = componentEl.querySelectorAll<HTMLInputElement>(
-      'input[type="checkbox"]'
+      'input[type="checkbox"]',
     );
 
     expect(checkboxes.length).toBe(MOCK_CONTACTS.length);
@@ -120,7 +120,7 @@ describe('ContactMultiSelectorComponent', () => {
     expect(hostComponent.selected).toEqual(['urn:contacts:user:user-456']);
 
     const firstCheckbox = fixture.debugElement.query(
-      By.css('input[type="checkbox"]')
+      By.css('input[type="checkbox"]'),
     )?.nativeElement as HTMLInputElement;
 
     expect(firstCheckbox).toBeTruthy();
@@ -133,7 +133,7 @@ describe('ContactMultiSelectorComponent', () => {
     ]);
 
     const secondCheckbox = componentEl.querySelectorAll<HTMLInputElement>(
-      'input[type="checkbox"]'
+      'input[type="checkbox"]',
     )[1];
 
     secondCheckbox.click();

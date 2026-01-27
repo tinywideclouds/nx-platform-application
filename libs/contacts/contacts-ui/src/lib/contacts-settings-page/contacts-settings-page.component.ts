@@ -12,9 +12,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 // ✅ UPDATE: Use the new Sync Service (Snapshot API)
-import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
-
-import { ContactsSecurityComponent } from '../contacts-security/contacts-security.component';
+import { ContactsSyncService } from '@nx-platform-application/contacts-domain-sync';
 
 @Component({
   selector: 'contacts-settings-page',
@@ -24,7 +22,6 @@ import { ContactsSecurityComponent } from '../contacts-security/contacts-securit
     MatIconModule,
     MatCardModule,
     MatProgressBarModule,
-    ContactsSecurityComponent,
   ],
   templateUrl: './contacts-settings-page.component.html',
   styleUrl: './contacts-settings-page.component.scss',

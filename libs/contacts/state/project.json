@@ -4,7 +4,7 @@
   "sourceRoot": "libs/contacts/state/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:contacts", "type:state"],
+  "tags": ["scope:contacts", "layer:state"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
@@ -16,7 +16,7 @@
       }
     },
     "test": {
-      "executor": "@nx/vitest:test",
+      "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "configFile": "libs/contacts/state/vitest.config.mts",

@@ -3,7 +3,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // Infrastructure
-import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
+import { ContactsSyncService } from '@nx-platform-application/contacts-domain-sync';
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
 

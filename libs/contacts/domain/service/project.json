@@ -1,0 +1,34 @@
+{
+  "name": "contacts-domain-service",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contacts/domain/service/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:contacts", "layer:domain"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/contacts/domain/service",
+        "configFile": "libs/contacts/domain/service/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/contacts/domain/service",
+        "htmlReportDirectory": "dist/test-reports/libs/contacts/domain/service",
+        "configFile": "libs/contacts/domain/service/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

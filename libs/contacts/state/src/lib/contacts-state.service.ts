@@ -1,234 +1,137 @@
 import { Injectable, inject, computed, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Temporal } from '@js-temporal/polyfill';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
-import {
-  Contact,
-  ContactGroup,
-  IdentityLink,
-  BlockedIdentity,
-  PendingIdentity,
-} from '@nx-platform-application/contacts-types';
-
-import {
-  ContactsStorageService,
-  GatekeeperStorage,
-} from '@nx-platform-application/contacts-storage';
+import { URN } from '@nx-platform-application/platform-types';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
+import { ContactsDomainService } from '@nx-platform-application/contacts-domain-service';
 
 @Injectable({ providedIn: 'root' })
 export class ContactsStateService {
-  private storage = inject(ContactsStorageService);
-  private gatekeeper = inject(GatekeeperStorage);
+  private domain = inject(ContactsDomainService);
 
-  // --- RAW OBSERVABLES (For Facade/API) ---
-  readonly contacts$ = this.storage.contacts$;
-  readonly groups$ = this.storage.groups$;
-  readonly blocked$ = this.gatekeeper.blocked$;
-  readonly pending$ = this.gatekeeper.pending$;
+  // --- RAW STREAMS ---
+  readonly contacts$ = this.domain.contacts$;
+  readonly groups$ = this.domain.groups$;
 
-  // --- SIGNALS (Source of Truth for UI) ---
-  readonly contacts = toSignal(this.contacts$, {
+  // --- INTERNAL STATE ---
+  private readonly directory = toSignal(this.contacts$, {
     initialValue: [] as Contact[],
   });
 
-  readonly favorites = toSignal(this.storage.favorites$, {
-    initialValue: [] as Contact[],
-  });
+  // ✅ PUBLIC SIGNALS
+  readonly contacts = computed(() => this.directory());
 
   readonly groups = toSignal(this.groups$, {
     initialValue: [] as ContactGroup[],
   });
 
-  readonly blocked = toSignal(this.blocked$, {
-    initialValue: [] as BlockedIdentity[],
-  });
-
-  readonly pending = toSignal(this.pending$, {
-    initialValue: [] as PendingIdentity[],
-  });
-
   private readonly contactMap = computed(() => {
     const map = new Map<string, Contact>();
-    for (const c of this.contacts()) {
-      map.set(c.id.toString(), c);
-    }
+    this.directory().forEach((c) => map.set(c.id.toString(), c));
     return map;
   });
 
-  // --- Lookups ---
+  // --- LOOKUP HELPERS ---
 
   resolveContact(
     urn: URN | string | null | undefined,
   ): Signal<Contact | undefined> {
-    return computed(() => {
-      if (!urn) return undefined;
-      const idStr = urn.toString();
-      return this.contactMap().get(idStr);
-    });
+    return computed(() =>
+      urn ? this.contactMap().get(urn.toString()) : undefined,
+    );
+  }
+
+  resolveContactName(urn: URN | string | null | undefined): Signal<string> {
+    const contactSignal = this.resolveContact(urn);
+    return computed(() => contactSignal()?.alias || 'Unknown');
   }
 
   getContactSnapshot(urn: URN): Contact | undefined {
     return this.contactMap().get(urn.toString());
   }
 
-  resolveContactName(urn: URN | string | null | undefined): Signal<string> {
-    return computed(() => {
-      if (!urn) return 'Unknown';
-      const idStr = urn.toString();
-      const contact = this.contactMap().get(idStr);
-      if (contact) {
-        return contact.alias || contact.firstName || 'Unknown Contact';
-      }
-      return this.formatUnknownUrn(idStr);
-    });
-  }
-
-  // --- API Support Methods ---
-
-  async isBlocked(urn: URN, scope: string): Promise<boolean> {
-    const idStr = urn.toString();
-    const allBlocked = this.blocked();
-    return allBlocked.some(
-      (b) =>
-        b.urn.toString() === idStr &&
-        (b.scopes.includes('all') || b.scopes.includes(scope)),
-    );
-  }
-
-  async isTrusted(urn: URN, scope: string = 'messenger'): Promise<boolean> {
-    const idStr = urn.toString();
-    const isInContacts = this.contactMap().has(idStr);
-
-    if (!isInContacts) {
-      return false;
-    }
-
-    const blocked = await this.isBlocked(urn, scope);
-    return !blocked;
-  }
-
-  // --- Factory Methods (Domain Logic) ---
-
-  async createContact(alias: string, networkId?: URN): Promise<URN> {
-    const uuid = crypto.randomUUID();
-    const localId = URN.create('user', uuid, 'contacts');
-
-    const parts = alias.trim().split(' ');
-    const firstName = parts[0] || alias;
-    const surname = parts.length > 1 ? parts.slice(1).join(' ') : '';
-    const now = Temporal.Now.instant().toString() as ISODateTimeString;
-
-    const newContact: Contact = {
-      id: localId,
-      alias: alias,
-      email: '',
-      firstName,
-      surname,
-      emailAddresses: [],
-      phoneNumbers: [],
-      serviceContacts: {},
-      lastModified: now,
-    };
-
-    if (networkId) {
-      newContact.serviceContacts['messenger'] = {
-        id: networkId,
-        alias: '',
-        lastSeen: now,
-      };
-    }
-
-    await this.storage.saveContact(newContact);
-    return localId;
-  }
-
-  // --- Orchestration ---
-
+  /**
+   * Resolves member URNs to full Contact objects using the loaded directory.
+   */
   async getGroupParticipants(groupUrn: URN): Promise<Contact[]> {
-    return this.storage.getContactsForGroup(groupUrn);
+    const group = await this.domain.getGroup(groupUrn);
+    if (!group || !group.memberUrns) return [];
+
+    const allContacts = this.contactMap();
+    return group.memberUrns
+      .map((urn) => allContacts.get(urn.toString()))
+      .filter((c): c is Contact => !!c);
   }
 
-  // --- Delegation (To Storage) ---
+  // --- GROUP ACTIONS ---
 
-  async saveContact(contact: Contact): Promise<void> {
-    await this.storage.saveContact(contact);
+  async createGroup(
+    name: string,
+    description: string,
+    memberUrns: URN[],
+  ): Promise<URN> {
+    return this.domain.createGroup(name, description, memberUrns);
   }
 
-  async deleteContact(id: URN): Promise<void> {
-    await this.storage.deleteContact(id);
-  }
-
+  /**
+   * ✅ RESTORED: Required by ContactGroupPageComponent for updates
+   */
   async saveGroup(group: ContactGroup): Promise<void> {
-    await this.storage.saveGroup(group);
+    return this.domain.saveGroup(group);
+  }
+
+  async getGroup(urn: URN): Promise<ContactGroup | undefined> {
+    return this.domain.getGroup(urn);
+  }
+
+  /**
+   * ✅ RESTORED: Required by ContactGroupPageComponent for hierarchy
+   */
+  async getGroupsByParent(parentId: URN): Promise<ContactGroup[]> {
+    return this.domain.getGroupsByParent(parentId);
+  }
+
+  async getGroupsForContact(contactUrn: URN): Promise<ContactGroup[]> {
+    return this.domain.getGroupsForContact(contactUrn);
   }
 
   async deleteGroup(id: URN): Promise<void> {
-    await this.storage.deleteGroup(id);
+    return this.domain.deleteGroup(id);
   }
 
-  async getGroupsByParent(parentId: URN): Promise<ContactGroup[]> {
-    return this.storage.getGroupsByParent(parentId);
+  async getGroupMetadata(urn: URN): Promise<{ memberCount: number }> {
+    return this.domain.getGroupMetadata(urn);
   }
 
-  async getGroupsForContact(contactId: URN): Promise<ContactGroup[]> {
-    return this.storage.getGroupsForContact(contactId);
+  // --- CONTACT ACTIONS ---
+
+  async createContact(
+    alias: string,
+    networkId?: URN,
+    scope = 'address-book',
+  ): Promise<URN> {
+    return this.domain.createContact(
+      alias,
+      networkId ? { urn: networkId, scope } : undefined,
+    );
   }
 
-  async getLinkedIdentities(contactId: URN): Promise<URN[]> {
-    return this.storage.getLinkedIdentities(contactId);
+  async saveContact(contact: Contact): Promise<void> {
+    return this.domain.saveContact(contact);
   }
 
-  // --- Gatekeeper Delegation ---
-
-  async blockIdentity(urn: URN, scopes: string[] = ['all']): Promise<void> {
-    await this.gatekeeper.blockIdentity(urn, scopes);
-    await this.gatekeeper.deletePending(urn);
+  async deleteContact(id: URN): Promise<void> {
+    return this.domain.deleteContact(id);
   }
 
-  async unblockIdentity(urn: URN): Promise<void> {
-    await this.gatekeeper.unblockIdentity(urn);
+  async getContact(urn: URN): Promise<Contact | undefined> {
+    return this.domain.getContact(urn);
   }
 
-  async deletePending(urn: URN): Promise<void> {
-    await this.gatekeeper.deletePending(urn);
-  }
-
-  async addToPending(urn: URN, vouchedBy?: URN, note?: string): Promise<void> {
-    await this.gatekeeper.addToPending(urn, vouchedBy, note);
-  }
-
-  async getPendingIdentity(urn: URN): Promise<PendingIdentity | null> {
-    return this.gatekeeper.getPendingIdentity(urn);
-  }
-
-  async getAllIdentityLinks(): Promise<IdentityLink[]> {
-    return this.storage.getAllIdentityLinks();
+  async getLinkedIdentities(urn: URN): Promise<URN[]> {
+    return this.domain.getLinkedIdentities(urn);
   }
 
   async clearDatabase(): Promise<void> {
-    await this.storage.clearDatabase();
-  }
-
-  async performContactsWipe(): Promise<void> {
-    await this.storage.clearAllContacts();
-  }
-
-  async getContact(id: URN): Promise<Contact | undefined> {
-    return this.storage.getContact(id);
-  }
-
-  async getGroup(id: URN): Promise<ContactGroup | undefined> {
-    return this.storage.getGroup(id);
-  }
-
-  private formatUnknownUrn(str: string): string {
-    const id = str.includes(':') ? str.split(':').pop()! : str;
-    if (id.length === 36 && id.includes('-')) {
-      return `User ${id.slice(-4).toUpperCase()}`;
-    }
-    return id;
+    return this.domain.clearDatabase();
   }
 }

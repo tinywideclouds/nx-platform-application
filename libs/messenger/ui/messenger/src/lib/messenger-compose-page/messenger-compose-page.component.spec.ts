@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MessengerComposePageComponent } from './messenger-compose-page.component';
 import { Router } from '@angular/router';
 import { URN } from '@nx-platform-application/platform-types';
-import { Contact } from '@nx-platform-application/contacts-storage';
+import { Contact } from '@nx-platform-application/contacts-infrastructure-storage';
 import { vi } from 'vitest';
 import { By } from '@angular/platform-browser';
 

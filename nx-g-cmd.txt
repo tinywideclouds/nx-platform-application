@@ -235,5 +235,35 @@ nx g @nx/angular:library --name=lib-messenger-app-mocking --directory=libs/messe
 
 nx g @nx/angular:library --name=platform-ui-pipes --directory=libs/platform/ui/pipes --tags="scope:platform"   
 
+nx g @nx/angular:library --name=directory-api --directory=libs/directory/api --tags="scope:directory"   
 
+
+nx g @nx/angular:library --name=directory-infrastructure-indexed-db --directory=libs/directory/infrastructure/indexed-db --tags="scope:directory"   
+
+
+nx g @nx/angular:library --name=directory-types --directory=libs/directory/types --tags="scope:directory"   
+
+
+
+nx g @nx/angular:library --name=directory-infrastructure-storage --directory=libs/directory/infrastructure/storage --tags="scope:directory"   
+
+nx g @nx/workspace:move --project=directory-infrastructure-storage --destination=libs/directory/service --importPath=@nx-platform-application/directory-service
+
+nx g @nx/workspace:move --project=contacts-persistence --destination=libs/contacts/infrastructure/indexed-db --importPath=@nx-platform-application/contacts-infrastructure-indexed-db
+
+
+
+nx g @nx/angular:library --name=contacts-domain-bridge --directory=libs/contacts/domain/bridge --tags="scope:contacts"   
+
+nx g @nx/workspace:move --project=contacts-storage --destination=libs/contacts/infrastructure/storage --importPath=@nx-platform-application/contacts-infrastructure-storage
+
+nx g @nx/workspace:move --project=contacts-sync --destination=libs/contacts/domain/sync --importPath=@nx-platform-application/contacts-domain-sync
+
+
+nx g @nx/angular:library --name=directory-app-mocking --directory=libs/directory/app-mocking --tags="scope:directory"   
+
+nx g @nx/angular:library --name=directory-infrastructure-storage --directory=libs/directory/infrastructure/storage --tags="scope:directory"   
+
+
+nx g @nx/workspace:move --project=contacts-domain-bridge --destination=libs/contacts/domain/service --importPath=@nx-platform-application/contacts-domain-service
 

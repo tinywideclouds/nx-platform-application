@@ -1,0 +1,21 @@
+{
+  "name": "directory-infrastructure-storage",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/directory/infrastructure/storage/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:directory", "layer:infrastructure"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/directory/infrastructure/storage/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/directory/infrastructure/storage"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

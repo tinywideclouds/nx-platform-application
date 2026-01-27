@@ -207,4 +207,49 @@ describe('AppState', () => {
       expect(mockActionService.sendMessage).not.toHaveBeenCalled();
     });
   });
+
+  describe('upgradeGroup', () => {
+    it('should delegate group upgrade to protocol service', async () => {
+      const localUrn = URN.parse('urn:contacts:group:local-1');
+      const networkUrn = URN.parse('urn:messenger:group:net-1');
+      const groupProtocol = TestBed.inject(GroupProtocolService);
+
+      vi.spyOn(groupProtocol, 'upgradeGroup').mockResolvedValue(networkUrn);
+
+      const result = await service.upgradeGroup(localUrn);
+
+      expect(groupProtocol.upgradeGroup).toHaveBeenCalledWith(
+        localUrn,
+        mockKeys,
+        mockCurrentUser.id,
+      );
+      expect(result).toBe(networkUrn);
+    });
+
+    it('should return null if keys are missing during upgrade', async () => {
+      mockIdentity.myKeys.set(null);
+      const groupProtocol = TestBed.inject(GroupProtocolService);
+      const spy = vi.spyOn(groupProtocol, 'upgradeGroup');
+
+      const result = await service.upgradeGroup(
+        URN.parse('urn:contacts:group:local-1'),
+      );
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    it('should return null if protocol throws error', async () => {
+      const groupProtocol = TestBed.inject(GroupProtocolService);
+      vi.spyOn(groupProtocol, 'upgradeGroup').mockRejectedValue(
+        new Error('Fail'),
+      );
+
+      const result = await service.upgradeGroup(
+        URN.parse('urn:contacts:group:local-1'),
+      );
+
+      expect(result).toBeNull();
+    });
+  });
 });

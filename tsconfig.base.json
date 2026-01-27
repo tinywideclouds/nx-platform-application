@@ -26,23 +26,44 @@
       "@nx-platform-application/contacts-app-mocking": [
         "libs/contacts/app-mocking/src/index.ts"
       ],
-      "@nx-platform-application/contacts-persistence": [
-        "libs/contacts/persistence/src/index.ts"
+      "@nx-platform-application/contacts-domain-service": [
+        "libs/contacts/domain/service/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-domain-sync": [
+        "libs/contacts/domain/sync/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-infrastructure-indexed-db": [
+        "libs/contacts/infrastructure/indexed-db/src/index.ts"
+      ],
+      "@nx-platform-application/contacts-infrastructure-storage": [
+        "libs/contacts/infrastructure/storage/src/index.ts"
       ],
       "@nx-platform-application/contacts-state": [
         "libs/contacts/state/src/index.ts"
-      ],
-      "@nx-platform-application/contacts-storage": [
-        "libs/contacts/contacts-storage/src/index.ts"
-      ],
-      "@nx-platform-application/contacts-sync": [
-        "libs/contacts/sync/src/index.ts"
       ],
       "@nx-platform-application/contacts-types": [
         "libs/contacts/types/src/index.ts"
       ],
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
+      ],
+      "@nx-platform-application/directory-api": [
+        "libs/directory/api/src/index.ts"
+      ],
+      "@nx-platform-application/directory-app-mocking": [
+        "libs/directory/app-mocking/src/index.ts"
+      ],
+      "@nx-platform-application/directory-infrastructure-indexed-db": [
+        "libs/directory/infrastructure/indexed-db/src/index.ts"
+      ],
+      "@nx-platform-application/directory-infrastructure-storage": [
+        "libs/directory/infrastructure/storage/src/index.ts"
+      ],
+      "@nx-platform-application/directory-service": [
+        "libs/directory/service/src/index.ts"
+      ],
+      "@nx-platform-application/directory-types": [
+        "libs/directory/types/src/index.ts"
       ],
       "@nx-platform-application/lib-messenger-test-app-mocking": [
         "libs/messenger/test/app-mocking/src/index.ts"

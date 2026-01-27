@@ -1,0 +1,34 @@
+{
+  "name": "contacts-infrastructure-indexed-db",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contacts/infrastructure/indexed-db/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:contacts", "layer:infrastructure"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/contacts/infrastructure/indexed-db",
+        "configFile": "libs/contacts/infrastructure/indexed-db/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": [
+        "{options.reportsDirectory}",
+        "{options.htmlReportDirectory}"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/contacts/infrastructure/indexed-db",
+        "htmlReportDirectory": "dist/test-reports/libs/contacts/infrastructure/indexed-db",
+        "configFile": "libs/contacts/infrastructure/indexed-db/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

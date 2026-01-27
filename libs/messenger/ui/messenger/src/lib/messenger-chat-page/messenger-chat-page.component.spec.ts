@@ -18,7 +18,7 @@ import {
   Contact,
   ContactGroup,
   PendingIdentity,
-} from '@nx-platform-application/contacts-storage';
+} from '@nx-platform-application/contacts-infrastructure-storage';
 import {
   ListFilterComponent,
   MasterDetailLayoutComponent,

@@ -1,0 +1,30 @@
+{
+  "name": "directory-api",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/directory/api/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:directory", "layer:domain"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/directory/api",
+        "configFile": "libs/directory/api/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/directory/api/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/directory/sttate"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

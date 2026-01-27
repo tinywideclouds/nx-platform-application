@@ -3,6 +3,8 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
+export const EntityTypeUser = URN.parse('urn:directory:type:user');
+
 export interface Message {
   senderId: URN;
   sentTimestamp: ISODateTimeString;

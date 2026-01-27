@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ContactsSettingsPageComponent } from './contacts-settings-page.component';
-import { ContactsSyncService } from '@nx-platform-application/contacts-sync';
+import { ContactsSyncService } from '@nx-platform-application/contacts-domain-sync';
 import { ContactsSecurityComponent } from '../contacts-security/contacts-security.component';
 import { MockComponent, MockProvider } from 'ng-mocks';
 import { MatSnackBar } from '@angular/material/snack-bar';

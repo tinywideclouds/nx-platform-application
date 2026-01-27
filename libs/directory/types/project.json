@@ -1,0 +1,21 @@
+{
+  "name": "directory-types",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/directory/types/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:directory"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/directory/types/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/directory/types"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

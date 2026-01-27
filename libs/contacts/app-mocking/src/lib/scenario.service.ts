@@ -2,51 +2,58 @@ import { Injectable, inject } from '@angular/core';
 import {
   ContactsStorageService,
   GatekeeperStorage,
-} from '@nx-platform-application/contacts-storage';
-import { SCENARIOS } from './data/scenarios.const';
+} from '@nx-platform-application/contacts-infrastructure-storage';
+import { DirectoryScenarioService } from '@nx-platform-application/directory-app-mocking';
+import { scenarios } from './data/scenarios.const'; // ✅ Updated import (camelCase)
 
-/**
- * Service responsible for wiping and seeding the database
- * based on the current URL query parameters.
- * * Usage: ?scenario=populated (Default) or ?scenario=empty
- */
 @Injectable({ providedIn: 'root' })
-export class ScenarioService {
+export class ContactsScenarioService {
   private contactsStorage = inject(ContactsStorageService);
   private gatekeeperStorage = inject(GatekeeperStorage);
+  private dirScenario = inject(DirectoryScenarioService);
 
-  async initialize(defaultScenario = 'populated'): Promise<void> {
-    // 1. Determine Scenario
+  async initialize(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
-    const scenarioKey = params.get('scenario') || defaultScenario;
-    const data = SCENARIOS[scenarioKey as keyof typeof SCENARIOS];
+    const scenarioKey = params.get('scenario') || 'populated';
+
+    // ✅ Updated to use the new camelCase constant
+    const data = scenarios[scenarioKey as keyof typeof scenarios];
 
     if (!data) {
-      console.warn(
-        `[ScenarioService] Unknown scenario "${scenarioKey}". Skipping seed.`,
-      );
+      console.warn(`[ContactsScenario] Unknown scenario "${scenarioKey}".`);
       return;
     }
 
-    console.info(`[ScenarioService] Initializing Scenario: "${scenarioKey}"`);
+    console.info(`[ContactsScenario] Initializing Scenario: "${scenarioKey}"`);
 
-    // 2. Wipe Database (Ensure clean slate)
+    // 1. Seed Network Truth (Directory)
+    await this.dirScenario.initialize(scenarioKey);
+
+    // 2. Wipe Local Database
     await this.contactsStorage.clearDatabase();
 
-    // 3. Seed Data
-    // We use the real storage services to ensure indexes and logic (if any) are respected.
-
-    // Contacts
+    // 3. Seed Contacts
     if (data.contacts.length) {
       await this.contactsStorage.bulkUpsert(data.contacts);
     }
 
-    // Groups
+    // 4. Seed Groups
     for (const group of data.groups) {
       await this.contactsStorage.saveGroup(group);
     }
 
-    // Gatekeeper (Pending)
+    // 5. Seed Identity Links (Connecting Bob to Messenger)
+    if (data.links) {
+      for (const link of data.links) {
+        await this.contactsStorage.linkIdentityToContact(
+          link.contactId,
+          link.authUrn,
+          link.scope,
+        );
+      }
+    }
+
+    // 6. Seed Gatekeeper (Pending)
     for (const p of data.pending) {
       await this.gatekeeperStorage.addToPending(
         p.urn,
@@ -55,13 +62,11 @@ export class ScenarioService {
       );
     }
 
-    // Gatekeeper (Blocked)
+    // 7. Seed Gatekeeper (Blocked)
     for (const b of data.blocked) {
       await this.gatekeeperStorage.blockIdentity(b.urn, b.scopes, b.reason);
     }
 
-    console.info(
-      `[ScenarioService] Scenario "${scenarioKey}" loaded successfully.`,
-    );
+    console.info(`[ContactsScenario] Local State Loaded.`);
   }
 }

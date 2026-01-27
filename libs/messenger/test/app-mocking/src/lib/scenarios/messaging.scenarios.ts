@@ -46,5 +46,6 @@ export const ACTIVE_USER: MessengerScenarioData = {
     identity: { hasMyKey: true },
     network: { queuedMessages: [] },
     send: { shouldFail: false },
+    directory: { groups: [], entities: [] },
   },
 };

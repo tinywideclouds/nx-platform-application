@@ -3,10 +3,14 @@ import {
   input,
   output,
   computed,
+  inject,
   ChangeDetectionStrategy,
   viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { toSignal, toObservable } from '@angular/core/rxjs-interop';
+import { switchMap, of } from 'rxjs';
+
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -15,6 +19,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { ContactGroup } from '@nx-platform-application/contacts-types';
 import { GroupBadgeResolver } from './../models/group-badge.model';
 import { SwipeableItemComponent } from '@nx-platform-application/platform-ui-lists';
+import { ContactsStateService } from '@nx-platform-application/contacts-state';
 
 @Component({
   selector: 'contacts-group-list-item',
@@ -36,6 +41,8 @@ import { SwipeableItemComponent } from '@nx-platform-application/platform-ui-lis
   },
 })
 export class ContactGroupListItemComponent {
+  private state = inject(ContactsStateService);
+
   // --- INPUTS & OUTPUTS ---
   group = input.required<ContactGroup>();
   badgeResolver = input<GroupBadgeResolver | undefined>(undefined);
@@ -46,15 +53,29 @@ export class ContactGroupListItemComponent {
   swipeStart = output<void>();
 
   // --- QUERIES ---
-  // [FIX] Use string selector for safety
   menuTrigger = viewChild<MatMenuTrigger>('menuTrigger');
   swipeItem = viewChild<SwipeableItemComponent>('swipeItem');
 
   // --- STATE ---
   private closeTimer: any;
 
+  // --- ASYNC DATA ---
+  private metadata = toSignal(
+    toObservable(this.group).pipe(
+      switchMap((g) => {
+        // ✅ FIX: Always trust the local group object for the count.
+        // We do not fetch from the Directory here.
+        const v9Count = g.memberUrns?.length;
+        const legacyCount = (g as any).members?.length;
+
+        return of({ memberCount: v9Count ?? legacyCount ?? 0 });
+      }),
+    ),
+    { initialValue: { memberCount: 0 } },
+  );
+
   // --- COMPUTED ---
-  memberCount = computed(() => this.group().members.length);
+  memberCount = computed(() => this.metadata().memberCount);
 
   badges = computed(() => {
     const resolver = this.badgeResolver();

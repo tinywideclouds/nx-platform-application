@@ -21,71 +21,27 @@ export interface Contact extends User {
   lastModified: ISODateTimeString;
 }
 
-// Group Definitions
-export type GroupScope = 'local' | 'messenger';
-
-export type GroupMemberStatus =
-  | 'added'
-  | 'invited'
-  | 'joined'
-  | 'left'
-  | 'removed'
-  | 'declined';
-
-export type GroupInviteDecision = 'accept' | 'reject';
-
-export interface ContactGroupMember {
-  contactId: URN;
-  status: GroupMemberStatus;
-  joinedAt?: ISODateTimeString;
-}
-
 export interface ContactGroup extends Resource {
   name: string;
   description?: string;
 
   /**
-   * Defines the persistence strategy for the group.
-   * - 'local': A user-defined distribution list (stored only in local DB).
-   * - 'messenger': A network-synced chat group.
+   * Simple list of Contact URNs.
+   * We do not hydrate full Contact objects here to keep the domain lightweight.
    */
-  scope: GroupScope;
+  memberUrns: URN[];
 
-  /**
-   * If this is a 'messenger' group, this ID links back to the 'local' group
-   * that acted as the template/origin for the chat.
-   */
-  parentId?: URN;
+  lastModified: ISODateTimeString;
 
-  /**
-   * Rich membership list containing status and timestamps.
-   */
-  members: ContactGroupMember[];
+  directoryId?: URN; // Optional link to a network group
 }
 
 export interface IdentityLink {
   id?: number;
   contactId: URN;
   authUrn: URN;
+  scope: string;
 }
 
-export interface PendingIdentity {
-  id?: number;
-  urn: URN;
-  firstSeenAt: ISODateTimeString;
-  vouchedBy?: URN;
-  note?: string;
-}
-
-export interface BlockedIdentity {
-  id?: number;
-  urn: URN;
-  blockedAt: ISODateTimeString;
-  scopes: string[];
-  reason?: string;
-}
-
-export interface ContactTombstone {
-  urn: string;
-  deletedAt: ISODateTimeString;
-}
+// Re-export Tombstone
+export type ContactTombstone = { urn: string; deletedAt: string };

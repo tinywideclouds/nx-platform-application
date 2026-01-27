@@ -1,0 +1,21 @@
+{
+  "name": "directory-infrastructure-indexed-db",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/directory/infrastructure/indexed-db/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:directory", "layer:infrastructure"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/directory/infrastructure/indexed-db/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/directory/infrastructure/indexed-db"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

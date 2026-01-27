@@ -7,5 +7,6 @@ export * from './lib/services/mock-vault.driver';
 export * from './lib/services/mock-auth.service';
 export * from './lib/services/mock-push-notification.service';
 export * from './lib/services/mock-integration-api.service';
+export * from './lib/services/mock-directory.service';
 export * from './lib/messenger-scenario-driver';
 export * from './lib/scenarios.const';

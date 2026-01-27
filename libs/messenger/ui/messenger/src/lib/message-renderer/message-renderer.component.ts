@@ -9,8 +9,11 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { MessageContentPipe } from '../message-content.pipe';
 import {
   ChatImageMessageComponent,
+  ChatSystemMessageComponent,
   ChatTextRendererComponent,
 } from '@nx-platform-application/messenger-ui-chat';
+
+import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
 
 @Component({
   selector: 'chat-message-renderer',
@@ -18,8 +21,10 @@ import {
   imports: [
     CommonModule,
     ChatImageMessageComponent,
+    ChatSystemMessageComponent,
     ChatTextRendererComponent,
     MessageContentPipe,
+    ContactNamePipe,
   ],
   templateUrl: './message-renderer.component.html',
   styleUrl: './message-renderer.component.scss',

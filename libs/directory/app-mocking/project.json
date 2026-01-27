@@ -1,0 +1,21 @@
+{
+  "name": "directory-app-mocking",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/directory/app-mocking/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:directory", "layer:infrastructure"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/directory/app-mocking/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/directory/app-mocking"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

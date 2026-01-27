@@ -4,7 +4,7 @@ export const GROUP_INVITE_TYPE = 'group-invite';
 const GROUP_INVITE_MESSAGE = 'urn:message:type:group-invite';
 export const MessageGroupInvite = URN.parse(GROUP_INVITE_MESSAGE);
 
-export const MESSAGE_TYPE_GROUP_INVITE_RESPONSE =
+const MESSAGE_TYPE_GROUP_INVITE_RESPONSE =
   'urn:message:type:group-invite-response';
 export const MessageGroupInviteResponse = URN.parse(
   MESSAGE_TYPE_GROUP_INVITE_RESPONSE,
@@ -20,6 +20,7 @@ export interface GroupInvitePayload {
   name: string;
   description?: string;
   inviterUrn: string;
+  participants: GroupParticipantSnapshot[];
 }
 
 // group message content

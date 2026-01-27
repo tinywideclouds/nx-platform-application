@@ -16,7 +16,7 @@ import {
 } from '@angular/material/autocomplete';
 import { toSignal } from '@angular/core/rxjs-interop';
 
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import { Contact } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 

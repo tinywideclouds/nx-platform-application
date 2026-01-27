@@ -1,40 +1,55 @@
 import { Injectable, inject, computed, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { from } from 'rxjs';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { GatekeeperApi } from '@nx-platform-application/contacts-api';
-import { BlockedIdentity } from '@nx-platform-application/contacts-types';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 
+// ✅ NEW: Use Directory for Blocking Logic
+import {
+  DirectoryQueryApi,
+  DirectoryMutationApi,
+} from '@nx-platform-application/directory-api';
+
+const BLOCK_LIST_URN = URN.parse('urn:directory:group:block-list');
+
 @Injectable({ providedIn: 'root' })
 export class ChatModerationFacade {
   private readonly logger = inject(Logger);
-  private readonly gatekeeper = inject(GatekeeperApi);
   private readonly quarantineService = inject(QuarantineService);
   private readonly storageService = inject(ChatStorageService);
   private readonly parser = inject(MessageContentParser);
 
+  // ✅ Architecture Swap
+  private readonly directoryQuery = inject(DirectoryQueryApi);
+  private readonly directoryMutation = inject(DirectoryMutationApi);
+
   // --- STATE ---
 
-  // Reactively track the blocked list from the API
-  private readonly blockedIdentities = toSignal(this.gatekeeper.blocked$, {
-    initialValue: [] as BlockedIdentity[],
-  });
+  // Reactively track the Block List Group from Directory
+  // Note: For now we fetch once. In a real app, DirectoryQueryApi should expose a stream.
+  private readonly blockListGroup = toSignal(
+    from(this.directoryQuery.getGroup(BLOCK_LIST_URN)),
+    { initialValue: null },
+  );
 
-  // Compute a fast lookup set for the UI and other services
+  // Compute a fast lookup set for the UI
   public readonly blockedSet: Signal<Set<string>> = computed(() => {
-    const all = this.blockedIdentities();
+    const group = this.blockListGroup();
     const set = new Set<string>();
-    for (const b of all) {
-      if (b.scopes.includes('messenger') || b.scopes.includes('all')) {
-        set.add(b.urn.toString());
-      }
+    if (group?.memberState) {
+      // Any member in the block-list group is considered blocked
+      Object.keys(group.memberState).forEach((key) => {
+        if (group.memberState[key] === 'joined') {
+          set.add(key);
+        }
+      });
     }
     return set;
   });
@@ -45,9 +60,16 @@ export class ChatModerationFacade {
     urns: URN[],
     scope: 'messenger' | 'all' = 'messenger',
   ): Promise<void> {
-    // 1. Block in the Contacts API
+    // 1. Block = Add to Block List Group
+    // We treat "Blocking" as "Joining" the Block List.
     await Promise.all(
-      urns.map((urn) => this.gatekeeper.blockIdentity(urn, [scope])),
+      urns.map((urn) =>
+        this.directoryMutation.updateMemberStatus(
+          BLOCK_LIST_URN,
+          urn,
+          'joined',
+        ),
+      ),
     );
 
     // 2. Reject any pending messages in Quarantine
@@ -62,10 +84,6 @@ export class ChatModerationFacade {
     return this.quarantineService.retrieveForInspection(urn);
   }
 
-  /**
-   * Moves messages from the Quarantine hold into the main database.
-   * This parses the raw bytes (which were skipped during ingestion) and saves them as real messages.
-   */
   public async promoteQuarantinedMessages(
     senderUrn: URN,
     targetConversationUrn?: URN,
@@ -93,7 +111,7 @@ export class ChatModerationFacade {
             status: 'received',
             conversationUrn: targetConversationUrn || parsed.conversationId,
             tags: parsed.tags,
-            payloadBytes: this.parser.serialize(parsed.payload), // Reserialize to ensure consistency
+            payloadBytes: this.parser.serialize(parsed.payload),
             textContent:
               parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
           });
@@ -112,7 +130,6 @@ export class ChatModerationFacade {
       );
     }
 
-    // Clean up the quarantine now that they are safe
     await this.quarantineService.reject(senderUrn);
   }
 }

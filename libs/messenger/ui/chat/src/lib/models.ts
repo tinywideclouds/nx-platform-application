@@ -4,13 +4,21 @@ export type MessagePart =
 
 export interface DisplayMessage {
   id: string;
-  kind: 'text' | 'image' | 'unknown';
+  kind: 'text' | 'image' | 'system' | 'unknown'; // ✅ Added 'system'
   parts: MessagePart[];
-  // Image-specific fields (only present if kind === 'image')
+
+  // Image-specific fields
   image?: {
     src: string;
     width: number;
     height: number;
-    assets: any; // Keep the asset record for HD upgrades
+    assets: any;
+  };
+
+  // ✅ System-specific fields
+  system?: {
+    text: string;
+    icon: string;
+    isAlert?: boolean; // For things like "Security code changed"
   };
 }

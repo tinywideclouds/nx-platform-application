@@ -13,6 +13,11 @@ import {
   SignalPayload,
 } from '@nx-platform-application/messenger-domain-message-content';
 
+import {
+  DirectoryGroup,
+  DirectoryEntity,
+} from '@nx-platform-application/directory-types';
+
 // --- DATA MODEL INTERFACES ---
 
 export interface MockMessageDef {
@@ -113,6 +118,11 @@ export interface ScenarioScript {
 
 // --- MASTER SCENARIO DEFINITION ---
 
+export interface MockServerDirectoryState {
+  groups?: DirectoryGroup[];
+  entities?: DirectoryEntity[];
+}
+
 export interface MessengerScenarioData {
   local_device: {
     messages: MockMessageDef[];
@@ -127,6 +137,7 @@ export interface MessengerScenarioData {
     identity: MockServerIdentityState;
     network: MockServerNetworkState;
     send: MockChatSendConfig;
+    directory: MockServerDirectoryState;
   };
   script?: ScenarioScript;
 }

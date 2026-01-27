@@ -14,18 +14,26 @@ import {
   LOGGER_CONFIG,
   LogLevel,
 } from '@nx-platform-application/platform-tools-console-logger';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import {
   VaultDrivers,
   PlatformStorageConfig,
   GoogleDriveDriver,
 } from '@nx-platform-application/platform-infrastructure-storage';
 
-// 1. Import Service
-import { ScenarioService } from '@nx-platform-application/contacts-app-mocking';
+// API Tokens (The Abstract Contracts)
+import {
+  DirectoryQueryApi,
+  DirectoryMutationApi,
+} from '@nx-platform-application/directory-api';
 
-// 2. Factory
-export function initializeScenario(scenarioService: ScenarioService) {
+// The Concrete Implementation
+import { DirectoryService } from '@nx-platform-application/directory-service';
+
+// The Mock Orchestrator
+import { ContactsScenarioService } from '@nx-platform-application/contacts-app-mocking';
+
+export function initializeScenario(scenarioService: ContactsScenarioService) {
   return () =>
     environment.useMocks ? scenarioService.initialize() : Promise.resolve();
 }
@@ -42,14 +50,19 @@ export const appConfig: ApplicationConfig = {
       useValue: { level: isDevMode() ? LogLevel.DEBUG : LogLevel.INFO },
     },
 
-    // 3. Services
+    // --- INFRASTRUCTURE ---
     ContactsStorageService,
 
-    // 4. Seeder (The Fix)
+    // ✅ BINDING THE DIRECTORY APIs (The Fix)
+    // "When the Bridge asks for the API, give it the Service."
+    { provide: DirectoryQueryApi, useExisting: DirectoryService },
+    { provide: DirectoryMutationApi, useExisting: DirectoryService },
+
+    // --- INITIALIZATION ---
     {
       provide: APP_INITIALIZER,
       useFactory: initializeScenario,
-      deps: [ScenarioService],
+      deps: [ContactsScenarioService],
       multi: true,
     },
 

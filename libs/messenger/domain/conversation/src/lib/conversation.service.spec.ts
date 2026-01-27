@@ -11,7 +11,8 @@ import {
   HistoryReader,
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { AddressBookApi } from '@nx-platform-application/contacts-api';
+// ✅ CHANGED: From AddressBook to Directory
+import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
 
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
@@ -27,7 +28,7 @@ import { ChatMessage } from '@nx-platform-application/messenger-types';
 
 describe('ConversationService', () => {
   let service: ConversationService;
-  let addressBook: AddressBookApi;
+  let directory: DirectoryQueryApi;
 
   // Define variables here, initialize in beforeEach
   let myUrn: URN;
@@ -41,14 +42,13 @@ describe('ConversationService', () => {
     myUrn = URN.parse('urn:contacts:user:me');
     groupUrn = URN.parse('urn:messenger:group:chat-1');
 
-    // ✅ FIX: Use imported URN constants directly (MessageTypeText, MessageGroupInvite)
     msgText = {
       id: 'msg-1',
       conversationUrn: groupUrn,
       senderId: URN.parse('urn:contacts:user:bob'),
       sentTimestamp: '2025-01-01T10:00:00Z' as ISODateTimeString,
       status: 'read',
-      typeId: MessageTypeText, // Pre-parsed URN
+      typeId: MessageTypeText,
       payloadBytes: new Uint8Array([1]),
       tags: [],
     };
@@ -59,7 +59,7 @@ describe('ConversationService', () => {
       senderId: URN.parse('urn:contacts:user:bob'),
       sentTimestamp: '2025-01-01T10:01:00Z' as ISODateTimeString,
       status: 'received',
-      typeId: MessageGroupInvite, // Pre-parsed URN
+      typeId: MessageGroupInvite,
       payloadBytes: new Uint8Array([]),
       tags: [],
     };
@@ -100,7 +100,8 @@ describe('ConversationService', () => {
         MockProvider(ChatSyncService, {
           isCloudEnabled: vi.fn().mockReturnValue(false),
         }),
-        MockProvider(AddressBookApi, {
+        // ✅ CHANGED: Mock Directory, not AddressBook
+        MockProvider(DirectoryQueryApi, {
           getGroup: vi.fn().mockResolvedValue(null),
         }),
         MockProvider(ChatKeyService, {
@@ -113,7 +114,7 @@ describe('ConversationService', () => {
     });
 
     service = TestBed.inject(ConversationService);
-    addressBook = TestBed.inject(AddressBookApi);
+    directory = TestBed.inject(DirectoryQueryApi);
   });
 
   function setRawMessages(msgs: ChatMessage[]) {
@@ -122,8 +123,9 @@ describe('ConversationService', () => {
 
   describe('Lurker Filter Logic', () => {
     it('should HIDE content messages if membership is invited', async () => {
-      vi.mocked(addressBook.getGroup).mockResolvedValue({
-        members: [{ contactId: myUrn, status: 'invited' }],
+      // ✅ TEST FIX: Return Directory Group State
+      vi.mocked(directory.getGroup).mockResolvedValue({
+        memberState: { [myUrn.toString()]: 'invited' },
       } as any);
 
       await service.loadConversation(groupUrn, myUrn);
@@ -141,8 +143,9 @@ describe('ConversationService', () => {
     });
 
     it('should SHOW everything if membership is joined', async () => {
-      vi.mocked(addressBook.getGroup).mockResolvedValue({
-        members: [{ contactId: myUrn, status: 'joined' }],
+      // ✅ TEST FIX: Return Directory Group State
+      vi.mocked(directory.getGroup).mockResolvedValue({
+        memberState: { [myUrn.toString()]: 'joined' },
       } as any);
 
       await service.loadConversation(groupUrn, myUrn);

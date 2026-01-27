@@ -1,0 +1,21 @@
+{
+  "name": "directory-service",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/directory/service/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:directory", "layer:domain"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "configFile": "libs/directory/service/vitest.config.mts",
+        "reportsDirectory": "coverage/libs/directory/service"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

@@ -1,0 +1,114 @@
+<form class="space-y-6" (submit)="$event.preventDefault()">
+  <div class="grid grid-cols-1 gap-4 max-w-2xl">
+    <mat-form-field
+      [floatLabel]="'always'"
+      class="w-full"
+      [hideRequiredMarker]="!isEditing()"
+    >
+      <mat-label>Group Name</mat-label>
+      <input
+        aria-label="Group Name"
+        id="group-name-input"
+        matInput
+        [value]="name()"
+        (input)="name.set($any($event.target).value)"
+        (blur)="nameTouched.set(true)"
+        [readonly]="!isEditing()"
+        placeholder="e.g. 'Project Alpha Team'"
+      />
+      @if (isEditing()) {
+        <mat-icon
+          matSuffix
+          [class]="getStatusColor('name')"
+          [matTooltip]="getStatusTooltip('name')"
+        >
+          {{ getStatusIcon('name') }}
+        </mat-icon>
+      }
+
+      @if (nameModified()) {
+        <mat-hint class="text-blue-600 text-xs font-medium">Modified</mat-hint>
+      }
+
+      @if (nameTouched() && nameError()) {
+        <mat-error>{{ nameError() }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field [floatLabel]="'always'" class="w-full">
+      <mat-label>Description</mat-label>
+      <textarea
+        aria-label="Description"
+        matInput
+        rows="3"
+        [value]="description()"
+        (input)="description.set($any($event.target).value)"
+        [readonly]="!isEditing()"
+        placeholder="Optional description of this group..."
+      ></textarea>
+
+      @if (isEditing()) {
+        <mat-icon
+          matSuffix
+          [class]="getStatusColor('description')"
+          [matTooltip]="getStatusTooltip('description')"
+        >
+          {{ getStatusIcon('description') }}
+        </mat-icon>
+      }
+
+      @if (descriptionModified()) {
+        <mat-hint class="text-blue-600 text-xs font-medium">Modified</mat-hint>
+      }
+    </mat-form-field>
+  </div>
+
+  <div class="max-w-2xl pt-2">
+    <label class="font-medium text-gray-700 block mb-2">Members</label>
+
+    @if (isEditing()) {
+      <contacts-multi-selector
+        [allContacts]="allContacts()"
+        [selectedIds]="contactIds()"
+        (selectedIdsChange)="contactIds.set($event)"
+      />
+    } @else {
+      <div class="border rounded-md overflow-hidden bg-gray-50 border-gray-200">
+        @for (
+          contact of groupMembers();
+          track trackContactById($index, contact)
+        ) {
+          <div
+            class="flex items-center gap-3 p-3 border-b border-gray-100 last:border-0 hover:bg-white transition-colors"
+          >
+            <contacts-avatar
+              [initials]="getInitials(contact)"
+              class="h-8 w-8 text-xs"
+            />
+            <span class="text-sm font-medium text-gray-700">{{
+              contact.alias
+            }}</span>
+          </div>
+        } @empty {
+          <div class="p-6 text-center text-gray-400 text-sm">
+            No members in this group.
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  @if (isEditing() && group()) {
+    <div class="pt-8 border-t border-gray-100 mt-8 max-w-2xl">
+      <button
+        type="button"
+        mat-button
+        color="warn"
+        (click)="onDelete()"
+        data-testid="delete-button"
+      >
+        <mat-icon>delete</mat-icon> Delete Group
+      </button>
+    </div>
+  }
+</form>

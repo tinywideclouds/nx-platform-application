@@ -1,123 +1,203 @@
 import { Injectable, inject } from '@angular/core';
-import { URN } from '@nx-platform-application/platform-types';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { ContactGroup } from '@nx-platform-application/contacts-types';
-import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 
-// APIs
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { URN } from '@nx-platform-application/platform-types';
 import {
-  AddressBookApi,
-  AddressBookManagementApi,
-  ContactsQueryApi,
-} from '@nx-platform-application/contacts-api';
+  ChatMessage,
+  EntityTypeUser,
+} from '@nx-platform-application/messenger-types';
+import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
+import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
-// Content Types
+// ✅ NEW: Directory APIs (The source of truth for Network Groups)
+import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
+
+// ✅ RETAINED: Contacts Query (Only to read the Local Template)
+import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+
+// ✅ DOMAIN TYPES & CONSTANTS
 import {
-  GroupInvitationData,
+  GroupInvitePayload,
   GroupJoinData,
   GroupParticipantSnapshot,
-  MessageGroupInvite,
-  MessageGroupInviteResponse,
+  MessageGroupInvite, // URN Constant
+  MessageGroupInviteResponse, // URN Constant
+  MessageContentParser,
 } from '@nx-platform-application/messenger-domain-message-content';
-import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
+
+import {
+  DirectoryGroup,
+  DirectoryEntity,
+  GroupMemberStatus,
+} from '@nx-platform-application/directory-types';
 
 @Injectable({ providedIn: 'root' })
 export class GroupProtocolService {
   private outbound = inject(OutboundService);
   private parser = inject(MessageContentParser);
   private logger = inject(Logger);
+  private identityResolver = inject(IdentityResolver);
 
-  // ✅ Inject APIs for State Management
-  private addressBook = inject(AddressBookApi);
-  private addressBookManager = inject(AddressBookManagementApi);
+  // ✅ Architecture Swap
   private contactsQuery = inject(ContactsQueryApi);
+  private directoryMutation = inject(DirectoryMutationApi);
 
   /**
-   * Upgrades a Local Group (Address Book) to a Network Group (Messenger).
-   * 1. Creates the Network Group locally.
-   * 2. Broadcasts the Invite to all members.
+   * PROVISIONER: Creates a new Network Group from a Local Template.
    */
-  async upgradeGroup(
+  async provisionNetworkGroup(
     localGroupUrn: URN,
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<URN> {
     this.logger.info(
-      `[GroupProtocol] Upgrading ${localGroupUrn.toString()}...`,
+      `[GroupProtocol] Provisioning from ${localGroupUrn.toString()}`,
     );
 
-    // 1. Fetch Source Data
-    const localGroup = await this.addressBook.getGroup(localGroupUrn);
-    if (!localGroup) throw new Error('Local group not found');
-
+    // 1. Fetch Source Participants (Local URNs)
     const participants =
       await this.contactsQuery.getGroupParticipants(localGroupUrn);
-    if (participants.length === 0)
-      throw new Error('Cannot upgrade empty group');
 
-    // 2. Mint Network Identity
-    const networkId = crypto.randomUUID();
-    const networkGroupUrn = URN.create('group', networkId, 'messenger');
+    if (participants.length === 0) {
+      throw new Error('Cannot provision empty group');
+    }
 
-    // 3. Create & Persist Network Group (So Strategy works)
-    // We map the Local Participants -> Network Members (Status: Invited)
-    // We set ourselves as 'joined'
-    const newGroup: ContactGroup = {
+    // 2. Resolve Network Identities (Local -> Network)
+    const roster: { networkId: URN; alias: string }[] = [];
+
+    // Add Myself first
+    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
+    roster.push({ networkId: myNetworkId, alias: 'Me' });
+
+    for (const p of participants) {
+      const networkId = await this.identityResolver.resolveToHandle(p.id);
+      // We only include people we can actually route to (Handle URNs)
+      if (networkId.namespace !== 'contacts') {
+        roster.push({ networkId, alias: p.alias });
+      }
+    }
+
+    if (roster.length < 2) {
+      throw new Error('No valid network participants found (need 2+)');
+    }
+
+    // 3. Mint Network Identity
+    const uuid = crypto.randomUUID();
+    const networkGroupUrn = URN.create('group', uuid, 'messenger');
+    const now = Temporal.Now.instant().toString();
+
+    // 4. Construct Directory Group State
+    const memberState: Record<string, GroupMemberStatus> = {};
+    const entities: DirectoryEntity[] = [];
+
+    roster.forEach((p) => {
+      const idStr = p.networkId.toString();
+      // I am joined, everyone else is invited
+      memberState[idStr] = p.networkId.equals(myNetworkId)
+        ? 'joined'
+        : 'invited';
+
+      entities.push({
+        id: p.networkId,
+        type: EntityTypeUser, // ✅ Uses Constant
+        lastSeenAt: now as any,
+      });
+    });
+
+    const newGroup: DirectoryGroup = {
       id: networkGroupUrn,
-      scope: 'messenger',
-      name: localGroup.name,
-      members: [
-        { contactId: myUrn, status: 'joined' },
-        ...participants.map((p) => ({
-          contactId: p.id,
-          status: 'invited' as const,
-        })),
-      ],
-      // Link back to local parent for UI grouping
-      parentId: localGroupUrn,
+      members: entities,
+      memberState,
+      lastUpdated: now as any,
     };
 
-    await this.addressBookManager.saveGroup(newGroup);
+    // 5. Persist to Directory (Corrected from AddressBook)
+    await this.directoryMutation.saveGroup(newGroup);
 
-    // 4. Construct Invite Payload
-    const snapshot: GroupParticipantSnapshot[] = participants.map((p) => ({
-      urn: p.id.toString(),
+    // 6. Construct Payload (With Snapshot)
+    const snapshot: GroupParticipantSnapshot[] = roster.map((p) => ({
+      urn: p.networkId.toString(),
       alias: p.alias,
     }));
 
-    // Add myself to snapshot
-    // (We need to resolve my own alias, or send "You")
-    // For now, let's trust the receiver resolves 'inviterUrn' to a name.
+    const groupName = 'New Group'; // TODO: Fetch name from Local Template
 
-    const invitePayload: GroupInvitationData = {
+    const invitePayload: GroupInvitePayload = {
       groupUrn: networkGroupUrn.toString(),
-      name: localGroup.name,
-      description: `Upgraded from ${localGroup.name}`,
+      name: groupName,
+      description: `Invited by ${myUrn.entityId}`,
+      inviterUrn: myNetworkId.toString(),
       participants: snapshot,
-      createdAt: Temporal.Now.instant().toString(),
     };
 
-    const bytes = new TextEncoder().encode(JSON.stringify(invitePayload));
+    const bytes = this.parser.serialize({
+      kind: 'group-invite',
+      data: invitePayload,
+    });
 
-    // 5. Broadcast Invite
-    // We send to the GROUP URN.
-    // The NetworkGroupStrategy will read the group we just saved in step #3,
-    // and fan-out to all the 'invited' members.
-    await this.outbound.sendMessage(
-      myKeys,
-      myUrn,
-      networkGroupUrn,
-      MessageGroupInvite,
-      bytes,
-    );
+    // 7. Fan-Out (DM to each participant except me)
+    const promises = roster
+      .filter((p) => !p.networkId.equals(myNetworkId))
+      .map(async (p) => {
+        await this.outbound.sendMessage(
+          myKeys,
+          myUrn,
+          p.networkId,
+          MessageGroupInvite, // ✅ Uses Constant
+          bytes,
+        );
+      });
 
-    this.logger.info(
-      `[GroupProtocol] Upgrade Complete. New URN: ${networkGroupUrn}`,
-    );
+    await Promise.all(promises);
     return networkGroupUrn;
+  }
+
+  /**
+   * INGESTION: Process an incoming Group Invite.
+   * Saves strangers to Directory, creates the Consensus Group.
+   */
+  async processIncomingInvite(groupInvite: GroupInvitePayload): Promise<void> {
+    const groupUrn = URN.parse(groupInvite.groupUrn);
+    const now = Temporal.Now.instant().toString();
+
+    const entities: DirectoryEntity[] = [];
+    const memberState: Record<string, GroupMemberStatus> = {};
+
+    // 1. Process Roster from Payload
+    if (groupInvite.participants) {
+      for (const p of groupInvite.participants) {
+        if (!p.urn) continue;
+        const pUrn = URN.parse(p.urn);
+
+        // Seed the Entity in Directory (Idempotent)
+        const entity: DirectoryEntity = {
+          id: pUrn,
+          type: EntityTypeUser, // ✅ Uses Constant
+          lastSeenAt: now as any,
+        };
+        await this.directoryMutation.saveEntity(entity);
+        entities.push(entity);
+
+        // Set initial state
+        if (p.urn === groupInvite.inviterUrn) {
+          memberState[p.urn] = 'joined';
+        } else {
+          memberState[p.urn] = 'invited';
+        }
+      }
+    }
+
+    // 2. Persist the Consensus Group to Directory
+    const group: DirectoryGroup = {
+      id: groupUrn,
+      members: entities,
+      memberState,
+      lastUpdated: now as any,
+    };
+
+    await this.directoryMutation.saveGroup(group);
   }
 
   async acceptInvite(
@@ -125,6 +205,28 @@ export class GroupProtocolService {
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<void> {
+    // 1. Resolve Group ID
+    const parsed = this.parser.parse(inviteMsg.typeId, inviteMsg.payloadBytes!);
+
+    if (parsed.kind !== 'content' || parsed.payload.kind !== 'group-invite') {
+      return;
+    }
+
+    const groupUrn = URN.parse(parsed.payload.data.groupUrn);
+    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
+
+    // 2. UPDATE STATE: Mark myself as "Joined" in Directory
+    await this.directoryMutation.updateMemberStatus(
+      groupUrn,
+      myNetworkId,
+      'joined',
+    );
+
+    this.logger.info(
+      `[GroupProtocol] Set status to JOINED for ${groupUrn.toString()}`,
+    );
+
+    // 3. RESPOND: Broadcast "Joined" to the group
     return this.respond(inviteMsg, myKeys, myUrn, 'joined');
   }
 
@@ -133,6 +235,20 @@ export class GroupProtocolService {
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<void> {
+    const parsed = this.parser.parse(inviteMsg.typeId, inviteMsg.payloadBytes!);
+    if (parsed.kind !== 'content' || parsed.payload.kind !== 'group-invite')
+      return;
+
+    const groupUrn = URN.parse(parsed.payload.data.groupUrn);
+    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
+
+    // Update Directory
+    await this.directoryMutation.updateMemberStatus(
+      groupUrn,
+      myNetworkId,
+      'declined',
+    );
+
     return this.respond(inviteMsg, myKeys, myUrn, 'declined');
   }
 
@@ -148,29 +264,30 @@ export class GroupProtocolService {
     );
 
     if (parsed.kind !== 'content' || parsed.payload.kind !== 'group-invite') {
-      this.logger.error(
-        `[GroupProtocol] Msg ${inviteMsg.id} is not a valid Group Invite.`,
-      );
       return;
     }
 
     const inviteData = parsed.payload.data;
     const groupUrn = URN.parse(inviteData.groupUrn);
 
-    // ✅ UPDATE: Use Correct Content Type
     const responseData: GroupJoinData = {
       groupUrn: inviteData.groupUrn,
       status: status,
       timestamp: Temporal.Now.instant().toString(),
     };
 
-    const bytes = new TextEncoder().encode(JSON.stringify(responseData));
+    const bytes = this.parser.serialize({
+      kind: 'group-system',
+      data: responseData,
+    });
 
+    // Send to the Group URN
+    // (NetworkGroupStrategy will fan-out based on Directory roster)
     await this.outbound.sendMessage(
       myKeys,
       myUrn,
       groupUrn,
-      MessageGroupInviteResponse,
+      MessageGroupInviteResponse, // ✅ Uses Constant
       bytes,
     );
   }

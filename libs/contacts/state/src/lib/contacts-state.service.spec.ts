@@ -1,52 +1,56 @@
 import { TestBed } from '@angular/core/testing';
 import { ContactsStateService } from './contacts-state.service';
-import {
-  ContactsStorageService,
-  GatekeeperStorage,
-} from '@nx-platform-application/contacts-storage';
+import { ContactsDomainService } from '@nx-platform-application/contacts-domain-service';
 import {
   Contact,
+  ContactGroup,
   BlockedIdentity,
-  PendingIdentity,
 } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { MockProvider } from 'ng-mocks';
-import { of } from 'rxjs';
+import { of, BehaviorSubject } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 describe('ContactsStateService', () => {
   let service: ContactsStateService;
-  let storage: ContactsStorageService;
-  let gatekeeper: GatekeeperStorage;
+  let domain: ContactsDomainService;
 
   const mockUserUrn = URN.parse('urn:contacts:user:alice');
-  const mockBlockedUrn = URN.parse('urn:contacts:user:bob');
-  const mockPendingUrn = URN.parse('urn:contacts:user:charlie');
+  const mockGroupUrn = URN.parse('urn:contacts:group:family');
 
   const mockContactAlice: Contact = {
     id: mockUserUrn,
     alias: 'Alice',
     firstName: 'Alice',
     surname: 'Wonderland',
-    email: 'alice@wonderland.img',
+    email: '',
     emailAddresses: [],
     phoneNumbers: [],
     serviceContacts: {},
     lastModified: '2025-01-01T00:00:00Z' as any,
-  } as Contact;
+  };
+
+  const mockGroup: ContactGroup = {
+    id: mockGroupUrn,
+    directoryId: URN.parse('urn:directory:group:1'),
+    name: 'Family',
+    memberUrns: [mockUserUrn],
+    lastModified: '2025-01-01T00:00:00Z' as any,
+  };
 
   const mockBlockedEntry: BlockedIdentity = {
     id: 1,
-    urn: mockBlockedUrn,
+    urn: URN.parse('urn:contacts:user:blocked'),
     blockedAt: '2025-01-01T00:00:00Z' as any,
     scopes: ['messenger'],
   };
 
-  const mockPendingEntry: PendingIdentity = {
-    id: 2,
-    urn: mockPendingUrn,
-    firstSeenAt: '2025-01-01T00:00:00Z' as any,
-  };
+  // Reactive Streams
+  const contactsSubject = new BehaviorSubject<Contact[]>([mockContactAlice]);
+  const groupsSubject = new BehaviorSubject<ContactGroup[]>([mockGroup]);
+  const blockedSubject = new BehaviorSubject<BlockedIdentity[]>([
+    mockBlockedEntry,
+  ]);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -54,91 +58,54 @@ describe('ContactsStateService', () => {
     TestBed.configureTestingModule({
       providers: [
         ContactsStateService,
-        MockProvider(ContactsStorageService, {
-          contacts$: of([mockContactAlice]),
-          favorites$: of([]),
-          groups$: of([]),
-          getGroup: vi.fn(),
-          getContact: vi.fn(),
-          getContactsForGroup: vi.fn().mockResolvedValue([]),
-          getAllIdentityLinks: vi.fn().mockResolvedValue([]),
-          clearDatabase: vi.fn().mockResolvedValue(undefined),
-          clearAllContacts: vi.fn().mockResolvedValue(undefined),
-          saveContact: vi.fn().mockResolvedValue(undefined),
-          saveGroup: vi.fn().mockResolvedValue(undefined),
-          getGroupsByParent: vi.fn().mockResolvedValue([]),
-        }),
-        MockProvider(GatekeeperStorage, {
-          blocked$: of([mockBlockedEntry]),
-          pending$: of([mockPendingEntry]),
-          blockIdentity: vi.fn().mockResolvedValue(undefined),
-          unblockIdentity: vi.fn().mockResolvedValue(undefined),
-          deletePending: vi.fn().mockResolvedValue(undefined),
-          addToPending: vi.fn().mockResolvedValue(undefined),
-          getPendingIdentity: vi.fn().mockResolvedValue(mockPendingEntry),
+        MockProvider(ContactsDomainService, {
+          contacts$: contactsSubject.asObservable(),
+          groups$: groupsSubject.asObservable(),
+          blocked$: blockedSubject.asObservable(),
+          pending$: of([]),
+          links$: of([]),
+          getGroup: vi.fn().mockResolvedValue(mockGroup),
+          saveGroup: vi.fn(), // ✅ Mocked
+          getGroupsByParent: vi.fn(), // ✅ Mocked
+          createContact: vi.fn(),
+          blockIdentity: vi.fn(),
+          unblockIdentity: vi.fn(),
         }),
       ],
     });
 
     service = TestBed.inject(ContactsStateService);
-    storage = TestBed.inject(ContactsStorageService);
-    gatekeeper = TestBed.inject(GatekeeperStorage);
+    domain = TestBed.inject(ContactsDomainService);
 
     TestBed.flushEffects();
   });
 
-  describe('Signal State', () => {
-    it('should initialize signals from storage observables', () => {
-      const contacts = service.contacts();
-      expect(contacts.length).toBe(1);
+  describe('Group Actions', () => {
+    it('should delegate saveGroup to Domain', async () => {
+      await service.saveGroup(mockGroup);
+      expect(domain.saveGroup).toHaveBeenCalledWith(mockGroup);
+    });
 
-      const blocked = service.blocked();
-      expect(blocked.length).toBe(1);
-
-      const pending = service.pending();
-      expect(pending.length).toBe(1);
+    it('should delegate getGroupsByParent to Domain', async () => {
+      const parentUrn = URN.parse('urn:contacts:group:parent');
+      await service.getGroupsByParent(parentUrn);
+      expect(domain.getGroupsByParent).toHaveBeenCalledWith(parentUrn);
     });
   });
 
-  describe('resolveContact', () => {
-    it('should return a reactive signal for a known contact', () => {
-      const signal = service.resolveContact(mockUserUrn);
-      const contact = signal();
-      expect(contact).toBeDefined();
-      expect(contact?.alias).toBe('Alice');
-    });
-
-    it('should return undefined for unknown contact', () => {
-      const unknownUrn = URN.parse('urn:contacts:user:unknown');
-      const signal = service.resolveContact(unknownUrn);
-      expect(signal()).toBeUndefined();
+  describe('Signals', () => {
+    it('should expose contacts signal', () => {
+      expect(service.contacts()).toHaveLength(1);
+      expect(service.contacts()[0].alias).toBe('Alice');
     });
   });
 
-  describe('Gatekeeper Delegation', () => {
-    it('should delegate blockIdentity to gatekeeper and clear pending', async () => {
-      await service.blockIdentity(mockPendingUrn, ['all']);
-      expect(gatekeeper.blockIdentity).toHaveBeenCalledWith(mockPendingUrn, [
-        'all',
-      ]);
-      expect(gatekeeper.deletePending).toHaveBeenCalledWith(mockPendingUrn);
-    });
-
-    it('should delegate addToPending', async () => {
-      await service.addToPending(mockPendingUrn);
-      expect(gatekeeper.addToPending).toHaveBeenCalledWith(
-        mockPendingUrn,
-        undefined,
-        undefined,
-      );
-    });
-
-    it('should delegate getPendingIdentity', async () => {
-      const result = await service.getPendingIdentity(mockPendingUrn);
-      expect(gatekeeper.getPendingIdentity).toHaveBeenCalledWith(
-        mockPendingUrn,
-      );
-      expect(result).toEqual(mockPendingEntry);
+  describe('getGroupParticipants', () => {
+    it('should resolve URNs to Contact objects', async () => {
+      const participants = await service.getGroupParticipants(mockGroupUrn);
+      expect(participants).toHaveLength(1);
+      expect(participants[0].id).toEqual(mockUserUrn);
+      expect(participants[0].alias).toBe('Alice');
     });
   });
 });

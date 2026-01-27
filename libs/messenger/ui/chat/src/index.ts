@@ -9,4 +9,5 @@ export * from './lib/chat-group-intro/chat-group-intro.component';
 export * from './lib/chat-image-message/chat-image-message.component';
 export * from './lib/chat-invite-message/chat-invite-message.component';
 export * from './lib/chat-text-renderer/chat-text-renderer.component';
+export * from './lib/chat-system-message/chat-system-message.component';
 export * from './lib/models';

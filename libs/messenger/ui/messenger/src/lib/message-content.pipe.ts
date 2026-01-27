@@ -21,7 +21,7 @@ export class MessageContentPipe implements PipeTransform {
 
       const payload = parsed.payload;
 
-      // 1. Handle Text
+      // 1. Text
       if (payload.kind === 'text') {
         return {
           id: msg.id,
@@ -30,21 +30,41 @@ export class MessageContentPipe implements PipeTransform {
         };
       }
 
-      // 2. Handle Image
+      // 2. Image
       if (payload.kind === 'image') {
         return {
           id: msg.id,
           kind: 'image',
-          // Parse the caption for links
           parts: parseMessageText(payload.caption),
           image: {
-            src: payload.inlineImage, // Map 'inlineImage' -> 'src'
+            src: payload.inlineImage,
             width: payload.width,
             height: payload.height,
             assets: payload.assets,
-            // NOTE: If you need mimeType/decryptionKey in the UI later,
-            // you must add them to the DisplayMessage interface.
           },
+        };
+      }
+
+      // 3. ✅ Group System Events (Joined/Declined)
+      // Note: We use 'group-system' based on the domain types discussed
+      if (payload.kind === 'group-system') {
+        const status = payload.data.status;
+        let text = 'updated the group';
+        let icon = 'info';
+
+        if (status === 'joined') {
+          text = 'joined the group';
+          icon = 'login';
+        } else if (status === 'declined') {
+          text = 'declined the invite';
+          icon = 'person_remove';
+        }
+
+        return {
+          id: msg.id,
+          kind: 'system',
+          parts: [],
+          system: { text, icon },
         };
       }
 

@@ -19,7 +19,7 @@ import { filter, map } from 'rxjs/operators';
 
 // Services
 import { AppState } from '@nx-platform-application/messenger-state-app';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatParticipant } from '@nx-platform-application/messenger-types';
@@ -31,7 +31,6 @@ import {
   ChatScopeMode,
   ChatGroupIntroComponent,
 } from '@nx-platform-application/messenger-ui-chat';
-// ✅ NEW IMPORT
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
@@ -41,7 +40,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     RouterOutlet,
     ChatWindowHeaderComponent,
     ChatGroupIntroComponent,
-    MatProgressSpinnerModule, // ✅ Registered
+    MatProgressSpinnerModule,
   ],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
@@ -59,8 +58,10 @@ export class ChatWindowComponent {
   private routeParams = toSignal(this.route.paramMap);
   private queryParams = toSignal(this.route.queryParamMap);
 
-  // ✅ NEW: Loading State
+  // Data Loading State
   isLoading = signal(false);
+  // Action State
+  isUpgrading = signal(false);
 
   viewMode = toSignal(
     this.routerEvents$.pipe(
@@ -163,7 +164,7 @@ export class ChatWindowComponent {
       untracked(() => this.hasDismissedIntro.set(false));
     });
 
-    // ✅ UPDATED: Loader Effect
+    // Data Loader Effect
     effect(() => {
       const urn = this.conversationUrn();
       if (urn) {
@@ -238,6 +239,29 @@ export class ChatWindowComponent {
   }
 
   async onCreateGroupChat(): Promise<void> {
-    console.log('[ChatWindow] TODO: Create Group Chat Logic (Phase 3)');
+    const currentUrn = this.conversationUrn();
+    if (!currentUrn) return;
+
+    // 1. Set Loading State (Minting keys + saving contacts takes ~200ms)
+    this.isUpgrading.set(true);
+
+    try {
+      // 2. Perform Upgrade via State Layer
+      const newGroupUrn = await this.appState.provisionNetworkGroup(currentUrn);
+
+      if (newGroupUrn) {
+        // 3. Navigation: Switch to the new Network Group
+        // We use replaceUrl to avoid going "Back" to the setup screen
+        await this.router.navigate(
+          ['/messenger', 'conversations', newGroupUrn.toString()],
+          { replaceUrl: true },
+        );
+      }
+    } catch (error) {
+      this.logger.error('Failed to create group chat', error);
+      // Optional: Add snackbar here if desired
+    } finally {
+      this.isUpgrading.set(false);
+    }
   }
 }

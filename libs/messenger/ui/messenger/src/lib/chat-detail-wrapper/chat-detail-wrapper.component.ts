@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common'; // ✅ Need Common for @if
 import { URN } from '@nx-platform-application/platform-types';
 import { AppState } from '@nx-platform-application/messenger-state-app';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { ContactsStorageService } from '@nx-platform-application/contacts-storage';
+import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 
 // UI Imports
 import { ContactPageComponent } from '@nx-platform-application/contacts-ui';

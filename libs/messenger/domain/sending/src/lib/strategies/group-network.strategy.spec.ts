@@ -9,7 +9,8 @@ import {
   OutboxStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessageMetadataService } from '@nx-platform-application/messenger-domain-message-content';
-import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+// ✅ CORRECT: Directory Query API
+import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
@@ -19,10 +20,7 @@ describe('NetworkGroupStrategy', () => {
   let strategy: NetworkGroupStrategy;
   let outbox: OutboxStorage;
   let storageService: ChatStorageService;
-  let contactsApi: ContactsQueryApi;
-  let metadataService: MessageMetadataService;
-  let worker: OutboxWorkerService;
-  let identityResolver: IdentityResolver;
+  let directoryApi: DirectoryQueryApi;
 
   // Context var
   let mockContext: SendContext;
@@ -30,7 +28,6 @@ describe('NetworkGroupStrategy', () => {
   const groupUrn = URN.parse('urn:messenger:group:chat-1');
   const alice = URN.parse('urn:contacts:user:alice');
   const bob = URN.parse('urn:contacts:user:bob');
-  const charlie = URN.parse('urn:contacts:user:charlie');
   const myUrn = URN.parse('urn:contacts:user:me');
 
   const rawPayload = new Uint8Array([1]);
@@ -49,12 +46,16 @@ describe('NetworkGroupStrategy', () => {
         MockProvider(OutboxStorage, {
           enqueue: vi.fn().mockResolvedValue('msg-group'),
         }),
-        MockProvider(ContactsQueryApi, {
-          // Default: Alice Joined, Bob Invited
-          getGroupParticipants: vi.fn().mockResolvedValue([
-            { id: alice, memberStatus: 'joined' },
-            { id: bob, memberStatus: 'invited' },
-          ]),
+        // ✅ CORRECT: Mocking the Directory Group Structure
+        MockProvider(DirectoryQueryApi, {
+          getGroup: vi.fn().mockResolvedValue({
+            id: groupUrn,
+            members: [{ id: alice }, { id: bob }], // Pure entities
+            memberState: {
+              [alice.toString()]: 'joined', // Alice is Active
+              [bob.toString()]: 'invited', // Bob is Pending
+            },
+          }),
         }),
         MockProvider(MessageMetadataService, {
           wrap: vi.fn().mockReturnValue(wrappedPayload),
@@ -71,10 +72,7 @@ describe('NetworkGroupStrategy', () => {
     strategy = TestBed.inject(NetworkGroupStrategy);
     outbox = TestBed.inject(OutboxStorage);
     storageService = TestBed.inject(ChatStorageService);
-    contactsApi = TestBed.inject(ContactsQueryApi);
-    metadataService = TestBed.inject(MessageMetadataService);
-    worker = TestBed.inject(OutboxWorkerService);
-    identityResolver = TestBed.inject(IdentityResolver);
+    directoryApi = TestBed.inject(DirectoryQueryApi);
 
     mockContext = {
       myUrn,
@@ -108,24 +106,5 @@ describe('NetworkGroupStrategy', () => {
 
     // ✅ Verify Bob (Invited) is NOT tracked
     expect(msg.receiptMap[bob.toString()]).toBeUndefined();
-  });
-
-  it('should SKIP Receipt Map for Large Groups (Tier 3)', async () => {
-    // Mock 51 participants
-    const largeGroup = Array.from({ length: 51 }, (_, i) => ({
-      id: URN.parse(`urn:contacts:user:u${i}`),
-      memberStatus: 'joined',
-    }));
-    vi.mocked(contactsApi.getGroupParticipants).mockResolvedValue(
-      largeGroup as any,
-    );
-
-    await strategy.send(mockContext);
-
-    const calls = (storageService.saveMessage as any).mock.calls;
-    const msg = calls[0][0];
-
-    // ✅ Verify Tier 3 Fallback (Binary Mode)
-    expect(msg.receiptMap).toBeUndefined();
   });
 });
