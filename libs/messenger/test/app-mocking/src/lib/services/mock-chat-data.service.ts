@@ -14,7 +14,7 @@ import { MessageTypeText } from '@nx-platform-application/messenger-domain-messa
 import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
-import { MockServerNetworkState, MockMessageDef } from '../types';
+import { MockServerNetworkState } from '../types';
 
 @Injectable({ providedIn: 'root' })
 export class MockChatDataService implements IChatDataService {

@@ -14,8 +14,10 @@ import {
   RouterOutlet,
   NavigationEnd,
 } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog'; // ✅ Added
 
 // Services
 import { AppState } from '@nx-platform-application/messenger-state-app';
@@ -30,6 +32,7 @@ import {
   ChatWindowMode,
   ChatScopeMode,
   ChatGroupIntroComponent,
+  NetworkGroupSetupDialog,
 } from '@nx-platform-application/messenger-ui-chat';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
@@ -41,6 +44,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     ChatWindowHeaderComponent,
     ChatGroupIntroComponent,
     MatProgressSpinnerModule,
+    MatDialogModule, // ✅ Added
   ],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
@@ -49,28 +53,27 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 export class ChatWindowComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private dialog = inject(MatDialog); // ✅ Added
   protected appState = inject(AppState);
   private contactsService = inject(ContactsStorageService);
   private logger = inject(Logger);
 
-  // --- Router & Data State ---
+  // ... (Existing router/signal code remains the same) ...
   private routerEvents$ = this.router.events;
   private routeParams = toSignal(this.route.paramMap);
   private queryParams = toSignal(this.route.queryParamMap);
-
-  // Data Loading State
   isLoading = signal(false);
-  // Action State
   isUpgrading = signal(false);
+  hasDismissedIntro = signal(false);
 
   viewMode = toSignal(
     this.routerEvents$.pipe(
       filter((e) => e instanceof NavigationEnd),
-      map(() => {
-        return this.router.url.endsWith('/details')
+      map(() =>
+        this.router.url.endsWith('/details')
           ? ('details' as ChatWindowMode)
-          : ('chat' as ChatWindowMode);
-      }),
+          : ('chat' as ChatWindowMode),
+      ),
     ),
     { initialValue: 'chat' as ChatWindowMode },
   );
@@ -96,8 +99,7 @@ export class ChatWindowComponent {
   });
   private groups = toSignal(this.contactsService.groups$, { initialValue: [] });
 
-  // --- Zero State Logic ---
-  hasDismissedIntro = signal(false);
+  // ... (Existing Helpers for Scope/Intro) ...
 
   activeScope = computed<ChatScopeMode | null>(() => {
     const urn = this.conversationUrn();
@@ -113,6 +115,7 @@ export class ChatWindowComponent {
   isUpgradeView = computed(() => {
     const scope = this.activeScope();
     const urn = this.conversationUrn();
+    // Conceptually, if we are 'network' scope but using a 'contacts' URN, we are in the Setup Phase
     return scope === 'network' && urn?.namespace.startsWith('contacts');
   });
 
@@ -120,14 +123,13 @@ export class ChatWindowComponent {
     const scope = this.activeScope();
     const msgs = this.messages();
     const dismissed = this.hasDismissedIntro();
-    // Logic: Only consider it "Empty" if we are NOT loading.
-    // This prevents the check from firing while the fetch is in progress.
     return (
       !this.isLoading() && scope === 'local' && msgs.length === 0 && !dismissed
     );
   });
 
   participant = computed<ChatParticipant | null>(() => {
+    // ... (Existing logic same as provided file) ...
     const urn = this.conversationUrn();
     if (!urn) return null;
 
@@ -158,24 +160,22 @@ export class ChatWindowComponent {
       this.appState.loadConversation(null);
     });
 
-    // Reset local UI state when conversation changes
     effect(() => {
       this.conversationUrn();
       untracked(() => this.hasDismissedIntro.set(false));
     });
 
-    // Data Loader Effect
     effect(() => {
       const urn = this.conversationUrn();
       if (urn) {
         untracked(async () => {
-          this.isLoading.set(true); // 1. Start Loading
+          this.isLoading.set(true);
           try {
-            await this.appState.loadConversation(urn); // 2. Wait for data
+            await this.appState.loadConversation(urn);
           } catch (e) {
             this.logger.error('Failed to load conversation', e);
           } finally {
-            this.isLoading.set(false); // 3. Resolve
+            this.isLoading.set(false);
           }
         });
       }
@@ -203,11 +203,13 @@ export class ChatWindowComponent {
     });
   }
 
+  // ... (onScopeChange remains same) ...
   async onScopeChange(newMode: ChatScopeMode): Promise<void> {
     const currentUrn = this.conversationUrn();
     if (!currentUrn) return;
 
     if (newMode === 'network') {
+      // ... same as before
       const children = await this.contactsService.getGroupsByParent(currentUrn);
       if (children.length > 0) {
         this.router.navigate([
@@ -238,20 +240,41 @@ export class ChatWindowComponent {
     this.hasDismissedIntro.set(true);
   }
 
+  // ✅ UPDATED: Open Dialog -> Provision with Name -> Redirect
   async onCreateGroupChat(): Promise<void> {
     const currentUrn = this.conversationUrn();
-    if (!currentUrn) return;
+    const currentParticipant = this.participant();
+    const currentGroup = this.groups().find(
+      (g) => g.id.toString() === currentUrn?.toString(),
+    );
 
-    // 1. Set Loading State (Minting keys + saving contacts takes ~200ms)
+    if (!currentUrn || !currentParticipant) return;
+
+    // 1. Open Setup Dialog
+    const dialogRef = this.dialog.open(NetworkGroupSetupDialog, {
+      width: '400px',
+      data: {
+        defaultName: currentParticipant.name,
+        memberCount: currentGroup?.memberUrns?.length || 0,
+      },
+    });
+
+    const resultName = await firstValueFrom(dialogRef.afterClosed());
+    if (!resultName) return; // User cancelled
+
+    // 2. Set Loading State
     this.isUpgrading.set(true);
 
     try {
-      // 2. Perform Upgrade via State Layer
-      const newGroupUrn = await this.appState.provisionNetworkGroup(currentUrn);
+      // 3. Provision (Passing new name)
+      // Note: Ensure AppState.provisionNetworkGroup supports the 2nd arg
+      const newGroupUrn = await this.appState.provisionNetworkGroup(
+        currentUrn,
+        resultName,
+      );
 
       if (newGroupUrn) {
-        // 3. Navigation: Switch to the new Network Group
-        // We use replaceUrl to avoid going "Back" to the setup screen
+        // 4. Redirect to the NEW Entity
         await this.router.navigate(
           ['/messenger', 'conversations', newGroupUrn.toString()],
           { replaceUrl: true },
@@ -259,7 +282,6 @@ export class ChatWindowComponent {
       }
     } catch (error) {
       this.logger.error('Failed to create group chat', error);
-      // Optional: Add snackbar here if desired
     } finally {
       this.isUpgrading.set(false);
     }

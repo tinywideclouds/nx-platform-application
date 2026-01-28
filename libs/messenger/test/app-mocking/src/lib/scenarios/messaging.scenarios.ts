@@ -13,39 +13,38 @@ export const ACTIVE_USER: MessengerScenarioData = {
     notifications: { permission: 'granted', isSubscribed: true },
 
     // ✅ 1. Contacts (Populated & Linked)
-    contacts: [CONTACT_ALICE, CONTACT_BOB],
-
+    contactSetup: {
+      contacts: [CONTACT_ALICE, CONTACT_BOB],
+    },
+    directory: { groups: [], entities: [] },
     // ✅ 2. Messages (History Exists)
-    messages: [
-      // THREAD 1: ALICE (Received Message)
-      {
-        id: 'msg-alice-1',
-        senderUrn: MESSENGER_USERS.ALICE,
-        text: 'Hey! Are we still on for the design review?',
-        sentAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
-        status: 'read',
-      },
-      // THREAD 2: BOB (Sent Message)
-      {
-        id: 'msg-bob-1',
-        senderUrn: MESSENGER_USERS.ME, // Sent by ME
-        text: 'I pushed the latest mocks. Let me know what you think.',
-        sentAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-        status: 'sent',
-      },
-    ],
-
-    // ⚠️ TODO: We likely need to seed 'conversations' table here
-    // once we confirm the domain logic.
-
-    outbox: [],
-    quarantine: [],
+    messaging: {
+      messages: [
+        // THREAD 1: ALICE (Received Message)
+        {
+          id: 'msg-alice-1',
+          senderUrn: MESSENGER_USERS.ALICE,
+          text: 'Hey! Are we still on for the design review?',
+          sentAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
+          status: 'read',
+        },
+        // THREAD 2: BOB (Sent Message)
+        {
+          id: 'msg-bob-1',
+          senderUrn: MESSENGER_USERS.ME, // Sent by ME
+          text: 'I pushed the latest mocks. Let me know what you think.',
+          sentAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
+          status: 'sent',
+        },
+      ],
+      outbox: [],
+      quarantine: [],
+    },
   },
   remote_server: {
     auth: { authenticated: true, user: DEFAULT_USER },
     identity: { hasMyKey: true },
     network: { queuedMessages: [] },
     send: { shouldFail: false },
-    directory: { groups: [], entities: [] },
   },
 };

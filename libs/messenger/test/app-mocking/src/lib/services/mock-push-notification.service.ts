@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { MockPushNotificationConfig } from '../scenarios.const';
+// ✅ FIX: Import from types, not const
+import { MockPushNotificationConfig } from '../types';
 
 @Injectable({ providedIn: 'root' })
 export class MockPushNotificationService {

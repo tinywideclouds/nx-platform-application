@@ -12,7 +12,9 @@ const NOW = Temporal.Now.instant();
 export const FLIGHT_MODE_RECOVERY = composeScenarios(ACTIVE_USER, {
   local_device: {
     // Override: Clear local history to simulate stale state
-    messages: [],
+    messaging: {
+      messages: [], // Clear local history to simulate stale state
+    },
   },
   remote_server: {
     network: {

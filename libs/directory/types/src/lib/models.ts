@@ -3,6 +3,7 @@ import {
   URN,
 } from '@nx-platform-application/platform-types';
 
+export const EntityTypeUser = URN.parse('urn:directory:type:user');
 /**
  * 1. THE ATOM
  * Represents a unique network identity (User, Bot, etc).
@@ -10,8 +11,7 @@ import {
  */
 export interface DirectoryEntity {
   id: URN;
-  type: URN; // e.g. urn:type:user
-  lastSeenAt: ISODateTimeString;
+  type: URN; // e.g. urn:directory:type:user
 }
 
 /**

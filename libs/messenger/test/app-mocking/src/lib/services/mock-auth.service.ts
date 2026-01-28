@@ -7,9 +7,11 @@ import {
   AuthStatusResponse,
 } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { User, URN } from '@nx-platform-application/platform-types';
-import { MockServerAuthState } from '../scenarios.const';
 
-@Injectable({ providedIn: 'root' }) // ✅ Fixes Injection Error
+// ✅ FIX: Import from types.ts
+import { MockServerAuthState } from '../types';
+
+@Injectable({ providedIn: 'root' })
 export class MockAuthService implements IAuthService {
   // --- INTERNAL STATE ---
   private readonly _currentUser = signal<User | null>({

@@ -171,10 +171,8 @@ export class ContactsSyncService {
 
     // 2. Groups (Parallel)
     if (payload.groups.length > 0) {
-      const groupTasks = payload.groups.map((g) =>
-        this.contactsStorage.saveGroup(g),
-      );
-      promises.push(Promise.all(groupTasks));
+      // ✅ REPLACE the .map(saveGroup) loop with this:
+      promises.push(this.contactsStorage.bulkUpsertGroups(payload.groups));
     }
 
     await Promise.all(promises);

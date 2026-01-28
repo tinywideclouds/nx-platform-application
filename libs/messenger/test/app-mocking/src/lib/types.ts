@@ -3,7 +3,7 @@ import {
   ISODateTimeString,
   User,
 } from '@nx-platform-application/platform-types';
-import { Contact } from '@nx-platform-application/contacts-types';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
   MessageDeliveryStatus,
   DeliveryStatus,
@@ -12,7 +12,6 @@ import {
   ContentPayload,
   SignalPayload,
 } from '@nx-platform-application/messenger-domain-message-content';
-
 import {
   DirectoryGroup,
   DirectoryEntity,
@@ -24,7 +23,7 @@ export interface MockMessageDef {
   id: string;
   senderUrn: URN;
   text: string;
-  sentAt: string; // ISO String (Temporal)
+  sentAt: string; // ISO String
   status: MessageDeliveryStatus;
 }
 
@@ -33,8 +32,6 @@ export interface ScenarioItem {
   senderUrn: URN;
   sentAt: string | ISODateTimeString;
   status: MessageDeliveryStatus;
-
-  // STRICT TYPING: Only allow valid App Domain payloads
   payload: ContentPayload | SignalPayload;
 }
 
@@ -51,7 +48,7 @@ export interface MockPushNotificationConfig {
   isSubscribed: boolean;
 }
 
-// --- SERVICE CONFIGURATION INTERFACES ---
+// --- CONFIGURATION INTERFACES ---
 
 export interface MockServerAuthState {
   authenticated: boolean;
@@ -74,20 +71,18 @@ export interface MockChatSendConfig {
   latencyMs?: number;
 }
 
-// --- DIRECTOR SCRIPT TYPES ---
+export interface MockServerDirectoryState {
+  groups?: DirectoryGroup[];
+  entities?: DirectoryEntity[];
+}
+
+// --- SCRIPTING ---
 
 export type TriggerEvent = 'outbound_message';
 
 export interface TriggerMatcher {
   recipientId?: URN;
   textContains?: string;
-  /**
-   * Distinguishes between Ephemeral Signals (e.g. Typing) and Durable Data.
-   *
-   * true  = Matches ONLY Ephemeral Signals (e.g. Typing Indicators)
-   * false = Matches Durable Data (Text, Images, AND Read Receipts)
-   * undefined = Matches Both
-   */
   isEphemeral?: boolean;
 }
 
@@ -100,9 +95,6 @@ export type ActionType =
 export interface ScriptAction {
   type: ActionType;
   delayMs: number;
-
-  // ✅ UPDATE: Runtime actions now use the same Domain Payload
-  // This allows complex scripted responses (e.g. Asset Reveal)
   payload?: ContentPayload | SignalPayload;
 }
 
@@ -116,28 +108,39 @@ export interface ScenarioScript {
   rules: ScriptRule[];
 }
 
-// --- MASTER SCENARIO DEFINITION ---
-
-export interface MockServerDirectoryState {
-  groups?: DirectoryGroup[];
-  entities?: DirectoryEntity[];
-}
-
+/**
+ * THE MASTER SCENARIO DEFINITION
+ * (Single Source of Truth)
+ */
 export interface MessengerScenarioData {
   local_device: {
-    messages: MockMessageDef[];
-    outbox: MockOutboxDef[];
-    quarantine: MockMessageDef[];
-    contacts: Contact[];
+    // 1. Address Book State (CamelCase)
+    contactSetup: {
+      contacts: Contact[];
+      groups?: ContactGroup[];
+    };
+
+    // 2. Chat Data State
+    messaging: {
+      messages: MockMessageDef[]; // History
+      outbox: MockOutboxDef[];
+      quarantine: MockMessageDef[];
+    };
+
+    // 3. Directory State (Network Cache/Mock)
+    directory: MockServerDirectoryState;
+
+    // 4. Device Settings
     identity?: { seeded: boolean };
     notifications: MockPushNotificationConfig;
   };
+
   remote_server: {
     auth: MockServerAuthState;
     identity: MockServerIdentityState;
     network: MockServerNetworkState;
     send: MockChatSendConfig;
-    directory: MockServerDirectoryState;
   };
+
   script?: ScenarioScript;
 }

@@ -153,6 +153,13 @@ export class ContactsStorageService {
     await this.db.groups.put(storable);
   }
 
+  async bulkUpsertGroups(groups: ContactGroup[]): Promise<void> {
+    const storables = groups.map((g) => this.groupMapper.toStorable(g));
+    await this.db.transaction('rw', this.db.groups, async () => {
+      await this.db.groups.bulkPut(storables);
+    });
+  }
+
   async getGroup(id: URN): Promise<ContactGroup | undefined> {
     if (!id) return undefined;
     const storable = await this.db.groups.get(id.toString());

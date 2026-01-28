@@ -474,9 +474,14 @@ export class AppState {
 
   /**
    * Provisions a Network group based on a Local Group (Address Book)
-   * @returns The URN of the new Network Group, or null if upgrade failed/cancelled.
+   * @param localGroupUrn The source template
+   * @param name The name for the new network group
+   * @returns The URN of the new Network Group, or null if upgrade failed.
    */
-  public async provisionNetworkGroup(localGroupUrn: URN): Promise<URN | null> {
+  public async provisionNetworkGroup(
+    localGroupUrn: URN,
+    name: string,
+  ): Promise<URN | null> {
     const keys = this.identity.myKeys();
     const me = this.currentUserUrn();
 
@@ -488,10 +493,12 @@ export class AppState {
     }
 
     try {
+      // ✅ PASS THE NAME THROUGH
       return await this.groupProtocol.provisionNetworkGroup(
         localGroupUrn,
         keys,
         me,
+        name,
       );
     } catch (e) {
       this.logger.error('[AppState] Group Upgrade Failed', e);

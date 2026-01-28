@@ -1,23 +1,31 @@
 import { Injectable, inject } from '@angular/core';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import { TransportMessage } from '@nx-platform-application/messenger-types';
+
 import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 
-// ✅ NEW WORLD SERVICES (The Sources of Truth)
+// WORLD SERVICES
 import { IdentitySetupService } from './world/identity-setup.service';
 import { WorldMessagingService } from './world/world-messaging.service';
-import { MockDirectoryService } from './services/mock-directory.service';
 
+// HELPER SERVICES
+// ✅ FIX: Correct path to driver services
+import { MockLocalStorageBuilder } from './driver-services/mock-local-storage.builder';
 import { ScenarioDirectorService } from './driver-services/scenario-director.service';
 
-// Mock Services (Configuration targets)
+// MOCK SERVICES
 import { MockAuthService } from './services/mock-auth.service';
 import { MockKeyService } from './services/mock-key.service';
 import { MockChatDataService } from './services/mock-chat-data.service';
 import { MockLiveService } from './services/mock-live.service';
 import { MockChatSendService } from './services/mock-chat-send.service';
 import { MockPushNotificationService } from './services/mock-push-notification.service';
+import { MockDirectoryService } from './services/mock-directory.service';
 
-// Real Storage (For wiping/resetting only)
+// REAL STORAGE
 import {
   ChatStorageService,
   OutboxStorage,
@@ -26,132 +34,82 @@ import {
 import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
 import { KeyStorageService } from '@nx-platform-application/messenger-infrastructure-key-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import {
+  MessengerCryptoService,
+  CryptoEngine,
+} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
-// Modular Imports
-import { MESSENGER_SCENARIOS } from './scenarios';
-import { MessengerScenarioData, ScenarioItem, MockMessageDef } from './types';
-import { MESSENGER_USERS } from './data/users.const';
+import { MESSENGER_SCENARIOS } from './scenarios.const';
+import { MessengerScenarioData, ScenarioItem } from './types';
 
 @Injectable({ providedIn: 'root' })
 export class MessengerScenarioDriver {
-  // --- WORLD LAYER ---
-  private worldIdentity = inject(IdentitySetupService);
-  private worldMessaging = inject(WorldMessagingService);
-  // ✅ ACTIVATE THE DIRECTOR
-  // Just injecting it here forces it to instantiate, which starts the WorldInbox listener.
-  private director = inject(ScenarioDirectorService);
-
-  // --- MOCK LAYER ---
+  // Mocks
   private authMock = inject(MockAuthService);
   private keyMock = inject(MockKeyService);
-  private chatDataMock = inject(MockChatDataService); // We still config the 'mode', but data comes from World
+  private routerMock = inject(MockChatDataService);
   private liveMock = inject(MockLiveService);
   private sendMock = inject(MockChatSendService);
   private pushMock = inject(MockPushNotificationService);
   private directoryMock = inject(MockDirectoryService);
 
-  // --- INFRASTRUCTURE LAYER (Access for Wiping) ---
+  // World & Helpers
+  private identitySetup = inject(IdentitySetupService);
+  private worldMessaging = inject(WorldMessagingService);
+  private messageBuilder = inject(MockLocalStorageBuilder);
+  private director = inject(ScenarioDirectorService);
+  private crypto = inject(CryptoEngine);
+
+  // Storage
   private chatStorage = inject(ChatStorageService);
-  private outboxStorage = inject(OutboxStorage);
   private contactsStorage = inject(ContactsStorageService);
   private publicKeysStorage = inject(KeyStorageService);
   private messengerCrypto = inject(MessengerCryptoService);
+  private outboxStorage = inject(OutboxStorage);
   private quarantineStorage = inject(QuarantineStorage);
   private keyCache = inject(KeyCacheService);
 
-  private readonly STORAGE_KEY = 'messenger_active_scenario';
-
-  constructor() {
+  async initialize(): Promise<void> {
     (window as any).messengerDriver = this;
-  }
-
-  public async initialize(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
-    const activeKey =
-      params.get('scenario') ||
-      localStorage.getItem(this.STORAGE_KEY) ||
-      'active-user';
-    localStorage.setItem(this.STORAGE_KEY, activeKey);
-    await this.loadScenario(activeKey);
+    const scenarioKey = params.get('scenario') || 'active-user';
+    await this.loadScenario(scenarioKey);
   }
 
   async loadScenario(key: string): Promise<void> {
     const scenario =
       MESSENGER_SCENARIOS[key as keyof typeof MESSENGER_SCENARIOS];
     if (!scenario) {
-      console.error(`[Driver] ❌ Unknown scenario: ${key}`);
+      console.error(`[Driver] ❌ Scenario '${key}' not found!`);
       return;
     }
 
-    console.groupCollapsed(`[Driver] 🎬 Activating Scenario: "${key}"`);
+    console.groupCollapsed(`[Driver] 🎬 Loading Scenario: ${key}`);
 
-    // 1. RESET REALITY (Wipe the App's memory)
     await this.wipeDevice();
 
-    // 2. CONFIGURE WORLD (The God View)
-    // This generates keys in memory and decides if they go to the DB.
-    await this.worldIdentity.configure(
+    // 1. Identity & Keys
+    await this.identitySetup.configure(
       scenario.remote_server.identity,
-      scenario.local_device.contacts || [],
+      scenario.local_device.contactSetup.contacts, // ✅ FIX: contactSetup
     );
 
-    // 3. LOAD SCRIPT (The Interactive Rules)
-    // This tells the Director: "If Alice receives 'Hello', wait 2s and reply."
-    this.director.loadScript(scenario.script);
-
-    // 3. CONFIGURE MOCKS (The Dumb Pipes)
+    // 2. Configure Mocks
     this.authMock.loadScenario(scenario.remote_server.auth);
-    this.keyMock.loadScenario(scenario.remote_server.identity); // Configs the 404/200 behavior
-    this.liveMock.loadScenario(scenario.remote_server.network);
+    this.keyMock.loadScenario(scenario.remote_server.identity);
+    this.routerMock.loadScenario(scenario.remote_server.network);
     this.sendMock.loadScenario(scenario.remote_server.send);
     this.pushMock.loadScenario(scenario.local_device.notifications);
+    this.directoryMock.loadScenario(scenario.local_device.directory); // Directory is conceptually local cache + network
 
-    // ✅ NEW: Seed Directory
-    this.directoryMock.loadScenario(
-      scenario.remote_server.directory || { groups: [], entities: [] },
-    );
-
-    // Config the Chat Data Service (Wait mode, etc), but don't load messages yet
-    // We will inject messages via the World Service next.
-    this.chatDataMock.loadScenario({ queuedMessages: [] });
-
-    // 4. SEED CONTENT (Populate the Universe)
-
-    // A. Network Queue (Offline Messages)
-    // We delegate this to WorldMessagingService so it uses the CORRECT keys (from IdentitySetup)
-    if (scenario.remote_server.network.queuedMessages.length > 0) {
-      console.log(
-        `[Driver] 🌍 World creating ${scenario.remote_server.network.queuedMessages.length} offline messages...`,
-      );
-      for (const msgDef of scenario.remote_server.network.queuedMessages) {
-        await this.worldMessaging.deliverMessage(
-          this.mapMockToScenarioItem(msgDef),
-        );
-      }
-    }
-
-    // B. Local Device (Messages already downloaded)
+    // 3. Seed Database
     await this.seedLocalDevice(scenario.local_device);
 
+    // 4. Start Director
+    this.director.loadScript(scenario.script);
+
     console.groupEnd();
-    console.log(
-      `%c[World] 🌍 World Initial State READY`,
-      'color: #0f0; font-weight: bold; font-size: 12px;',
-    );
-  }
-
-  // --- INTERNAL HELPER ---
-
-  private mapMockToScenarioItem(def: MockMessageDef): ScenarioItem {
-    return {
-      id: def.id,
-      senderUrn: def.senderUrn,
-      sentAt: def.sentAt,
-      status: def.status,
-      // Convert legacy text definition to Domain Payload
-      payload: { kind: 'text', text: def.text },
-    };
+    console.log(`%c[World] 🌍 READY`, 'color: #0f0; font-weight: bold;');
   }
 
   private async wipeDevice() {
@@ -168,17 +126,65 @@ export class MessengerScenarioDriver {
   }
 
   private async seedLocalDevice(config: MessengerScenarioData['local_device']) {
-    // Note: We don't seed Identity here anymore. WorldIdentity service handled it in step 2.
+    // 1. Contacts & Groups (from contactSetup)
+    // ✅ FIX: Use new structure
+    const { contacts, groups } = config.contactSetup;
 
-    if (config.contacts && config.contacts.length > 0) {
-      await this.contactsStorage.bulkUpsert(config.contacts);
+    if (contacts.length > 0) {
+      console.log(`[Driver] Seeding ${contacts.length} contacts...`);
+      await this.contactsStorage.bulkUpsert(contacts);
+    }
+    if (groups && groups.length > 0) {
+      console.log(`[Driver] Seeding ${groups.length} local groups...`);
+      await this.contactsStorage.bulkUpsertGroups(groups);
     }
 
-    // Direct injection of already-decrypted messages into local DB
-    // (Simulating data that was processed days ago)
-    for (const msg of config.messages) {
-      // Logic from previous implementation to inject ChatMessage directly
-      // ... (omitted for brevity, same as previous seedMessageToStorage) ...
+    // 2. Message History (from messaging)
+    // ✅ FIX: Use new structure
+    const { messages, outbox, quarantine } = config.messaging;
+
+    if (messages.length > 0) {
+      console.log(`[Driver] Seeding ${messages.length} history messages...`);
+      const items: ScenarioItem[] = messages.map((def) => ({
+        id: def.id,
+        senderUrn: def.senderUrn,
+        sentAt: def.sentAt,
+        status: def.status,
+        payload: { kind: 'text', text: def.text },
+      }));
+
+      const realMessages = this.messageBuilder.build(items);
+
+      await Promise.all(
+        realMessages.map((msg) => this.chatStorage.saveMessage(msg)),
+      );
+    }
+
+    // 3. Outbox
+    if (outbox.length > 0) {
+      // Outbox seeding logic would go here
+    }
+
+    // 4. Quarantine
+    if (quarantine.length > 0) {
+      console.log(`[Driver] Seeding ${quarantine.length} quarantined items...`);
+      for (const def of quarantine) {
+        // Generate valid encrypted payload
+        const dummyKey = (await this.crypto.generateEncryptionKeys()).publicKey;
+        const encrypted = await this.crypto.encrypt(
+          dummyKey,
+          new TextEncoder().encode(def.text),
+        );
+
+        const transportMsg: TransportMessage = {
+          senderId: def.senderUrn,
+          sentTimestamp: def.sentAt as ISODateTimeString,
+          typeId: MessageTypeText,
+          payloadBytes: encrypted.encryptedData,
+        };
+
+        await this.quarantineStorage.saveQuarantinedMessage(transportMsg);
+      }
     }
   }
 }

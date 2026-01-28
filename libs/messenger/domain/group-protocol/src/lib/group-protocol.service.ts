@@ -3,18 +3,14 @@ import { Temporal } from '@js-temporal/polyfill';
 
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
-import {
-  ChatMessage,
-  EntityTypeUser,
-} from '@nx-platform-application/messenger-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
+import { EntityTypeUser } from '@nx-platform-application/directory-types';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
-// ✅ NEW: Directory APIs (The source of truth for Network Groups)
 import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
 
-// ✅ RETAINED: Contacts Query (Only to read the Local Template)
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 
 // ✅ DOMAIN TYPES & CONSTANTS
@@ -51,9 +47,10 @@ export class GroupProtocolService {
     localGroupUrn: URN,
     myKeys: PrivateKeys,
     myUrn: URN,
+    name: string, // ✅ NEW ARGUMENT
   ): Promise<URN> {
     this.logger.info(
-      `[GroupProtocol] Provisioning from ${localGroupUrn.toString()}`,
+      `[GroupProtocol] Provisioning '${name}' from ${localGroupUrn.toString()}`,
     );
 
     // 1. Fetch Source Participants (Local URNs)
@@ -101,8 +98,7 @@ export class GroupProtocolService {
 
       entities.push({
         id: p.networkId,
-        type: EntityTypeUser, // ✅ Uses Constant
-        lastSeenAt: now as any,
+        type: EntityTypeUser,
       });
     });
 
@@ -122,11 +118,9 @@ export class GroupProtocolService {
       alias: p.alias,
     }));
 
-    const groupName = 'New Group'; // TODO: Fetch name from Local Template
-
     const invitePayload: GroupInvitePayload = {
       groupUrn: networkGroupUrn.toString(),
-      name: groupName,
+      name: name,
       description: `Invited by ${myUrn.entityId}`,
       inviterUrn: myNetworkId.toString(),
       participants: snapshot,
@@ -174,8 +168,7 @@ export class GroupProtocolService {
         // Seed the Entity in Directory (Idempotent)
         const entity: DirectoryEntity = {
           id: pUrn,
-          type: EntityTypeUser, // ✅ Uses Constant
-          lastSeenAt: now as any,
+          type: EntityTypeUser,
         };
         await this.directoryMutation.saveEntity(entity);
         entities.push(entity);
