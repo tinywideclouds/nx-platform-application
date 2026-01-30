@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { MessengerDatabase } from '@nx-platform-application/messenger-infrastructure-db-schema';
+import { MessengerDatabase } from '@nx-platform-application/messenger-infrastructure-indexed-db';
 
 // Define known keys to enforce type safety
 export const SETTING_KEYS = {

@@ -8,7 +8,7 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir:
-    '../../../node_modules/.vite/libs/messenger/infrastructure/db-schema',
+    '../../../node_modules/.vite/libs/messenger/infrastructure/indexed-db',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -16,7 +16,7 @@ export default defineConfig({
     nxViteTsPaths(),
   ],
   test: {
-    name: 'messenger-infrastructure-db-schema',
+    name: 'messenger-infrastructure-indexed-db',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -26,12 +26,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/libs/messenger/infrastructure/db-schema/index.html',
+        '../../../../dist/test-reports/libs/messenger/infrastructure/indexed-db/index.html',
       ),
     },
     coverage: {
       reportsDirectory:
-        '../../../../coverage/libs/messenger/infrastructure/db-schema',
+        '../../../../coverage/libs/messenger/infrastructure/indexed-db',
       provider: 'v8' as const,
     },
   },

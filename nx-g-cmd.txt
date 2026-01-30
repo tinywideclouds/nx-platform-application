@@ -273,3 +273,6 @@ nx g @nx/angular:library --name=directory-infrastructure-storage --directory=lib
 
 nx g @nx/workspace:move --project=contacts-domain-bridge --destination=libs/contacts/domain/service --importPath=@nx-platform-application/contacts-domain-service
 
+
+nx g @nx/workspace:move --project=messenger-infrastructure-db-schema --destination=libs/messenger/infrastructure/indexed-db --importPath=@nx-platform-application/messenger-infrastructure-indexed-db
+

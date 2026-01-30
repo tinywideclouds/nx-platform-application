@@ -1,7 +1,7 @@
 {
-  "name": "messenger-infrastructure-db-schema",
+  "name": "messenger-infrastructure-indexed-db",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/infrastructure/db-schema/src",
+  "sourceRoot": "libs/messenger/infrastructure/indexed-db/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:messenger", "layer:infrastructure"],
@@ -10,8 +10,8 @@
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/libs/messenger/infrastructure/db-schema",
-        "configFile": "libs/messenger/infrastructure/db-schema/vite.config.mts"
+        "outputPath": "dist/libs/messenger/infrastructure/indexed-db",
+        "configFile": "libs/messenger/infrastructure/indexed-db/vite.config.mts"
       }
     },
     "lint": {

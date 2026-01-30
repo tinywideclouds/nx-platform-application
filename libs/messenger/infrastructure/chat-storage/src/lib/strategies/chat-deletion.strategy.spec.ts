@@ -6,7 +6,7 @@ import {
   MessengerDatabase,
   MessageRecord,
   MessageMapper,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 import {
   ISODateTimeString,
   URN,

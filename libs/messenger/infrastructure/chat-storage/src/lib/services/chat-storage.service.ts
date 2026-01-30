@@ -19,7 +19,7 @@ import {
   ConversationIndexRecord,
   DeletedMessageRecord,
   generateSnippet,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 
 import { ChatDeletionStrategy } from '../strategies/chat-deletion.strategy';
 import { HistoryReader, HistoryQuery, HistoryResult } from '../history.reader';
@@ -197,6 +197,7 @@ export class ChatStorageService
 
     if (isNewer) {
       update.lastActivityTimestamp = sentTime;
+      console.log('Newer message generating snippet');
       update.snippet = generateSnippet(message);
       if (message.status === 'received') {
         update.unreadCount = (existing?.unreadCount || 0) + 1;

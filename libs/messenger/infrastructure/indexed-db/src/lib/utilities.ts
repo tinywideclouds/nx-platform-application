@@ -1,4 +1,5 @@
 import { ChatMessage } from '@nx-platform-application/messenger-types';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 
 const MAX_SNIPPET_BYTES = 1024 * 5; // 5KB limit for text decoding
 
@@ -7,8 +8,9 @@ const MAX_SNIPPET_BYTES = 1024 * 5; // 5KB limit for text decoding
  * Used for the conversation index (sidebar preview).
  */
 export function generateSnippet(msg: ChatMessage): string {
+  console.log('[SNIPPED GENERATION]', msg);
   // 1. Check Type & Payload Existence
-  if (msg.typeId.toString() === 'urn:message:type:text' && msg.payloadBytes) {
+  if (msg.typeId.equals(MessageTypeText) && msg.payloadBytes) {
     try {
       // 2. Performance Guard: Don't decode massive blobs on the main thread
       if (msg.payloadBytes.byteLength > MAX_SNIPPET_BYTES) {
@@ -24,16 +26,4 @@ export function generateSnippet(msg: ChatMessage): string {
 
   // 4. Fallback for Media or Missing Payload
   return 'Media Message';
-}
-
-/**
- * Determines the preview type (text/image/file) for rendering icons in the UI.
- */
-export function getPreviewType(
-  typeIdStr: string,
-): 'text' | 'image' | 'file' | 'other' {
-  if (typeIdStr === 'urn:message:type:text') return 'text';
-  if (typeIdStr.includes('image')) return 'image';
-  if (typeIdStr.includes('file')) return 'file';
-  return 'other';
 }

@@ -4,7 +4,7 @@ import { DexieQuarantineStorage } from './dexie-quarantine.storage';
 import {
   MessengerDatabase,
   QuarantineMapper,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 import {
   URN,
   ISODateTimeString,

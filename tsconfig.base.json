@@ -116,11 +116,11 @@
       "@nx-platform-application/messenger-infrastructure-crypto-bridge": [
         "libs/messenger/infrastructure/crypto-bridge/src/index.ts"
       ],
-      "@nx-platform-application/messenger-infrastructure-db-schema": [
-        "libs/messenger/infrastructure/db-schema/src/index.ts"
-      ],
       "@nx-platform-application/messenger-infrastructure-device-notifications": [
         "libs/messenger/infrastructure/device-notifications/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-indexed-db": [
+        "libs/messenger/infrastructure/indexed-db/src/index.ts"
       ],
       "@nx-platform-application/messenger-infrastructure-key-access": [
         "libs/messenger/infrastructure/key-access/src/index.ts"

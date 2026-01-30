@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { LocalSettingsService, SETTING_KEYS } from './local-settings.service';
-import { MessengerDatabase } from '@nx-platform-application/messenger-infrastructure-db-schema';
+import { MessengerDatabase } from '@nx-platform-application/messenger-infrastructure-indexed-db';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 describe('LocalSettingsService', () => {

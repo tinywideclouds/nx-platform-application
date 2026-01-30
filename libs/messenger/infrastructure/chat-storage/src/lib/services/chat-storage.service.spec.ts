@@ -5,7 +5,7 @@ import {
   MessageMapper,
   ConversationMapper,
   DeletedMessageRecord,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 import { ChatDeletionStrategy } from '../strategies/chat-deletion.strategy';
 import {
   URN,

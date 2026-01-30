@@ -12,7 +12,7 @@ import {
 import {
   MessengerDatabase,
   OutboxMapper,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 import { Temporal } from '@js-temporal/polyfill';
 
 // ✅ UPDATED: Import the new Request type

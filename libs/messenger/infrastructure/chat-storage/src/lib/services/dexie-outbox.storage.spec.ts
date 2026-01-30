@@ -4,7 +4,7 @@ import {
   MessengerDatabase,
   OutboxMapper,
   OutboxRecord,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 import {
   URN,
   ISODateTimeString,

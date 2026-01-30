@@ -9,8 +9,7 @@ import {
   MessageMapper,
   MessageRecord,
   generateSnippet,
-  getPreviewType,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 
 @Injectable({ providedIn: 'root' })
 export class ChatDeletionStrategy {

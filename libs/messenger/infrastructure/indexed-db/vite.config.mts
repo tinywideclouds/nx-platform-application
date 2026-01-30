@@ -8,7 +8,7 @@ import path from 'path';
 export default defineConfig(() => ({
   root: __dirname,
   cacheDir:
-    '../../../../node_modules/.vite/libs/messenger/infrastructure/db-schema',
+    '../../../../node_modules/.vite/libs/messenger/infrastructure/indexed-db',
   plugins: [
     angular({
       tsconfig: path.join(__dirname, 'tsconfig.lib.json'),
@@ -20,7 +20,7 @@ export default defineConfig(() => ({
     emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
-      name: 'infrastructure/db-schema',
+      name: 'infrastructure/indexed-db',
       fileName: (format: any) => `index.${format}.js`,
       formats: ['es' as const],
     },

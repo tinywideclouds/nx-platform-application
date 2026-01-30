@@ -7,7 +7,7 @@ import {
 import {
   MessengerDatabase,
   QuarantineMapper,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
+} from '@nx-platform-application/messenger-infrastructure-indexed-db';
 
 import { QuarantineStorage } from '../quarantine.storage';
 
