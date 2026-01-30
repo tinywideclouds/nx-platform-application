@@ -1,3 +1,5 @@
+// libs/messenger/state/app/src/lib/app-state.service.ts
+
 import {
   Injectable,
   DestroyRef,
@@ -7,13 +9,16 @@ import {
   computed,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { Subject } from 'rxjs';
-import { throttleTime } from 'rxjs/operators';
+import { Subject, combineLatest } from 'rxjs';
+import { throttleTime, filter, skip, take } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { DevicePairingSession } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  DraftMessage,
+  DevicePairingSession,
+} from '@nx-platform-application/messenger-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { filter, skip, take, combineLatest } from 'rxjs';
+import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
 
 // --- FACADES & STATE ---
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
@@ -29,17 +34,34 @@ import {
 } from '@nx-platform-application/messenger-domain-conversation';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+
+// --- INFRASTRUCTURE ---
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
-import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
-import { DraftMessage } from '@nx-platform-application/messenger-types';
-import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
+import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+import {
+  AddressBookManagementApi,
+  AddressBookApi,
+} from '@nx-platform-application/contacts-api';
 
-const TYPING_DEBOUNCE_MS = 3000; // ✅ Domain Constant
+// --- ENGINE ---
+import { StateEngine, PageState, AppDiagnosticState } from './state.engine';
+import { ContactGroup } from '@nx-platform-application/contacts-types';
+
+const TYPING_DEBOUNCE_MS = 3000;
+
+/**
+ * Structural capabilities of the current conversation.
+ * Derived purely from the URN.
+ */
+export interface ConversationCapabilities {
+  kind: 'network-group' | 'local-group' | 'p2p';
+  canBroadcast: boolean; // True for Network Groups
+  canFork: boolean; // True for Network & Local Groups
+}
 
 @Injectable({
   providedIn: 'root',
@@ -57,9 +79,10 @@ export class AppState {
   private readonly syncService = inject(CloudSyncService);
   private readonly chatService = inject(ChatDataService);
 
-  // General servfices
+  // General services
   private readonly authService = inject(IAuthService);
   private readonly addressBookManager = inject(AddressBookManagementApi);
+  private readonly addressBookApi = inject(AddressBookApi);
 
   // Domain layer
   private readonly outboxWorker = inject(OutboxWorkerService);
@@ -67,7 +90,7 @@ export class AppState {
   private readonly conversationService = inject(ConversationService);
   private readonly conversationActions = inject(ConversationActionService);
 
-  // Straight to infrastructure
+  // Infrastructure
   private readonly settingsService = inject(LocalSettingsService);
   private readonly cryptoService = inject(MessengerCryptoService);
   private readonly storageService = inject(ChatStorageService);
@@ -98,15 +121,15 @@ export class AppState {
   public readonly isCloudConnected = this.syncService.isConnected;
   public readonly isBackingUp = this.syncService.isSyncing;
 
-  // Messaging State (Delegated to chatService or Domain)
+  // Messaging State
   public readonly selectedConversation =
     this.conversationService.selectedConversation;
-
   public readonly activeConversations = this.chatService.activeConversations;
-
   public readonly typingActivity = this.chatService.typingActivity;
-
   public readonly messages = this.conversationService.messages;
+
+  // UI Helpers from ChatData
+  public readonly uiConversations = this.chatService.uiConversations;
 
   public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
   public readonly firstUnreadId = this.conversationService.firstUnreadId;
@@ -114,10 +137,69 @@ export class AppState {
   public readonly isRecipientKeyMissing =
     this.conversationService.isRecipientKeyMissing;
 
-  public readonly blockedSet = this.moderation.blockedSet;
+  public readonly activeLocalGroup = signal<ContactGroup | null>(null);
 
+  public readonly blockedSet = this.moderation.blockedSet;
   public readonly isCloudAuthRequired =
     this.syncService.requiresUserInteraction;
+
+  // =================================================================
+  // 🧠 THE BRAIN: SIGNAL DERIVATION
+  // =================================================================
+
+  /**
+   * SIGNAL 1: CAPABILITIES (The "What Is It?")
+   * Driven purely by the URN structure. Used by Header/Menus.
+   */
+  public readonly capabilities = computed<ConversationCapabilities | null>(
+    () => {
+      const conv = this.selectedConversation();
+      if (!conv) return null;
+
+      const urn = conv.id;
+      const isGroup = urn.entityType === 'group';
+      const isNetwork = urn.namespace === 'messenger';
+
+      if (isNetwork && isGroup) {
+        return { kind: 'network-group', canBroadcast: true, canFork: true };
+      }
+
+      if (isGroup) {
+        // Local Contact Group
+        return { kind: 'local-group', canBroadcast: false, canFork: true };
+      }
+
+      // Default: P2P User
+      return { kind: 'p2p', canBroadcast: false, canFork: false };
+    },
+  );
+
+  /**
+   * SIGNAL 2: PAGE STATE (The "What's Happening?")
+   * Driven by Logic + Data. Used by the Main View Switch.
+   */
+  public readonly pageState = computed<PageState>(() => {
+    // 1. Gather Inputs
+    const conv = this.selectedConversation();
+    if (!conv) return 'NOT_FOUND';
+
+    const urn = conv.id;
+    const msgs = this.messages();
+    const isLoading = this.isLoadingHistory();
+    const blocked = this.blockedSet();
+
+    // Resolve Boolean Flags
+    const isBlocked = blocked.has(urn.toString());
+
+    // 2. Delegate to Pure Logic Engine
+    return StateEngine.resolvePageState({
+      urn,
+      messages: msgs,
+      isLoading,
+      isBlocked,
+      isQuarantined: false, // Future integration point
+    });
+  });
 
   constructor() {
     this.logger.info('ChatService: Initializing via Facades...');
@@ -130,12 +212,35 @@ export class AppState {
       }
     });
 
+    effect(() => {
+      const conv = this.selectedConversation();
+      const urn = conv?.id;
+
+      if (urn && urn.namespace === 'contacts' && urn.entityType === 'group') {
+        this.addressBookApi
+          .getGroup(urn)
+          .then((group) => {
+            this.activeLocalGroup.set(group || null);
+          })
+          .catch((err) => {
+            this.logger.error('Failed to load local group details', err);
+            this.activeLocalGroup.set(null);
+          });
+      } else {
+        this.activeLocalGroup.set(null);
+      }
+    });
+
     this.loadUiSettings();
   }
 
-  // ✅ REFACTORED: Parallel Boot Sequence
+  // --- BOOT SEQUENCING ---
+
+  readonly bootStatus = signal<AppDiagnosticState>({ bootStage: 'IDLE' });
+
   private async bootDataLayer() {
     this.logger.info('🚀 [AppState] Identity Ready. Booting Data Layer...');
+    this.bootStatus.set({ bootStage: 'CHECKING_AUTH' });
     const user = this.authService.currentUser();
     const keys = this.identity.myKeys();
 
@@ -149,37 +254,32 @@ export class AppState {
       return;
     }
 
-    // We run independent tasks in parallel to avoid blocking the UI
     const promises: Promise<any>[] = [];
 
-    // Task 1: Start Chat Sync (WebSockets & Ingestion)
+    this.bootStatus.update((s) => ({ ...s, bootStage: 'STARTING_CHAT_SYNC' }));
+
     const chatTask = this.chatService
       .startSyncSequence(token)
       .then(() => this.logger.info('🟢 [AppState] Chat Sync Started'))
       .catch((e) => this.logger.error('💥 [AppState] Chat Sync Failed', e));
     promises.push(chatTask);
 
-    // Task 2: Check Cloud Status (The Passive Check)
-    // This asks the server: "Is this user linked?"
-    // It does NOT trigger a popup or a sync.
+    this.bootStatus.update((s) => ({ ...s, bootStage: 'CHECKING_CLOUD' }));
     this.logger.info('☁️ [AppState] Triggering Cloud Session Resume...');
+
     const cloudTask = this.syncService
       .resumeSession()
       .then(() => this.logger.info('🔵 [AppState] Cloud Check Complete'))
       .catch((e) => this.logger.error('⚠️ [AppState] Cloud Check Failed', e));
     promises.push(cloudTask);
 
-    // Initialize triggers immediately (don't need to wait for network)
     this.initOrchestration();
     this.initResumptionTriggers();
 
-    // Task 3: Flush Outbox (Resumption)
-    // We fire this and forget it, letting the worker handle the queue
     void this.outboxWorker.processQueue(user.id, keys);
 
-    // Wait for critical network tasks only to ensure logs are clean,
-    // but the UI should already be responsive.
     await Promise.allSettled(promises);
+    this.bootStatus.set({ bootStage: 'READY' });
   }
 
   private initOrchestration() {
@@ -189,13 +289,10 @@ export class AppState {
   }
 
   public async connectCloud(): Promise<void> {
-    // This MUST be called from a button click handler in the UI
-    // 'google' is hardcoded here, but could be passed in
     await this.syncService.connect('google-drive');
   }
 
   private initResumptionTriggers(): void {
-    // 1. On Socket Reconnect -> Process Queue
     this.liveService.status$
       .pipe(
         filter((status) => status === 'connected'),
@@ -213,10 +310,8 @@ export class AppState {
         }
       });
 
-    // 2. On Boot -> Process Queue
     combineLatest([
       this.authService.sessionLoaded$.pipe(filter((s) => !!s)),
-      // ✅ FIX: Use the class property (safe), not toObservable() here (unsafe)
       this.myKeys$.pipe(filter((k) => !!k)),
     ])
       .pipe(take(1), takeUntilDestroyed(this.destroyRef))
@@ -238,16 +333,11 @@ export class AppState {
     const myUrn = this.currentUserUrn();
     await this.conversationService.loadConversation(urn, myUrn);
 
-    // 2. Delegate UI update (Clear Badge) to the Owner
     if (urn) {
       this.chatService.clearUnreadCount(urn);
     }
   }
 
-  /**
-   * Handles the complex logic of deciding HOW to send a draft.
-   * Splits text, images, or handles mixed content.
-   */
   public async sendDraft(draft: DraftMessage): Promise<void> {
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
@@ -261,12 +351,8 @@ export class AppState {
       return;
     }
 
-    // 1. Handle File(s)
-    // Future-proof: This is where we will eventually loop through draft.attachments
     if (draft.attachments.length > 0) {
       const firstAttachment = draft.attachments[0];
-
-      // We delegate to the specific existing logic for images
       await this.media.sendImage(
         recipient,
         firstAttachment.file,
@@ -277,8 +363,6 @@ export class AppState {
       return;
     }
 
-    // 2. Handle Text Only
-    // Only send if there is actual text and no files
     if (draft.text.trim().length > 0) {
       await this.conversationActions.sendMessage(
         recipient,
@@ -318,7 +402,6 @@ export class AppState {
   }
 
   public performTypingNotification(): void {
-    console.log('debounce?');
     const recipient = this.selectedConversation()?.id;
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
@@ -470,12 +553,6 @@ export class AppState {
     return this.conversationService.loadMoreMessages();
   }
 
-  /**
-   * Provisions a Network group based on a Local Group (Address Book)
-   * @param localGroupUrn The source template
-   * @param name The name for the new network group
-   * @returns The URN of the new Network Group, or null if upgrade failed.
-   */
   public async provisionNetworkGroup(
     localGroupUrn: URN,
     name: string,
@@ -491,7 +568,6 @@ export class AppState {
     }
 
     try {
-      // ✅ PASS THE NAME THROUGH
       return await this.groupProtocol.provisionNetworkGroup(
         localGroupUrn,
         keys,

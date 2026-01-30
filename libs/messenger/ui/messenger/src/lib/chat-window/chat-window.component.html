@@ -1,34 +1,42 @@
 <div class="flex flex-col h-full bg-white">
-  @if (participant(); as p) {
-    <messenger-chat-window-header
-      [title]="title()"
-      [icon]="participant()"
-      [hasKeyIssue]="isKeyMissing()"
-      (back)="onHeaderBack()"
-      (toggleInfo)="onToggleInfo()"
-    />
+  <messenger-chat-window-header
+    [title]="title()"
+    [icon]="headerData()"
+    [hasKeyIssue]="isKeyMissing()"
+    [groupType]="groupType()"
+    (back)="onHeaderBack()"
+    (toggleInfo)="onToggleInfo()"
+    (fork)="onHeaderFork()"
+    (broadcast)="onHeaderBroadcast()"
+  />
 
-    <div class="flex-grow overflow-hidden relative">
-      @if (isLoading() || isUpgrading()) {
+  <div class="flex-grow overflow-hidden relative">
+    @switch (viewState()) {
+      @case ('SHOW_LOADING') {
         <div
-          class="absolute inset-0 flex flex-col items-center justify-center bg-white z-50"
+          class="absolute inset-0 flex items-center justify-center bg-white z-50"
         >
           <mat-spinner diameter="40" class="opacity-50"></mat-spinner>
-          @if (isUpgrading()) {
-            <p
-              class="mt-4 text-xs font-medium text-gray-500 uppercase tracking-wide animate-pulse"
-            >
-              Creating Group...
-            </p>
-          }
         </div>
       }
 
-      <router-outlet></router-outlet>
-    </div>
-  } @else {
-    <div class="flex items-center justify-center h-full text-gray-500">
-      <p>Select a conversation to start chatting.</p>
-    </div>
-  }
+      @case ('SHOW_INTRO') {
+        <messenger-chat-group-intro
+          [groupName]="headerData()?.name || 'Group'"
+          [memberCount]="activeLocalGroup()?.memberUrns?.length || 0"
+          (startBroadcast)="onStartBroadcast()"
+          (createGroupChat)="onCreateGroupChat()"
+        />
+      }
+
+      @case ('SHOW_BLOCKED') {
+        <div>blocked</div>
+        >
+      }
+
+      @case ('SHOW_ROUTER_OUTLET') {
+        <router-outlet></router-outlet>
+      }
+    }
+  </div>
 </div>

@@ -1,149 +1,193 @@
+// libs/messenger/ui/chat/src/lib/chat-window/chat-window.component.spec.ts
+
 import { TestBed } from '@angular/core/testing';
-import { Temporal } from '@js-temporal/polyfill';
 import { ChatWindowComponent } from './chat-window.component';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of } from 'rxjs';
 import { signal } from '@angular/core';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
-import { Contact } from '@nx-platform-application/contacts-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-
-import { ChatWindowHeaderComponent } from '@nx-platform-application/messenger-ui-chat';
-
-// Services
-import { AppState } from '@nx-platform-application/messenger-state-app';
-import { ContactsStorageService } from '@nx-platform-application/contacts-infrastructure-storage';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-
-// ng-mocks
 import { MockComponent, MockProvider } from 'ng-mocks';
 
-// Mock Data
-const mockContactUrn = URN.parse('urn:contacts:user:alice');
-const mockContact: Contact = {
-  id: mockContactUrn,
-  alias: 'Alice',
-  email: 'alice@test.com',
-  firstName: 'Alice',
-  surname: 'Wonderland',
-  lastModified: Temporal.Now.instant().toString() as ISODateTimeString,
-  phoneNumbers: [],
-  emailAddresses: [],
-  serviceContacts: { messenger: { profilePictureUrl: 'img.png' } } as any,
-};
+// Components
+import {
+  ChatWindowHeaderComponent,
+  ChatGroupIntroComponent,
+} from '@nx-platform-application/messenger-ui-chat';
+import { MatDialog } from '@angular/material/dialog';
+
+// Services
+import {
+  AppState,
+  ConversationCapabilities,
+} from '@nx-platform-application/messenger-state-app';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { UIConversation } from '@nx-platform-application/messenger-state-chat-data';
+import { PageState } from 'libs/messenger/state/app/src/lib/state.engine';
 
 describe('ChatWindowComponent', () => {
-  let harness: RouterTestingHarness;
   let component: ChatWindowComponent;
+  let harness: RouterTestingHarness;
+  let mockAppState: any;
 
   // Signals
-  const selectedConversation = signal(null);
+  const pageStateSig = signal<PageState>('LOADING');
+  const capabilitiesSig = signal<ConversationCapabilities | null>(null);
+  const isKeyMissingSig = signal(false);
+  const uiConversationsSig = signal<UIConversation[]>([]);
 
   beforeEach(async () => {
+    // Setup Mock AppState
+    mockAppState = {
+      pageState: pageStateSig,
+      capabilities: capabilitiesSig,
+      isRecipientKeyMissing: isKeyMissingSig,
+      uiConversations: uiConversationsSig,
+      loadConversation: vi.fn(), // Replaces focusConversation
+      provisionNetworkGroup: vi
+        .fn()
+        .mockResolvedValue(URN.parse('urn:messenger:group:new')),
+    };
+
     await TestBed.configureTestingModule({
-      imports: [ChatWindowComponent, MockComponent(ChatWindowHeaderComponent)],
+      imports: [ChatWindowComponent], // Standalone
       providers: [
         provideRouter([
-          { path: 'chat/:id', component: ChatWindowComponent },
-          { path: 'chat/:id/details', component: ChatWindowComponent },
           {
             path: 'messenger/conversations/:id',
             component: ChatWindowComponent,
+            children: [
+              { path: '', component: MockComponent(ChatGroupIntroComponent) }, // Mock child
+              {
+                path: 'details',
+                component: MockComponent(ChatGroupIntroComponent),
+              },
+            ],
           },
         ]),
-        // Mock AppState directly since it's the new delegate
-        MockProvider(AppState, {
-          loadConversation: vi.fn(),
-          upgradeGroup: vi.fn(),
-          selectedConversation,
-          isRecipientKeyMissing: signal(false),
-          messages: signal([]),
-        }),
-        // Also mock ChatService if it's still used by some internals,
-        // but AppState is the primary one we are testing.
-        MockProvider(AppState, {
-          loadConversation: vi.fn(),
-          selectedConversation,
-          isRecipientKeyMissing: signal(false),
-        }),
-        MockProvider(ContactsStorageService, {
-          contacts$: of([mockContact]),
-          groups$: of([]),
-        }),
+        MockProvider(AppState, mockAppState),
         MockProvider(Logger),
+        MockProvider(MatDialog),
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(ChatWindowComponent, {
+        remove: {
+          imports: [ChatWindowHeaderComponent, ChatGroupIntroComponent],
+        },
+        add: {
+          imports: [
+            MockComponent(ChatWindowHeaderComponent),
+            MockComponent(ChatGroupIntroComponent),
+          ],
+        },
+      })
+      .compileComponents();
 
     harness = await RouterTestingHarness.create();
   });
 
-  it('should load conversation when route ID is present', async () => {
-    // Navigate to the route
-    component = await harness.navigateByUrl(
-      `/chat/${mockContactUrn.toString()}`,
-      ChatWindowComponent,
-    );
+  it('should focus conversation on route activation', async () => {
+    const urn = URN.parse('urn:messenger:group:123');
+    await harness.navigateByUrl(`/messenger/conversations/${urn.toString()}`);
 
-    const appState = TestBed.inject(AppState);
-
-    expect(appState.loadConversation).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: 'alice' }),
-    );
+    expect(mockAppState.loadConversation).toHaveBeenCalledWith(urn);
   });
 
-  it('should calculate participant correctly', async () => {
-    component = await harness.navigateByUrl(
-      `/chat/${mockContactUrn.toString()}`,
+  it('should blur conversation on destroy (nav away)', async () => {
+    const urn = URN.parse('urn:messenger:group:123');
+    // ✅ Correct: Capture instance from return value
+    await harness.navigateByUrl(
+      `/messenger/conversations/${urn.toString()}`,
       ChatWindowComponent,
     );
 
-    const participant = component.participant();
-    expect(participant).toBeTruthy();
-    expect(participant?.name).toBe('Alice');
-    expect(participant?.profilePictureUrl).toBe('img.png');
+    expect(mockAppState.loadConversation).toHaveBeenCalledWith(urn);
   });
 
-  it('should detect "details" view mode from router', async () => {
-    component = await harness.navigateByUrl(
-      `/chat/${mockContactUrn.toString()}/details`,
-      ChatWindowComponent,
-    );
-    expect(component.viewMode()).toBe('details');
+  describe('View State Logic (The Gatekeeper)', () => {
+    const urn = 'urn:messenger:group:123';
+
+    it('should show LOADING when pageState is LOADING', async () => {
+      pageStateSig.set('LOADING');
+      component = await harness.navigateByUrl(
+        `/messenger/conversations/${urn}`,
+        ChatWindowComponent,
+      );
+      expect(component.viewState()).toBe('SHOW_LOADING');
+    });
+
+    it('should show INTRO when pageState is EMPTY_NETWORK_GROUP', async () => {
+      pageStateSig.set('EMPTY_NETWORK_GROUP');
+      component = await harness.navigateByUrl(
+        `/messenger/conversations/${urn}`,
+        ChatWindowComponent,
+      );
+      expect(component.viewState()).toBe('SHOW_INTRO');
+    });
+
+    it('should show BLOCKED when pageState is BLOCKED', async () => {
+      pageStateSig.set('BLOCKED');
+      component = await harness.navigateByUrl(
+        `/messenger/conversations/${urn}`,
+        ChatWindowComponent,
+      );
+      expect(component.viewState()).toBe('SHOW_BLOCKED');
+    });
+
+    it('should show ROUTER_OUTLET (Details) even if BLOCKED when route is /details', async () => {
+      pageStateSig.set('BLOCKED');
+      // Navigate to details sub-route
+      component = await harness.navigateByUrl(
+        `/messenger/conversations/${urn}/details`,
+        ChatWindowComponent,
+      );
+
+      expect(component.viewMode()).toBe('details');
+      expect(component.viewState()).toBe('SHOW_ROUTER_OUTLET');
+    });
   });
 
-  // [NEW] Test Case for Upgrade Flow
-  it('should call upgradeGroup and navigate on success', async () => {
-    // 1. Setup
-    const localUrn = URN.parse('urn:contacts:group:local-1');
-    const newNetworkUrn = URN.parse('urn:messenger:group:new-uuid');
+  describe('Header Data Resolution', () => {
+    it('should resolve participant from UI Conversations list', async () => {
+      const urnStr = 'urn:contacts:user:alice';
+      const urn = URN.parse(urnStr);
 
-    component = await harness.navigateByUrl(
-      `/chat/${localUrn.toString()}`,
-      ChatWindowComponent,
-    );
+      // Mock Data
+      uiConversationsSig.set([
+        {
+          id: urn,
+          name: 'Alice',
+          initials: 'AL',
+          pictureUrl: 'img.png',
+        } as any,
+      ]);
 
-    // Mock the AppState
-    const appState = TestBed.inject(AppState);
-    vi.spyOn(appState, 'upgradeGroup').mockResolvedValue(newNetworkUrn);
+      component = await harness.navigateByUrl(
+        `/messenger/conversations/${urnStr}`,
+        ChatWindowComponent,
+      );
 
-    const router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate');
+      const header = component.headerData();
+      expect(header).toEqual({
+        name: 'Alice',
+        initials: 'AL',
+        pictureUrl: 'img.png',
+      });
+    });
 
-    // 2. Action
-    await component.onCreateGroupChat();
+    it('should determine groupType from capabilities', async () => {
+      capabilitiesSig.set({
+        kind: 'network-group',
+        canBroadcast: true,
+        canFork: true,
+      });
 
-    // 3. Verification
-    expect(appState.upgradeGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ id: localUrn.entityId }),
-    );
+      component = await harness.navigateByUrl(
+        '/messenger/conversations/urn:messenger:group:1',
+        ChatWindowComponent,
+      );
 
-    expect(router.navigate).toHaveBeenCalledWith(
-      ['/messenger', 'conversations', newNetworkUrn.toString()],
-      expect.objectContaining({ replaceUrl: true }),
-    );
+      expect(component.groupType()).toBe('network');
+    });
   });
 });

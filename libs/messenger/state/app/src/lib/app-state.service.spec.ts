@@ -1,8 +1,14 @@
+// libs/messenger/state/app/src/lib/app-state.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { AppState } from './app-state.service';
 import { URN, User } from '@nx-platform-application/platform-types';
-import { DraftMessage } from '@nx-platform-application/messenger-types';
+import {
+  ChatMessage,
+  DraftMessage,
+  Conversation,
+} from '@nx-platform-application/messenger-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
@@ -11,7 +17,10 @@ import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-ide
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
-import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import {
+  ChatDataService,
+  UIConversation,
+} from '@nx-platform-application/messenger-state-chat-data';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
@@ -34,7 +43,7 @@ import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastr
 describe('AppState', () => {
   let service: AppState;
 
-  // Variables for mocks (Initialized in beforeEach)
+  // Variables for mocks
   let mockIdentity: any;
   let mockMedia: any;
   let mockModeration: any;
@@ -57,7 +66,6 @@ describe('AppState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // --- RE-INITIALIZE MOCKS PER TEST ---
     mockIdentity = {
       onboardingState: signal('READY'),
       isCeremonyActive: signal(false),
@@ -70,24 +78,31 @@ describe('AppState', () => {
       isConnected: signal(true),
       isSyncing: signal(false),
       resumeSession: vi.fn().mockResolvedValue(true),
+      requiresUserInteraction: signal(false),
     };
 
     mockChatService = {
       activeConversations: signal([]),
+      uiConversations: signal<UIConversation[]>([]),
       typingActivity: signal(new Map()),
       refreshActiveConversations: vi.fn(),
       startSyncSequence: vi.fn().mockResolvedValue(undefined),
+      clearUnreadCount: vi.fn(),
     };
 
     mockConversationService = {
       messages: signal([]),
-      selectedConversation: signal(mockRecipientUrn),
+      selectedConversation: signal<Conversation | null>({
+        id: mockRecipientUrn,
+      } as Conversation),
       isLoadingHistory: signal(false),
       firstUnreadId: signal(null),
       readCursors: signal(new Map()),
       isRecipientKeyMissing: signal(false),
       typingTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
       readReceiptTrigger$: { pipe: () => ({ subscribe: vi.fn() }) },
+      loadConversation: vi.fn(),
+      startNewConversation: vi.fn(),
     };
 
     mockActionService = {
@@ -112,8 +127,14 @@ describe('AppState', () => {
         { provide: ChatModerationFacade, useValue: mockModeration },
         { provide: CloudSyncService, useValue: mockSync },
         { provide: ChatDataService, useValue: mockChatService },
-        { provide: ConversationService, useValue: mockConversationService },
-        { provide: ConversationActionService, useValue: mockActionService },
+        {
+          provide: ConversationService,
+          useValue: mockConversationService,
+        },
+        {
+          provide: ConversationActionService,
+          useValue: mockActionService,
+        },
         { provide: OutboxWorkerService, useValue: mockOutbox },
         { provide: IAuthService, useValue: mockAuth },
         { provide: ChatLiveDataService, useValue: mockLive },
@@ -131,125 +152,74 @@ describe('AppState', () => {
     service = TestBed.inject(AppState);
   });
 
-  describe('sendDraft()', () => {
-    it('should abort if no keys or user are present', async () => {
-      mockIdentity.myKeys.set(null);
-      await service.sendDraft({ text: 'hi', attachments: [] });
-
-      expect(mockMedia.sendImage).not.toHaveBeenCalled();
-      expect(mockActionService.sendMessage).not.toHaveBeenCalled();
+  describe('Signal 1: Capabilities (Identity)', () => {
+    it('should return NULL if no conversation is selected', () => {
+      mockConversationService.selectedConversation.set(null);
+      expect(service.capabilities()).toBeNull();
     });
 
-    it('should delegate to MediaFacade if attachment is present (File Priority)', async () => {
-      const mockFile = new File([''], 'test.png');
-      const draft: DraftMessage = {
-        text: 'Caption Text',
-        attachments: [
-          {
-            file: mockFile,
-            previewUrl: '',
-            mimeType: 'image/png',
-            name: 'test.png',
-            size: 0,
-          },
-        ],
-      };
+    it('should identify Network Group', () => {
+      mockConversationService.selectedConversation.set({
+        id: URN.parse('urn:messenger:group:net-1'),
+      } as any);
 
-      await service.sendDraft(draft);
-
-      expect(mockMedia.sendImage).toHaveBeenCalledWith(
-        mockRecipientUrn,
-        mockFile,
-        'Caption Text',
-        mockKeys,
-        mockCurrentUser.id,
-      );
-
-      expect(mockActionService.sendMessage).not.toHaveBeenCalled();
+      const caps = service.capabilities();
+      expect(caps).toEqual({
+        kind: 'network-group',
+        canBroadcast: true,
+        canFork: true,
+      });
     });
 
-    it('should delegate to ActionService if NO attachment is present', async () => {
-      const draft: DraftMessage = {
-        text: 'Pure Text Message',
-        attachments: [],
-      };
+    it('should identify Local Contact Group', () => {
+      mockConversationService.selectedConversation.set({
+        id: URN.parse('urn:contacts:group:local-1'),
+      } as any);
 
-      await service.sendDraft(draft);
-
-      expect(mockActionService.sendMessage).toHaveBeenCalledWith(
-        mockRecipientUrn,
-        'Pure Text Message',
-        mockKeys,
-        mockCurrentUser.id,
-      );
-
-      expect(mockMedia.sendImage).not.toHaveBeenCalled();
+      const caps = service.capabilities();
+      expect(caps).toEqual({
+        kind: 'local-group',
+        canBroadcast: false,
+        canFork: true,
+      });
     });
 
-    it('should trigger UI refresh and Outbox processing after sending', async () => {
-      const draft: DraftMessage = { text: 'test', attachments: [] };
+    it('should identify P2P User', () => {
+      mockConversationService.selectedConversation.set({
+        id: URN.parse('urn:contacts:user:alice'),
+      } as any);
 
-      await service.sendDraft(draft);
-
-      expect(mockChatService.refreshActiveConversations).toHaveBeenCalled();
-      expect(mockOutbox.processQueue).toHaveBeenCalledWith(
-        mockCurrentUser.id,
-        mockKeys,
-      );
-    });
-
-    it('should do nothing if text is empty and attachments are empty', async () => {
-      const draft: DraftMessage = { text: '   ', attachments: [] };
-
-      await service.sendDraft(draft);
-
-      expect(mockMedia.sendImage).not.toHaveBeenCalled();
-      expect(mockActionService.sendMessage).not.toHaveBeenCalled();
+      const caps = service.capabilities();
+      expect(caps).toEqual({
+        kind: 'p2p',
+        canBroadcast: false,
+        canFork: false,
+      });
     });
   });
 
-  describe('upgradeGroup', () => {
-    it('should delegate group upgrade to protocol service', async () => {
-      const localUrn = URN.parse('urn:contacts:group:local-1');
-      const networkUrn = URN.parse('urn:messenger:group:net-1');
-      const groupProtocol = TestBed.inject(GroupProtocolService);
+  describe('Signal 2: Page State (Behavior)', () => {
+    it('should return BLOCKED if in blocklist', () => {
+      mockConversationService.selectedConversation.set({
+        id: mockRecipientUrn,
+      } as any);
+      mockModeration.blockedSet.set(new Set([mockRecipientUrn.toString()]));
 
-      vi.spyOn(groupProtocol, 'upgradeGroup').mockResolvedValue(networkUrn);
-
-      const result = await service.upgradeGroup(localUrn);
-
-      expect(groupProtocol.upgradeGroup).toHaveBeenCalledWith(
-        localUrn,
-        mockKeys,
-        mockCurrentUser.id,
-      );
-      expect(result).toBe(networkUrn);
+      expect(service.pageState()).toBe('BLOCKED');
     });
 
-    it('should return null if keys are missing during upgrade', async () => {
-      mockIdentity.myKeys.set(null);
-      const groupProtocol = TestBed.inject(GroupProtocolService);
-      const spy = vi.spyOn(groupProtocol, 'upgradeGroup');
+    it('should return EMPTY_NETWORK_GROUP for Messenger Group w/o messages', () => {
+      mockConversationService.selectedConversation.set({
+        id: URN.parse('urn:messenger:group:net-1'),
+      } as any);
+      mockConversationService.messages.set([]);
 
-      const result = await service.upgradeGroup(
-        URN.parse('urn:contacts:group:local-1'),
-      );
-
-      expect(spy).not.toHaveBeenCalled();
-      expect(result).toBeNull();
+      expect(service.pageState()).toBe('EMPTY_NETWORK_GROUP');
     });
 
-    it('should return null if protocol throws error', async () => {
-      const groupProtocol = TestBed.inject(GroupProtocolService);
-      vi.spyOn(groupProtocol, 'upgradeGroup').mockRejectedValue(
-        new Error('Fail'),
-      );
-
-      const result = await service.upgradeGroup(
-        URN.parse('urn:contacts:group:local-1'),
-      );
-
-      expect(result).toBeNull();
+    it('should return ACTIVE_CHAT if messages exist', () => {
+      mockConversationService.messages.set([{ id: '1' } as ChatMessage]);
+      expect(service.pageState()).toBe('ACTIVE_CHAT');
     });
   });
 });

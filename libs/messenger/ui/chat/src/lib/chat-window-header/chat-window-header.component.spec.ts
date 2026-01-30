@@ -1,91 +1,98 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ChatWindowHeaderComponent } from './chat-window-header.component';
-import { MatBadge, MatBadgeModule } from '@angular/material/badge';
-import { ChatParticipant } from '@nx-platform-application/messenger-types';
-import { URN } from '@nx-platform-application/platform-types';
 import { By } from '@angular/platform-browser';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-// 1. Import ngMocks
-import { MockModule, ngMocks } from 'ng-mocks';
-
-const MOCK_PARTICIPANT: ChatParticipant = {
-  urn: URN.parse('urn:contacts:user:alice'),
-  name: 'Alice',
-  initials: 'A',
-  profilePictureUrl: 'http://img.com/alice.png',
-};
 
 describe('ChatWindowHeaderComponent', () => {
-  let component: ChatWindowHeaderComponent;
   let fixture: ComponentFixture<ChatWindowHeaderComponent>;
+  let component: ChatWindowHeaderComponent;
+
+  const getButtonByIcon = (iconName: string) => {
+    const buttons = fixture.debugElement.queryAll(By.css('button'));
+    return buttons.find(
+      (btn) => btn.nativeElement.textContent.trim() === iconName,
+    );
+  };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        ChatWindowHeaderComponent,
-        // Mock Material to avoid rendering heavy real badge logic
-        MockModule(MatBadgeModule),
-      ],
+      imports: [ChatWindowHeaderComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ChatWindowHeaderComponent);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('participant', MOCK_PARTICIPANT);
-    fixture.detectChanges();
+
+    fixture.componentRef.setInput('title', 'Test Chat');
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
+  describe('Group Type Logic', () => {
+    it('should show NO extra actions for a P2P User (groupType = null)', () => {
+      fixture.componentRef.setInput('groupType', null);
+      fixture.detectChanges();
+
+      expect(getButtonByIcon('campaign')).toBeFalsy(); // Broadcast
+      expect(getButtonByIcon('add_circle_outline')).toBeFalsy(); // Fork
+      expect(getButtonByIcon('info_outline')).toBeTruthy(); // Info
+    });
+
+    it('should show ONLY Fork action for Local Group (groupType = "local")', () => {
+      fixture.componentRef.setInput('groupType', 'local');
+      fixture.detectChanges();
+
+      expect(getButtonByIcon('campaign')).toBeFalsy(); // No Broadcast
+      expect(getButtonByIcon('add_circle_outline')).toBeTruthy(); // Has Fork
+      expect(getButtonByIcon('info_outline')).toBeTruthy();
+    });
+
+    it('should show BOTH actions for Network Group (groupType = "network")', () => {
+      fixture.componentRef.setInput('groupType', 'network');
+      fixture.detectChanges();
+
+      expect(getButtonByIcon('campaign')).toBeTruthy(); // Has Broadcast
+      expect(getButtonByIcon('add_circle_outline')).toBeTruthy(); // Has Fork
+      expect(getButtonByIcon('info_outline')).toBeTruthy();
+    });
   });
 
-  it('should hide warning badge when hasKeyIssue is false', () => {
-    fixture.componentRef.setInput('hasKeyIssue', false);
-    fixture.detectChanges();
+  describe('Events', () => {
+    it('should emit fork event', () => {
+      fixture.componentRef.setInput('groupType', 'local');
+      fixture.detectChanges();
 
-    const infoBtn = fixture.debugElement.query(
-      By.css('[data-testid="info-button"]'),
-    );
+      const spy = vi.spyOn(component.fork, 'emit');
+      getButtonByIcon('add_circle_outline')?.nativeElement.click();
 
-    // ✅ CORRECT: Pass the element and the input alias string
-    const isHidden = ngMocks.input(infoBtn, 'matBadgeHidden');
+      expect(spy).toHaveBeenCalled();
+    });
 
-    expect(isHidden).toBe(true);
+    it('should emit broadcast event', () => {
+      fixture.componentRef.setInput('groupType', 'network');
+      fixture.detectChanges();
+
+      const spy = vi.spyOn(component.broadcast, 'emit');
+      getButtonByIcon('campaign')?.nativeElement.click();
+
+      expect(spy).toHaveBeenCalled();
+    });
   });
 
-  it('should show warning badge when hasKeyIssue is true', () => {
-    fixture.componentRef.setInput('hasKeyIssue', true);
-    fixture.detectChanges();
+  describe('Mode Logic', () => {
+    it('should show actions in CHAT mode', () => {
+      fixture.componentRef.setInput('mode', 'chat');
+      fixture.componentRef.setInput('groupType', 'local'); // Enable group buttons
+      fixture.detectChanges();
 
-    const infoBtn = fixture.debugElement.query(
-      By.css('[data-testid="info-button"]'),
-    );
+      expect(getButtonByIcon('info_outline')).toBeTruthy();
+      expect(getButtonByIcon('add_circle_outline')).toBeTruthy();
+    });
 
-    // ✅ CORRECT: Check hidden status
-    const isHidden = ngMocks.input(infoBtn, 'matBadgeHidden');
-    expect(isHidden).toBe(false);
+    it('should hide actions in DETAILS mode', () => {
+      fixture.componentRef.setInput('mode', 'details');
+      fixture.componentRef.setInput('groupType', 'local');
+      fixture.detectChanges();
 
-    // ✅ CORRECT: Check content
-    const content = ngMocks.input(infoBtn, 'matBadge');
-    expect(content).toBe('!');
-  });
-
-  it('should emit back event', () => {
-    const spy = vi.spyOn(component.back, 'emit');
-    const backBtn = fixture.debugElement.query(
-      By.css('button[aria-label="Back"]'),
-    );
-
-    backBtn.nativeElement.click();
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should emit toggleInfo event', () => {
-    const spy = vi.spyOn(component.toggleInfo, 'emit');
-    const infoBtn = fixture.debugElement.query(
-      By.css('[data-testid="info-button"]'),
-    );
-
-    infoBtn.nativeElement.click();
-    expect(spy).toHaveBeenCalled();
+      expect(getButtonByIcon('info_outline')).toBeFalsy();
+      expect(getButtonByIcon('add_circle_outline')).toBeFalsy();
+      expect(getButtonByIcon('campaign')).toBeFalsy();
+    });
   });
 });
