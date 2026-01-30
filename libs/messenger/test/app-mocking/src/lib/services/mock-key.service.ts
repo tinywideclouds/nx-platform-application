@@ -7,7 +7,7 @@ import {
 import { ISecureKeyService } from '@nx-platform-application/messenger-infrastructure-key-access';
 import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { MockServerIdentityState } from '../types';
-import { SCENARIO_USERS } from '../scenarios.const';
+import { SCENARIO_USERS } from '../scenarios/users.scenarios';
 
 @Injectable({ providedIn: 'root' })
 export class MockKeyService implements ISecureKeyService {

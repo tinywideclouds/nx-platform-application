@@ -1,13 +1,11 @@
 <div class="flex flex-col h-full bg-white">
   @if (participant(); as p) {
     <messenger-chat-window-header
-      [participant]="p"
-      [mode]="viewMode()"
-      [scopeMode]="activeScope()"
+      [title]="title()"
+      [icon]="participant()"
       [hasKeyIssue]="isKeyMissing()"
       (back)="onHeaderBack()"
       (toggleInfo)="onToggleInfo()"
-      (scopeChange)="onScopeChange($event)"
     />
 
     <div class="flex-grow overflow-hidden relative">
@@ -26,23 +24,7 @@
         </div>
       }
 
-      @if (isUpgradeView()) {
-        <messenger-chat-group-intro
-          [groupName]="p.name"
-          [memberCount]="0"
-          (startBroadcast)="onStartBroadcast()"
-          (createGroupChat)="onCreateGroupChat()"
-        />
-      } @else if (isEmptyBroadcast()) {
-        <messenger-chat-group-intro
-          [groupName]="p.name"
-          [memberCount]="0"
-          (startBroadcast)="onStartBroadcast()"
-          (createGroupChat)="onCreateGroupChat()"
-        />
-      } @else {
-        <router-outlet></router-outlet>
-      }
+      <router-outlet></router-outlet>
     </div>
   } @else {
     <div class="flex items-center justify-center h-full text-gray-500">

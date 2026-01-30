@@ -15,7 +15,6 @@ import {
   ChatMessage,
   MessageTombstone,
 } from '@nx-platform-application/messenger-types';
-import { MockProvider } from 'ng-mocks';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Dexie } from 'dexie';
 import 'fake-indexeddb/auto';
@@ -108,7 +107,8 @@ describe('ChatStorageService', () => {
       // 2. Verify Conversation Index
       const index = await db.conversations.get(convUrn.toString());
       expect(index).toBeDefined();
-      expect(index?.snippet).toBe('Hello'); // Should pass now with correct typeId
+      expect(index?.snippet).toBe('Hello');
+      // Refactor Check: previewType removed
       expect(index?.lastActivityTimestamp).toBe('2025-01-01T10:00:00Z');
     });
 
@@ -149,12 +149,12 @@ describe('ChatStorageService', () => {
         {
           messageId: 'old',
           deletedAt: '2020-01-01T00:00:00Z' as ISODateTimeString,
-          conversationUrn: 'urn:messenger:group:1', // FIX: Valid 4-part URN
+          conversationUrn: 'urn:messenger:group:1',
         },
         {
           messageId: 'new',
           deletedAt: '2025-01-01T00:00:00Z' as ISODateTimeString,
-          conversationUrn: 'urn:messenger:group:1', // FIX: Valid 4-part URN
+          conversationUrn: 'urn:messenger:group:1',
         },
       ]);
 
@@ -227,19 +227,23 @@ describe('ChatStorageService', () => {
       expect(deletionStrategy.deleteMessage).toHaveBeenCalledWith('m1');
     });
 
-    it('should retrieve conversation summaries', async () => {
+    // Refactor: Updated from getConversationSummaries to getAllConversations
+    it('should retrieve all conversations (Inbox)', async () => {
       await db.conversations.put({
         conversationUrn: convUrn.toString(),
+        name: 'Lisbon Group',
         lastActivityTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
         snippet: 'Summary Test',
-        previewType: 'text',
+        // previewType removed
         unreadCount: 2,
         genesisTimestamp: null,
         lastModified: '2025-01-01T12:00:00Z' as ISODateTimeString,
       });
 
-      const summaries = await service.getConversationSummaries();
-      expect(summaries).toHaveLength(1);
+      const inbox = await service.getAllConversations();
+      expect(inbox).toHaveLength(1);
+      expect(inbox[0].name).toBe('Lisbon Group');
+      expect(inbox[0].unreadCount).toBe(2);
     });
 
     it('getMessage should return undefined for missing ID', async () => {
@@ -254,8 +258,8 @@ describe('ChatStorageService', () => {
     const groupMsgRecord = {
       messageId: msgId,
       senderId: 'urn:contacts:user:me',
-      conversationUrn: 'urn:messenger:group:project-alpha',
       recipientId: 'urn:messenger:group:project-alpha', // Group ID
+      conversationUrn: 'urn:messenger:group:project-alpha',
       sentTimestamp: '2024-01-01T10:00:00Z' as any,
       typeId: 'urn:message:type:text',
       payloadBytes: new Uint8Array([]),
@@ -303,14 +307,10 @@ describe('ChatStorageService', () => {
       expect(step1?.receiptMap?.['urn:contacts:user:bob']).toBe('delivered');
       // If the logic is "High Fidelity", it might switch to 'delivered'
       // or stay 'sent' depending on your exact threshold.
-      // Usually "at least one delivery" -> delivered.
       expect(step1?.status).not.toBe('read');
     });
 
-    it('should promote group message to READ only when consensus is reached (if implemented)', async () => {
-      // Note: This test assumes your implementation aggregates based on known participants
-      // or simply checks "are there any non-read receipts?".
-
+    it('should promote group message to READ when consensus is reached', async () => {
       // 1. Bob Reads
       await service.applyReceipt(
         msgId,
@@ -334,8 +334,6 @@ describe('ChatStorageService', () => {
       });
 
       // Verify Aggregation
-      // (Adjust expectation based on whether your logic requires ALL participants or just observed ones)
-      // Assuming "Optimistic Upgrade":
       expect(final?.status).toBe('read');
     });
 
@@ -352,7 +350,6 @@ describe('ChatStorageService', () => {
 
   describe('Maintenance', () => {
     it('should prune tombstones older than a specific date', async () => {
-      // FIX: Use valid 4-part URNs
       const ancient: DeletedMessageRecord = {
         messageId: 'old',
         deletedAt: '2020-01-01T00:00:00Z' as ISODateTimeString,

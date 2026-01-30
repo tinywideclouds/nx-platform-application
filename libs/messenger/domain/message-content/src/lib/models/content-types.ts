@@ -11,6 +11,9 @@ export const SIGNAL = 'signal';
 export const CONTENT = 'content';
 export type MessageType = 'signal' | 'content';
 
+const SYSTEM_MESSAGE = 'urn:message:content:system';
+export const MessageTypeSystem = URN.parse(SYSTEM_MESSAGE);
+
 export const TEXT_MESSAGE_TYPE = 'text';
 const TEXT_MESSAGE = 'urn:message:content:text';
 export const MessageTypeText = URN.parse(TEXT_MESSAGE);
@@ -122,7 +125,7 @@ export interface AssetRevealData {
 // ✅ UPDATE: Add asset-reveal to SignalPayload union
 export interface SignalPayload {
   action: 'read-receipt' | 'typing' | 'group-join' | 'asset-reveal';
-  data: ReadReceiptData | AssetRevealData | null;
+  data: ReadReceiptData | AssetRevealData | GroupSystemContent | null;
 }
 
 // --- 3. ROUTER OUTPUT ---

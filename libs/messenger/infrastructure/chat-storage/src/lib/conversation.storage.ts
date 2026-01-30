@@ -3,24 +3,54 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
-  ConversationSyncState,
+  Conversation,
   ChatMessage,
+  MessageDeliveryStatus, // Added strict type
 } from '@nx-platform-application/messenger-types';
 
 /**
- * CONTRACT: Write/Update operations for conversations.
+ * CONTRACT: Persistence operations for conversations and messages.
  * Defined in Infrastructure. Consumed by Domain.
  */
 export abstract class ConversationStorage {
-  abstract markConversationAsRead(urn: URN): Promise<void>;
+  // --- IDENTITY & LIFECYCLE ---
 
-  abstract getConversationIndex(
-    urn: URN,
-  ): Promise<ConversationSyncState | undefined>;
+  /**
+   * Initializes a conversation if it doesn't exist, or updates the name.
+   * Preserves existing history/state (safe init).
+   */
+  abstract startConversation(urn: URN, name: string): Promise<void>;
+
+  abstract renameConversation(urn: URN, name: string): Promise<void>;
+
+  abstract conversationExists(urn: URN): Promise<boolean>;
+
+  // --- RETRIEVAL ---
+
+  /**
+   * Refactor: Renamed from getConversationIndex.
+   * Returns the single unified Conversation object.
+   */
+  abstract getConversation(urn: URN): Promise<Conversation | undefined>;
+
+  // --- PERSISTENCE ---
+
+  /**
+   * Refactor: Renamed from bulkUploadConversationSummaries.
+   * Persists a batch of conversations (e.g., from a sync or import).
+   */
+  abstract bulkSaveConversations(conversations: Conversation[]): Promise<void>;
+
+  // --- STATUS & MESSAGES ---
+
+  abstract markConversationAsRead(urn: URN): Promise<void>;
 
   abstract getMessage(id: string): Promise<ChatMessage | undefined>;
 
-  abstract updateMessageStatus(ids: string[], status: string): Promise<void>;
+  abstract updateMessageStatus(
+    ids: string[],
+    status: MessageDeliveryStatus,
+  ): Promise<void>;
 
   abstract deleteMessage(id: string): Promise<void>;
 
@@ -28,7 +58,6 @@ export abstract class ConversationStorage {
 
   /**
    * MAINTENANCE: Removes deletion records older than a specific date.
-   * Call this periodically (e.g., on app init) to prevent DB bloat.
    */
   abstract pruneTombstones(olderThan: ISODateTimeString): Promise<number>;
 }

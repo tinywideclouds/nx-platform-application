@@ -6,7 +6,6 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-import { ChatParticipant } from '@nx-platform-application/messenger-types';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -32,8 +31,9 @@ export type ChatScopeMode = 'local' | 'network'; // ✅ NEW
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatWindowHeaderComponent {
-  participant = input.required<ChatParticipant>();
-  mode = input<ChatWindowMode>('chat');
+  title = input.required<string>();
+  icon = input<{ initials: string; pictureUrl?: string } | null>(null);
+
   hasKeyIssue = input(false);
 
   // ✅ NEW: Slider State (Null = Hidden)
@@ -44,7 +44,4 @@ export class ChatWindowHeaderComponent {
 
   /** Emitted when the user clicks the Info/Cog button */
   toggleInfo = output<void>();
-
-  // ✅ NEW: Output for slider change
-  scopeChange = output<ChatScopeMode>();
 }

@@ -2,16 +2,17 @@ import {
   Injectable,
   inject,
   signal,
-  WritableSignal,
+  computed,
+  Signal,
   DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Temporal } from '@js-temporal/polyfill';
 import { switchMap, EMPTY, interval } from 'rxjs';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { URN } from '@nx-platform-application/platform-types';
+import { Resource, URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { ConversationSummary } from '@nx-platform-application/messenger-types';
+import { Conversation } from '@nx-platform-application/messenger-types';
 
 // Infrastructure
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
@@ -24,6 +25,19 @@ import { IngestionService } from '@nx-platform-application/messenger-domain-inge
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 
+import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+
+import { ContactSummary } from '@nx-platform-application/contacts-types';
+
+export interface UIChatParticipant extends Resource {
+  initials: string; // Visual fallback
+  pictureUrl?: string; // Visual enhancement
+  isActive?: boolean;
+}
+
+// THE ONLY UI TYPE
+export interface UIConversation extends Conversation, UIChatParticipant {}
+
 @Injectable({ providedIn: 'root' })
 export class ChatDataService {
   private readonly logger = inject(Logger);
@@ -34,16 +48,47 @@ export class ChatDataService {
   private readonly liveService = inject(ChatLiveDataService);
   private readonly ingestionService = inject(IngestionService);
   private readonly conversationService = inject(ConversationService);
+  private readonly contactsQuery = inject(ContactsQueryApi);
   private readonly identity = inject(ChatIdentityFacade);
   private readonly moderation = inject(ChatModerationFacade);
 
   // --- STATE ---
-  public readonly activeConversations: WritableSignal<ConversationSummary[]> =
-    signal([]);
+  private readonly _activeConversations = signal<Conversation[]>([]);
+
+  // Public Read-Only State (Raw Data)
+  public readonly activeConversations = this._activeConversations.asReadonly();
+
+  // Cache stores the "Sauce" (Alias/Avatar)
+  private readonly identityCache = signal<Map<string, ContactSummary>>(
+    new Map(),
+  );
 
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
     new Map(),
   );
+
+  // --- THE UI SIGNAL (Zero Mapping, just Extending) ---
+  public readonly uiConversations: Signal<UIConversation[]> = computed(() => {
+    const conversations = this.activeConversations();
+    const identities = this.identityCache();
+
+    return conversations.map((c) => {
+      const urnStr = c.id.toString();
+      const cached = identities.get(urnStr);
+
+      // 1. Resolve Display Name (Alias > Original Name)
+      const displayName = cached?.alias || c.name || 'Unknown';
+
+      // 2. Return UIConversation (Spread ...c + Visuals)
+      return {
+        ...c, // Inherit all ID, Timestamp, Snippet, etc.
+        name: displayName, // Override name if alias exists
+        pictureUrl: cached?.profilePictureUrl, // Add Image
+        initials: this.generateInitials(displayName), // Add Initials
+        // isActive is undefined here; set by the Component/Router logic
+      };
+    });
+  });
 
   private operationLock = Promise.resolve();
 
@@ -51,104 +96,114 @@ export class ChatDataService {
     this.initLiveSubscriptions();
   }
 
-  /**
-   * Starts the sync loop. Called when Identity is Ready.
-   */
+  // --- ACTIONS ---
+
+  public clearUnreadCount(urn: URN): void {
+    this._activeConversations.update((list) => {
+      if (list.length === 0) return list;
+      return list.map((c) => (c.id.equals(urn) ? { ...c, unreadCount: 0 } : c));
+    });
+  }
+
+  public async refreshActiveConversations(): Promise<void> {
+    const conversations =
+      await this.conversationService.loadConversationSummaries();
+    this._activeConversations.set(conversations);
+    this.fetchMissingIdentities(conversations);
+  }
+
+  private async fetchMissingIdentities(conversations: Conversation[]) {
+    const currentCache = this.identityCache();
+    const missingUrns: URN[] = [];
+
+    for (const c of conversations) {
+      if (!currentCache.has(c.id.toString())) {
+        missingUrns.push(c.id);
+      }
+    }
+
+    if (missingUrns.length === 0) return;
+
+    try {
+      const batchResult = await this.contactsQuery.resolveBatch(missingUrns);
+      this.identityCache.update((prev) => {
+        const next = new Map(prev);
+        batchResult.forEach((summary, key) => next.set(key, summary));
+        missingUrns.forEach((urn) => {
+          const key = urn.toString();
+          if (!next.has(key)) {
+            next.set(key, { id: urn, alias: '' });
+          }
+        });
+        return next;
+      });
+    } catch (e) {
+      this.logger.error('[ChatData] Failed to batch resolve identities', e);
+    }
+  }
+
+  // --- SYNC & INGESTION ---
+
   public async startSyncSequence(authToken: string): Promise<void> {
-    this.logger.info('[ChatDataOrchestrator] Starting Sync Sequence...');
-
     this.liveService.connect(() => this.authService.getJwtToken() ?? authToken);
-
     await this.refreshActiveConversations();
     await this.runIngestionCycle();
   }
 
-  /**
-   * Stops the sync loop. Called on Logout.
-   */
   public stopSyncSequence(): void {
     this.liveService.disconnect();
-    this.activeConversations.set([]);
+    this._activeConversations.set([]);
+    this.identityCache.set(new Map());
     this.typingActivity.set(new Map());
   }
 
-  /**
-   * Refreshes the Sidebar list.
-   */
-  public async refreshActiveConversations(): Promise<void> {
-    console.warn(
-      '[TIME TRACE] Refreshing Active Conversations:',
-      new Date().toISOString(),
-    );
-    const summaries =
-      await this.conversationService.loadConversationSummaries();
-    this.activeConversations.set(summaries);
-  }
-
-  /**
-   * Manually triggers ingestion (e.g. after a refresh pull).
-   */
   public async runIngestionCycle(): Promise<void> {
     return this.runExclusive(async () => {
       const keys = this.identity.myKeys();
       const user = this.authService.currentUser();
-
       if (!keys || !user?.id) return;
-      const myUrn = user.id;
 
       try {
         const result = await this.ingestionService.process(
           keys,
-          myUrn,
+          user.id,
           this.moderation.blockedSet(),
           50,
         );
 
-        // 1. Process Messages (Content)
         if (result.messages.length > 0) {
-          this.logger.info(
-            `[DataOrchestrator] Ingested ${result.messages.length} messages.`,
-          );
-          this.conversationService.upsertMessages(result.messages, myUrn);
-          // Optimization: Only refresh sidebar if real content arrived
+          this.conversationService.upsertMessages(result.messages, user.id);
           await this.refreshActiveConversations();
         }
 
-        // 2. Process Typing Indicators (Signals)
-        // Run independently of message content
         if (result.typingIndicators.length > 0 || result.messages.length > 0) {
           this.updateTypingActivity(result.typingIndicators, result.messages);
         }
 
-        // 3. Process Receipts (Signals)
         if (result.readReceipts.length > 0) {
           await this.conversationService.applyIncomingReadReceipts(
             result.readReceipts,
           );
         }
 
-        // 4. Process Patches (Signals)
         if (result.patchedMessageIds.length > 0) {
-          this.logger.info(
-            `[DataOrchestrator] Reloading ${result.patchedMessageIds.length} patched messages.`,
-          );
           await this.conversationService.reloadMessages(
             result.patchedMessageIds,
           );
         }
       } catch (e) {
-        this.logger.error('[DataOrchestrator] Ingestion failed', e);
+        this.logger.error('[Ingestion] Failed', e);
       }
     });
   }
 
+  // --- HELPERS ---
+
   private initLiveSubscriptions(): void {
-    // 1. Incoming Message "Poke"
     this.liveService.incomingMessage$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.runIngestionCycle());
 
-    // 2. Connection Resilience
     this.liveService.status$
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -167,19 +222,27 @@ export class ChatDataService {
     this.typingActivity.update((map) => {
       const newMap = new Map(map);
       const now = Temporal.Now.instant();
-
-      // Add new typers
       indicators.forEach((urn) => newMap.set(urn.toString(), now));
-
-      // Remove typers if they just sent a real message
       realMessages.forEach((msg) => {
         if (newMap.has(msg.senderId.toString())) {
           newMap.delete(msg.senderId.toString());
         }
       });
-
       return newMap;
     });
+  }
+
+  private generateInitials(name: string): string {
+    const words = name.trim().split(/\s+/);
+    if (words.length === 0) return '?';
+
+    if (words.length === 1) {
+      const word = words[0];
+      if (word.length === 1) return word.toUpperCase();
+      return word[0].toUpperCase() + word[1].toLowerCase();
+    }
+
+    return (words[0][0] + words[1][0]).toUpperCase();
   }
 
   private async runExclusive<T>(task: () => Promise<T>): Promise<T> {

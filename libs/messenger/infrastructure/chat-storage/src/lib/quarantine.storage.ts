@@ -18,6 +18,7 @@ export abstract class QuarantineStorage {
    */
   abstract saveQuarantinedMessage(message: TransportMessage): Promise<void>;
 
+  abstract bulkUpsert(messages: TransportMessage[]): Promise<void>;
   /**
    * Retrieves messages from a specific sender for inspection.
    * Returns them as "Received" ChatMessages for preview.

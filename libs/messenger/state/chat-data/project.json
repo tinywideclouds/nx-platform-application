@@ -4,8 +4,25 @@
   "sourceRoot": "libs/messenger/state/chat-data/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger"],
+  "tags": ["scope:messenger", "layer:state"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/state/chat-data",
+        "configFile": "libs/messenger/state/chat-data/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/messenger/state/chat-data",
+        "configFile": "libs/messenger/state/chat-data/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

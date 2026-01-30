@@ -15,9 +15,12 @@ import {
   AddressBookApi,
   AddressBookManagementApi,
   ContactsQueryApi,
-  ContactSummary,
 } from '@nx-platform-application/contacts-api';
-import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
+import {
+  Contact,
+  ContactGroup,
+  ContactSummary,
+} from '@nx-platform-application/contacts-types';
 import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
 
 // UI Imports

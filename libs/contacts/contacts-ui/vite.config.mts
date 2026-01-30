@@ -41,10 +41,6 @@ export default defineConfig(() => ({
         'rxjs',
         'rxjs/operators',
 
-        // 2. Internal Dependencies
-        // Let the App provide the singleton instance.
-        '@nx-platform-application/contacts-storage',
-
         // 3. Shared Types (if used directly in components)
         '@nx-platform-application/platform-types',
       ],

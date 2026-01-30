@@ -36,10 +36,13 @@ export class MockLocalStorageBuilder {
       // ✅ SAFE: TypeScript now knows item.payload is strictly ContentPayload
       const payloadBytes = this.contentParser.serialize(item.payload);
 
+      const conversationUrn = item.conversationUrn
+        ? item.conversationUrn
+        : item.senderUrn;
       // 3. MAP: Construct the ChatMessage (Storage Artifact)
       const message: ChatMessage = {
         id: item.id,
-        conversationUrn: this.resolveConversationUrn(item.senderUrn),
+        conversationUrn: this.resolveConversationUrn(conversationUrn),
         senderId: item.senderUrn,
         sentTimestamp: item.sentAt as ISODateTimeString,
         typeId: this.resolveTypeId(item.payload),

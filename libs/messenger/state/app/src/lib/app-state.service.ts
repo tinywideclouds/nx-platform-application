@@ -99,12 +99,15 @@ export class AppState {
   public readonly isBackingUp = this.syncService.isSyncing;
 
   // Messaging State (Delegated to chatService or Domain)
+  public readonly selectedConversation =
+    this.conversationService.selectedConversation;
+
   public readonly activeConversations = this.chatService.activeConversations;
+
   public readonly typingActivity = this.chatService.typingActivity;
 
   public readonly messages = this.conversationService.messages;
-  public readonly selectedConversation =
-    this.conversationService.selectedConversation;
+
   public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
   public readonly firstUnreadId = this.conversationService.firstUnreadId;
   public readonly readCursors = this.conversationService.readCursors;
@@ -235,14 +238,9 @@ export class AppState {
     const myUrn = this.currentUserUrn();
     await this.conversationService.loadConversation(urn, myUrn);
 
+    // 2. Delegate UI update (Clear Badge) to the Owner
     if (urn) {
-      this.activeConversations.update((list) =>
-        list.map((c) =>
-          c.conversationUrn.toString() === urn.toString()
-            ? { ...c, unreadCount: 0 }
-            : c,
-        ),
-      );
+      this.chatService.clearUnreadCount(urn);
     }
   }
 
@@ -256,7 +254,7 @@ export class AppState {
 
     if (!keys || !sender) return;
 
-    const recipient = this.selectedConversation();
+    const recipient = this.selectedConversation()?.id;
 
     if (!recipient) {
       this.logger.warn('Attempted to send draft with no selected conversation');
@@ -295,7 +293,7 @@ export class AppState {
   }
 
   public async markAsRead(messageIds: string[]): Promise<void> {
-    const recipient = this.selectedConversation();
+    const recipient = this.selectedConversation()?.id;
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
 
@@ -321,7 +319,7 @@ export class AppState {
 
   public performTypingNotification(): void {
     console.log('debounce?');
-    const recipient = this.selectedConversation();
+    const recipient = this.selectedConversation()?.id;
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
 
@@ -504,6 +502,10 @@ export class AppState {
       this.logger.error('[AppState] Group Upgrade Failed', e);
       return null;
     }
+  }
+
+  public async startNewConversation(urn: URN, name: string): Promise<void> {
+    this.conversationService.startNewConversation(urn, name);
   }
 
   private loadUiSettings(): void {

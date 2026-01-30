@@ -7,6 +7,7 @@ import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
   MessageDeliveryStatus,
   DeliveryStatus,
+  Conversation,
 } from '@nx-platform-application/messenger-types';
 import {
   ContentPayload,
@@ -22,15 +23,18 @@ import {
 export interface MockMessageDef {
   id: string;
   senderUrn: URN;
+  conversationUrn?: URN;
+  type: URN;
   text: string;
-  sentAt: string; // ISO String
+  sentAt: ISODateTimeString;
   status: MessageDeliveryStatus;
 }
 
 export interface ScenarioItem {
   id: string;
   senderUrn: URN;
-  sentAt: string | ISODateTimeString;
+  conversationUrn?: URN;
+  sentAt: ISODateTimeString;
   status: MessageDeliveryStatus;
   payload: ContentPayload | SignalPayload;
 }
@@ -84,13 +88,15 @@ export interface TriggerMatcher {
   recipientId?: URN;
   textContains?: string;
   isEphemeral?: boolean;
+  payloadKind?: ContentPayload['kind'] | SignalPayload['action'];
 }
 
 export type ActionType =
   | 'send_delivery_receipt'
   | 'send_read_receipt'
   | 'send_typing_indicator'
-  | 'send_text_reply';
+  | 'send_text_reply'
+  | 'accept_group_invite';
 
 export interface ScriptAction {
   type: ActionType;
@@ -122,6 +128,7 @@ export interface MessengerScenarioData {
 
     // 2. Chat Data State
     messaging: {
+      conversations: Conversation[];
       messages: MockMessageDef[]; // History
       outbox: MockOutboxDef[];
       quarantine: MockMessageDef[];

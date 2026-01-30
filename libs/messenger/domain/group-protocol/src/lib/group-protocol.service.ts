@@ -2,9 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { EntityTypeUser } from '@nx-platform-application/directory-types';
+import { MessageTypeSystem } from '@nx-platform-application/messenger-domain-message-content';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
@@ -12,6 +16,9 @@ import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-c
 import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
 
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+
+// ✅ NEW DEPENDENCY
+import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
 
 // ✅ DOMAIN TYPES & CONSTANTS
 import {
@@ -35,6 +42,9 @@ export class GroupProtocolService {
   private parser = inject(MessageContentParser);
   private logger = inject(Logger);
   private identityResolver = inject(IdentityResolver);
+
+  // ✅ Inject the Domain Service
+  private conversationService = inject(ConversationService);
 
   // ✅ Architecture Swap
   private contactsQuery = inject(ContactsQueryApi);
@@ -84,6 +94,8 @@ export class GroupProtocolService {
     const uuid = crypto.randomUUID();
     const networkGroupUrn = URN.create('group', uuid, 'messenger');
     const now = Temporal.Now.instant().toString();
+
+    await this.conversationService.startNewConversation(networkGroupUrn, name);
 
     // 4. Construct Directory Group State
     const memberState: Record<string, GroupMemberStatus> = {};
@@ -191,6 +203,9 @@ export class GroupProtocolService {
     };
 
     await this.directoryMutation.saveGroup(group);
+
+    const displayName = groupInvite.name;
+    await this.conversationService.startNewConversation(groupUrn, displayName);
   }
 
   async acceptInvite(
@@ -243,6 +258,48 @@ export class GroupProtocolService {
     );
 
     return this.respond(inviteMsg, myKeys, myUrn, 'declined');
+  }
+
+  /**
+   * ✅ NEW: Protocol Controller
+   * Consumes a signal, updates state, and decides what history to create.
+   */
+  async processSignal(
+    signal: GroupJoinData,
+    senderUrn: URN,
+    context: { messageId: string; sentAt: string }, // Context passed from Ingestion
+  ): Promise<ChatMessage | null> {
+    const groupUrn = URN.parse(signal.groupUrn);
+    const status = signal.status === 'joined' ? 'joined' : 'declined';
+
+    this.logger.info(`[GroupProtocol] Processing: ${senderUrn} -> ${status}`);
+
+    // 1. Update State (Directory)
+    await this.directoryMutation.updateMemberStatus(
+      groupUrn,
+      senderUrn,
+      status,
+    );
+
+    // 2. Control Persistence
+    // Logic: Only 'joined' warrants a visible bubble in the chat.
+    if (status !== 'joined') {
+      return null;
+    }
+
+    // 3. Create the Persistent Message
+    return {
+      id: context.messageId,
+      conversationUrn: groupUrn,
+      senderId: senderUrn,
+      sentTimestamp: context.sentAt as ISODateTimeString,
+      status: 'read',
+      typeId: MessageTypeSystem,
+      payloadBytes: new TextEncoder().encode(
+        `${senderUrn.toString()} joined the group`,
+      ),
+      tags: [URN.parse('urn:messenger:event:system-event')],
+    };
   }
 
   private async respond(

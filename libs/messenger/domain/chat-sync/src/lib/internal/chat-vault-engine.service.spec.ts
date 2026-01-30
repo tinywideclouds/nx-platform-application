@@ -1,10 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatVaultEngine } from './chat-vault-engine.service';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+import {
+  HistoryReader,
+  MessageWriter,
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, Mock } from 'vitest';
 import { signal } from '@angular/core';
 import {
   ISODateTimeString,
@@ -28,6 +31,17 @@ vi.mock('@js-temporal/polyfill', () => {
         })),
         instant: vi.fn(() => ({
           toString: () => '2026-01-07T10:00:00Z',
+          subtract: () => ({
+            toString: () => '2026-01-06T10:00:00Z',
+          }),
+        })),
+      },
+      PlainDate: {
+        from: vi.fn((d) => ({
+          year: 2024,
+          month: 1,
+          day: 1,
+          toString: () => d,
         })),
       },
     },
@@ -36,10 +50,11 @@ vi.mock('@js-temporal/polyfill', () => {
 
 describe('ChatVaultEngine', () => {
   let service: ChatVaultEngine;
-  let storage: ChatStorageService;
+  let historyReader: HistoryReader;
+  let messageWriter: MessageWriter;
   let cloudStorage: StorageService;
+  let logger: Logger;
 
-  // Mock Driver (The "File System")
   const mockDriver = {
     providerId: 'google',
     displayName: 'Google Drive',
@@ -51,11 +66,9 @@ describe('ChatVaultEngine', () => {
     unlink: vi.fn(),
   };
 
-  // Test Data URNs
   const bobUrn = URN.parse('urn:contacts:user:bob');
   const meUrn = URN.parse('urn:contacts:user:me');
 
-  // FIX: Return a Domain Object for "Storage" mocks, but we will manually flatten it for "Cloud" mocks
   const createMsg = (id: string, text: string): ChatMessage => ({
     id,
     sentTimestamp: '2026-01-07T10:00:00Z' as ISODateTimeString,
@@ -68,7 +81,6 @@ describe('ChatVaultEngine', () => {
     payloadBytes: new TextEncoder().encode(text),
   });
 
-  // Helper to simulate Raw JSON from Cloud (Stringifies URNs)
   const toRawJson = (msg: ChatMessage) => ({
     ...msg,
     conversationUrn: msg.conversationUrn.toString(),
@@ -80,12 +92,24 @@ describe('ChatVaultEngine', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn(() => 'mock-uuid-1234'),
+    });
+
+    const localStorageMock = {
+      getItem: vi.fn(),
+      setItem: vi.fn(),
+    };
+    vi.stubGlobal('localStorage', localStorageMock);
+
     TestBed.configureTestingModule({
       providers: [
         ChatVaultEngine,
-        MockProvider(ChatStorageService, {
-          getMessagesAfter: vi.fn().mockResolvedValue([]),
-          getTombstonesAfter: vi.fn().mockResolvedValue([]),
+        MockProvider(HistoryReader, {
+          getMessagesInRange: vi.fn().mockResolvedValue([]),
+          getTombstonesInRange: vi.fn().mockResolvedValue([]),
+        }),
+        MockProvider(MessageWriter, {
           bulkSaveMessages: vi.fn().mockResolvedValue(undefined),
           bulkSaveTombstones: vi.fn().mockResolvedValue(undefined),
         }),
@@ -93,42 +117,47 @@ describe('ChatVaultEngine', () => {
           getActiveDriver: vi.fn().mockReturnValue(mockDriver),
           isConnected: signal(true),
         }),
-        MockProvider(Logger),
+        MockProvider(Logger, {
+          info: vi.fn(),
+          error: vi.fn(),
+        }),
       ],
     });
 
     service = TestBed.inject(ChatVaultEngine);
-    storage = TestBed.inject(ChatStorageService);
+    historyReader = TestBed.inject(HistoryReader);
+    messageWriter = TestBed.inject(MessageWriter);
     cloudStorage = TestBed.inject(StorageService);
+    logger = TestBed.inject(Logger);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('backup()', () => {
     it('should write a Delta file if new messages exist', async () => {
-      // 1. Setup: Local storage has 1 new message (Domain Object)
       const newMsg = createMsg('m1', 'Hello Cloud');
-      vi.spyOn(storage, 'getMessagesAfter').mockResolvedValue([newMsg]);
+      (historyReader.getMessagesInRange as Mock).mockResolvedValue([newMsg]);
 
-      // 2. Action
       await service.backup();
 
-      // 3. Verify
       expect(mockDriver.writeJson).toHaveBeenCalledTimes(1);
-      const [path, payload, options] = mockDriver.writeJson.mock.calls[0];
+      const [path, payload] = mockDriver.writeJson.mock.calls[0];
 
-      expect(path).toContain('tinywide/messaging/2026/01/deltas');
-      expect(path).toContain('_delta.json');
-      expect(options).toEqual({ blindCreate: true });
+      expect(path).toContain('tinywide/messaging/deltas');
+
+      // ✅ FIX: Use the mocked UUID, remove reference to "_delta.json"
+      expect(path).toContain('mock-uuid-1234.json');
+
       expect(payload.messages).toHaveLength(1);
       expect(payload.messages[0].id).toBe('m1');
     });
 
     it('should NOT write anything if no new data exists', async () => {
-      vi.spyOn(storage, 'getMessagesAfter').mockResolvedValue([]);
-      vi.spyOn(storage, 'getTombstonesAfter').mockResolvedValue([]);
+      (historyReader.getMessagesInRange as Mock).mockResolvedValue([]);
+      (historyReader.getTombstonesInRange as Mock).mockResolvedValue([]);
 
       await service.backup();
 
@@ -141,10 +170,13 @@ describe('ChatVaultEngine', () => {
         conversationUrn: bobUrn,
         deletedAt: '2026-01-07T10:00:00Z' as ISODateTimeString,
       };
-      vi.spyOn(storage, 'getTombstonesAfter').mockResolvedValue([tombstone]);
+      (historyReader.getTombstonesInRange as Mock).mockResolvedValue([
+        tombstone,
+      ]);
 
       await service.backup();
 
+      expect(mockDriver.writeJson).toHaveBeenCalled();
       const [_, payload] = mockDriver.writeJson.mock.calls[0];
       expect(payload.tombstones).toHaveLength(1);
       expect(payload.tombstones[0].messageId).toBe('del-1');
@@ -153,16 +185,19 @@ describe('ChatVaultEngine', () => {
 
   describe('restore()', () => {
     it('should download, hydrate, and save messages to local storage', async () => {
-      // 1. Setup: Cloud has 1 delta file
+      // ✅ FIX: Simplify match logic and return a FULL vault shape
       mockDriver.readJson.mockImplementation((path: string) => {
-        if (path.includes('chat_vault')) return Promise.resolve(null);
         if (path.includes('delta_1.json')) {
-          // FIX: Use toRawJson to flatten URNs to strings
           return Promise.resolve({
+            version: 1,
+            vaultId: 'mock-v1',
+            rangeStart: '2026-01-01',
+            rangeEnd: '2026-01-02',
+            messageCount: 1,
             messages: [
               {
                 ...toRawJson(createMsg('remote-1', 'Hydrate Me')),
-                payloadBytes: { 0: 72, 1: 105 }, // "Hi"
+                payloadBytes: { 0: 72, 1: 105 },
               },
             ],
             tombstones: [],
@@ -173,18 +208,20 @@ describe('ChatVaultEngine', () => {
 
       mockDriver.listFiles.mockResolvedValue(['delta_1.json']);
 
-      // 2. Action
       await service.restore();
 
-      // 3. Verify Storage Save
-      expect(storage.bulkSaveMessages).toHaveBeenCalledTimes(1);
-      const savedMessages = (storage.bulkSaveMessages as any).mock.calls[0][0];
+      // DEBUG: If failing, check if logger.error was called (meaning hydration crash)
+      if ((logger.error as Mock).mock.calls.length > 0) {
+        console.error('Restore Error:', (logger.error as Mock).mock.calls[0]);
+      }
+
+      expect(messageWriter.bulkSaveMessages).toHaveBeenCalledTimes(1);
+      const savedMessages = (messageWriter.bulkSaveMessages as Mock).mock
+        .calls[0][0];
 
       expect(savedMessages).toHaveLength(1);
-      const msg = savedMessages[0];
-
-      expect(msg.payloadBytes).toBeInstanceOf(Uint8Array);
-      expect(msg.id).toBe('remote-1');
+      expect(savedMessages[0].id).toBe('remote-1');
+      expect(savedMessages[0].payloadBytes).toBeInstanceOf(Uint8Array);
     });
 
     it('should apply remote deletions (tombstones)', async () => {
@@ -194,7 +231,7 @@ describe('ChatVaultEngine', () => {
         tombstones: [
           {
             messageId: 'del-remote',
-            conversationUrn: bobUrn.toString(), // Stringified
+            conversationUrn: bobUrn.toString(),
             deletedAt: '2026-01-07T09:00:00Z',
           },
         ],
@@ -202,7 +239,7 @@ describe('ChatVaultEngine', () => {
 
       await service.restore();
 
-      expect(storage.bulkSaveTombstones).toHaveBeenCalledWith(
+      expect(messageWriter.bulkSaveTombstones).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ messageId: 'del-remote' }),
         ]),
@@ -215,22 +252,19 @@ describe('ChatVaultEngine', () => {
 
       await service.restore();
 
-      expect(storage.bulkSaveMessages).not.toHaveBeenCalled();
+      expect(messageWriter.bulkSaveMessages).not.toHaveBeenCalled();
     });
 
     it('should trigger compaction if delta count > 10', async () => {
-      // 1. Setup: Simulate 11 delta files
       const deltaFiles = Array.from(
         { length: 11 },
         (_, i) => `delta_${i}.json`,
       );
       mockDriver.listFiles.mockResolvedValue(deltaFiles);
 
-      // Return a dummy payload for any delta read
       mockDriver.readJson.mockImplementation((path: string) => {
         if (path.includes('chat_vault')) return Promise.resolve(null);
 
-        // FIX: Use toRawJson to prevent URN parse errors
         const rawMsg = toRawJson(createMsg('m', 'content'));
         return Promise.resolve({
           messages: [{ ...rawMsg, id: `msg_${path}` }],
@@ -238,10 +272,8 @@ describe('ChatVaultEngine', () => {
         });
       });
 
-      // 2. Action
       await service.restore();
 
-      // 3. Verify Compaction
       expect(mockDriver.writeJson).toHaveBeenCalledWith(
         expect.stringContaining('chat_vault_2026_01.json'),
         expect.objectContaining({

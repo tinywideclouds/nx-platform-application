@@ -1,10 +1,13 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { ChatDataService } from './chat-data.service';
 import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, Mock } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { signal } from '@angular/core';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 
@@ -18,16 +21,18 @@ import { IngestionService } from '@nx-platform-application/messenger-domain-inge
 // Facades
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
+import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+import { Conversation } from '@nx-platform-application/messenger-types';
 
 describe('ChatDataService (Data Orchestrator)', () => {
   let service: ChatDataService;
   let liveData: ChatLiveDataService;
   let ingestion: IngestionService;
   let conversation: ConversationService;
+  let authService: IAuthService;
 
   // --- MOCK STREAMS ---
   const incomingMessage$ = new Subject<void>();
-  // FIX: Cast to <any> so it satisfies the strict 'ConnectionStatus' type of the real service
   const status$ = new BehaviorSubject<any>('disconnected');
 
   // --- FIXTURES ---
@@ -36,6 +41,7 @@ describe('ChatDataService (Data Orchestrator)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
 
     TestBed.configureTestingModule({
       providers: [
@@ -43,6 +49,7 @@ describe('ChatDataService (Data Orchestrator)', () => {
         MockProvider(Logger),
         MockProvider(IAuthService, {
           currentUser: signal({ id: mockUrn } as any),
+          getJwtToken: vi.fn().mockReturnValue(null), // Default to null so fallback is used
         }),
         MockProvider(ChatLiveDataService, {
           connect: vi.fn(),
@@ -70,6 +77,9 @@ describe('ChatDataService (Data Orchestrator)', () => {
         MockProvider(ChatModerationFacade, {
           blockedSet: signal(new Set()),
         }),
+        MockProvider(ContactsQueryApi, {
+          resolveBatch: vi.fn().mockResolvedValue(new Map()),
+        }),
       ],
     });
 
@@ -77,25 +87,74 @@ describe('ChatDataService (Data Orchestrator)', () => {
     liveData = TestBed.inject(ChatLiveDataService);
     ingestion = TestBed.inject(IngestionService);
     conversation = TestBed.inject(ConversationService);
+    authService = TestBed.inject(IAuthService);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  describe('UI Conversation Projection', () => {
+    it('should extend Domain Model with UI properties (Initials/Picture)', () => {
+      const domainConvo: Conversation = {
+        conversationUrn: URN.parse('urn:messenger:group:alpha'),
+        name: 'Project Alpha',
+        snippet: 'Launch codes...',
+        unreadCount: 5,
+        lastActivityTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
+        genesisTimestamp: null,
+        lastModified: '2025-01-01T12:00:00Z' as ISODateTimeString,
+      };
+
+      // Set the raw state
+      (service as any)._activeConversations.set([domainConvo]);
+
+      // Get the UI signal
+      const uiList = service.uiConversations();
+      expect(uiList).toHaveLength(1);
+      const entry = uiList[0];
+
+      // 1. Check inherited properties (Zero Mapping)
+      expect(entry.name).toBe('Project Alpha');
+      expect(entry.snippet).toBe('Launch codes...');
+      expect(entry.unreadCount).toBe(5);
+      // It should keep the original type, not cast to string
+      expect(entry.lastActivityTimestamp).toBe('2025-01-01T12:00:00Z');
+
+      // 2. Check Computed UI properties
+      expect(entry.initials).toBe('PA');
+      expect(entry.pictureUrl).toBeUndefined(); // No contact loaded yet
+    });
   });
 
   describe('Lifecycle', () => {
     it('startSyncSequence should connect live service and run initial ingestion', async () => {
       await service.startSyncSequence('mock-token');
 
-      expect(liveData.connect).toHaveBeenCalledWith('mock-token');
-      // Should load summaries
+      // 1. Verify connect was called with a FUNCTION (Token Provider)
+      expect(liveData.connect).toHaveBeenCalledWith(expect.any(Function));
+
+      // 2. Capture the provider function
+      const tokenProvider = (liveData.connect as Mock).mock.calls[0][0];
+
+      // 3. Execute it to verify it resolves the correct token
+      expect(tokenProvider()).toBe('mock-token');
+
       expect(conversation.loadConversationSummaries).toHaveBeenCalled();
-      // Should trigger ingestion
       expect(ingestion.process).toHaveBeenCalled();
     });
 
     it('stopSyncSequence should disconnect and clear state', () => {
-      service.activeConversations.set([{ id: 'c1' } as any]);
+      const mockConvo = {
+        conversationUrn: URN.parse('urn:messenger:group:c1'),
+        name: 'Chat',
+        snippet: '',
+        unreadCount: 0,
+        lastActivityTimestamp: '2025-01-01T00:00:00Z' as ISODateTimeString,
+      } as Conversation;
+
+      (service as any)._activeConversations.set([mockConvo]);
       service.stopSyncSequence();
 
       expect(liveData.disconnect).toHaveBeenCalled();
@@ -105,7 +164,6 @@ describe('ChatDataService (Data Orchestrator)', () => {
 
   describe('Ingestion Cycle (The Loop)', () => {
     it('should process NEW MESSAGES correctly', async () => {
-      // Setup Ingestion Result
       const mockMsg = { id: 'm1', senderId: mockUrn };
       vi.spyOn(ingestion, 'process').mockResolvedValue({
         messages: [mockMsg],
@@ -116,12 +174,10 @@ describe('ChatDataService (Data Orchestrator)', () => {
 
       await service.runIngestionCycle();
 
-      // 1. Upsert to Domain
       expect(conversation.upsertMessages).toHaveBeenCalledWith(
         [mockMsg],
         mockUrn,
       );
-      // 2. Refresh Sidebar (Optimistic refresh when content arrives)
       expect(conversation.loadConversationSummaries).toHaveBeenCalled();
     });
 
@@ -170,11 +226,9 @@ describe('ChatDataService (Data Orchestrator)', () => {
     });
 
     it('should remove typing indicator if a real message arrives from that user', async () => {
-      // 1. Set initial typing state
       const aliceUrnString = 'urn:contacts:user:alice';
       service.typingActivity.set(new Map([[aliceUrnString, {} as any]]));
 
-      // 2. Ingestion returns a MESSAGE from Alice
       const aliceMsg = { id: 'm9', senderId: URN.parse(aliceUrnString) };
       vi.spyOn(ingestion, 'process').mockResolvedValue({
         messages: [aliceMsg],
@@ -190,25 +244,43 @@ describe('ChatDataService (Data Orchestrator)', () => {
     });
   });
 
-  describe('Live Subscriptions', () => {
-    it('should trigger ingestion on incomingMessage$', fakeAsync(() => {
-      // Reset calls from constructor init
-      vi.clearAllMocks();
+  describe('Live Subscriptions (Zoneless)', () => {
+    it('should trigger ingestion on incomingMessage$', async () => {
+      let ingestionCalled = false;
+      vi.spyOn(ingestion, 'process').mockImplementation(async () => {
+        ingestionCalled = true;
+        return {
+          messages: [],
+          typingIndicators: [],
+          readReceipts: [],
+          patchedMessageIds: [],
+        } as any;
+      });
 
-      // Emit event
       incomingMessage$.next();
-      tick(); // resolve promises
 
-      expect(ingestion.process).toHaveBeenCalled();
-    }));
+      await Promise.resolve();
+      expect(ingestionCalled).toBe(true);
+    });
 
-    it('should trigger ingestion when connection status becomes connected', fakeAsync(() => {
-      vi.clearAllMocks();
+    it('should trigger ingestion when polling fallback activates', async () => {
+      vi.useFakeTimers();
 
-      status$.next('connected');
-      tick();
+      let calls = 0;
+      vi.spyOn(ingestion, 'process').mockImplementation(async () => {
+        calls++;
+        return {
+          messages: [],
+          typingIndicators: [],
+          readReceipts: [],
+          patchedMessageIds: [],
+        } as any;
+      });
 
-      expect(ingestion.process).toHaveBeenCalled();
-    }));
+      status$.next('disconnected');
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(calls).toBeGreaterThan(0);
+    });
   });
 });

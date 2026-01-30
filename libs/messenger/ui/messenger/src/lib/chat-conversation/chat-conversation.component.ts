@@ -24,8 +24,6 @@ import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   messageTagBroadcast,
-  ContentPayload,
-  MessageTypeText,
   TEXT_MESSAGE_TYPE,
   IMAGE_MESSAGE_TYPE,
   GROUP_INVITE_TYPE,
@@ -165,28 +163,6 @@ export class ChatConversationComponent {
       return { groupName: 'Corrupted Invite', groupUrn: '' };
     }
   }
-
-  // getContentPayload(msg: ChatMessage): ContentPayload | null {
-  //   if (msg.typeId.equals(MessageTypeText) && msg.textContent) {
-  //     return { kind: 'text', text: msg.textContent };
-  //   }
-  //   if (!msg.payloadBytes || (msg.payloadBytes as any).length === 0) {
-  //     return null;
-  //   }
-  //   try {
-  //     const bytes =
-  //       msg.payloadBytes instanceof Uint8Array
-  //         ? msg.payloadBytes
-  //         : new Uint8Array(Object.values(msg.payloadBytes));
-  //     const decoded = new TextDecoder().decode(bytes);
-  //     if (msg.typeId.equals(MessageTypeText)) {
-  //       return { kind: 'text', text: decoded };
-  //     }
-  //     return JSON.parse(decoded);
-  //   } catch (e) {
-  //     return null;
-  //   }
-  // }
 
   isBroadcast(msg: ChatMessage): boolean {
     return (

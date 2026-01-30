@@ -8,21 +8,10 @@ import {
 } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
 
-import { ChatConversationListItemComponent } from '../chat-conversation-list-item/chat-conversation-list-item.component';
+// THE SINGLE TRUTH
+import { UIConversation } from '@nx-platform-application/messenger-state-chat-data';
 
-/**
- * A "View Model" representing a single item in the conversation list.
- */
-export type ConversationViewItem = {
-  id: URN;
-  name: string;
-  latestMessage: string;
-  timestamp: string;
-  initials: string;
-  profilePictureUrl?: string;
-  unreadCount: number;
-  isActive: boolean;
-};
+import { ChatConversationListItemComponent } from '../chat-conversation-list-item/chat-conversation-list-item.component';
 
 @Component({
   selector: 'chat-conversation-list',
@@ -34,16 +23,16 @@ export type ConversationViewItem = {
 })
 export class ChatConversationListComponent {
   /**
-   * The list of items to display.
+   * The list of items to display (UIConversation directly).
    */
-  items = input.required<ConversationViewItem[]>();
+  items = input.required<UIConversation[]>();
 
   /**
    * Emits the unique ID (conversation URN string) of the selected conversation.
    */
   conversationSelected = output<URN>();
 
-  onSelect(item: ConversationViewItem): void {
+  onSelect(item: UIConversation): void {
     this.conversationSelected.emit(item.id);
   }
 }

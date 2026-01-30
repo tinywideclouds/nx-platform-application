@@ -67,6 +67,7 @@ export const ACTIVE_USER_LOCAL_GROUP: MessengerScenarioData = {
       groups: [LOCAL_GROUP_DEF],
     },
     messaging: {
+      conversations: [],
       messages: [],
       outbox: [],
       quarantine: [],
@@ -103,6 +104,7 @@ export const ACTIVE_USER_NETWORK_GROUP: MessengerScenarioData = {
       ],
     },
     messaging: {
+      conversations: [],
       messages: [],
       outbox: [],
       quarantine: [],

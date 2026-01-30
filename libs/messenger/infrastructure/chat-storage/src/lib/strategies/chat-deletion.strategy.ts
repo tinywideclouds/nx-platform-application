@@ -64,14 +64,12 @@ export class ChatDeletionStrategy {
             await this.db.conversations.update(conversationUrnStr, {
               lastActivityTimestamp: previousMsg.sentTimestamp,
               snippet: generateSnippet(prevSmart),
-              previewType: getPreviewType(previousMsg.typeId),
             });
           } else {
             // Edge Case: No messages left in conversation
             await this.db.conversations.update(conversationUrnStr, {
               lastActivityTimestamp: conversationIndex.lastModified,
               snippet: '',
-              previewType: 'text',
             });
           }
         }

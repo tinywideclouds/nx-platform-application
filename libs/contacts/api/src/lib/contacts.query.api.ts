@@ -1,11 +1,6 @@
 import { URN } from '@nx-platform-application/platform-types';
 
-export interface ContactSummary {
-  id: URN;
-  alias: string;
-  profilePictureUrl?: string;
-  // ✅ FIX: Removed memberStatus (Local groups are flat lists)
-}
+import { ContactSummary } from '@nx-platform-application/contacts-types';
 
 /**
  * CONTRACT & TOKEN
@@ -20,4 +15,6 @@ export abstract class ContactsQueryApi {
 
   abstract isBlocked(urn: URN, scope: string): Promise<boolean>;
   abstract resolveIdentity(urn: URN): Promise<ContactSummary | null>;
+
+  abstract resolveBatch(urns: URN[]): Promise<Map<string, ContactSummary>>;
 }

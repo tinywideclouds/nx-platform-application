@@ -31,5 +31,15 @@ export default defineConfig(() => ({
       fileName: 'index',
       formats: ['es' as const],
     },
+    rollupOptions: {
+      external: [
+        '@angular/core',
+        '@angular/common',
+        '@angular/platform-browser',
+        'rxjs',
+        'rxjs/operators',
+        // Add any other shared libs if this lib imports them
+      ],
+    },
   },
 }));

@@ -12,7 +12,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   MessageDeliveryStatus,
-  ConversationSummary,
+  Conversation,
 } from '@nx-platform-application/messenger-types';
 
 import {
@@ -21,14 +21,10 @@ import {
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
-// ❌ REMOVED: AddressBookApi (Local Templates only)
-// ✅ ADDED: DirectoryQueryApi (Consensus Groups)
 import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
-
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 
-import { MessageViewMapper } from './message-view.mapper';
 import {
   MessageContentParser,
   MessageGroupInvite,
@@ -40,45 +36,32 @@ const DEFAULT_PAGE_SIZE = 50;
 @Injectable({ providedIn: 'root' })
 export class ConversationService {
   private logger = inject(Logger);
-
   private historyReader = inject(HistoryReader);
   private storage = inject(ConversationStorage);
   private chatSync = inject(ChatSyncService);
-
-  // ✅ Architecture Swap
   private directory = inject(DirectoryQueryApi);
-
   private keyService = inject(ChatKeyService);
-  private mapper = inject(MessageViewMapper);
+
+  // ✅ Single Source of Truth for Parsing
   private contentParser = inject(MessageContentParser);
 
   public readonly myUrn = signal<URN | null>(null);
-  public readonly selectedConversation = signal<URN | null>(null);
-
-  // STATE: Tracks Lurker vs Member status
+  public readonly selectedConversation = signal<Conversation | null>(null);
   public readonly membershipStatus = signal<'invited' | 'joined' | 'unknown'>(
     'unknown',
   );
 
-  // Internal: The unfiltered stream from DB/Network
   private readonly _rawMessages: WritableSignal<ChatMessage[]> = signal([]);
 
-  // PUBLIC COMPUTED: Applies the "Lurker Filter"
   public readonly messages = computed(() => {
     const raw = this._rawMessages();
-
     const status = this.membershipStatus();
-    const currentUrn = this.selectedConversation();
+    const currentUrn = this.selectedConversation()?.id;
     const me = this.myUrn();
 
-    // 1. Direct Chats (Non-Group): Show Everything
     if (currentUrn && currentUrn.entityType !== 'group') return raw;
-
-    // 2. Member/Joined: Show Everything
     if (status === 'joined') return raw;
 
-    // 3. Lurker (Invited/Unknown): Shield Content
-    // Only show Invites and Responses (System Traffic) or my own messages
     return raw.filter(
       (m) =>
         m.typeId.equals(MessageGroupInviteResponse) ||
@@ -100,7 +83,7 @@ export class ConversationService {
   public readonly readCursors = computed(() => {
     const msgs = this.messages();
     const me = this.myUrn();
-    const partner = this.selectedConversation();
+    const partner = this.selectedConversation()?.id;
 
     if (!me || !partner || msgs.length === 0) return new Map<string, URN[]>();
 
@@ -123,8 +106,20 @@ export class ConversationService {
 
   private operationLock = Promise.resolve();
 
-  async loadConversationSummaries(): Promise<ConversationSummary[]> {
-    return this.historyReader.getConversationSummaries();
+  async conversationExists(urn: URN): Promise<boolean> {
+    return this.storage.conversationExists(urn);
+  }
+
+  async startNewConversation(urn: URN, name: string): Promise<void> {
+    this.logger.info(
+      `[ConversationService] Starting new Conversation: ${name} (${urn})`,
+    );
+    await this.storage.startConversation(urn, name);
+  }
+
+  // ✅ FIXED: Updated Method Name & Return Type
+  async loadConversationSummaries(): Promise<Conversation[]> {
+    return this.historyReader.getAllConversations();
   }
 
   async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
@@ -132,30 +127,28 @@ export class ConversationService {
       this.myUrn.set(myUrn);
 
       const current = this.selectedConversation();
-      if (current?.equals(urn) && urn !== null) {
+      if (current?.id?.equals(urn) && urn !== null) {
         await this.storage.markConversationAsRead(urn);
         return;
       }
 
-      this.selectedConversation.set(urn);
+      if (!urn) {
+        this.selectedConversation.set(null);
+        this.isRecipientKeyMissing.set(false);
+        this._rawMessages.set([]);
+        return;
+      }
+
       this.genesisReached.set(false);
       this.firstUnreadId.set(null);
       this._rawMessages.set([]);
       this.membershipStatus.set('unknown');
 
-      if (!urn) {
-        this.isRecipientKeyMissing.set(false);
-        return;
-      }
-
-      // LOGIC: Determine Group Status via Directory Consensus
       if (urn.entityType === 'group') {
         const group = await this.directory.getGroup(urn);
 
         if (group && myUrn) {
-          // Check the Consensus Roster Map
           const status = group.memberState[myUrn.toString()];
-
           if (status === 'joined') {
             this.membershipStatus.set('joined');
           } else if (status === 'invited') {
@@ -164,17 +157,31 @@ export class ConversationService {
             this.membershipStatus.set('unknown');
           }
         } else {
-          // If we don't have the group definition, we are unknown
           this.membershipStatus.set('unknown');
         }
       } else {
-        // Direct Messages are always "Joined" (if 1:1)
         this.membershipStatus.set('joined');
       }
 
-      const index = await this.storage.getConversationIndex(urn);
-      const unreadCount = index?.unreadCount || 0;
+      // ✅ FIXED: Updated Method Name
+      const index = await this.storage.getConversation(urn);
 
+      if (index) {
+        this.selectedConversation.set(index);
+      } else {
+        this.selectedConversation.set({
+          id: urn,
+          name: 'Loading...',
+          // previewType removed
+          lastActivityTimestamp: Temporal.Now.instant().toString() as any,
+          snippet: '',
+          unreadCount: 0,
+          genesisTimestamp: null,
+          lastModified: Temporal.Now.instant().toString() as any,
+        });
+      }
+
+      const unreadCount = index?.unreadCount || 0;
       await this.storage.markConversationAsRead(urn);
 
       const hasKeys = await this.keyService.checkRecipientKeys(urn);
@@ -189,9 +196,10 @@ export class ConversationService {
           limit: limit,
         });
 
+        // ✅ FIXED: Use local helper instead of Mapper
         const viewMessages = result.messages
           .reverse()
-          .map((m) => this.mapper.toView(m));
+          .map((m) => this.hydrateMessage(m));
 
         if (unreadCount > 0 && viewMessages.length > 0) {
           const boundaryIndex = Math.max(0, viewMessages.length - unreadCount);
@@ -218,21 +226,23 @@ export class ConversationService {
 
     return this.runExclusive(async () => {
       const currentMsgs = this._rawMessages();
-      const urn = this.selectedConversation();
-      if (!urn || currentMsgs.length === 0) return;
+      const conversationUrn = this.selectedConversation()?.id;
+
+      if (!conversationUrn || currentMsgs.length === 0) return;
 
       this.isLoadingHistory.set(true);
       try {
         const oldestMsg = currentMsgs[0];
 
         const result = await this.loadSmartHistory({
-          conversationUrn: urn,
+          conversationUrn,
           limit: DEFAULT_PAGE_SIZE,
           beforeTimestamp: oldestMsg.sentTimestamp,
         });
 
         if (result.messages.length > 0) {
-          const newHistory = result.messages.map((m) => this.mapper.toView(m));
+          // ✅ FIXED: Use local helper
+          const newHistory = result.messages.map((m) => this.hydrateMessage(m));
           this._rawMessages.update((current) => [...newHistory, ...current]);
         }
         this.genesisReached.set(result.genesisReached);
@@ -253,7 +263,8 @@ export class ConversationService {
     if (!isCloudEnabled || result.genesisReached) return result;
 
     if (!beforeTimestamp) {
-      const index = await this.storage.getConversationIndex(conversationUrn);
+      // ✅ FIXED: Updated Method Name
+      const index = await this.storage.getConversation(conversationUrn);
       const newestLocal = result.messages[0]?.sentTimestamp;
       const knownLatest = index?.lastActivityTimestamp;
 
@@ -321,23 +332,25 @@ export class ConversationService {
     }
 
     if (freshMessages.length > 0) {
+      // ✅ FIXED: Use local helper, strip existing text to force re-parse
       const viewed = freshMessages.map((m) =>
-        this.mapper.toView({ ...m, textContent: undefined }),
+        this.hydrateMessage({ ...m, textContent: undefined }),
       );
       this.upsertMessages(viewed, null);
     }
   }
 
   upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
-    const activeConvo = this.selectedConversation();
-    if (!activeConvo) return;
+    const selectedConversation = this.selectedConversation();
+    if (!selectedConversation) return;
 
     const relevant = messages.filter((msg) =>
-      msg.conversationUrn.equals(activeConvo),
+      msg.conversationUrn.equals(selectedConversation.id),
     );
 
     if (relevant.length > 0) {
-      const viewed = relevant.map((m) => this.mapper.toView(m));
+      // ✅ FIXED: Use local helper
+      const viewed = relevant.map((m) => this.hydrateMessage(m));
 
       if (myUrn) {
         this.processReadReceipts(viewed, myUrn).catch((err) =>
@@ -357,7 +370,7 @@ export class ConversationService {
         );
       });
 
-      this.storage.markConversationAsRead(activeConvo);
+      this.storage.markConversationAsRead(selectedConversation.id);
     }
   }
 
@@ -429,5 +442,34 @@ export class ConversationService {
     } finally {
       releaseLock!();
     }
+  }
+
+  /**
+   * ✅ NEW: Centralized Hydration Logic
+   * Replaces MessageViewMapper. Uses MessageContentParser to interpret bytes.
+   */
+  private hydrateMessage(msg: ChatMessage): ChatMessage {
+    // Idempotency: If already parsed, skip
+    if (msg.textContent !== undefined) return msg;
+
+    let textContent: string | undefined;
+
+    if (msg.payloadBytes && msg.payloadBytes.length > 0) {
+      const parsed = this.contentParser.parse(msg.typeId, msg.payloadBytes);
+      if (parsed.kind === 'content' && parsed.payload.kind === 'text') {
+        textContent = parsed.payload.text;
+      } else if (parsed.kind === 'unknown') {
+        // Fallback for debugging
+        textContent = '[Unparseable Content]';
+      }
+    } else {
+      // Empty body (e.g. typing indicator stored by mistake?)
+      textContent = '';
+    }
+
+    return {
+      ...msg,
+      textContent,
+    };
   }
 }

@@ -1,8 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 import { TransportMessage } from '@nx-platform-application/messenger-types';
 
 import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
@@ -20,7 +17,6 @@ import { ScenarioDirectorService } from './driver-services/scenario-director.ser
 import { MockAuthService } from './services/mock-auth.service';
 import { MockKeyService } from './services/mock-key.service';
 import { MockChatDataService } from './services/mock-chat-data.service';
-import { MockLiveService } from './services/mock-live.service';
 import { MockChatSendService } from './services/mock-chat-send.service';
 import { MockPushNotificationService } from './services/mock-push-notification.service';
 import { MockDirectoryService } from './services/mock-directory.service';
@@ -39,8 +35,9 @@ import {
   CryptoEngine,
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
-import { MESSENGER_SCENARIOS } from './scenarios.const';
+import { MESSENGER_SCENARIOS } from './scenarios/index';
 import { MessengerScenarioData, ScenarioItem } from './types';
+import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 
 @Injectable({ providedIn: 'root' })
 export class MessengerScenarioDriver {
@@ -48,7 +45,6 @@ export class MessengerScenarioDriver {
   private authMock = inject(MockAuthService);
   private keyMock = inject(MockKeyService);
   private routerMock = inject(MockChatDataService);
-  private liveMock = inject(MockLiveService);
   private sendMock = inject(MockChatSendService);
   private pushMock = inject(MockPushNotificationService);
   private directoryMock = inject(MockDirectoryService);
@@ -68,6 +64,7 @@ export class MessengerScenarioDriver {
   private outboxStorage = inject(OutboxStorage);
   private quarantineStorage = inject(QuarantineStorage);
   private keyCache = inject(KeyCacheService);
+  private contentParser = inject(MessageContentParser);
 
   async initialize(): Promise<void> {
     (window as any).messengerDriver = this;
@@ -91,7 +88,7 @@ export class MessengerScenarioDriver {
     // 1. Identity & Keys
     await this.identitySetup.configure(
       scenario.remote_server.identity,
-      scenario.local_device.contactSetup.contacts, // ✅ FIX: contactSetup
+      scenario.local_device.contactSetup.contacts,
     );
 
     // 2. Configure Mocks
@@ -100,7 +97,17 @@ export class MessengerScenarioDriver {
     this.routerMock.loadScenario(scenario.remote_server.network);
     this.sendMock.loadScenario(scenario.remote_server.send);
     this.pushMock.loadScenario(scenario.local_device.notifications);
-    this.directoryMock.loadScenario(scenario.local_device.directory); // Directory is conceptually local cache + network
+    this.directoryMock.loadScenario(scenario.local_device.directory);
+
+    this.routerMock.loadScenario({
+      ...scenario.remote_server.network,
+      queuedMessages: [],
+    });
+
+    // ✅ Use WorldMessaging to seed encrypted envelopes
+    await this.worldMessaging.seedNetworkQueue(
+      scenario.remote_server.network.queuedMessages || [],
+    );
 
     // 3. Seed Database
     await this.seedLocalDevice(scenario.local_device);
@@ -140,13 +147,22 @@ export class MessengerScenarioDriver {
     }
 
     // 2. Message History (from messaging)
-    // ✅ FIX: Use new structure
-    const { messages, outbox, quarantine } = config.messaging;
+    const { conversations, messages, outbox, quarantine } = config.messaging;
 
+    if (conversations && conversations.length > 0) {
+      console.log(
+        `[Driver] Seeding ${conversations.length} conversation summaries...`,
+      );
+
+      // No manual mapping needed. The seed data is now authoritative.
+      await this.chatStorage.bulkSaveConversations(conversations);
+    }
+
+    // 3. Message History (Bulk)
     if (messages.length > 0) {
-      console.log(`[Driver] Seeding ${messages.length} history messages...`);
       const items: ScenarioItem[] = messages.map((def) => ({
         id: def.id,
+        conversationUrn: def.conversationUrn,
         senderUrn: def.senderUrn,
         sentAt: def.sentAt,
         status: def.status,
@@ -154,37 +170,29 @@ export class MessengerScenarioDriver {
       }));
 
       const realMessages = this.messageBuilder.build(items);
+      await this.chatStorage.bulkSaveMessages(realMessages);
+    }
 
-      await Promise.all(
-        realMessages.map((msg) => this.chatStorage.saveMessage(msg)),
-      );
+    // 4. Local Quarantine (Bulk)
+    if (quarantine.length > 0) {
+      const transportMessages: TransportMessage[] = quarantine.map((def) => ({
+        id: def.id,
+        senderId: def.senderUrn,
+        sentTimestamp: def.sentAt as ISODateTimeString,
+        typeId: MessageTypeText,
+        // Direct serialization: Seeding the state the app would have left behind
+        payloadBytes: this.contentParser.serialize({
+          kind: 'text',
+          text: def.text,
+        }),
+      }));
+
+      await this.quarantineStorage.bulkUpsert(transportMessages);
     }
 
     // 3. Outbox
     if (outbox.length > 0) {
-      // Outbox seeding logic would go here
-    }
-
-    // 4. Quarantine
-    if (quarantine.length > 0) {
-      console.log(`[Driver] Seeding ${quarantine.length} quarantined items...`);
-      for (const def of quarantine) {
-        // Generate valid encrypted payload
-        const dummyKey = (await this.crypto.generateEncryptionKeys()).publicKey;
-        const encrypted = await this.crypto.encrypt(
-          dummyKey,
-          new TextEncoder().encode(def.text),
-        );
-
-        const transportMsg: TransportMessage = {
-          senderId: def.senderUrn,
-          sentTimestamp: def.sentAt as ISODateTimeString,
-          typeId: MessageTypeText,
-          payloadBytes: encrypted.encryptedData,
-        };
-
-        await this.quarantineStorage.saveQuarantinedMessage(transportMsg);
-      }
+      // TODO we don't have an offline mock yet but it could have outbox meesages
     }
   }
 }

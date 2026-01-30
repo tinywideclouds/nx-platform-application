@@ -1,60 +1,49 @@
-//libs/messenger/infrastructure/chat-storage/src/lib/strategies/chat-merge.strategy.ts
-import { Injectable, inject } from '@angular/core';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { Conversation } from '@nx-platform-application/messenger-types';
+import { Temporal } from '@js-temporal/polyfill';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
-import {
-  MessengerDatabase,
-  ConversationIndexRecord,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
-
-@Injectable({ providedIn: 'root' })
 export class ChatMergeStrategy {
-  private readonly db = inject(MessengerDatabase);
-  private readonly logger = inject(Logger);
+  static merge(local: Conversation | null, remote: Conversation): Conversation {
+    if (!local) {
+      return remote;
+    }
 
-  /**
-   * Merges a Cloud Index into the Local Index using Last-Write-Wins.
-   * - If Cloud is NEWER: Update Local.
-   * - If Local is NEWER (offline changes): Keep Local.
-   * - If New Conversation: Insert.
-   */
-  async merge(cloudIndex: ConversationIndexRecord[]): Promise<void> {
-    if (cloudIndex.length === 0) return;
+    // GENESIS RULE: The true start of the conversation is the oldest date we know of.
+    // If local thinks it started today, but remote says it started last year, remote wins.
+    const mergedGenesis = this.pickEarliest(
+      local.genesisTimestamp,
+      remote.genesisTimestamp,
+    );
 
-    await this.db.transaction('rw', this.db.conversations, async () => {
-      const localRecords = await this.db.conversations.toArray();
-      const localMap = new Map(localRecords.map((c) => [c.conversationUrn, c]));
+    // MUTABLE RULE: Last Write Wins for content (snippet, unreadCount, etc)
+    const localTime = Temporal.Instant.from(local.lastModified);
+    const remoteTime = Temporal.Instant.from(remote.lastModified);
 
-      const recordsToUpsert: ConversationIndexRecord[] = [];
-      let updatedCount = 0;
-      let newCount = 0;
-      let ignoredCount = 0;
+    // If Remote is newer (or equal), it wins the mutable fields.
+    if (Temporal.Instant.compare(remoteTime, localTime) >= 0) {
+      return {
+        ...remote,
+        genesisTimestamp: mergedGenesis,
+      };
+    }
 
-      for (const cloudRec of cloudIndex) {
-        const localRec = localMap.get(cloudRec.conversationUrn);
+    // If Local is newer, it keeps its mutable fields.
+    return {
+      ...local,
+      genesisTimestamp: mergedGenesis,
+    };
+  }
 
-        if (!localRec) {
-          recordsToUpsert.push(cloudRec);
-          newCount++;
-        } else {
-          // Lexicographical string comparison works correctly for ISO dates
-          if (cloudRec.lastActivityTimestamp > localRec.lastActivityTimestamp) {
-            recordsToUpsert.push(cloudRec);
-            updatedCount++;
-          } else {
-            ignoredCount++;
-          }
-        }
-      }
+  private static pickEarliest(
+    a: ISODateTimeString | null,
+    b: ISODateTimeString | null,
+  ): ISODateTimeString | null {
+    if (!a) return b;
+    if (!b) return a;
 
-      if (recordsToUpsert.length > 0) {
-        await this.db.conversations.bulkPut(recordsToUpsert);
-        this.logger.info(
-          `[ChatMerge] Sync complete. New: ${newCount}, Updated: ${updatedCount}, Ignored: ${ignoredCount}`,
-        );
-      } else {
-        this.logger.debug('[ChatMerge] Local index is already up to date.');
-      }
-    });
+    const tA = Temporal.Instant.from(a);
+    const tB = Temporal.Instant.from(b);
+
+    return Temporal.Instant.compare(tA, tB) <= 0 ? a : b;
   }
 }

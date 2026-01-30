@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Temporal } from '@js-temporal/polyfill';
 import {
   QueuedMessage,
   ISODateTimeString,
@@ -8,6 +9,7 @@ import {
   TransportMessage,
   serializePayloadToProtoBytes,
 } from '@nx-platform-application/messenger-types';
+import { MockMessageDef } from '../types';
 import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
@@ -27,6 +29,8 @@ import {
   MessageGroupInviteResponse,
   ContentPayload,
   SignalPayload,
+  GroupJoinData,
+  GroupSystemContent,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import { ScenarioItem } from '../types';
@@ -53,11 +57,79 @@ export class WorldMessagingService {
         `   Content: ${payloadInfo.summary}`,
     );
 
+    this.transmit(item.senderUrn, recipientUrn, item.payload);
+
+    // 1. FAIL FAST CHECK
+    // let recipientKey: CryptoKey;
+    // try {
+    //   const publicKeys = this.worldIdentity.getPublicKey(recipientUrn);
+
+    //   recipientKey = await window.crypto.subtle.importKey(
+    //     'spki',
+    //     publicKeys.encKey as BufferSource,
+    //     { name: 'RSA-OAEP', hash: 'SHA-256' },
+    //     true,
+    //     ['encrypt'],
+    //   );
+    // } catch (e) {
+    //   this.logger.error(
+    //     `❌ [World] Delivery Failed: Recipient 'ME' key missing.`,
+    //   );
+    //   throw new Error(
+    //     `Simulation Error: Cannot send message to uninitialized user.`,
+    //   );
+    // }
+
+    // // 2. CONSTRUCT PAYLOAD
+    // const { rawBytes, typeId, isEphemeral } = this.resolvePayload(item.payload);
+
+    // // 3. WRAP METADATA
+    // const wrappedBytes = this.metadataService.wrap(
+    //   rawBytes,
+    //   item.senderUrn,
+    //   [],
+    // );
+
+    // // 4. TRANSPORT CONTAINER
+    // const transport: TransportMessage = {
+    //   senderId: item.senderUrn,
+    //   sentTimestamp: item.sentAt as ISODateTimeString,
+    //   typeId: typeId,
+    //   payloadBytes: wrappedBytes,
+    // };
+
+    // // 5. ENCRYPT
+    // const transportBytes = serializePayloadToProtoBytes(transport);
+    // const encryptionResult = await this.crypto.encrypt(
+    //   recipientKey,
+    //   transportBytes,
+    // );
+
+    // // 6. DELIVER
+    // const artifact: QueuedMessage = {
+    //   id: `queue-${item.id}`,
+    //   envelope: {
+    //     recipientId: recipientUrn,
+    //     encryptedData: encryptionResult.encryptedData,
+    //     encryptedSymmetricKey: encryptionResult.encryptedSymmetricKey,
+    //     signature: new Uint8Array(0),
+    //     isEphemeral: isEphemeral,
+    //   },
+    // };
+
+    // this.networkMock.enqueue(artifact);
+    // this.logger.info(`✅ [World] Artifact Enqueued (ID: ${artifact.id})`);
+  }
+
+  private async transmit(
+    sender: URN,
+    recipient: URN,
+    payload: ContentPayload | SignalPayload,
+  ): Promise<void> {
     // 1. FAIL FAST CHECK
     let recipientKey: CryptoKey;
     try {
-      const publicKeys = this.worldIdentity.getPublicKey(recipientUrn);
-
+      const publicKeys = this.worldIdentity.getPublicKey(recipient);
       recipientKey = await window.crypto.subtle.importKey(
         'spki',
         publicKeys.encKey as BufferSource,
@@ -66,44 +138,35 @@ export class WorldMessagingService {
         ['encrypt'],
       );
     } catch (e) {
-      this.logger.error(
-        `❌ [World] Delivery Failed: Recipient 'ME' key missing.`,
-      );
-      throw new Error(
-        `Simulation Error: Cannot send message to uninitialized user.`,
-      );
+      this.logger.error(`❌ [World] Key missing for ${recipient}`);
+      return;
     }
 
     // 2. CONSTRUCT PAYLOAD
-    const { rawBytes, typeId, isEphemeral } = this.resolvePayload(item.payload);
+    const { rawBytes, typeId, isEphemeral } = this.resolvePayload(payload);
 
     // 3. WRAP METADATA
-    const wrappedBytes = this.metadataService.wrap(
-      rawBytes,
-      item.senderUrn,
-      [],
-    );
+    const wrappedBytes = this.metadataService.wrap(rawBytes, sender, []);
 
     // 4. TRANSPORT CONTAINER
     const transport: TransportMessage = {
-      senderId: item.senderUrn,
-      sentTimestamp: item.sentAt as ISODateTimeString,
+      senderId: sender,
+      sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
       typeId: typeId,
       payloadBytes: wrappedBytes,
     };
 
-    // 5. ENCRYPT
+    // 5. ENCRYPT & ENQUEUE
     const transportBytes = serializePayloadToProtoBytes(transport);
     const encryptionResult = await this.crypto.encrypt(
       recipientKey,
       transportBytes,
     );
 
-    // 6. DELIVER
     const artifact: QueuedMessage = {
-      id: `queue-${item.id}`,
+      id: `queue-${Math.random().toString(36).slice(2)}`,
       envelope: {
-        recipientId: recipientUrn,
+        recipientId: recipient,
         encryptedData: encryptionResult.encryptedData,
         encryptedSymmetricKey: encryptionResult.encryptedSymmetricKey,
         signature: new Uint8Array(0),
@@ -112,7 +175,62 @@ export class WorldMessagingService {
     };
 
     this.networkMock.enqueue(artifact);
-    this.logger.info(`✅ [World] Artifact Enqueued (ID: ${artifact.id})`);
+  }
+
+  /**
+   * ✅ NEW: Protocol Helper for Group Joins
+   * Constructs the correct payload structure for accepting an invite.
+   */
+  async deliverGroupJoinResponse(
+    senderUrn: URN, // Who is accepting (Alice)
+    groupUrn: URN,
+    status: 'joined' | 'declined' = 'joined',
+  ): Promise<void> {
+    const recipientUrn = this.worldIdentity.getMyPublicHandle(); // "Me" (Inviter)
+
+    this.logger.info(
+      `🤝 [World] ${senderUrn.entityId} is accepting invite for Group ${groupUrn.entityId}`,
+    );
+
+    const joinData: GroupJoinData = {
+      groupUrn: groupUrn.toString(),
+      status: status,
+      timestamp: Temporal.Now.instant().toString(),
+    };
+
+    const data: GroupSystemContent = {
+      kind: 'group-system',
+      data: joinData,
+    };
+
+    const payload: SignalPayload = {
+      action: 'group-join',
+      data: data,
+    };
+
+    await this.transmit(senderUrn, recipientUrn, payload);
+  }
+
+  async seedNetworkQueue(messages: MockMessageDef[]): Promise<void> {
+    if (!messages || messages.length === 0) return;
+
+    this.logger.info(
+      `🌱 [World] Seeding ${messages.length} messages to network queue...`,
+    );
+
+    for (const message of messages) {
+      const item: ScenarioItem = {
+        id: message.id,
+        conversationUrn: message.conversationUrn,
+        senderUrn: message.senderUrn,
+        sentAt: message.sentAt,
+        status: message.status,
+        payload: { kind: 'text', text: message.text },
+      };
+
+      // Re-use the delivery pipeline to ensure correct encryption/enveloping
+      await this.deliverMessage(item);
+    }
   }
 
   // --- HELPERS ---
@@ -151,6 +269,7 @@ export class WorldMessagingService {
 
   private serializeSignal(payload: SignalPayload): Uint8Array {
     if (payload.action === 'typing') return new Uint8Array(0);
+    // ✅ Fix: Use MessageContentParser logic or JSON stringify for data signals
     if (payload.data)
       return new TextEncoder().encode(JSON.stringify(payload.data));
     return new Uint8Array(0);

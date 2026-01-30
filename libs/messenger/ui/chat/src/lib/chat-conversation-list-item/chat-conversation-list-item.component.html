@@ -1,38 +1,44 @@
 <div
-  class="flex items-center p-3 space-x-3 cursor-pointer transition-colors duration-150"
-  [class.hover:bg-gray-100]="!isActive()"
-  [class.bg-blue-100]="isActive()"
+  class="flex items-center p-3 space-x-3 cursor-pointer transition-colors duration-150 border-b border-gray-100 last:border-0"
+  [class.hover:bg-gray-50]="!item().isActive"
+  [class.bg-blue-50]="item().isActive"
 >
   <contacts-avatar
-    [profilePictureUrl]="profilePictureUrl()"
-    [initials]="initials()"
+    [profilePictureUrl]="item().pictureUrl"
+    [initials]="item().initials"
+    class="shrink-0"
   ></contacts-avatar>
 
   <div class="flex-1 min-w-0">
-    <div class="flex justify-between items-center">
+    <div class="flex justify-between items-baseline mb-0.5">
       <div
-        class="font-medium truncate"
-        [class.text-gray-900]="!isActive()"
-        [class.text-blue-800]="isActive()"
+        class="text-sm font-semibold truncate pr-2"
+        [class.text-gray-900]="!item().isActive"
+        [class.text-blue-900]="item().isActive"
         data-testid="contact-name"
       >
-        {{ name() }}
+        {{ item().name }}
       </div>
-      <div class="text-xs text-gray-500 flex-shrink-0 ml-2">
-        {{ timestamp() | date: 'shortTime' }}
+      <div class="text-xs text-gray-400 shrink-0">
+        {{ item().lastActivityTimestamp | date: 'shortTime' }}
       </div>
     </div>
 
-    <div class="flex justify-between items-center mt-1">
-      <div class="text-sm text-gray-500 truncate" data-testid="last-message">
-        {{ latestMessage() }}
+    <div class="flex justify-between items-center">
+      <div
+        class="text-sm text-gray-500 truncate pr-2"
+        [class.text-gray-600]="item().isActive"
+        data-testid="snippet"
+      >
+        {{ item().snippet }}
       </div>
-      @if (unreadCount() > 0) {
+
+      @if (item().unreadCount > 0) {
         <div
-          class="flex-shrink-0 ml-2 bg-blue-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center"
+          class="shrink-0 bg-blue-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center"
           data-testid="unread-count"
         >
-          {{ unreadCount() }}
+          {{ item().unreadCount }}
         </div>
       }
     </div>

@@ -15,6 +15,15 @@
         "configFile": "libs/messenger/domain/group-protocol/vite.config.mts"
       }
     },
+
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../../coverage/libs/messenger/domain/group-protocol",
+        "configFile": "libs/messenger/domain/group-protocol/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

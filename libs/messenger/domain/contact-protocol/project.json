@@ -1,0 +1,30 @@
+{
+  "name": "messenger-domain-contact-strategy",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/messenger/domain/contact-protocol/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:messenger", "layer:domain"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/messenger/domain/contact-protocol",
+        "configFile": "libs/messenger/domain/contact-protocol/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../../coverage/libs/messenger/domain/contact-protocol",
+        "configFile": "libs/messenger/domain/contact-protocol/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

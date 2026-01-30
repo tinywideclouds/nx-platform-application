@@ -4,38 +4,37 @@ import {
   computed,
   ChangeDetectionStrategy,
   signal,
-  effect,
 } from '@angular/core';
 
 import { Router, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
-import { Temporal } from '@js-temporal/polyfill';
 import { from } from 'rxjs';
+import { Temporal } from '@js-temporal/polyfill';
 
+// UI Layouts & Toolkits
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 import {
   FeaturePlaceholderComponent,
   ListFilterComponent,
   ConfirmationDialogComponent,
 } from '@nx-platform-application/platform-ui-toolkit';
-import {
-  ChatConversationListComponent,
-  ConversationViewItem,
-} from '@nx-platform-application/messenger-ui-chat';
+
+// Chat UI Components
+import { ChatConversationListComponent } from '@nx-platform-application/messenger-ui-chat';
 import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 import { MessageRequestReviewComponent } from '../message-request-review/message-request-review.component';
+import { StickyWizardComponent } from '@nx-platform-application/messenger-settings-ui';
 
+// State & Data
 import { AppState } from '@nx-platform-application/messenger-state-app';
+import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
 
-import {
-  AddressBookApi,
-  AddressBookManagementApi,
-} from '@nx-platform-application/contacts-api';
-
-// ✅ FIX: Use Quarantine for Pending Logic
+// Domain & Logic
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
+import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
 
+// Types
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
   URN,
@@ -43,14 +42,13 @@ import {
 } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
+// Material
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-
-import { StickyWizardComponent } from '@nx-platform-application/messenger-settings-ui';
 
 @Component({
   selector: 'messenger-chat-page',
@@ -78,18 +76,25 @@ import { StickyWizardComponent } from '@nx-platform-application/messenger-settin
 export class MessengerChatPageComponent {
   protected router = inject(Router);
   private route = inject(ActivatedRoute);
-  private appState = inject(AppState);
 
-  private addressBook = inject(AddressBookApi);
+  // State Services
+  private appState = inject(AppState);
+  private chatData = inject(ChatDataService);
+
+  // Action Services
   private addressBookManager = inject(AddressBookManagementApi);
-  // ✅ FIX: Swapped Gatekeeper for Quarantine
   private quarantine = inject(QuarantineService);
 
+  // UI Utilities
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
-  showDetail = computed(() => !!this.selectedConversationUrn());
-  hasConversations = computed(() => this.conversationsList().length > 0);
+  // --- UI SIGNALS ---
+
+  showDetail = computed(() => !!this.appState.selectedConversation());
+
+  // Direct check against the UI Source
+  hasConversations = computed(() => this.chatData.uiConversations().length > 0);
 
   showWizard = this.appState.showWizard;
 
@@ -102,89 +107,40 @@ export class MessengerChatPageComponent {
 
   searchQuery = signal<string>('');
   showRequestsPane = signal(false);
+
+  // --- QUARANTINE DATA ---
+
+  pendingRequests = toSignal(from(this.quarantine.getPendingRequests()), {
+    initialValue: [] as URN[],
+  });
+
   previewMessages = signal<Record<string, ChatMessage[]>>({});
   loadingPreviews = signal<Set<string>>(new Set());
 
-  // --- DATA SOURCES ---
+  // --- THE CORE LIST (Zero Mapping) ---
 
-  private allContacts = toSignal(this.addressBook.contacts$, {
-    initialValue: [] as Contact[],
+  /**
+   * Consumes UIConversation[] directly.
+   * Handles local filtering and adding 'isActive' state.
+   */
+  conversationsList = computed(() => {
+    const all = this.chatData.uiConversations();
+    const query = this.searchQuery().toLowerCase().trim();
+    const activeUrn = this.appState.selectedConversation()?.id;
+
+    // 1. Filter
+    const filtered = !query
+      ? all
+      : all.filter((item) => item.name.toLowerCase().includes(query));
+
+    // 2. Attach UI State (isActive) - No data transformation
+    return filtered.map((item) => ({
+      ...item,
+      isActive: activeUrn ? activeUrn.equals(item.id) : false,
+    }));
   });
 
-  private allGroups = toSignal(this.addressBook.groups$, {
-    initialValue: [] as ContactGroup[],
-  });
-
-  // ✅ FIX: Load Pending from Quarantine
-  // Note: In a real app, this should be reactive. For now, we load once or poll.
-  pendingRequests = toSignal(from(this.quarantine.getPendingRequests()), {
-    initialValue: [] as URN[], // The type is now URN[]
-  });
-
-  private activeConversations = this.appState.activeConversations;
-  private selectedConversationUrn = this.appState.selectedConversation;
-
-  conversationsList = computed<ConversationViewItem[]>(() => {
-    const summaries = this.activeConversations();
-    const contacts = this.allContacts();
-    const groups = this.allGroups();
-    const activeUrn = this.selectedConversationUrn();
-
-    const rawQuery = this.searchQuery();
-    const tokens = rawQuery
-      ? rawQuery
-          .toLowerCase()
-          .split(' ')
-          .filter((t) => t.length > 0)
-      : [];
-
-    const validItems: ConversationViewItem[] = [];
-
-    for (const summary of summaries) {
-      const urn = summary.conversationUrn;
-      let name = '';
-      let initials = '';
-      let profilePictureUrl: string | undefined;
-
-      if (urn.entityType === 'user') {
-        const contact = contacts.find((c) => c.id.equals(urn));
-        if (!contact) continue;
-
-        name = contact.alias;
-        initials =
-          (contact.firstName?.[0] || '') + (contact.surname?.[0] || '');
-        profilePictureUrl =
-          contact.serviceContacts['messenger']?.profilePictureUrl;
-      } else {
-        const group = groups.find((g) => g.id.toString() === urn.toString());
-        if (!group) continue;
-
-        name = group.name;
-        initials = 'G';
-      }
-
-      if (tokens.length > 0) {
-        const searchableText = name.toLowerCase();
-        const isMatch = tokens.every((token) => searchableText.includes(token));
-        if (!isMatch) continue;
-      }
-
-      validItems.push({
-        id: urn,
-        name,
-        latestMessage: summary.latestSnippet || 'No messages',
-        timestamp: summary.timestamp,
-        initials: initials || name.slice(0, 2).toUpperCase(),
-        profilePictureUrl,
-        unreadCount: summary.unreadCount,
-        isActive: activeUrn ? activeUrn.equals(urn) : false,
-      });
-    }
-
-    return validItems;
-  });
-
-  // --- ACTIONS ---
+  // --- NAVIGATION ACTIONS ---
 
   setSidebarMode(mode: 'list' | 'new') {
     this.searchQuery.set('');
@@ -193,13 +149,6 @@ export class MessengerChatPageComponent {
       queryParams: { sidebar: mode === 'new' ? 'new' : null },
       queryParamsHandling: 'merge',
     });
-  }
-
-  toggleRequestsPane() {
-    this.showRequestsPane.update((v) => !v);
-    if (this.showRequestsPane()) {
-      this.appState.loadConversation(null);
-    }
   }
 
   onConversationSelected(id: URN) {
@@ -213,21 +162,24 @@ export class MessengerChatPageComponent {
     this.router.navigate(['/messenger', 'conversations', item.id.toString()]);
   }
 
+  toggleRequestsPane() {
+    this.showRequestsPane.update((v) => !v);
+    if (this.showRequestsPane()) {
+      this.appState.loadConversation(null);
+    }
+  }
+
+  // --- QUARANTINE ACTIONS ---
+
   async onPeekRequests(urn: URN) {
     const urnStr = urn.toString();
-    const cached = this.previewMessages()[urnStr];
+    if (this.previewMessages()[urnStr]) return;
 
-    if (cached && cached.length > 0) return;
-
-    this.loadingPreviews.update((s) => {
-      const n = new Set(s);
-      n.add(urnStr);
-      return n;
-    });
+    this.loadingPreviews.update((s) => new Set(s).add(urnStr));
 
     try {
       const messages = await this.appState.getQuarantinedMessages(urn);
-      const viewMessages: ChatMessage[] = messages.map((m) => ({
+      const viewMessages = messages.map((m) => ({
         ...m,
         textContent: new TextDecoder().decode(m.payloadBytes),
       }));
@@ -237,7 +189,6 @@ export class MessengerChatPageComponent {
         [urnStr]: viewMessages,
       }));
     } catch (e) {
-      console.error('[UI] Peek Failed', e);
       this.showFeedback('Could not load preview', true);
     } finally {
       this.loadingPreviews.update((s) => {
@@ -268,21 +219,13 @@ export class MessengerChatPageComponent {
         emailAddresses: isEmail ? [urn.entityId] : [],
         phoneNumbers: [],
         serviceContacts: {
-          messenger: {
-            id: urn,
-            alias: initialAlias,
-            lastSeen: now,
-          },
+          messenger: { id: urn, alias: initialAlias, lastSeen: now },
         },
         lastModified: now,
       };
 
       await this.addressBookManager.saveContact(newContact);
       await this.appState.promoteQuarantinedMessages(urn, newContactId);
-      // ✅ FIX: Use Quarantine Rejection (Deletes messages, but we moved them first)
-      // Actually we just need to ensure the quarantine bucket is empty.
-      // promoteQuarantinedMessages likely handles the move.
-      // await this.quarantine.reject(urn);
 
       this.showFeedback('Contact created. Opening details...');
       this.showRequestsPane.set(false);
@@ -310,13 +253,8 @@ export class MessengerChatPageComponent {
 
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
-        try {
-          await this.appState.block([event.urn], event.scope);
-          this.showFeedback(`Blocked sender`);
-        } catch (e) {
-          console.error('Block failed', e);
-          this.showFeedback('Failed to block', true);
-        }
+        await this.appState.block([event.urn], event.scope);
+        this.showFeedback(`Blocked sender`);
       }
     });
   }
@@ -334,19 +272,13 @@ export class MessengerChatPageComponent {
 
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
-        try {
-          await this.appState.dismissPending([urn]);
-          this.showFeedback(`Dismissed request`);
-        } catch (e) {
-          console.error('Dismiss failed', e);
-          this.showFeedback('Failed to dismiss', true);
-        }
+        await this.appState.dismissPending([urn]);
+        this.showFeedback(`Dismissed request`);
       }
     });
   }
 
   async onBlockAll() {
-    // ✅ FIX: Map URN[] from quarantine signal
     const allUrns = this.pendingRequests();
     if (allUrns.length === 0) return;
 

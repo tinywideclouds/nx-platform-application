@@ -1,3 +1,5 @@
+// libs/messenger/domain/chat-sync/src/lib/chat-sync.service.ts
+
 import { Injectable, inject, signal } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { HistoryReader } from '@nx-platform-application/messenger-infrastructure-chat-storage';
@@ -6,7 +8,7 @@ import { StorageService } from '@nx-platform-application/platform-domain-storage
 import { ChatVaultEngine } from './internal/chat-vault-engine.service';
 
 export interface ChatSyncRequest {
-  providerId: string; // Deprecated, kept for compatibility but ignored
+  providerId: string;
   syncMessages: boolean;
 }
 
@@ -19,10 +21,6 @@ export class ChatSyncService {
 
   public readonly isSyncing = signal<boolean>(false);
 
-  /**
-   * COMPATIBILITY BRIDGE
-   * Allows consumers to trigger sync without knowing internal details.
-   */
   async performSync(options: ChatSyncRequest): Promise<boolean> {
     if (options.syncMessages) {
       return this.syncMessages();
@@ -30,10 +28,6 @@ export class ChatSyncService {
     return true;
   }
 
-  /**
-   * Main Sync Workflow (Backup + Index Restore)
-   * Refactored to use the Engine's parameterless API.
-   */
   async syncMessages(): Promise<boolean> {
     if (!this.storage.isConnected()) {
       this.logger.warn(
@@ -46,13 +40,8 @@ export class ChatSyncService {
     this.logger.info('[ChatSyncService] Starting sync sequence...');
 
     try {
-      // 1. Sync Down (Restore Deltas)
       await this.restore();
-
-      // 2. Sync Up (Backup Deltas)
       await this.backup();
-
-      // 3. Post-Sync Hydration (UX optimization)
       this.hydrateRecentConversations().catch((e) =>
         this.logger.error('[ChatSyncService] Hydration failed', e),
       );
@@ -66,16 +55,10 @@ export class ChatSyncService {
     }
   }
 
-  /**
-   * SYNC DOWN: Pulls new messages from cloud.
-   */
   async restore(): Promise<void> {
     await this.engine.restore();
   }
 
-  /**
-   * SYNC UP: Pushes local messages to cloud.
-   */
   async backup(): Promise<void> {
     await this.engine.backup();
   }
@@ -86,16 +69,31 @@ export class ChatSyncService {
     return this.storage.isConnected();
   }
 
+  /**
+   * ✅ IMPLEMENTED: On-Demand History Restoration.
+   * Fetches the cloud vault for the specified date and filters messages for the given URN.
+   */
   async restoreVaultForDate(date: string, urn: URN): Promise<number> {
-    // Engine specific logic remains
-    return 0; // TODO: Implement if Engine exposes this, otherwise stub for now
+    if (!this.isCloudEnabled()) return 0;
+
+    this.isSyncing.set(true);
+    try {
+      // Delegate to the new Engine capability
+      const count = await this.engine.restoreHistory(date, urn);
+      return count;
+    } catch (e) {
+      this.logger.error(`[ChatSync] Failed to restore history for ${date}`, e);
+      return 0;
+    } finally {
+      this.isSyncing.set(false);
+    }
   }
 
   // --- Internals ---
 
   private async hydrateRecentConversations(): Promise<void> {
-    const summaries = await this.historyReader.getConversationSummaries();
-    const topConversations = summaries.slice(0, 5);
+    const conversations = await this.historyReader.getAllConversations();
+    const topConversations = conversations.slice(0, 5);
 
     if (topConversations.length === 0) return;
 
@@ -106,11 +104,11 @@ export class ChatSyncService {
     for (const c of topConversations) {
       try {
         await this.historyReader.getMessages({
-          conversationUrn: c.conversationUrn,
+          conversationUrn: c.id,
           limit: 50,
         });
       } catch (e) {
-        this.logger.warn(`Failed to pre-fetch ${c.conversationUrn}`, e);
+        this.logger.warn(`Failed to pre-fetch ${c.id}`, e);
       }
     }
     this.logger.info('[ChatSyncService] Pre-fetch complete.');

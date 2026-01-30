@@ -71,6 +71,9 @@
       "@nx-platform-application/messenger-domain-chat-sync": [
         "libs/messenger/domain/chat-sync/src/index.ts"
       ],
+      "@nx-platform-application/messenger-domain-contact-protocol": [
+        "libs/messenger/domain/contact-protocol/src/index.ts"
+      ],
       "@nx-platform-application/messenger-domain-conversation": [
         "libs/messenger/domain/conversation/src/index.ts"
       ],

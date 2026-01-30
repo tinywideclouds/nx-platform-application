@@ -15,10 +15,6 @@ import {
   PrivateKeys,
 } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 
-// ❌ REMOVED: GroupNetworkStorageApi
-// ✅ ADDED: DirectoryMutationApi
-import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
-
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
@@ -28,6 +24,7 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+import { ContactProtocolService } from '@nx-platform-application/messenger-domain-contact-protocol';
 
 export interface IngestionResult {
   messages: ChatMessage[];
@@ -44,10 +41,8 @@ export class IngestionService {
   private quarantineService = inject(QuarantineService);
   private parser = inject(MessageContentParser);
 
-  // ✅ FIX: Switched to Directory Mutation
-  private directoryMutation = inject(DirectoryMutationApi);
-
   private groupProtocol = inject(GroupProtocolService);
+  private contactProtocol = inject(ContactProtocolService);
   private logger = inject(Logger);
 
   async process(
@@ -184,6 +179,8 @@ export class IngestionService {
     accumulator: IngestionResult,
   ): Promise<void> {
     const canonicalId = transport.clientRecordId || queueId;
+
+    // CHECK - is the parsed.conversationId not always right - if not why not?
     const conversationUrn =
       parsed.conversationId.entityType === 'group'
         ? parsed.conversationId
@@ -194,26 +191,24 @@ export class IngestionService {
     }
 
     if (parsed.payload.kind === 'group-system') {
-      const data = parsed.payload.data;
       try {
-        const groupUrn = URN.parse(data.groupUrn);
-        // ✅ FIX: Use Directory API to update roster status
-        if (data.status === 'joined') {
-          await this.directoryMutation.updateMemberStatus(
-            groupUrn,
-            canonicalSenderUrn,
-            'joined',
-          );
-        } else if (data.status === 'declined') {
-          await this.directoryMutation.updateMemberStatus(
-            groupUrn,
-            canonicalSenderUrn,
-            'declined',
-          );
+        const systemMessage = await this.groupProtocol.processSignal(
+          parsed.payload.data,
+          canonicalSenderUrn,
+          { messageId: canonicalId, sentAt: transport.sentTimestamp },
+        );
+
+        // If Protocol returned a message, save it to history
+        if (systemMessage) {
+          await this.storageService.saveMessage(systemMessage);
+          accumulator.messages.push(systemMessage);
         }
       } catch (e) {
         this.logger.error('[Ingestion] Failed to update group roster', e);
       }
+    } else {
+      // "Before we save this DM, ensure the session exists."
+      await this.contactProtocol.ensureSession(canonicalSenderUrn);
     }
 
     const chatMessage: ChatMessage = {

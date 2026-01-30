@@ -1,94 +1,82 @@
-//libs/messenger/infrastructure/chat-storage/src/lib/strategies/chat-merge.strategy.spec.ts
-import { TestBed } from '@angular/core/testing';
 import { ChatMergeStrategy } from './chat-merge.strategy';
+import { Conversation } from '@nx-platform-application/messenger-types';
 import {
-  MessengerDatabase,
-  ConversationIndexRecord,
-} from '@nx-platform-application/messenger-infrastructure-db-schema';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { MockProvider } from 'ng-mocks';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import 'fake-indexeddb/auto';
-import { Dexie } from 'dexie';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 
 describe('ChatMergeStrategy', () => {
-  let service: ChatMergeStrategy;
-  let db: MessengerDatabase;
+  // Strict 4-part URN: urn:messenger:conversation:id
+  const TEST_URN = URN.parse('urn:messenger:conversation:test-id-1');
 
-  beforeEach(async () => {
-    await Dexie.delete('messenger');
-
-    TestBed.configureTestingModule({
-      providers: [ChatMergeStrategy, MessengerDatabase, MockProvider(Logger)],
-    });
-
-    service = TestBed.inject(ChatMergeStrategy);
-    db = TestBed.inject(MessengerDatabase);
-    await db.open();
-  });
-
-  afterEach(async () => {
-    if (db) await db.close();
-  });
-
-  const createRecord = (
-    urn: string,
-    time: string,
-    snippet: string,
-  ): ConversationIndexRecord => ({
-    conversationUrn: urn,
-    lastActivityTimestamp: time as ISODateTimeString,
-    snippet,
+  const base: Conversation = {
+    conversationUrn: TEST_URN,
+    name: 'Test Chat',
+    snippet: 'Hello',
+    lastActivityTimestamp: '2024-06-01T12:00:00Z' as ISODateTimeString,
     unreadCount: 0,
-    previewType: 'text',
-    genesisTimestamp: null,
-    lastModified: time as ISODateTimeString,
+    genesisTimestamp: '2024-01-01T00:00:00Z' as ISODateTimeString,
+    lastModified: '2024-06-01T12:00:00Z' as ISODateTimeString,
+  };
+
+  it('should adopt Remote genesis if it is OLDER (discovered history)', () => {
+    const local = {
+      ...base,
+      genesisTimestamp: '2024-01-01T00:00:00Z' as ISODateTimeString,
+    };
+    const remote = {
+      ...base,
+      genesisTimestamp: '2023-01-01T00:00:00Z' as ISODateTimeString, // Older
+      lastModified: '2024-06-01T12:00:00Z' as ISODateTimeString,
+    };
+
+    const result = ChatMergeStrategy.merge(local, remote);
+
+    // Expecting 2023 because it is historically older (min)
+    expect(result.genesisTimestamp).toBe(remote.genesisTimestamp);
   });
 
-  describe('merge', () => {
-    it('should INSERT new conversations from Cloud', async () => {
-      const cloudIndex = [
-        createRecord('urn:bob', '2023-01-01T12:00:00Z', 'Hello'),
-      ];
+  it('should keep Local genesis if it is OLDER than Remote (remote is partial)', () => {
+    const local = {
+      ...base,
+      genesisTimestamp: '2020-01-01T00:00:00Z' as ISODateTimeString, // Older
+    };
+    const remote = {
+      ...base,
+      genesisTimestamp: '2024-01-01T00:00:00Z' as ISODateTimeString,
+    };
 
-      await service.merge(cloudIndex);
+    const result = ChatMergeStrategy.merge(local, remote);
 
-      const result = await db.conversations.get('urn:bob');
-      expect(result).toBeTruthy();
-      expect(result?.snippet).toBe('Hello');
-    });
+    expect(result.genesisTimestamp).toBe(local.genesisTimestamp);
+  });
 
-    it('should UPDATE local if Cloud is NEWER', async () => {
-      await db.conversations.put(
-        createRecord('urn:bob', '2023-01-01T10:00:00Z', 'Old Local'),
-      );
+  it('should correctly handle null genesis (non-null wins)', () => {
+    const local = { ...base, genesisTimestamp: null };
+    const remote = {
+      ...base,
+      genesisTimestamp: '2022-01-01T00:00:00Z' as ISODateTimeString,
+    };
 
-      const cloudIndex = [
-        createRecord('urn:bob', '2023-01-01T12:00:00Z', 'New Cloud'),
-      ];
+    const result = ChatMergeStrategy.merge(local, remote);
+    expect(result.genesisTimestamp).toBe(remote.genesisTimestamp);
+  });
 
-      await service.merge(cloudIndex);
+  it('should update mutable fields from Remote if Remote is newer', () => {
+    const local = {
+      ...base,
+      snippet: 'Old Message',
+      lastModified: '2024-06-01T10:00:00Z' as ISODateTimeString,
+    };
+    const remote = {
+      ...base,
+      snippet: 'New Message',
+      lastModified: '2024-06-01T11:00:00Z' as ISODateTimeString, // Newer
+    };
 
-      const result = await db.conversations.get('urn:bob');
-      expect(result?.snippet).toBe('New Cloud');
-      expect(result?.lastActivityTimestamp).toBe('2023-01-01T12:00:00Z');
-    });
+    const result = ChatMergeStrategy.merge(local, remote);
 
-    it('should IGNORE cloud record if Local is NEWER (Offline edits)', async () => {
-      await db.conversations.put(
-        createRecord('urn:bob', '2023-01-01T12:00:00Z', 'New Local'),
-      );
-
-      const cloudIndex = [
-        createRecord('urn:bob', '2023-01-01T10:00:00Z', 'Old Cloud'),
-      ];
-
-      await service.merge(cloudIndex);
-
-      const result = await db.conversations.get('urn:bob');
-      expect(result?.snippet).toBe('New Local');
-      expect(result?.lastActivityTimestamp).toBe('2023-01-01T12:00:00Z');
-    });
+    expect(result.snippet).toBe('New Message');
+    expect(result.lastModified).toBe(remote.lastModified);
   });
 });

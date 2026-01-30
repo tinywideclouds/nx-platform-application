@@ -21,6 +21,11 @@ export class DexieQuarantineStorage implements QuarantineStorage {
     await this.db.quarantined_messages.put(record);
   }
 
+  async bulkUpsert(messages: TransportMessage[]): Promise<void> {
+    const records = messages.map((m) => this.mapper.toRecord(m));
+    await this.db.quarantined_messages.bulkPut(records);
+  }
+
   async getQuarantinedMessages(senderId: URN): Promise<ChatMessage[]> {
     const records = await this.db.quarantined_messages
       .where('senderId')

@@ -1,6 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 
 import { ScenarioScript, ScriptAction, ScenarioItem } from '../types';
 import { MockLiveService } from '../services/mock-live.service';
@@ -53,12 +56,12 @@ export class ScenarioDirectorService {
     for (const rule of this.activeScript.rules) {
       if (rule.on !== eventType) continue;
 
-      // 🔍 MATCH: We check the Decrypted Content
       if (this.checkMatch(rule.match, msg)) {
         this.logger.info(
           `✅ Rule Matched! Scheduling ${rule.actions.length} actions.`,
         );
-        this.executeActions(rule.actions, msg.recipientId, msg.transportId);
+        // Pass the TRIGGER MESSAGE to the action executor
+        this.executeActions(rule.actions, msg);
       }
     }
   }
@@ -95,75 +98,195 @@ export class ScenarioDirectorService {
       }
     }
 
+    // 4. ✅ NEW: Payload Kind Match
+    if (match.payloadKind) {
+      let kind = '';
+      if (msg.content.kind === 'content') {
+        kind = msg.content.payload.kind;
+      } else if (msg.content.kind === 'signal') {
+        kind = msg.content.payload.action;
+      }
+
+      if (kind !== match.payloadKind) {
+        return false;
+      }
+    }
+
     return true;
   }
 
+  // private executeActions(
+  //   actions: ScriptAction[],
+  //   partnerUrn: URN,
+  //   messageId?: string,
+  // ) {
+  //   actions.forEach((action) => {
+  //     setTimeout(() => {
+  //       this.executeAction(action, partnerUrn, messageId);
+  //     }, action.delayMs);
+  //   });
+  // }
+
+  // private async executeAction(
+  //   action: ScriptAction,
+  //   partnerUrn: URN,
+  //   messageId?: string,
+  // ) {
+  //   const now = Temporal.Now.instant();
+  //   this.logger.info(
+  //     `⚡ Executing Action: ${action.type} at ${now.toString()}`,
+  //   );
+
+  //   try {
+  //     if (action.type === 'accept_group_invite') {
+  //       // Inspect Trigger Message for Group ID
+  //       if (
+  //         triggerMsg.content.kind === 'content' &&
+  //         triggerMsg.content.payload.kind === 'group-invite'
+  //       ) {
+  //         const inviteData = triggerMsg.content.payload.data;
+  //         const groupUrn = URN.parse(inviteData.groupUrn);
+
+  //         await this.worldMessaging.deliverGroupJoinResponse(
+  //           partnerUrn, // Sender (Alice)
+  //           groupUrn,
+  //           'joined',
+  //         );
+
+  //         this.liveService.trigger(); // Wake up app
+  //         return;
+  //       } else {
+  //         this.logger.warn(
+  //           '⚠️ Cannot accept invite: Trigger was not a group-invite',
+  //         );
+  //         return;
+  //       }
+  //     }
+
+  //     let payload = action.payload;
+
+  //     if (action.type === 'send_typing_indicator' && !payload) {
+  //       payload = { action: 'typing', data: null };
+  //     }
+
+  //     const receiptIds = ['mock-ack-id'];
+  //     if (messageId) {
+  //       receiptIds.push(messageId);
+  //     }
+  //     // Special handling for Read Receipts (simulate dynamic ID reference)
+  //     // Since we don't track exact message IDs in this simple script, we use a placeholder.
+  //     if (action.type === 'send_read_receipt' && !payload) {
+  //       payload = {
+  //         action: 'read-receipt',
+  //         data: {
+  //           messageIds: receiptIds,
+  //           readAt: now.toString(),
+  //         },
+  //       };
+  //     }
+
+  //     if (!payload) {
+  //       this.logger.warn('action has no payload returning');
+  //       return;
+  //     }
+
+  //     // 1. CONSTRUCT INTENT
+  //     // "Alice wants to reply"
+  //     const item: ScenarioItem = {
+  //       id: `reply-${now.toZonedDateTimeISO('Europe/Paris')}`,
+  //       senderUrn: partnerUrn, // The reply comes FROM the person we just messaged
+  //       sentAt: now.toString(),
+  //       status: 'sent',
+  //       payload: payload,
+  //     };
+
+  //     // 2. COMMAND WORLD TO DELIVER
+  //     // The World Service handles encryption, keys, and network injection.
+  //     await this.worldMessaging.deliverMessage(item);
+
+  //     // 3. WAKE UP APP
+  //     // Notify the app that new data is available in the mock queue.
+  //     this.liveService.trigger();
+  //   } catch (err) {
+  //     this.logger.error('Failed to execute script action', err);
+  //   }
+  // }
+
   private executeActions(
     actions: ScriptAction[],
-    partnerUrn: URN,
-    messageId?: string,
+    triggerMsg: WorldInboxMessage,
   ) {
     actions.forEach((action) => {
       setTimeout(() => {
-        this.executeAction(action, partnerUrn, messageId);
+        this.executeAction(action, triggerMsg);
       }, action.delayMs);
     });
   }
 
   private async executeAction(
     action: ScriptAction,
-    partnerUrn: URN,
-    messageId?: string,
+    triggerMsg: WorldInboxMessage,
   ) {
     const now = Temporal.Now.instant();
-    this.logger.info(
-      `⚡ Executing Action: ${action.type} at ${now.toString()}`,
-    );
+    const partnerUrn = triggerMsg.recipientId; // Use recipient as sender of reply
+
+    this.logger.info(`⚡ Executing Action: ${action.type}`);
 
     try {
+      // ✅ CASE 1: Accept Group Invite
+      if (action.type === 'accept_group_invite') {
+        // Inspect Trigger Message for Group ID
+        if (
+          triggerMsg.content.kind === 'content' &&
+          triggerMsg.content.payload.kind === 'group-invite'
+        ) {
+          const inviteData = triggerMsg.content.payload.data;
+          const groupUrn = URN.parse(inviteData.groupUrn);
+
+          await this.worldMessaging.deliverGroupJoinResponse(
+            partnerUrn, // Sender (Alice)
+            groupUrn,
+            'joined',
+          );
+
+          this.liveService.trigger(); // Wake up app
+          return;
+        } else {
+          this.logger.warn(
+            '⚠️ Cannot accept invite: Trigger was not a group-invite',
+          );
+          return;
+        }
+      }
+
+      // ✅ CASE 2: Standard Text/Signal Reply
       let payload = action.payload;
 
+      // ... (Existing Typing/Read Receipt logic) ...
       if (action.type === 'send_typing_indicator' && !payload) {
         payload = { action: 'typing', data: null };
       }
-
-      const receiptIds = ['mock-ack-id'];
-      if (messageId) {
-        receiptIds.push(messageId);
-      }
-      // Special handling for Read Receipts (simulate dynamic ID reference)
-      // Since we don't track exact message IDs in this simple script, we use a placeholder.
       if (action.type === 'send_read_receipt' && !payload) {
         payload = {
           action: 'read-receipt',
           data: {
-            messageIds: receiptIds,
+            messageIds: [triggerMsg.transportId || 'mock-id'],
             readAt: now.toString(),
           },
         };
       }
 
-      if (!payload) {
-        this.logger.warn('action has no payload returning');
-        return;
-      }
+      if (!payload) return;
 
-      // 1. CONSTRUCT INTENT
-      // "Alice wants to reply"
       const item: ScenarioItem = {
-        id: `reply-${now.toZonedDateTimeISO('Europe/Paris')}`,
-        senderUrn: partnerUrn, // The reply comes FROM the person we just messaged
-        sentAt: now.toString(),
+        id: `reply-${now.epochMilliseconds}`,
+        senderUrn: partnerUrn,
+        sentAt: now.toString() as ISODateTimeString,
         status: 'sent',
         payload: payload,
       };
 
-      // 2. COMMAND WORLD TO DELIVER
-      // The World Service handles encryption, keys, and network injection.
       await this.worldMessaging.deliverMessage(item);
-
-      // 3. WAKE UP APP
-      // Notify the app that new data is available in the mock queue.
       this.liveService.trigger();
     } catch (err) {
       this.logger.error('Failed to execute script action', err);

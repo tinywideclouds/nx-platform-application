@@ -73,6 +73,7 @@ import {
   DexieOutboxStorage,
   DexieQuarantineStorage,
   HistoryReader,
+  MessageWriter,
   ConversationStorage,
   OutboxStorage,
   QuarantineStorage,
@@ -136,20 +137,36 @@ const notificationProviders = environment.useMocks
 
 const infraProviders = environment.useMocks
   ? [
+      // MOCK MODE: Point everything to the Mocks
       { provide: IChatDataService, useExisting: MockChatDataService },
       { provide: IChatSendService, useExisting: MockChatSendService },
       { provide: IChatLiveDataService, useExisting: MockLiveService },
       { provide: ISecureKeyService, useExisting: MockKeyService },
+
+      // Also provide the Concrete tokens for services that inject them directly
       { provide: ChatDataService, useExisting: MockChatDataService },
       { provide: ChatSendService, useExisting: MockChatSendService },
       { provide: ChatLiveDataService, useExisting: MockLiveService },
       { provide: SecureKeyService, useExisting: MockKeyService },
     ]
   : [
-      { provide: IChatDataService, useClass: ChatDataService },
-      { provide: IChatSendService, useClass: ChatSendService },
-      { provide: IChatLiveDataService, useClass: ChatLiveDataService },
-      { provide: ISecureKeyService, useClass: SecureKeyService },
+      // REAL MODE: Instantiate the Concrete Class, Alias the Interface
+
+      // 1. Data Service
+      ChatDataService, // The Concrete Singleton
+      { provide: IChatDataService, useExisting: ChatDataService }, // Interface points to Singleton
+
+      // 2. Send Service
+      ChatSendService,
+      { provide: IChatSendService, useExisting: ChatSendService },
+
+      // 3. Live Data Service (Critical for your error)
+      ChatLiveDataService,
+      { provide: IChatLiveDataService, useExisting: ChatLiveDataService },
+
+      // 4. Secure Key Service
+      SecureKeyService,
+      { provide: ISecureKeyService, useExisting: SecureKeyService },
     ];
 
 // ✅ Directory Providers Logic
@@ -226,6 +243,7 @@ export const appConfig: ApplicationConfig = {
     provideMessengerIdentity(),
 
     { provide: HistoryReader, useExisting: ChatStorageService },
+    { provide: MessageWriter, useExisting: ChatStorageService },
     { provide: ConversationStorage, useExisting: ChatStorageService },
     { provide: OutboxStorage, useClass: DexieOutboxStorage },
     { provide: QuarantineStorage, useClass: DexieQuarantineStorage },

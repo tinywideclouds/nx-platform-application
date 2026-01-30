@@ -2,7 +2,11 @@ import { Temporal } from '@js-temporal/polyfill';
 import { composeScenarios } from '../driver-services/scenario-compositor';
 import { ACTIVE_USER } from './messaging.scenarios';
 import { MESSENGER_USERS } from '../data/users.const';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
 
 const NOW = Temporal.Now.instant();
 
@@ -12,9 +16,11 @@ export const ACTIVE_USER_INTERACTIVE = composeScenarios(ACTIVE_USER, {
       queuedMessages: [
         {
           id: 'msg-interactive-start',
+          conversationUrn: MESSENGER_USERS.ALICE,
           senderUrn: MESSENGER_USERS.ALICE,
+          type: MessageTypeText,
           text: 'Hello! Are you there?',
-          sentAt: NOW.subtract({ minutes: 1 }).toString(),
+          sentAt: NOW.subtract({ minutes: 1 }).toString() as ISODateTimeString,
           status: 'sent',
         },
       ],

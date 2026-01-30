@@ -1,5 +1,7 @@
 import { Injectable, inject, computed, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { ContactSummary } from '@nx-platform-application/contacts-types';
+
 import { URN } from '@nx-platform-application/platform-types';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { ContactsDomainService } from '@nx-platform-application/contacts-domain-service';
@@ -24,9 +26,17 @@ export class ContactsStateService {
     initialValue: [] as ContactGroup[],
   });
 
+  // --- O(1) INDICES ---
+
   private readonly contactMap = computed(() => {
     const map = new Map<string, Contact>();
     this.directory().forEach((c) => map.set(c.id.toString(), c));
+    return map;
+  });
+
+  private readonly groupMap = computed(() => {
+    const map = new Map<string, ContactGroup>();
+    this.groups().forEach((g) => map.set(g.id.toString(), g));
     return map;
   });
 
@@ -49,6 +59,45 @@ export class ContactsStateService {
     return this.contactMap().get(urn.toString());
   }
 
+  /**
+   * ✅ NEW: Implements the O(1) Batch Lookup Logic.
+   * Handles both Users (Contacts) and Groups (Local).
+   */
+  async resolveBatch(urns: URN[]): Promise<Map<string, ContactSummary>> {
+    console.log('RESOLVING BATCH', urns);
+    // We access the signals synchronously (in-memory cache)
+    const cMap = this.contactMap();
+    const gMap = this.groupMap();
+    const result = new Map<string, ContactSummary>();
+
+    for (const urn of urns) {
+      const key = urn.toString();
+
+      // 1. Try Contact
+      const contact = cMap.get(key);
+      if (contact) {
+        result.set(key, {
+          id: contact.id,
+          alias: contact.alias,
+          profilePictureUrl:
+            contact.serviceContacts['messenger']?.profilePictureUrl,
+        });
+        continue;
+      }
+
+      // 2. Try Group
+      const group = gMap.get(key);
+      if (group) {
+        result.set(key, {
+          id: group.id,
+          alias: group.name,
+          profilePictureUrl: undefined, // Groups might have icons later
+        });
+      }
+    }
+
+    return result;
+  }
   /**
    * Resolves member URNs to full Contact objects using the loaded directory.
    */

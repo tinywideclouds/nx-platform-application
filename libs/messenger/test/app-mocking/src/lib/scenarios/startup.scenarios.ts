@@ -10,6 +10,7 @@ export const NEW_USER: MessengerScenarioData = {
       groups: [],
     },
     messaging: {
+      conversations: [],
       messages: [],
       outbox: [],
       quarantine: [],
@@ -36,6 +37,7 @@ export const FRESH_LOGIN: MessengerScenarioData = {
       groups: [],
     },
     messaging: {
+      conversations: [],
       messages: [],
       outbox: [],
       quarantine: [],

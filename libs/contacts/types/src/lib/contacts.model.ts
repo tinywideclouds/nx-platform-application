@@ -21,6 +21,12 @@ export interface Contact extends User {
   lastModified: ISODateTimeString;
 }
 
+export interface ContactSummary {
+  id: URN;
+  alias: string;
+  profilePictureUrl?: string;
+}
+
 export interface ContactGroup extends Resource {
   name: string;
   description?: string;

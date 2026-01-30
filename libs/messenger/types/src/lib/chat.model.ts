@@ -1,6 +1,7 @@
 import {
   URN,
   ISODateTimeString,
+  Resource,
 } from '@nx-platform-application/platform-types';
 
 export interface Message {
@@ -33,35 +34,33 @@ export type MessageDeliveryStatus =
   | 'reference'; // Message is a reference to another message (History only, no delivery tracking)
 
 // This will be the view model for the participant (contact or group)
-export interface ChatParticipant {
-  urn: URN;
-  name: string;
-  initials: string;
-  profilePictureUrl?: string;
-}
+export interface Conversation extends Resource {
+  name: string; // ✅ Required
 
-export interface Conversation {
-  conversationUrn: URN;
-  previewType: 'text' | 'image' | 'file' | 'other';
-}
+  // Content
+  snippet: string; // ✅ Renamed from latestSnippet
 
-export interface ConversationSummary extends Conversation {
-  timestamp: ISODateTimeString;
-  latestSnippet: string;
+  // Timestamps & Counters
+  lastActivityTimestamp: ISODateTimeString; // ✅ Renamed from timestamp
   unreadCount: number;
+
+  // Sync Metadata
+  genesisTimestamp: ISODateTimeString | null;
+  lastModified: ISODateTimeString;
+}
+
+// A clean, public contract for syncing Conversation State
+export interface ConversationSyncState extends Conversation {
+  name: string;
+  snippet: string;
+  unreadCount: number;
+  lastActivityTimestamp: ISODateTimeString;
+  genesisTimestamp: ISODateTimeString | null;
+  lastModified: ISODateTimeString;
 }
 
 export interface MessageTombstone {
   messageId: string;
   conversationUrn: URN;
   deletedAt: ISODateTimeString;
-}
-
-// A clean, public contract for syncing Conversation State
-export interface ConversationSyncState extends Conversation {
-  snippet: string;
-  unreadCount: number;
-  lastActivityTimestamp: ISODateTimeString;
-  genesisTimestamp: ISODateTimeString | null;
-  lastModified: ISODateTimeString;
 }

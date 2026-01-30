@@ -39,12 +39,7 @@ export class IdentitySetupService {
   private worldState = new Map<string, WorldKeyPair>();
 
   /**
-   * 1. Initialize the World based on the Scenario.
-   * This happens BEFORE the App boots.
-   */
-  /**
    * Configures the World Identity.
-   * ✅ NOW ACCEPTS CONTACTS to derive Router Aliases dynamically.
    */
   async configure(config: MockServerIdentityState, contacts: Contact[]) {
     this.logger.info('🌍 Constructing Identity World...', {
@@ -56,53 +51,53 @@ export class IdentitySetupService {
     // 1. Setup ME (The Protagonist)
     const me = await this.generateWorldIdentity(MESSENGER_USERS.ME);
 
-    // ✅ NEW: Register My Public Alias
-    // This allows the World to look up keys using 'me@example.com'
+    // ✅ NEW: Register My Public Alias (So others can find ME)
     await this.registerAlias(lookupMe, me);
 
     // 2. Setup KNOWN CONTACTS (The Cast)
-    // We iterate the scenario's address book to ensure we know everyone the App knows.
     for (const contact of contacts) {
-      // A. Generate Primary Identity (urn:contacts:user:...)
+      // A. Generate Identity (Internal Only)
       const identity = await this.generateWorldIdentity(contact.id);
 
-      // B. Derive Router Handle (Mimic ContactMessengerMapper logic)
-      // If the app knows Alice's email, it will use that to route messages.
-      // The World must verify messages sent to that email handle.
+      // B. Derive Router Handle (Public)
+      // This mimics how the real world works: Alice has an email,
+      // and that email is her public handle on the network.
       const email = contact.email || contact.emailAddresses?.[0];
       if (email) {
-        // [Logic Mirror]: URN.create('email', email, 'lookup')
         const handleUrn = URN.create('email', email, 'lookup');
         await this.registerAlias(handleUrn, identity);
       }
-
-      // Handle Linked Identities (if defined in mock data)
-      // if (contact.linkedIdentities) {
-      //   for (const linkedUrn of contact.linkedIdentities) {
-      //     await this.registerAlias(linkedUrn, identity);
-      //   }
-      // }
     }
 
-    // 3. Ensure "Alice" exists even if not in contacts (for edge case tests)
-    // (This acts as a failsafe if the scenario contact list is empty but we still script Alice)
+    // 3. Ensure "Alice" exists for edge case tests
     if (!this.worldState.has(MESSENGER_USERS.ALICE.toString())) {
-      await this.generateWorldIdentity(MESSENGER_USERS.ALICE);
+      const aliceIdentity = await this.generateWorldIdentity(
+        MESSENGER_USERS.ALICE,
+      );
+      // Register Alice's alias if she wasn't in the contact list
+      const aliceEmail = 'alice@example.com';
+      await this.registerAlias(
+        URN.create('email', aliceEmail, 'lookup'),
+        aliceIdentity,
+      );
     }
 
-    // 4. Seed Network (MockKeyService)
+    // 4. Seed Network (MockKeyService) for ME
+    // We only publish ME if the scenario config says so
     if (config.hasMyKey) {
       if (config.keyMismatch) {
+        // Simulating a broken state
         await this.mockKeyServer.storeKeys(MESSENGER_USERS.ME, {
           encKey: new Uint8Array([0]),
           sigKey: new Uint8Array([0]),
         });
       } else {
+        // Publish ME to the network (optional, usually done by app on startup)
         await this.mockKeyServer.storeKeys(MESSENGER_USERS.ME, me.publicBytes);
       }
     }
 
-    // 5. Seed App Storage
+    // 5. Seed App Storage (BrowserDB)
     if (config.seeded) {
       this.logger.info('💾 Seeding Browser Storage (Active User Mode)');
       await this.browserStorage.saveJwk(
@@ -124,23 +119,24 @@ export class IdentitySetupService {
 
   /**
    * Registers a Router URN (Alias) pointing to an existing Identity.
-   * This mirrors the role of messenger-domain-identity-adapter in the real app
+   * ✅ BOUNDARY ENFORCEMENT: This is the ONLY place we publish to MockKeyService
+   * for other users.
    */
   private async registerAlias(alias: URN, identity: WorldKeyPair) {
     const aliasStr = alias.toString();
     if (this.worldState.has(aliasStr)) return;
 
     this.logger.info(`🔗 Mapping Alias: ${aliasStr} -> Contact Identity`);
+
+    // 1. Internal Map (So WorldInbox can decrypt messages sent to this alias)
     this.worldState.set(aliasStr, identity);
 
-    // Ensure the Alias is also routable on the network (Mock Server)
+    // 2. Public Network (So App can find the key to encrypt)
     await this.mockKeyServer.storeKeys(alias, identity.publicBytes);
   }
 
   /**
    * WORLD API: Get the authoritative Public Key for a user.
-   * The QueueBuilder uses this to encrypt messages.
-   * This removes the dependency on SecureKeyService for the Builder.
    */
   getPublicKey(user: URN): PublicKeys {
     const identity = this.worldState.get(user.toString());
@@ -153,8 +149,7 @@ export class IdentitySetupService {
   }
 
   /**
-   * ✅ NEW: WORLD API: Get the authoritative Private Key for a user.
-   * Used by WorldInboxService to decrypt messages sent TO this user.
+   * WORLD API: Get the authoritative Private Key for a user.
    */
   getPrivateKey(user: URN): CryptoKey {
     const identity = this.worldState.get(user.toString());
@@ -163,7 +158,6 @@ export class IdentitySetupService {
         `[World] User ${user} has not been created in this scenario.`,
       );
     }
-    // We return the encryption private key (RSA-OAEP)
     return identity.cryptoKeys.enc;
   }
 
@@ -173,18 +167,14 @@ export class IdentitySetupService {
     const urn = user.toString();
     if (this.worldState.has(urn)) return this.worldState.get(urn)!;
 
-    // 1. Generate Valid Keys (using App's Algo settings)
+    // 1. Generate Valid Keys
     const encPair = await this.crypto.generateEncryptionKeys();
     const sigPair = await this.crypto.generateSigningKeys();
 
-    // 2. Export to Bytes (for Network/DB)
+    // 2. Export to Bytes
     const subtle = (globalThis.crypto || window.crypto).subtle;
-
-    // Public (SPKI)
     const encPubBytes = await subtle.exportKey('spki', encPair.publicKey);
     const sigPubBytes = await subtle.exportKey('spki', sigPair.publicKey);
-
-    // Private (JWK)
     const encPrivJwk = await subtle.exportKey('jwk', encPair.privateKey);
     const sigPrivJwk = await subtle.exportKey('jwk', sigPair.privateKey);
 
@@ -203,12 +193,10 @@ export class IdentitySetupService {
       },
     };
 
+    // 3. Store Internal Reference ONLY
+    // We do NOT publish `urn:contacts:...` to the MockKeyServer.
+    // If the App tries to fetch this URN, it will correctly fail.
     this.worldState.set(urn, identity);
-
-    // Default: Everyone except ME is on the server
-    if (!user.equals(MESSENGER_USERS.ME)) {
-      await this.mockKeyServer.storeKeys(user, identity.publicBytes);
-    }
 
     return identity;
   }

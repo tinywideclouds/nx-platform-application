@@ -2,6 +2,8 @@ import { Temporal } from '@js-temporal/polyfill';
 import { MESSENGER_USERS } from '../data/users.const';
 import { ACTIVE_USER } from './messaging.scenarios';
 import { composeScenarios } from '../driver-services/scenario-compositor';
+import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 const NOW = Temporal.Now.instant();
 
@@ -22,16 +24,20 @@ export const FLIGHT_MODE_RECOVERY = composeScenarios(ACTIVE_USER, {
       queuedMessages: [
         {
           id: 'msg-offline-1',
+          conversationUrn: MESSENGER_USERS.ALICE,
           senderUrn: MESSENGER_USERS.ALICE,
+          type: MessageTypeText,
           text: 'I tried calling you, but you were offline.',
-          sentAt: NOW.subtract({ minutes: 5 }).toString(),
+          sentAt: NOW.subtract({ minutes: 5 }).toString() as ISODateTimeString,
           status: 'sent',
         },
         {
           id: 'msg-offline-2',
+          conversationUrn: MESSENGER_USERS.ALICE,
           senderUrn: MESSENGER_USERS.ALICE,
+          type: MessageTypeText,
           text: 'Call me back when you get this.',
-          sentAt: NOW.subtract({ minutes: 4 }).toString(),
+          sentAt: NOW.subtract({ minutes: 4 }).toString() as ISODateTimeString,
           status: 'sent',
         },
       ],

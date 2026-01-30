@@ -1,39 +1,40 @@
+// libs/messenger/infrastructure/db-schema/src/lib/mappers/conversation.mapper.ts
+
 import { Injectable } from '@angular/core';
-import { Temporal } from '@js-temporal/polyfill';
 import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { ConversationSummary } from '@nx-platform-application/messenger-types';
+import { Conversation } from '@nx-platform-application/messenger-types';
 import { ConversationIndexRecord } from '../records/conversation.record';
 
-@Injectable({ providedIn: 'root' })
+@Injectable({
+  providedIn: 'root',
+})
 export class ConversationMapper {
-  /**
-   * Maps the Storage Record (DB) to the Domain Summary (UI/State).
-   */
-  toDomain(record: ConversationIndexRecord): ConversationSummary {
+  toRecord(domain: Conversation): ConversationIndexRecord {
     return {
-      conversationUrn: URN.parse(record.conversationUrn),
-      previewType: record.previewType,
-      timestamp: record.lastActivityTimestamp,
-      latestSnippet: record.snippet,
-      unreadCount: record.unreadCount,
+      conversationUrn: domain.id.toString(),
+      name: domain.name,
+      // previewType removed
+      lastActivityTimestamp: domain.lastActivityTimestamp,
+      snippet: domain.snippet,
+      unreadCount: domain.unreadCount,
+      genesisTimestamp: domain.genesisTimestamp,
+      lastModified: domain.lastModified,
     };
   }
 
-  /**
-   * Maps the Domain Summary back to a Storage Record.
-   */
-  toRecord(domain: ConversationSummary): ConversationIndexRecord {
+  toDomain(record: ConversationIndexRecord): Conversation {
     return {
-      conversationUrn: domain.conversationUrn.toString(),
-      previewType: domain.previewType,
-      unreadCount: domain.unreadCount,
-      lastActivityTimestamp: domain.timestamp,
-      snippet: domain.latestSnippet,
-      genesisTimestamp: null,
-      lastModified: Temporal.Now.instant().toString() as ISODateTimeString,
+      id: URN.parse(record.conversationUrn),
+      name: record.name,
+      // previewType removed
+      lastActivityTimestamp: record.lastActivityTimestamp as ISODateTimeString,
+      snippet: record.snippet,
+      unreadCount: record.unreadCount,
+      genesisTimestamp: record.genesisTimestamp as ISODateTimeString | null,
+      lastModified: record.lastModified as ISODateTimeString,
     };
   }
 }
