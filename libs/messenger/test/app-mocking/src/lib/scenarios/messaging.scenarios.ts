@@ -48,15 +48,15 @@ export const ACTIVE_USER: MessengerScenarioData = {
           lastModified: NOW.subtract({
             hours: 2,
           }).toString() as ISODateTimeString,
+          lastActivityTimestamp: NOW.subtract({
+            hours: 2,
+          }).toString() as ISODateTimeString,
           genesisTimestamp: NOW.toZonedDateTimeISO(Temporal.Now.timeZoneId())
             .subtract({
               weeks: 6,
               hours: 2,
             })
             .toString() as ISODateTimeString,
-          lastActivityTimestamp: NOW.subtract({
-            hours: 2,
-          }).toString() as ISODateTimeString,
         },
       ],
       messages: [

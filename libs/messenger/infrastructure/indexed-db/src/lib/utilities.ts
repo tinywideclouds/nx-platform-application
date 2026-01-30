@@ -8,7 +8,6 @@ const MAX_SNIPPET_BYTES = 1024 * 5; // 5KB limit for text decoding
  * Used for the conversation index (sidebar preview).
  */
 export function generateSnippet(msg: ChatMessage): string {
-  console.log('[SNIPPED GENERATION]', msg);
   // 1. Check Type & Payload Existence
   if (msg.typeId.equals(MessageTypeText) && msg.payloadBytes) {
     try {

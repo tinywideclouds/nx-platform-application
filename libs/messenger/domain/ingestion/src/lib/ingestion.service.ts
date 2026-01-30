@@ -47,7 +47,6 @@ export class IngestionService {
 
   async process(
     myKeys: PrivateKeys,
-    myUrn: URN,
     blockedSet: Set<string>,
     batchSize = 50,
   ): Promise<IngestionResult> {

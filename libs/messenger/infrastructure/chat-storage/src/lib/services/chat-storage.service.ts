@@ -197,7 +197,6 @@ export class ChatStorageService
 
     if (isNewer) {
       update.lastActivityTimestamp = sentTime;
-      console.log('Newer message generating snippet');
       update.snippet = generateSnippet(message);
       if (message.status === 'received') {
         update.unreadCount = (existing?.unreadCount || 0) + 1;
@@ -239,6 +238,7 @@ export class ChatStorageService
       [this.db.messages, this.db.conversations],
       async () => {
         const record = await this.db.messages.get(messageId);
+
         if (!record) return;
 
         const domainMsg = this.messageMapper.toDomain(record);

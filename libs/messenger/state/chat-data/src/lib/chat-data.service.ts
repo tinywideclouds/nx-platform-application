@@ -166,7 +166,6 @@ export class ChatDataService {
       try {
         const result = await this.ingestionService.process(
           keys,
-          user.id,
           this.moderation.blockedSet(),
           50,
         );
