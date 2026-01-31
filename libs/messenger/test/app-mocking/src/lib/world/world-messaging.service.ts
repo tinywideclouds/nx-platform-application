@@ -29,6 +29,7 @@ import {
   MessageGroupInviteResponse,
   ContentPayload,
   SignalPayload,
+  GroupPayloadFactory,
   MessagePayloadFactory,
 } from '@nx-platform-application/messenger-domain-message-content';
 
@@ -142,8 +143,8 @@ export class WorldMessagingService {
     // New: Use Factory to ensure Domain Compliance
     const content =
       status === 'joined'
-        ? MessagePayloadFactory.createJoinedSignal(groupUrn)
-        : MessagePayloadFactory.createDeclinedSignal(groupUrn);
+        ? GroupPayloadFactory.createJoinedSignal(groupUrn)
+        : GroupPayloadFactory.createDeclinedSignal(groupUrn);
 
     const payload: SignalPayload = {
       action: 'group-join',

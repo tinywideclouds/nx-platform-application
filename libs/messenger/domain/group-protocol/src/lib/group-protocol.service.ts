@@ -8,7 +8,10 @@ import {
 } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { EntityTypeUser } from '@nx-platform-application/directory-types';
-import { MessageTypeSystem } from '@nx-platform-application/messenger-domain-message-content';
+import {
+  GroupPayloadFactory,
+  MessageTypeSystem,
+} from '@nx-platform-application/messenger-domain-message-content';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
@@ -23,7 +26,7 @@ import { ConversationService } from '@nx-platform-application/messenger-domain-c
 // ✅ DOMAIN TYPES & CONSTANTS
 import {
   GroupInvitePayload,
-  GroupJoinData,
+  GroupSignalData,
   GroupParticipantSnapshot,
   MessageGroupInvite, // URN Constant
   MessageGroupInviteResponse, // URN Constant
@@ -37,6 +40,7 @@ import {
   DirectoryEntity,
   GroupMemberStatus,
 } from '@nx-platform-application/directory-types';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
 @Injectable({ providedIn: 'root' })
 export class GroupProtocolService {
@@ -47,6 +51,8 @@ export class GroupProtocolService {
 
   // ✅ Inject the Domain Service
   private conversationService = inject(ConversationService);
+  // ✅ Inject the Infrastructure Service
+  private storage = inject(ChatStorageService);
 
   // ✅ Architecture Swap
   private contactsQuery = inject(ContactsQueryApi);
@@ -59,7 +65,7 @@ export class GroupProtocolService {
     localGroupUrn: URN,
     myKeys: PrivateKeys,
     myUrn: URN,
-    name: string, // ✅ NEW ARGUMENT
+    name: string,
   ): Promise<URN> {
     this.logger.info(
       `[GroupProtocol] Provisioning '${name}' from ${localGroupUrn.toString()}`,
@@ -75,22 +81,24 @@ export class GroupProtocolService {
 
     // 2. Resolve Network Identities (Local -> Network)
     const roster: { networkId: URN; alias: string }[] = [];
-
-    // Add Myself first
-    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
-    roster.push({ networkId: myNetworkId, alias: 'Me' });
+    const invitees: URN[] = [];
 
     for (const p of participants) {
       const networkId = await this.identityResolver.resolveToHandle(p.id);
       // We only include people we can actually route to (Handle URNs)
       if (networkId.namespace !== 'contacts') {
         roster.push({ networkId, alias: p.alias });
+        invitees.push(networkId);
       }
     }
 
-    if (roster.length < 2) {
+    if (roster.length == 0) {
       throw new Error('No valid network participants found (need 2+)');
     }
+
+    // Add Myself
+    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
+    roster.push({ networkId: myNetworkId, alias: 'Me' });
 
     // 3. Mint Network Identity
     const uuid = crypto.randomUUID();
@@ -132,8 +140,26 @@ export class GroupProtocolService {
       alias: p.alias,
     }));
 
-    // ✅ UPDATE: Use Factory
-    const content = MessagePayloadFactory.createGroupInvite(
+    const systemContent = GroupPayloadFactory.createGroupCreatedSignal(
+      networkGroupUrn,
+      name,
+      roster.map((r) => r.alias || 'Unknown'),
+    );
+    const systemBytes = this.parser.serialize(systemContent);
+
+    const localSystemMsg: ChatMessage = {
+      id: `sys-${crypto.randomUUID()}`,
+      conversationUrn: networkGroupUrn,
+      senderId: myUrn,
+      status: 'read',
+      sentTimestamp: now as ISODateTimeString,
+      typeId: MessageGroupInviteResponse,
+      payloadBytes: systemBytes,
+      tags: [URN.parse('urn:messenger:event:system-event')],
+    };
+    await this.storage.saveMessage(localSystemMsg);
+
+    const content = GroupPayloadFactory.createGroupInvite(
       networkGroupUrn,
       myNetworkId,
       name,
@@ -141,16 +167,25 @@ export class GroupProtocolService {
       `Invited by ${myUrn.entityId}`,
     );
 
-    const bytes = this.parser.serialize(content);
+    const inviteData = this.parser.serialize(content);
 
     // 7. Fan-Out (DM to each participant except me)
-    await this.outbound.sendMessage(
-      myKeys,
-      myUrn,
-      networkGroupUrn,
-      MessageGroupInvite,
-      bytes,
-    );
+    // 6. Send Invites (✅ 1:1 Fan-Out)
+    // We send individual messages to each participant's 1:1 conversation.
+    // Note: We ideally want { shouldPersist: false } here to keep 1:1 history clean,
+    // but we respect the existing OutboundService contract for now.
+    const promises = invitees.map(async (invitee) => {
+      await this.outbound.sendMessage(
+        myKeys,
+        myUrn,
+        invitee, // Target: The Individual (1:1)
+        MessageGroupInvite,
+        inviteData,
+        { isEphemeral: false },
+      );
+    });
+
+    await Promise.all(promises);
 
     return networkGroupUrn;
   }
@@ -260,7 +295,7 @@ export class GroupProtocolService {
    * Consumes a signal, updates state, and decides what history to create.
    */
   async processSignal(
-    signal: GroupJoinData,
+    signal: GroupSignalData,
     senderUrn: URN,
     context: { messageId: string; sentAt: string }, // Context passed from Ingestion
   ): Promise<ChatMessage | null> {
@@ -283,7 +318,7 @@ export class GroupProtocolService {
     }
 
     // ✅ UPDATE: Use Factory (Correctly generates GroupSystemContent)
-    const content = MessagePayloadFactory.createJoinedSignal(groupUrn);
+    const content = GroupPayloadFactory.createJoinedSignal(groupUrn);
 
     // 3. Create the Persistent Message
     return {
@@ -319,8 +354,8 @@ export class GroupProtocolService {
     // ✅ UPDATE: Use Factory
     const content =
       status === 'joined'
-        ? MessagePayloadFactory.createJoinedSignal(groupUrn)
-        : MessagePayloadFactory.createDeclinedSignal(groupUrn);
+        ? GroupPayloadFactory.createJoinedSignal(groupUrn)
+        : GroupPayloadFactory.createDeclinedSignal(groupUrn);
 
     const bytes = this.parser.serialize(content);
 

@@ -4,3 +4,4 @@ export * from './lib/models/message-tags.const';
 export * from './lib/services/message-content-parser.service';
 export * from './lib/services/message-metadata.service';
 export * from './lib/factories/message-payload.factory';
+export * from './lib/factories/group-payload.factory';

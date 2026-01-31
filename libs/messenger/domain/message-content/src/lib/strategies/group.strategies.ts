@@ -3,7 +3,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import { ParsedMessage } from '../models/content-types';
 import {
   GroupInvitePayload,
-  GroupJoinData,
+  GroupSignalData,
   MessageGroupInvite,
   MessageGroupInviteResponse,
 } from '../models/group-protocol-types';
@@ -41,7 +41,7 @@ export class GroupParserStrategy implements ContentParserStrategy {
     }
 
     if (typeId.equals(MessageGroupInviteResponse)) {
-      const data = JSON.parse(json) as GroupJoinData;
+      const data = JSON.parse(json) as GroupSignalData;
       return {
         kind: 'content',
         conversationId: context.conversationId!,

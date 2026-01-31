@@ -11,12 +11,34 @@
     }
 
     @case ('system') {
-      <chat-system-message [icon]="p.system?.icon">
+      <chat-system-message>
         <span class="font-bold text-gray-800">
           {{ message().senderId | contactName }}
         </span>
-        {{ p.system?.text }}
+        <chat-text-renderer [parts]="p.parts" />
       </chat-system-message>
+    }
+
+    @case ('action') {
+      @if (p.action?.type === 'group-invite') {
+        @if (shouldRenderAsSystem()) {
+          <chat-system-message>
+            <mat-icon class="!w-4 !h-4 text-[16px] leading-4 mr-1 text-gray-500"
+              >mail</mat-icon
+            >
+            Invites sent!
+          </chat-system-message>
+        } @else if (p.action) {
+          <messenger-chat-invite-message
+            [payload]="{
+              groupName: p.action.actionMap['groupName'],
+              groupUrn: p.action.actionMap['groupUrn'],
+            }"
+            (accept)="acceptInvite.emit(message())"
+            (reject)="rejectInvite.emit(message())"
+          />
+        }
+      }
     }
 
     @default {

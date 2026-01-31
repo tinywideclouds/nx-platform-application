@@ -1,7 +1,10 @@
 import { Pipe, PipeTransform, inject } from '@angular/core';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { DisplayMessage } from '@nx-platform-application/messenger-ui-chat';
+import {
+  DisplayMessage,
+  MessagePart,
+} from '@nx-platform-application/messenger-ui-chat';
 import { parseMessageText } from './message-parser';
 
 @Pipe({
@@ -45,32 +48,49 @@ export class MessageContentPipe implements PipeTransform {
         };
       }
 
-      // 3. ✅ Group System Events (Joined/Declined)
-      // Note: We use 'group-system' based on the domain types discussed
+      // 3. Group System Events (Joined/Declined)
       if (payload.kind === 'group-system') {
         const status = payload.data.status;
-        let text = 'updated the group';
-        let icon = 'info';
+        const parts: MessagePart[] = [];
 
+        // Add Icon Part
         if (status === 'joined') {
-          text = 'joined the group';
-          icon = 'login';
+          parts.push({ type: 'icon', ref: 'login', color: 'primary' });
+          parts.push({ type: 'text', content: ' joined the group' });
         } else if (status === 'declined') {
-          text = 'declined the invite';
-          icon = 'person_remove';
+          parts.push({ type: 'icon', ref: 'person_remove', color: 'warn' });
+          parts.push({ type: 'text', content: ' declined the invite' });
+        } else {
+          parts.push({ type: 'icon', ref: 'info', color: 'primary' });
+          parts.push({ type: 'text', content: ' updated the group' });
         }
 
         return {
           id: msg.id,
           kind: 'system',
-          parts: [],
-          system: { text, icon },
+          parts: parts,
         };
       }
 
-      return { id: msg.id, kind: 'unknown', parts: [] };
+      // 4. ✅ Group Invites (Action)
+      if (payload.kind === 'group-invite') {
+        return {
+          id: msg.id,
+          kind: 'action',
+          parts: [], // Actions might have text, but usually custom rendered
+          action: {
+            type: 'group-invite',
+            actionMap: {
+              groupName: payload.data.name,
+              groupUrn: payload.data.groupUrn,
+            },
+          },
+        };
+      }
+
+      return null;
     } catch (e) {
-      console.warn('Message parsing failed', e);
+      console.error('Error parsing message content', e);
       return null;
     }
   }

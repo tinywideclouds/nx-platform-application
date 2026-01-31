@@ -48,15 +48,16 @@ export interface GroupInvitationData {
 /**
  * The Signal sent back when a user accepts the invite.
  */
-export interface GroupJoinData {
+export interface GroupSignalData {
   groupUrn: string;
-  status: 'joined' | 'declined';
+  status: 'joined' | 'declined' | 'created';
   timestamp: string;
+  details?: string;
 }
 
 // ✅ NEW: Group System Message (Persistent)
 // Used for "Joined", "Left", "Declined" events that appear in chat history.
 export interface GroupSystemContent {
   kind: 'group-system';
-  data: GroupJoinData;
+  data: GroupSignalData;
 }

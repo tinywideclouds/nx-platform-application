@@ -13,11 +13,13 @@ export interface SendContext {
   // The Separation of Concerns
   isEphemeral: boolean; // Instruction for the Wire (Router)
   shouldPersist: boolean; // Instruction for the Disk (Librarian)
+  recipients?: URN[];
 }
 
 export interface SendOptions {
   isEphemeral?: boolean;
   tags?: URN[];
+  recipients?: URN[];
 }
 
 export interface OutboundResult {

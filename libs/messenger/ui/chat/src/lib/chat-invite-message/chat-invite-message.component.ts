@@ -9,8 +9,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 export interface InviteViewModel {
-  groupName: string;
-  groupUrn: string;
+  groupName: string | undefined;
+  groupUrn: string | undefined;
 }
 
 @Component({
