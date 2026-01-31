@@ -28,6 +28,8 @@ import {
   MessageGroupInvite, // URN Constant
   MessageGroupInviteResponse, // URN Constant
   MessageContentParser,
+  // ✅ NEW: Factory
+  MessagePayloadFactory,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import {
@@ -130,33 +132,26 @@ export class GroupProtocolService {
       alias: p.alias,
     }));
 
-    const invitePayload: GroupInvitePayload = {
-      groupUrn: networkGroupUrn.toString(),
-      name: name,
-      description: `Invited by ${myUrn.entityId}`,
-      inviterUrn: myNetworkId.toString(),
-      participants: snapshot,
-    };
+    // ✅ UPDATE: Use Factory
+    const content = MessagePayloadFactory.createGroupInvite(
+      networkGroupUrn,
+      myNetworkId,
+      name,
+      snapshot,
+      `Invited by ${myUrn.entityId}`,
+    );
 
-    const bytes = this.parser.serialize({
-      kind: 'group-invite',
-      data: invitePayload,
-    });
+    const bytes = this.parser.serialize(content);
 
     // 7. Fan-Out (DM to each participant except me)
-    const promises = roster
-      .filter((p) => !p.networkId.equals(myNetworkId))
-      .map(async (p) => {
-        await this.outbound.sendMessage(
-          myKeys,
-          myUrn,
-          p.networkId,
-          MessageGroupInvite, // ✅ Uses Constant
-          bytes,
-        );
-      });
+    await this.outbound.sendMessage(
+      myKeys,
+      myUrn,
+      networkGroupUrn,
+      MessageGroupInvite,
+      bytes,
+    );
 
-    await Promise.all(promises);
     return networkGroupUrn;
   }
 
@@ -287,6 +282,9 @@ export class GroupProtocolService {
       return null;
     }
 
+    // ✅ UPDATE: Use Factory (Correctly generates GroupSystemContent)
+    const content = MessagePayloadFactory.createJoinedSignal(groupUrn);
+
     // 3. Create the Persistent Message
     return {
       id: context.messageId,
@@ -295,9 +293,7 @@ export class GroupProtocolService {
       sentTimestamp: context.sentAt as ISODateTimeString,
       status: 'read',
       typeId: MessageTypeSystem,
-      payloadBytes: new TextEncoder().encode(
-        `${senderUrn.toString()} joined the group`,
-      ),
+      payloadBytes: this.parser.serialize(content),
       tags: [URN.parse('urn:messenger:event:system-event')],
     };
   }
@@ -320,16 +316,13 @@ export class GroupProtocolService {
     const inviteData = parsed.payload.data;
     const groupUrn = URN.parse(inviteData.groupUrn);
 
-    const responseData: GroupJoinData = {
-      groupUrn: inviteData.groupUrn,
-      status: status,
-      timestamp: Temporal.Now.instant().toString(),
-    };
+    // ✅ UPDATE: Use Factory
+    const content =
+      status === 'joined'
+        ? MessagePayloadFactory.createJoinedSignal(groupUrn)
+        : MessagePayloadFactory.createDeclinedSignal(groupUrn);
 
-    const bytes = this.parser.serialize({
-      kind: 'group-system',
-      data: responseData,
-    });
+    const bytes = this.parser.serialize(content);
 
     // Send to the Group URN
     // (NetworkGroupStrategy will fan-out based on Directory roster)

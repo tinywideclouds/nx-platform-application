@@ -6,8 +6,17 @@ import { URN } from '@nx-platform-application/platform-types';
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { ContactsDomainService } from '@nx-platform-application/contacts-domain-service';
 
+import {
+  ContactsQueryApi,
+  AddressBookApi,
+  AddressBookManagementApi,
+  SharedIdentityLink,
+} from '@nx-platform-application/contacts-api';
+
 @Injectable({ providedIn: 'root' })
-export class ContactsStateService {
+export class ContactsStateService
+  implements ContactsQueryApi, AddressBookApi, AddressBookManagementApi
+{
   private domain = inject(ContactsDomainService);
 
   // --- RAW STREAMS ---
@@ -53,6 +62,39 @@ export class ContactsStateService {
   resolveContactName(urn: URN | string | null | undefined): Signal<string> {
     const contactSignal = this.resolveContact(urn);
     return computed(() => contactSignal()?.alias || 'Unknown');
+  }
+
+  /**
+   * Polymorphic Identity Resolver
+   * Checks Contacts first, then Groups. Returns Summary for UI.
+   */
+  async resolveIdentity(urn: URN): Promise<ContactSummary | null> {
+    const key = urn.toString();
+    const cMap = this.contactMap();
+    const gMap = this.groupMap();
+
+    // 1. Try Contact
+    const contact = cMap.get(key);
+    if (contact) {
+      return {
+        id: contact.id,
+        alias: contact.alias,
+        profilePictureUrl:
+          contact.serviceContacts['messenger']?.profilePictureUrl,
+      };
+    }
+
+    // 2. Try Group
+    const group = gMap.get(key);
+    if (group) {
+      return {
+        id: group.id,
+        alias: group.name,
+        profilePictureUrl: undefined,
+      };
+    }
+
+    return null;
   }
 
   getContactSnapshot(urn: URN): Contact | undefined {
@@ -178,6 +220,13 @@ export class ContactsStateService {
 
   async getLinkedIdentities(urn: URN): Promise<URN[]> {
     return this.domain.getLinkedIdentities(urn);
+  }
+
+  /**
+   * ✅ FAIL FAST: Not yet supported by Domain Service
+   */
+  async linkIdentity(localUrn: URN, link: SharedIdentityLink): Promise<void> {
+    throw new Error('Method not implemented: linkIdentity');
   }
 
   async clearDatabase(): Promise<void> {

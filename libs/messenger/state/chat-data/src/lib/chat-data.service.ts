@@ -69,7 +69,7 @@ export class ChatDataService {
 
   // --- THE UI SIGNAL (Zero Mapping, just Extending) ---
   public readonly uiConversations: Signal<UIConversation[]> = computed(() => {
-    const conversations = this.activeConversations();
+    const conversations = this.conversationService.allConversations();
     const identities = this.identityCache();
 
     return conversations.map((c) => {
@@ -106,10 +106,12 @@ export class ChatDataService {
   }
 
   public async refreshActiveConversations(): Promise<void> {
-    const conversations =
-      await this.conversationService.loadConversationSummaries();
-    this._activeConversations.set(conversations);
-    this.fetchMissingIdentities(conversations);
+    // Just ask the service to refresh its own state
+    await this.conversationService.refreshConversationList();
+
+    // We can still trigger identity fetching based on the new list
+    const newList = this.conversationService.allConversations();
+    this.fetchMissingIdentities(newList);
   }
 
   private async fetchMissingIdentities(conversations: Conversation[]) {

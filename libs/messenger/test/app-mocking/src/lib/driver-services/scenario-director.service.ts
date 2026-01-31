@@ -15,12 +15,15 @@ import {
   WorldInboxMessage,
 } from '../world/world-inbox.service';
 import { Temporal } from '@js-temporal/polyfill';
+import { IdentitySetupService } from '../world/identity-setup.service';
 
 @Injectable({ providedIn: 'root' })
 export class ScenarioDirectorService {
   private logger = inject(Logger).withPrefix('[Mock:Director]');
 
   private liveService = inject(MockLiveService);
+
+  private identitySetup = inject(IdentitySetupService);
 
   // OUTPUT: Sends messages FROM the world TO the app
   private worldMessaging = inject(WorldMessagingService);
@@ -68,11 +71,18 @@ export class ScenarioDirectorService {
 
   private checkMatch(match: any, msg: WorldInboxMessage): boolean {
     // 1. Match Recipient
-    if (match.recipientId && !match.recipientId.equals(msg.recipientId)) {
-      return false;
+    // 1. Match Recipient (Smart Match)
+    if (match.recipientId) {
+      // The message has the ROUTER URN (urn:lookup:email:...)
+      // The rule has the CONTACT URN (urn:contacts:user:...)
+      const isMatch = this.identitySetup.isSameIdentity(
+        match.recipientId,
+        msg.recipientId,
+      );
+
+      if (!isMatch) return false;
     }
 
-    // ✅ FIX: Filter out Signals by default
     const isSignal = msg.content.kind === 'signal';
 
     if (match.isEphemeral !== undefined) {

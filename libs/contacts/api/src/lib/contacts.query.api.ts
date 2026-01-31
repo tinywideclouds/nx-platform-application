@@ -1,6 +1,9 @@
 import { URN } from '@nx-platform-application/platform-types';
 
-import { ContactSummary } from '@nx-platform-application/contacts-types';
+import {
+  Contact,
+  ContactSummary,
+} from '@nx-platform-application/contacts-types';
 
 /**
  * CONTRACT & TOKEN
@@ -11,9 +14,8 @@ export abstract class ContactsQueryApi {
   /**
    * Resolves a Group URN (urn:contacts:group:*) to a list of participants.
    */
-  abstract getGroupParticipants(groupUrn: URN): Promise<ContactSummary[]>;
+  abstract getGroupParticipants(groupUrn: URN): Promise<Contact[]>;
 
-  abstract isBlocked(urn: URN, scope: string): Promise<boolean>;
   abstract resolveIdentity(urn: URN): Promise<ContactSummary | null>;
 
   abstract resolveBatch(urns: URN[]): Promise<Map<string, ContactSummary>>;

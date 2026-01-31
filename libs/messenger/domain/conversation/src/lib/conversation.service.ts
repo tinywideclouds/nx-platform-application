@@ -31,6 +31,8 @@ import {
   MessageGroupInviteResponse,
 } from '@nx-platform-application/messenger-domain-message-content';
 
+import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+
 const DEFAULT_PAGE_SIZE = 50;
 
 @Injectable({ providedIn: 'root' })
@@ -44,6 +46,9 @@ export class ConversationService {
 
   // ✅ Single Source of Truth for Parsing
   private contentParser = inject(MessageContentParser);
+
+  // Contacts services for temp conversation shells
+  private contactsQuery = inject(ContactsQueryApi);
 
   public readonly myUrn = signal<URN | null>(null);
   public readonly selectedConversation = signal<Conversation | null>(null);
@@ -77,6 +82,26 @@ export class ConversationService {
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
     new Map(),
   );
+
+  private readonly _persistedConversations = signal<Conversation[]>([]);
+
+  // 2. Keep your existing computed logic (It handles the shell merge perfectly)
+  public readonly allConversations = computed(() => {
+    const persisted = this._persistedConversations();
+    const active = this.selectedConversation();
+
+    // If we have an active shell that isn't in the DB yet, prepend it
+    if (active && !persisted.some((c) => c.id.equals(active.id))) {
+      return [active, ...persisted];
+    }
+    return persisted;
+  });
+
+  // 3. Update loadConversations to SET the signal
+  async refreshConversationList(): Promise<void> {
+    const list = await this.historyReader.getAllConversations();
+    this._persistedConversations.set(list);
+  }
 
   public readonly readReceiptTrigger$ = new Subject<string[]>();
 
@@ -117,8 +142,7 @@ export class ConversationService {
     await this.storage.startConversation(urn, name);
   }
 
-  // ✅ FIXED: Updated Method Name & Return Type
-  async loadConversationSummaries(): Promise<Conversation[]> {
+  async loadConversations(): Promise<Conversation[]> {
     return this.historyReader.getAllConversations();
   }
 
@@ -163,16 +187,24 @@ export class ConversationService {
         this.membershipStatus.set('joined');
       }
 
-      // ✅ FIXED: Updated Method Name
-      const index = await this.storage.getConversation(urn);
+      const persisted = await this.storage.getConversation(urn);
 
-      if (index) {
-        this.selectedConversation.set(index);
+      if (persisted) {
+        this.selectedConversation.set(persisted);
       } else {
+        // 3. Shell Creation (Draft Mode)
+        // We only attempt to resolve names for CONTACTS.
+        // Network groups should be persisted by GroupProtocol or Sync before we get here.
+        const contactsIdentity = await this.contactsQuery.resolveIdentity(urn);
+
+        if (!contactsIdentity) {
+          this.logger.error('no identity');
+          return;
+        }
+
         this.selectedConversation.set({
           id: urn,
-          name: 'Loading...',
-          // previewType removed
+          name: contactsIdentity.alias,
           lastActivityTimestamp: Temporal.Now.instant().toString() as any,
           snippet: '',
           unreadCount: 0,
@@ -181,7 +213,7 @@ export class ConversationService {
         });
       }
 
-      const unreadCount = index?.unreadCount || 0;
+      const unreadCount = persisted?.unreadCount || 0;
       await this.storage.markConversationAsRead(urn);
 
       const hasKeys = await this.keyService.checkRecipientKeys(urn);
@@ -196,7 +228,6 @@ export class ConversationService {
           limit: limit,
         });
 
-        // ✅ FIXED: Use local helper instead of Mapper
         const viewMessages = result.messages
           .reverse()
           .map((m) => this.hydrateMessage(m));

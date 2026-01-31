@@ -202,6 +202,11 @@ export class IngestionService {
           await this.storageService.saveMessage(systemMessage);
           accumulator.messages.push(systemMessage);
         }
+
+        // 🚩 FIX: Stop here!
+        // Do not let the generic logic below overwrite this message.
+        console.log('saved system message', systemMessage);
+        return;
       } catch (e) {
         this.logger.error('[Ingestion] Failed to update group roster', e);
       }

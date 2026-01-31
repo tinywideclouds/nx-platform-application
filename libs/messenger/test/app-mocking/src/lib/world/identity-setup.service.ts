@@ -208,4 +208,14 @@ export class IdentitySetupService {
   private getSigKeyUrn(userId: URN): string {
     return `messenger:${userId.toString()}:key:signing`;
   }
+
+  public isSameIdentity(urnA: URN, urnB: URN): boolean {
+    if (urnA.equals(urnB)) return true;
+
+    const identityA = this.worldState.get(urnA.toString());
+    const identityB = this.worldState.get(urnB.toString());
+
+    // Check Reference Equality (They point to the same KeyPair object in memory)
+    return !!identityA && !!identityB && identityA === identityB;
+  }
 }

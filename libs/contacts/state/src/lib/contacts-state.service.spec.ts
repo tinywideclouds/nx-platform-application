@@ -1,11 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ContactsStateService } from './contacts-state.service';
 import { ContactsDomainService } from '@nx-platform-application/contacts-domain-service';
-import {
-  Contact,
-  ContactGroup,
-  BlockedIdentity,
-} from '@nx-platform-application/contacts-types';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { MockProvider } from 'ng-mocks';
 import { of, BehaviorSubject } from 'rxjs';
@@ -38,19 +34,9 @@ describe('ContactsStateService', () => {
     lastModified: '2025-01-01T00:00:00Z' as any,
   };
 
-  const mockBlockedEntry: BlockedIdentity = {
-    id: 1,
-    urn: URN.parse('urn:contacts:user:blocked'),
-    blockedAt: '2025-01-01T00:00:00Z' as any,
-    scopes: ['messenger'],
-  };
-
   // Reactive Streams
   const contactsSubject = new BehaviorSubject<Contact[]>([mockContactAlice]);
   const groupsSubject = new BehaviorSubject<ContactGroup[]>([mockGroup]);
-  const blockedSubject = new BehaviorSubject<BlockedIdentity[]>([
-    mockBlockedEntry,
-  ]);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -61,15 +47,11 @@ describe('ContactsStateService', () => {
         MockProvider(ContactsDomainService, {
           contacts$: contactsSubject.asObservable(),
           groups$: groupsSubject.asObservable(),
-          blocked$: blockedSubject.asObservable(),
-          pending$: of([]),
           links$: of([]),
           getGroup: vi.fn().mockResolvedValue(mockGroup),
           saveGroup: vi.fn(), // ✅ Mocked
           getGroupsByParent: vi.fn(), // ✅ Mocked
           createContact: vi.fn(),
-          blockIdentity: vi.fn(),
-          unblockIdentity: vi.fn(),
         }),
       ],
     });
@@ -97,6 +79,30 @@ describe('ContactsStateService', () => {
     it('should expose contacts signal', () => {
       expect(service.contacts()).toHaveLength(1);
       expect(service.contacts()[0].alias).toBe('Alice');
+    });
+  });
+
+  describe('resolveIdentity (Polymorphic)', () => {
+    it('should resolve a Contact to a Summary', async () => {
+      const summary = await service.resolveIdentity(mockUserUrn);
+      expect(summary).toBeDefined();
+      expect(summary?.id).toEqual(mockUserUrn);
+      expect(summary?.alias).toBe('Alice');
+      expect(summary?.profilePictureUrl).toBe('http://pic/alice.jpg');
+    });
+
+    it('should resolve a Group to a Summary', async () => {
+      const summary = await service.resolveIdentity(mockGroupUrn);
+      expect(summary).toBeDefined();
+      expect(summary?.id).toEqual(mockGroupUrn);
+      expect(summary?.alias).toBe('Family');
+      expect(summary?.profilePictureUrl).toBeUndefined();
+    });
+
+    it('should return null for unknown URN', async () => {
+      const unknown = URN.parse('urn:contacts:user:unknown');
+      const summary = await service.resolveIdentity(unknown);
+      expect(summary).toBeNull();
     });
   });
 
