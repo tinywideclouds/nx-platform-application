@@ -36,7 +36,7 @@ export class DirectSendStrategy implements SendStrategy {
     // === 0. Optimistic Persistence (Strategy Owned) ===
     if (shouldPersist) {
       // Direct Strategy: 1 Message -> 1 Record
-      this.logger.debug('local optimistic store of message');
+      this.logger.debug('local optimistic store of message', optimisticMsg);
       await this.storageService.saveMessage(optimisticMsg);
     }
 

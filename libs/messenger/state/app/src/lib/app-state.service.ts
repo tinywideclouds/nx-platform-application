@@ -332,10 +332,6 @@ export class AppState {
   public async loadConversation(urn: URN | null): Promise<void> {
     const myUrn = this.currentUserUrn();
     await this.conversationService.loadConversation(urn, myUrn);
-
-    if (urn) {
-      this.chatService.clearUnreadCount(urn);
-    }
   }
 
   public async sendDraft(draft: DraftMessage): Promise<void> {
@@ -517,10 +513,15 @@ export class AppState {
     void this.outboxWorker.processQueue(sender, keys);
   }
 
-  public async acceptInvite(msg: ChatMessage): Promise<void> {
+  public async acceptInvite(msg: ChatMessage): Promise<string> {
     const keys = this.identity.myKeys();
     const me = this.currentUserUrn();
-    if (keys && me) await this.groupProtocol.acceptInvite(msg, keys, me);
+
+    if (!keys || !me) {
+      throw new Error('Cannot accept invite: Identity not ready');
+    }
+
+    return this.groupProtocol.acceptInvite(msg, keys, me);
   }
 
   public async rejectInvite(msg: ChatMessage): Promise<void> {

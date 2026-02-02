@@ -7,6 +7,7 @@ import {
   MessageTypeText,
   MessageTypeContactShare,
   MessageTypeImage,
+  MessageTypeSystem,
 } from '../models/content-types';
 import {
   ContentParserStrategy,

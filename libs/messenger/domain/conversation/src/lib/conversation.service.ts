@@ -29,6 +29,7 @@ import {
   MessageContentParser,
   MessageGroupInvite,
   MessageGroupInviteResponse,
+  MessageTypeSystem,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
@@ -67,12 +68,15 @@ export class ConversationService {
     if (currentUrn && currentUrn.entityType !== 'group') return raw;
     if (status === 'joined') return raw;
 
-    return raw.filter(
+    const filtered = raw.filter(
       (m) =>
         m.typeId.equals(MessageGroupInviteResponse) ||
         m.typeId.equals(MessageGroupInvite) ||
+        m.typeId.equals(MessageTypeSystem) ||
         (me && m.senderId.equals(me)),
     );
+
+    return filtered;
   });
 
   public readonly genesisReached = signal<boolean>(false);
@@ -146,6 +150,12 @@ export class ConversationService {
     return this.historyReader.getAllConversations();
   }
 
+  private setLocalUnreadCount(urn: URN, count: number): void {
+    this._persistedConversations.update((list) =>
+      list.map((c) => (c.id.equals(urn) ? { ...c, unreadCount: count } : c)),
+    );
+  }
+
   async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
       this.myUrn.set(myUrn);
@@ -153,6 +163,8 @@ export class ConversationService {
       const current = this.selectedConversation();
       if (current?.id?.equals(urn) && urn !== null) {
         await this.storage.markConversationAsRead(urn);
+
+        this.setLocalUnreadCount(urn, 0);
         return;
       }
 
@@ -215,6 +227,8 @@ export class ConversationService {
 
       const unreadCount = persisted?.unreadCount || 0;
       await this.storage.markConversationAsRead(urn);
+
+      this.setLocalUnreadCount(urn, 0);
 
       const hasKeys = await this.keyService.checkRecipientKeys(urn);
       this.isRecipientKeyMissing.set(!hasKeys);
@@ -363,7 +377,6 @@ export class ConversationService {
     }
 
     if (freshMessages.length > 0) {
-      // ✅ FIXED: Use local helper, strip existing text to force re-parse
       const viewed = freshMessages.map((m) =>
         this.hydrateMessage({ ...m, textContent: undefined }),
       );
@@ -380,7 +393,6 @@ export class ConversationService {
     );
 
     if (relevant.length > 0) {
-      // ✅ FIXED: Use local helper
       const viewed = relevant.map((m) => this.hydrateMessage(m));
 
       if (myUrn) {
@@ -455,7 +467,13 @@ export class ConversationService {
     if (unreadMessages.length === 0) return;
 
     const ids = unreadMessages.map((m) => m.id);
-    unreadMessages.forEach((m) => (m.status = 'read'));
+    const idSet = new Set(ids); // Create Set for O(1) lookup
+
+    this._rawMessages.update((current) =>
+      current.map((msg) =>
+        idSet.has(msg.id) ? { ...msg, status: 'read' } : msg,
+      ),
+    );
 
     await this.storage.updateMessageStatus(ids, 'read');
     this.readReceiptTrigger$.next(ids);

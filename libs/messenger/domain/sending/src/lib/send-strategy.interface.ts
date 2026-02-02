@@ -8,18 +8,18 @@ import {
 export interface SendContext {
   myKeys: PrivateKeys;
   myUrn: URN;
-  recipientUrn: URN; // The Group or User URN
+  recipientUrn: URN; // The Context (Chat Window)
   optimisticMsg: ChatMessage;
-  // The Separation of Concerns
-  isEphemeral: boolean; // Instruction for the Wire (Router)
-  shouldPersist: boolean; // Instruction for the Disk (Librarian)
+  isEphemeral: boolean;
+  shouldPersist: boolean;
+  // ✅ NEW: The "Dumb" Strategy just iterates this list
   recipients?: URN[];
 }
 
 export interface SendOptions {
   isEphemeral?: boolean;
   tags?: URN[];
-  recipients?: URN[];
+  shouldPersist?: boolean;
 }
 
 export interface OutboundResult {
@@ -27,9 +27,6 @@ export interface OutboundResult {
   outcome: Promise<MessageDeliveryStatus>;
 }
 
-/**
- * CONTRACT: Defines a method for delivering a message to a specific target type.
- */
 export abstract class SendStrategy {
   abstract send(context: SendContext): Promise<OutboundResult>;
 }

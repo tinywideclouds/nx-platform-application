@@ -1,5 +1,3 @@
-// libs/messenger/feature-conversation/src/lib/chat-conversation.component.ts
-
 import {
   Component,
   ChangeDetectionStrategy,
@@ -24,22 +22,23 @@ import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import {
   messageTagBroadcast,
-  MessageContentParser,
+  TEXT_MESSAGE_TYPE,
+  IMAGE_MESSAGE_TYPE,
+  GROUP_INVITE_TYPE,
 } from '@nx-platform-application/messenger-domain-message-content';
 
+// Import Types
 import { DraftMessage } from '@nx-platform-application/messenger-types';
 
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
 import {
-  ChatMessageBubbleComponent,
   ChatMessageDividerComponent,
   ChatTypingIndicatorComponent,
-  ChatInviteMessageComponent,
   ChatMessageInputComponent,
 } from '@nx-platform-application/messenger-ui-chat';
 
-import { ContactNamePipe } from '@nx-platform-application/contacts-ui';
-import { MessageRendererComponent } from '../message-renderer/message-renderer.component';
+// ✅ NEW IMPORT: The Row Component
+import { ChatConversationRowComponent } from '../chat-conversation-row/chat-conversation-row.component';
 
 @Component({
   selector: 'messenger-chat-conversation',
@@ -50,12 +49,10 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
     MatProgressSpinnerModule,
     MatTooltipModule,
     AutoScrollDirective,
-    ChatMessageBubbleComponent,
     ChatMessageDividerComponent,
     ChatTypingIndicatorComponent,
     ChatMessageInputComponent,
-    ContactNamePipe,
-    MessageRendererComponent,
+    ChatConversationRowComponent,
   ],
   providers: [DatePipe],
   templateUrl: './chat-conversation.component.html',
@@ -66,7 +63,6 @@ export class ChatConversationComponent {
   private appState = inject(AppState);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
-  private parser = inject(MessageContentParser);
 
   autoScroll = viewChild.required<AutoScrollDirective>('autoScroll');
 
@@ -84,6 +80,10 @@ export class ChatConversationComponent {
     initialValue: Temporal.Now.instant(),
   });
 
+  readonly TEXT_MESSAGE = TEXT_MESSAGE_TYPE;
+  readonly IMAGE_MESSAGE = IMAGE_MESSAGE_TYPE;
+  readonly GROUP_INVITE_MESSAGE = GROUP_INVITE_TYPE;
+
   constructor() {
     effect((onCleanup) => {
       const id = this.firstUnreadId();
@@ -95,6 +95,10 @@ export class ChatConversationComponent {
         onCleanup(() => clearTimeout(timer));
       }
     });
+  }
+
+  getTypeId(msg: ChatMessage): string {
+    return msg.typeId.entityId;
   }
 
   getReadCursorsForMessage(msgId: string): URN[] {
@@ -183,26 +187,16 @@ export class ChatConversationComponent {
   }
 
   async onAcceptInvite(msg: ChatMessage): Promise<void> {
-    await this.appState.acceptInvite(msg);
-    // Logic: Once accepted, we navigate to the new group conversation
-    const vm = this.getInviteViewModel(msg);
-    if (vm.groupUrn) {
-      this.router.navigate(['/messenger', 'conversations', vm.groupUrn]);
+    try {
+      const groupUrn = await this.appState.acceptInvite(msg);
+      this.router.navigate(['/messenger', 'conversations', groupUrn]);
+    } catch (e) {
+      this.snackBar.open('Failed to accept invite', 'OK', { duration: 3000 });
     }
   }
 
   async onRejectInvite(msg: ChatMessage): Promise<void> {
     await this.appState.rejectInvite(msg);
-  }
-
-  // Helper for onAcceptInvite navigation
-  private getInviteViewModel(msg: ChatMessage): { groupUrn?: string } {
-    if (!msg.payloadBytes) return {};
-    const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-    if (parsed.kind === 'content' && parsed.payload.kind === 'group-invite') {
-      return { groupUrn: parsed.payload.data.groupUrn };
-    }
-    return {};
   }
 
   onAlertVisibility(show: boolean): void {
@@ -222,10 +216,17 @@ export class ChatConversationComponent {
     }
   }
 
+  // --- ACTIONS ---
+
   onTyping(): void {
     this.appState.notifyTyping();
   }
 
+  /**
+   * ✅ PURE DELEGATION
+   * The UI just hands the draft to the State.
+   * No logic here about checking files vs text.
+   */
   onSendDraft(draft: DraftMessage): void {
     this.appState.sendDraft(draft);
   }

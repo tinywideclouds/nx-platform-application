@@ -20,6 +20,38 @@ export class MessageContentPipe implements PipeTransform {
 
     try {
       const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
+
+      if (parsed.kind === 'signal') {
+        const action = parsed.payload.action;
+
+        // Handle "User Joined" / "User Declined"
+        if (action === 'group-join' || action === 'group-leave') {
+          // The data might be wrapped, so we access it safely
+          const data = parsed.payload.data as any;
+          const status =
+            data?.status || (action === 'group-join' ? 'joined' : 'left');
+
+          const parts: MessagePart[] = [];
+
+          if (status === 'joined') {
+            parts.push({ type: 'icon', ref: 'login', color: 'primary' });
+            parts.push({ type: 'text', content: ' joined the group' });
+          } else if (status === 'declined') {
+            parts.push({ type: 'icon', ref: 'person_remove', color: 'warn' });
+            parts.push({ type: 'text', content: ' declined the invite' });
+          }
+
+          return {
+            id: msg.id,
+            kind: 'system',
+            parts: parts,
+          };
+        }
+
+        // Ignore other signals (Typing, Read Receipts)
+        return null;
+      }
+
       if (parsed.kind !== 'content') return null;
 
       const payload = parsed.payload;
@@ -53,7 +85,6 @@ export class MessageContentPipe implements PipeTransform {
         const status = payload.data.status;
         const parts: MessagePart[] = [];
 
-        // Add Icon Part
         if (status === 'joined') {
           parts.push({ type: 'icon', ref: 'login', color: 'primary' });
           parts.push({ type: 'text', content: ' joined the group' });
@@ -74,10 +105,26 @@ export class MessageContentPipe implements PipeTransform {
 
       // 4. ✅ Group Invites (Action)
       if (payload.kind === 'group-invite') {
+        const parts: MessagePart[] = [];
+        const groupName = payload.data.name;
+        const participants = payload.data.participants || [];
+
+        // ✅ SYNTHESIZE THE TEXT HERE
+        // This effectively replaces the old "Created" signal
+        parts.push({ type: 'text', content: ` created group "${groupName}"` });
+
+        if (participants.length > 0) {
+          parts.push({ type: 'text', content: ' with ' });
+          const names = participants
+            .map((p) => p.alias || 'Unknown')
+            .join(', ');
+          parts.push({ type: 'text', content: names });
+        }
+
         return {
           id: msg.id,
           kind: 'action',
-          parts: [], // Actions might have text, but usually custom rendered
+          parts: parts,
           action: {
             type: 'group-invite',
             actionMap: {
@@ -88,7 +135,16 @@ export class MessageContentPipe implements PipeTransform {
         };
       }
 
-      return null;
+      return {
+        id: 'something',
+        kind: 'system',
+        parts: [
+          {
+            type: 'text',
+            content: 'System Message: ' + payload.data + ' ' + payload.kind,
+          },
+        ],
+      };
     } catch (e) {
       console.error('Error parsing message content', e);
       return null;

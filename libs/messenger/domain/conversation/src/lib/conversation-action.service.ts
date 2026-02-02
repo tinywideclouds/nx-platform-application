@@ -16,6 +16,7 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import { ConversationService } from './conversation.service';
+import { SendOptions } from 'libs/messenger/domain/sending/src/lib/send-strategy.interface';
 
 @Injectable({ providedIn: 'root' })
 export class ConversationActionService {
@@ -70,13 +71,13 @@ export class ConversationActionService {
     const typeId = MessageTypingIndicator;
     const bytes = new Uint8Array([]);
     await this.runExclusive(() =>
-      this.outbound.sendMessage(
+      this.outbound.sendToConversation(
         myKeys,
         myUrn,
         recipientUrn,
         typeId,
         bytes,
-        { isEphemeral: true }, // ephemeral
+        { isEphemeral: true, shouldPersist: false },
       ),
     );
   }
@@ -93,7 +94,10 @@ export class ConversationActionService {
     };
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     const typeId = MessageTypeReadReceipt;
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+
+    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn, {
+      shouldPersist: false,
+    });
   }
 
   async sendAssetReveal(
@@ -104,7 +108,9 @@ export class ConversationActionService {
   ): Promise<void> {
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     const typeId = MessageTypeAssetReveal;
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn, {
+      shouldPersist: false,
+    });
   }
 
   /**
@@ -116,28 +122,22 @@ export class ConversationActionService {
     bytes: Uint8Array,
     myKeys: PrivateKeys,
     myUrn: URN,
+    options?: SendOptions,
   ): Promise<string> {
     return this.runExclusive(async () => {
-      const result = await this.outbound.sendMessage(
+      const result = await this.outbound.sendToConversation(
         myKeys,
         myUrn,
         recipientUrn,
         typeId,
         bytes,
+        options,
       );
 
       if (result) {
         const { message, outcome } = result;
 
-        // ✅ CHECK: Is this a Renderable Message or a System Signal?
-        // We use the URN structure (urn:message:signal:...) or specific equality checks.
-        const isSignal =
-          typeId.entityType === 'signal' ||
-          typeId.equals(MessageTypeReadReceipt) ||
-          typeId.equals(MessageTypeAssetReveal) ||
-          typeId.equals(MessageTypingIndicator);
-
-        if (!isSignal) {
+        if (options?.shouldPersist ?? true) {
           // 1. Optimistic Update (Show 'pending' in Chat Window)
           this.conversationState.upsertMessages([message], myUrn);
 

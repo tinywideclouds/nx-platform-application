@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Dexie } from 'dexie';
 import { Temporal } from '@js-temporal/polyfill';
 import {
@@ -32,6 +33,7 @@ const BULK_SAVE_CHUNK_SIZE = 200;
 export class ChatStorageService
   implements HistoryReader, MessageWriter, ConversationStorage
 {
+  private logger = inject(Logger);
   private readonly db = inject(MessengerDatabase);
   private readonly deletionStrategy = inject(ChatDeletionStrategy);
   private readonly messageMapper = inject(MessageMapper);
@@ -239,9 +241,21 @@ export class ChatStorageService
       async () => {
         const record = await this.db.messages.get(messageId);
 
-        if (!record) return;
+        if (!record) {
+          this.logger.warn(
+            '[apply receipt] id does not match existing record',
+            messageId,
+          );
+          return;
+        }
 
         const domainMsg = this.messageMapper.toDomain(record);
+
+        console.log('applying receipt to existing message', domainMsg);
+        if (!domainMsg.receiptMap) {
+          domainMsg.receiptMap = {};
+        }
+
         let newGlobalStatus = domainMsg.status;
 
         if (domainMsg.receiptMap) {
@@ -259,6 +273,8 @@ export class ChatStorageService
 
         domainMsg.status = newGlobalStatus;
         await this.saveInternal(domainMsg);
+
+        console.log('receipt applied: ', domainMsg);
 
         if (newGlobalStatus) {
           const ghostTag = `urn:messenger:ghost-of:${messageId}`;

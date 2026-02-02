@@ -124,7 +124,13 @@ export interface AssetRevealData {
 
 // ✅ UPDATE: Add asset-reveal to SignalPayload union
 export interface SignalPayload {
-  action: 'read-receipt' | 'typing' | 'group-join' | 'asset-reveal';
+  action:
+    | 'read-receipt'
+    | 'delivery-receipt'
+    | 'typing'
+    | 'group-join'
+    | 'group-leave'
+    | 'asset-reveal';
   data: ReadReceiptData | AssetRevealData | GroupSystemContent | null;
 }
 

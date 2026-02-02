@@ -218,4 +218,29 @@ export class IdentitySetupService {
     // Check Reference Equality (They point to the same KeyPair object in memory)
     return !!identityA && !!identityB && identityA === identityB;
   }
+
+  // ✅ NEW METHOD: Smart Resolve
+  /**
+   * Given a Local URN (urn:contacts:user:alice), finds the corresponding
+   * Network URN (urn:lookup:email:alice@example.com) used for routing.
+   */
+  resolveNetworkHandle(urn: URN): URN {
+    const urnStr = urn.toString();
+    const identity = this.worldState.get(urnStr);
+
+    // If we don't know this user, or it's already a lookup URN, return as-is
+    if (!identity || urnStr.startsWith('urn:lookup:')) {
+      return urn;
+    }
+
+    // Reverse Lookup: Find the alias pointing to this same identity object
+    for (const [key, value] of this.worldState.entries()) {
+      // Check Reference Equality (Same Identity) AND Protocol (Lookup)
+      if (value === identity && key.startsWith('urn:lookup:')) {
+        return URN.parse(key);
+      }
+    }
+
+    return urn;
+  }
 }

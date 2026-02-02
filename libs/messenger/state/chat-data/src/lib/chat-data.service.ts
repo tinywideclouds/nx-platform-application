@@ -98,12 +98,13 @@ export class ChatDataService {
 
   // --- ACTIONS ---
 
-  public clearUnreadCount(urn: URN): void {
-    this._activeConversations.update((list) => {
-      if (list.length === 0) return list;
-      return list.map((c) => (c.id.equals(urn) ? { ...c, unreadCount: 0 } : c));
-    });
-  }
+  // now handled in domain layer automatically
+  // public clearUnreadCount(urn: URN): void {
+  //   this._activeConversations.update((list) => {
+  //     if (list.length === 0) return list;
+  //     return list.map((c) => (c.id.equals(urn) ? { ...c, unreadCount: 0 } : c));
+  //   });
+  // }
 
   public async refreshActiveConversations(): Promise<void> {
     // Just ask the service to refresh its own state

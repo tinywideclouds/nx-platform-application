@@ -23,7 +23,7 @@ export class LocalBroadcastStrategy implements SendStrategy {
   private identityResolver = inject(IdentityResolver);
   private worker = inject(OutboxWorkerService);
 
-  // ✅ REMOVED: ContactsQueryApi (Separation of Concerns)
+  // ✅ REMOVED: ContactsQueryApi (It was making this strategy too smart)
 
   async send(ctx: SendContext): Promise<OutboundResult> {
     const {
@@ -32,16 +32,18 @@ export class LocalBroadcastStrategy implements SendStrategy {
       isEphemeral,
       myUrn,
       myKeys,
-      recipients, // ✅ Must be provided by the caller
+      recipients, // ✅ Must be provided by the Facade
     } = ctx;
 
     try {
       if (!recipients || recipients.length === 0) {
-        throw new Error('BroadcastStrategy requires explicit recipients');
+        throw new Error(
+          '[LocalBroadcastStrategy] No recipients provided in context',
+        );
       }
 
       // 1. Persist (Aggregation)
-      // We save the single "Source" message.
+      // We save the single message to the "Context" conversation
       if (shouldPersist) {
         await this.storageService.saveMessage(optimisticMsg);
       }
@@ -58,7 +60,7 @@ export class LocalBroadcastStrategy implements SendStrategy {
       // 3. Execution (Fan-Out)
       if (isEphemeral) {
         this.worker.sendEphemeralBatch(
-          recipients, // Use resolved list
+          recipients,
           optimisticMsg.typeId,
           wirePayload,
           myUrn,
@@ -83,7 +85,7 @@ export class LocalBroadcastStrategy implements SendStrategy {
 
       return { message: optimisticMsg, outcome: Promise.resolve('pending') };
     } catch (err) {
-      this.logger.error('[BroadcastStrategy] Failed', err);
+      this.logger.error('[LocalBroadcastStrategy] Failed', err);
       if (shouldPersist) {
         await this.storageService.updateMessageStatus(
           [optimisticMsg.id],

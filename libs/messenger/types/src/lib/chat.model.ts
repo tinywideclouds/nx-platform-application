@@ -14,7 +14,6 @@ export interface ChatMessage extends Message {
   id: string; // Unique message ID
   conversationUrn: URN;
 
-  // ✅ NEW: The Domain Object holds the metadata
   tags?: URN[];
 
   // Storage holds bytes; View computes text.

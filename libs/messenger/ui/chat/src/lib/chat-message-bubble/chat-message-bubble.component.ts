@@ -16,6 +16,7 @@ export type ChatBubbleDirection = 'inbound' | 'outbound';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatMessageBubbleComponent {
+  isSystem = input(false);
   direction = input.required<ChatBubbleDirection>();
   timestamp = input<ISODateTimeString | string | undefined>(undefined);
   status = input<MessageDeliveryStatus | undefined>(undefined);

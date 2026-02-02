@@ -228,6 +228,7 @@ export class IngestionService {
         parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
     };
 
+    console.log('handling context save', chatMessage);
     await this.storageService.saveMessage(chatMessage);
     accumulator.messages.push(chatMessage);
   }
@@ -245,6 +246,8 @@ export class IngestionService {
       case 'read-receipt': {
         const rr = payload.data as ReadReceiptData;
         const ids = rr?.messageIds || [];
+
+        console.log('handling read receipt', rr);
         if (ids.length > 0) {
           for (const msgId of ids) {
             await this.storageService.applyReceipt(

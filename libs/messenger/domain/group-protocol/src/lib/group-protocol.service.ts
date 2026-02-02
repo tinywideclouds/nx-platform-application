@@ -31,8 +31,6 @@ import {
   MessageGroupInvite, // URN Constant
   MessageGroupInviteResponse, // URN Constant
   MessageContentParser,
-  // ✅ NEW: Factory
-  MessagePayloadFactory,
 } from '@nx-platform-application/messenger-domain-message-content';
 
 import {
@@ -40,7 +38,6 @@ import {
   DirectoryEntity,
   GroupMemberStatus,
 } from '@nx-platform-application/directory-types';
-import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
 @Injectable({ providedIn: 'root' })
 export class GroupProtocolService {
@@ -51,8 +48,6 @@ export class GroupProtocolService {
 
   // ✅ Inject the Domain Service
   private conversationService = inject(ConversationService);
-  // ✅ Inject the Infrastructure Service
-  private storage = inject(ChatStorageService);
 
   // ✅ Architecture Swap
   private contactsQuery = inject(ContactsQueryApi);
@@ -140,25 +135,6 @@ export class GroupProtocolService {
       alias: p.alias,
     }));
 
-    const systemContent = GroupPayloadFactory.createGroupCreatedSignal(
-      networkGroupUrn,
-      name,
-      roster.map((r) => r.alias || 'Unknown'),
-    );
-    const systemBytes = this.parser.serialize(systemContent);
-
-    const localSystemMsg: ChatMessage = {
-      id: `sys-${crypto.randomUUID()}`,
-      conversationUrn: networkGroupUrn,
-      senderId: myUrn,
-      status: 'read',
-      sentTimestamp: now as ISODateTimeString,
-      typeId: MessageGroupInviteResponse,
-      payloadBytes: systemBytes,
-      tags: [URN.parse('urn:messenger:event:system-event')],
-    };
-    await this.storage.saveMessage(localSystemMsg);
-
     const content = GroupPayloadFactory.createGroupInvite(
       networkGroupUrn,
       myNetworkId,
@@ -167,25 +143,25 @@ export class GroupProtocolService {
       `Invited by ${myUrn.entityId}`,
     );
 
-    const inviteData = this.parser.serialize(content);
+    const inviteBytes = this.parser.serialize(content);
 
     // 7. Fan-Out (DM to each participant except me)
     // 6. Send Invites (✅ 1:1 Fan-Out)
     // We send individual messages to each participant's 1:1 conversation.
     // Note: We ideally want { shouldPersist: false } here to keep 1:1 history clean,
     // but we respect the existing OutboundService contract for now.
-    const promises = invitees.map(async (invitee) => {
-      await this.outbound.sendMessage(
-        myKeys,
-        myUrn,
-        invitee, // Target: The Individual (1:1)
-        MessageGroupInvite,
-        inviteData,
-        { isEphemeral: false },
-      );
-    });
-
-    await Promise.all(promises);
+    await this.outbound.broadcast(
+      myKeys,
+      myUrn,
+      invitees,
+      networkGroupUrn,
+      MessageGroupInvite,
+      inviteBytes,
+      {
+        isEphemeral: false,
+        shouldPersist: true, // Sender sees "You invited..." in Group Chat
+      },
+    );
 
     return networkGroupUrn;
   }
@@ -238,56 +214,29 @@ export class GroupProtocolService {
     await this.conversationService.startNewConversation(groupUrn, displayName);
   }
 
-  async acceptInvite(
-    inviteMsg: ChatMessage,
+  /**
+   * Processes an incoming Group Invite.
+   * Sends a "Joined" signal back to the group.
+   * Returns the Group URN for navigation.
+   */
+  public async acceptInvite(
+    msg: ChatMessage,
     myKeys: PrivateKeys,
     myUrn: URN,
-  ): Promise<void> {
-    // 1. Resolve Group ID
-    const parsed = this.parser.parse(inviteMsg.typeId, inviteMsg.payloadBytes!);
-
-    if (parsed.kind !== 'content' || parsed.payload.kind !== 'group-invite') {
-      return;
-    }
-
-    const groupUrn = URN.parse(parsed.payload.data.groupUrn);
-    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
-
-    // 2. UPDATE STATE: Mark myself as "Joined" in Directory
-    await this.directoryMutation.updateMemberStatus(
-      groupUrn,
-      myNetworkId,
-      'joined',
-    );
-
-    this.logger.info(
-      `[GroupProtocol] Set status to JOINED for ${groupUrn.toString()}`,
-    );
-
-    // 3. RESPOND: Broadcast "Joined" to the group
-    return this.respond(inviteMsg, myKeys, myUrn, 'joined');
+  ): Promise<string> {
+    return this.respond(msg, myKeys, myUrn, 'joined');
   }
 
-  async rejectInvite(
-    inviteMsg: ChatMessage,
+  /**
+   * Processes an incoming Group Invite.
+   * Sends a "Declined" signal back to the group.
+   */
+  public async rejectInvite(
+    msg: ChatMessage,
     myKeys: PrivateKeys,
     myUrn: URN,
   ): Promise<void> {
-    const parsed = this.parser.parse(inviteMsg.typeId, inviteMsg.payloadBytes!);
-    if (parsed.kind !== 'content' || parsed.payload.kind !== 'group-invite')
-      return;
-
-    const groupUrn = URN.parse(parsed.payload.data.groupUrn);
-    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
-
-    // Update Directory
-    await this.directoryMutation.updateMemberStatus(
-      groupUrn,
-      myNetworkId,
-      'declined',
-    );
-
-    return this.respond(inviteMsg, myKeys, myUrn, 'declined');
+    await this.respond(msg, myKeys, myUrn, 'declined');
   }
 
   /**
@@ -302,12 +251,17 @@ export class GroupProtocolService {
     const groupUrn = URN.parse(signal.groupUrn);
     const status = signal.status === 'joined' ? 'joined' : 'declined';
 
-    this.logger.info(`[GroupProtocol] Processing: ${senderUrn} -> ${status}`);
+    const networkHandle =
+      await this.identityResolver.resolveToHandle(senderUrn);
+
+    this.logger.info(
+      `[GroupProtocol] Processing: ${networkHandle} -> ${status} for ${groupUrn}`,
+    );
 
     // 1. Update State (Directory)
     await this.directoryMutation.updateMemberStatus(
       groupUrn,
-      senderUrn,
+      networkHandle,
       status,
     );
 
@@ -317,7 +271,6 @@ export class GroupProtocolService {
       return null;
     }
 
-    // ✅ UPDATE: Use Factory (Correctly generates GroupSystemContent)
     const content = GroupPayloadFactory.createJoinedSignal(groupUrn);
 
     // 3. Create the Persistent Message
@@ -338,20 +291,32 @@ export class GroupProtocolService {
     myKeys: PrivateKeys,
     myUrn: URN,
     status: 'joined' | 'declined',
-  ): Promise<void> {
+  ): Promise<string> {
     const parsed = this.parser.parse(
       inviteMsg.typeId,
       inviteMsg.payloadBytes || new Uint8Array([]),
     );
 
     if (parsed.kind !== 'content' || parsed.payload.kind !== 'group-invite') {
-      return;
+      throw new Error(`Invalid Group Invite Message: ${inviteMsg.id}`);
     }
 
     const inviteData = parsed.payload.data;
     const groupUrn = URN.parse(inviteData.groupUrn);
 
-    // ✅ UPDATE: Use Factory
+    // 1. Update Directory locally if we are joining
+    if (status === 'joined') {
+      const identity = await this.identityResolver.resolveToHandle(myUrn);
+      if (identity) {
+        await this.directoryMutation.updateMemberStatus(
+          groupUrn,
+          identity,
+          'joined',
+        );
+      }
+    }
+
+    // 2. Create Response Content
     const content =
       status === 'joined'
         ? GroupPayloadFactory.createJoinedSignal(groupUrn)
@@ -359,14 +324,15 @@ export class GroupProtocolService {
 
     const bytes = this.parser.serialize(content);
 
-    // Send to the Group URN
-    // (NetworkGroupStrategy will fan-out based on Directory roster)
-    await this.outbound.sendMessage(
+    // 3. Broadcast the Response
+    await this.outbound.sendToConversation(
       myKeys,
       myUrn,
       groupUrn,
-      MessageGroupInviteResponse, // ✅ Uses Constant
+      MessageGroupInviteResponse,
       bytes,
     );
+
+    return groupUrn.toString();
   }
 }

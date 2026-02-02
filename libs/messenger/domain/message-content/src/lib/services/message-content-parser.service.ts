@@ -7,6 +7,7 @@ import {
   AssetRevealData,
   MessageTypeReadReceipt,
   ReadReceiptData,
+  MessageTypeSystem,
 } from '../models/content-types';
 import { MessageMetadataService } from './message-metadata.service';
 
@@ -18,7 +19,10 @@ import {
   RichMediaParserStrategy,
 } from '../strategies/text-media.strategies';
 import { GroupParserStrategy } from '../strategies/group.strategies';
-import { SignalParserStrategy } from '../strategies/signal.strategies';
+import {
+  SignalParserStrategy,
+  SystemParserStrategy,
+} from '../strategies/signal.strategies';
 
 @Injectable({ providedIn: 'root' })
 export class MessageContentParser {
@@ -33,6 +37,7 @@ export class MessageContentParser {
     inject(GroupParserStrategy),
     inject(RichMediaParserStrategy),
     inject(SignalParserStrategy),
+    inject(SystemParserStrategy),
   ];
 
   /**

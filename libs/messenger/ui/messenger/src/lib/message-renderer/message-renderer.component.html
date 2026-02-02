@@ -13,7 +13,11 @@
     @case ('system') {
       <chat-system-message>
         <span class="font-bold text-gray-800">
-          {{ message().senderId | contactName }}
+          @if (isMine()) {
+            You
+          } @else {
+            {{ message().senderId | contactName }}
+          }
         </span>
         <chat-text-renderer [parts]="p.parts" />
       </chat-system-message>
@@ -24,9 +28,11 @@
         @if (shouldRenderAsSystem()) {
           <chat-system-message>
             <mat-icon class="!w-4 !h-4 text-[16px] leading-4 mr-1 text-gray-500"
-              >mail</mat-icon
+              >add_circle</mat-icon
             >
-            Invites sent!
+            <span class="font-bold text-gray-800">You</span>
+            <!-- <span>{{ p | json }}</span> -->
+            <chat-text-renderer [parts]="p.parts" />
           </chat-system-message>
         } @else if (p.action) {
           <messenger-chat-invite-message
@@ -45,4 +51,12 @@
       <div class="text-xs text-red-400 italic">[Unsupported Content]</div>
     }
   }
+} @else {
+  <div
+    class="p-2 bg-red-100 text-red-800 text-xs border border-red-300 rounded mb-2"
+  >
+    <strong>⛔ Pipe Returned Null</strong>
+    <div class="mt-1">Type: {{ message().typeId }}</div>
+    <div class="mt-1">Bytes: {{ message().payloadBytes?.length || 0 }}</div>
+  </div>
 }

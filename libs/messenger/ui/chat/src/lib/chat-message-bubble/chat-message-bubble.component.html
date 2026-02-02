@@ -31,6 +31,8 @@
 
       <span>{{ ts | date: 'shortTime' }}</span>
 
+      <span> {{ status() }}</span>
+
       @if (direction() === 'outbound' && status() !== 'reference') {
         <span [matTooltip]="statusTooltip()" matTooltipPosition="left">
           @switch (status()) {
@@ -41,6 +43,11 @@
             }
             @case ('sent') {
               <mat-icon class="!w-3 !h-3 text-[12px] leading-3">check</mat-icon>
+            }
+            @case ('delivered') {
+              <mat-icon class="!w-3 !h-3 text-[12px] leading-3"
+                >done_all</mat-icon
+              >
             }
             @case ('read') {
               <mat-icon class="!w-3 !h-3 text-[12px] leading-3 text-cyan-300"

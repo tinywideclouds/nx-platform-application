@@ -40,54 +40,18 @@
             <chat-message-divider type="new-messages" label="New Messages" />
           }
 
-          <div
-            class="flex w-full mb-1 transition-all"
-            [class.justify-end]="isMyMessage(msg)"
-            [class.justify-start]="!isMyMessage(msg)"
-          >
-            <div class="relative max-w-[85%] group">
-              <chat-message-bubble
-                [direction]="isMyMessage(msg) ? 'outbound' : 'inbound'"
-                [timestamp]="msg.sentTimestamp"
-                [status]="msg.status"
-                [isBroadcast]="isBroadcast(msg)"
-                [isGhost]="isGhost(msg)"
-                [statusTooltip]="getReceiptSummary(msg)"
-                (retry)="onRetryMessage(msg)"
-              >
-                <chat-message-renderer
-                  [message]="msg"
-                  [isMine]="isMyMessage(msg)"
-                  (action)="onContentAction($event)"
-                  (acceptInvite)="onAcceptInvite($event)"
-                  (rejectInvite)="onRejectInvite($event)"
-                />
-              </chat-message-bubble>
-
-              @if (getReadCursorsForMessage(msg.id).length > 0) {
-                <div
-                  class="absolute top-0 z-10 cursor-container flex flex-col space-y-1"
-                  [class.right-full]="isMyMessage(msg)"
-                  [class.mr-2]="isMyMessage(msg)"
-                  [class.left-full]="!isMyMessage(msg)"
-                  [class.ml-2]="!isMyMessage(msg)"
-                >
-                  @for (
-                    urn of getReadCursorsForMessage(msg.id);
-                    track urn.toString()
-                  ) {
-                    <div
-                      class="cursor-avatar looking-right"
-                      [matTooltip]="'' + (urn | contactName)"
-                      matTooltipPosition="above"
-                    >
-                      👀
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          </div>
+          <chat-conversation-row
+            [message]="msg"
+            [isMine]="isMyMessage(msg)"
+            [readCursors]="getReadCursorsForMessage(msg.id)"
+            [isBroadcast]="isBroadcast(msg)"
+            [isGhost]="isGhost(msg)"
+            [statusTooltip]="getReceiptSummary(msg)"
+            (retry)="onRetryMessage(msg)"
+            (action)="onContentAction($event)"
+            (acceptInvite)="onAcceptInvite($event)"
+            (rejectInvite)="onRejectInvite($event)"
+          />
         }
       }
 
