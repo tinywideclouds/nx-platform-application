@@ -32,6 +32,8 @@ import {
   MessageTypeSystem,
 } from '@nx-platform-application/messenger-domain-message-content';
 
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
+
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -47,6 +49,8 @@ export class ConversationService {
 
   // ✅ Single Source of Truth for Parsing
   private contentParser = inject(MessageContentParser);
+
+  private readonly sessionService = inject(SessionService);
 
   // Contacts services for temp conversation shells
   private contactsQuery = inject(ContactsQueryApi);
@@ -156,10 +160,8 @@ export class ConversationService {
     );
   }
 
-  async loadConversation(urn: URN | null, myUrn: URN | null): Promise<void> {
+  async loadConversation(urn: URN | null): Promise<void> {
     return this.runExclusive(async () => {
-      this.myUrn.set(myUrn);
-
       const current = this.selectedConversation();
       if (current?.id?.equals(urn) && urn !== null) {
         await this.storage.markConversationAsRead(urn);
@@ -182,6 +184,13 @@ export class ConversationService {
 
       if (urn.entityType === 'group') {
         const group = await this.directory.getGroup(urn);
+
+        const myUrn = this.sessionService.snapshot.networkUrn;
+        console.log(
+          'checking my membership status from group',
+          myUrn,
+          group?.id,
+        );
 
         if (group && myUrn) {
           const status = group.memberState[myUrn.toString()];
@@ -254,9 +263,7 @@ export class ConversationService {
           }
         }
 
-        if (myUrn) {
-          await this.processReadReceipts(viewMessages, myUrn);
-        }
+        await this.processReadReceipts(viewMessages);
 
         this._rawMessages.set(viewMessages);
         this.genesisReached.set(result.genesisReached);
@@ -286,7 +293,6 @@ export class ConversationService {
         });
 
         if (result.messages.length > 0) {
-          // ✅ FIXED: Use local helper
           const newHistory = result.messages.map((m) => this.hydrateMessage(m));
           this._rawMessages.update((current) => [...newHistory, ...current]);
         }
@@ -308,7 +314,6 @@ export class ConversationService {
     if (!isCloudEnabled || result.genesisReached) return result;
 
     if (!beforeTimestamp) {
-      // ✅ FIXED: Updated Method Name
       const index = await this.storage.getConversation(conversationUrn);
       const newestLocal = result.messages[0]?.sentTimestamp;
       const knownLatest = index?.lastActivityTimestamp;
@@ -380,11 +385,11 @@ export class ConversationService {
       const viewed = freshMessages.map((m) =>
         this.hydrateMessage({ ...m, textContent: undefined }),
       );
-      this.upsertMessages(viewed, null);
+      this.upsertMessages(viewed);
     }
   }
 
-  upsertMessages(messages: ChatMessage[], myUrn: URN | null): void {
+  upsertMessages(messages: ChatMessage[]): void {
     const selectedConversation = this.selectedConversation();
     if (!selectedConversation) return;
 
@@ -395,11 +400,9 @@ export class ConversationService {
     if (relevant.length > 0) {
       const viewed = relevant.map((m) => this.hydrateMessage(m));
 
-      if (myUrn) {
-        this.processReadReceipts(viewed, myUrn).catch((err) =>
-          this.logger.warn('Failed to process live receipts', err),
-        );
-      }
+      this.processReadReceipts(viewed).catch((err) =>
+        this.logger.warn('Failed to process live receipts', err),
+      );
 
       this._rawMessages.update((current) => {
         const lookup = new Map(current.map((m) => [m.id, m]));
@@ -456,10 +459,9 @@ export class ConversationService {
     this.logger.info('[ConversationService] Local history wiped.');
   }
 
-  private async processReadReceipts(
-    messages: ChatMessage[],
-    myUrn: URN,
-  ): Promise<void> {
+  private async processReadReceipts(messages: ChatMessage[]): Promise<void> {
+    const myUrn = this.sessionService.snapshot.networkUrn;
+
     const unreadMessages = messages.filter(
       (m) => !m.senderId.equals(myUrn) && m.status !== 'read',
     );

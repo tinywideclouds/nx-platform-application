@@ -1,9 +1,11 @@
 //scss:Contact Group Form (Styles):libs/contacts/contacts-ui/src/lib/components/contact-group-form/contact-group-form.component.scss
 :host {
   display: block;
+  // height: 100%;
+  // overflow: hidden;
 }
 
-.group-form {
-  max-height: 300px;
-  overflow-y: auto;
-}
+// .group-form {
+//   max-height: 300px;
+//   overflow-y: auto;
+// }

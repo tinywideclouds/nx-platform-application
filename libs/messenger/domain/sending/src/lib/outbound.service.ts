@@ -2,117 +2,227 @@ import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
 import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
-import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
+import {
+  ChatStorageService,
+  OutboxStorage,
+} from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
-// ✅ MOVED HERE: Service Layer handles data resolution
-import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+import {
+  ChatMessage,
+  MessageDeliveryStatus,
+} from '@nx-platform-application/messenger-types';
+import {
+  MessageTypeText,
+  MessageMetadataService,
+} from '@nx-platform-application/messenger-domain-message-content';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 import {
   SendContext,
   SendOptions,
   OutboundResult,
+  SendStrategy,
+  OutboundTarget,
 } from './send-strategy.interface';
+
+// Strategies
 import { DirectSendStrategy } from './strategies/direct-send.strategy';
 import { NetworkGroupStrategy } from './strategies/group-network.strategy';
-import { LocalBroadcastStrategy } from './strategies/group-broadcast.strategy';
+import { ContactGroupStrategy } from './strategies/group-contacts.strategy';
+import { BroadcastStrategy } from './strategies/broadcast.strategy';
+
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 @Injectable({ providedIn: 'root' })
 export class OutboundService {
   private logger = inject(Logger);
   private outboxWorker = inject(OutboxWorkerService);
-  private contactsQuery = inject(ContactsQueryApi);
+  private storageService = inject(ChatStorageService);
+  private outboxStorage = inject(OutboxStorage);
 
+  // Data Assembly Services (Centralized)
+  private metadataService = inject(MessageMetadataService);
+
+  // Strategy Injection
   private directStrategy = inject(DirectSendStrategy);
-  private networkStrategy = inject(NetworkGroupStrategy);
-  private broadcastStrategy = inject(LocalBroadcastStrategy);
+  private networkGroupStrategy = inject(NetworkGroupStrategy);
+  private broadcastStrategy = inject(BroadcastStrategy);
+  private contactGroupStrategy = inject(ContactGroupStrategy);
 
-  /**
-   * FACADE 1: Standard Chat
-   * "I am in a conversation window, send this message."
-   */
+  private sessionService = inject(SessionService);
+
+  // --- 1. Standard Routing (The "Smart" Router) ---
+  // Routes based on whether the target is a User, a Network Group, or a Local Contact List.
   async sendToConversation(
-    myKeys: PrivateKeys,
-    myUrn: URN,
-    conversationUrn: URN,
+    recipientUrn: URN,
     typeId: URN,
     payloadBytes: Uint8Array,
     options: SendOptions = {},
   ): Promise<OutboundResult> {
-    // 1. Prepare Context
+    const ctx = this.createContext(recipientUrn, typeId, payloadBytes, options);
+
+    // Dynamic Strategy Selection based on URN Type
+    const strategy = this.getStrategy(recipientUrn);
+
+    return this.orchestrate(ctx, strategy);
+  }
+
+  // --- 2. Broadcast / Invites (Explicit Fan-Out) ---
+  // Used by GroupProtocolService for sending invites to a specific list of people.
+  async broadcast(
+    recipients: URN[], // Explicit invitee list
+    conversationUrn: URN, // Context (e.g. Group URN)
+    typeId: URN,
+    payloadBytes: Uint8Array,
+    options: SendOptions = {},
+  ): Promise<OutboundResult> {
     const ctx = this.createContext(
-      myKeys,
-      myUrn,
       conversationUrn,
       typeId,
       payloadBytes,
       options,
     );
 
-    let result: OutboundResult;
-
-    // 2. Route based on URN Type
-    if (conversationUrn.entityType === 'group') {
-      if (conversationUrn.namespace === 'messenger') {
-        // A. Network Group -> Network Strategy
-        result = await this.networkStrategy.send(ctx);
-      } else {
-        // B. Local Group -> Resolve & Broadcast
-        const members =
-          await this.contactsQuery.getGroupParticipants(conversationUrn);
-        ctx.recipients = members.map((c) => c.id); // Feed the dumb strategy
-        result = await this.broadcastStrategy.send(ctx);
-      }
-    } else {
-      // C. User -> Direct Strategy
-      result = await this.directStrategy.send(ctx);
-    }
-
-    this.processPostSend(result, options.isEphemeral, myUrn, myKeys);
-    return result;
-  }
-
-  /**
-   * FACADE 2: Explicit Broadcast / Invite
-   * "Send this payload to these specific people, but store it in this context."
-   */
-  async broadcast(
-    myKeys: PrivateKeys,
-    myUrn: URN,
-    recipients: URN[], // ✅ Explicit List
-    contextUrn: URN, // ✅ History Context
-    typeId: URN,
-    payloadBytes: Uint8Array,
-    options: SendOptions = {},
-  ): Promise<OutboundResult> {
-    const ctx = this.createContext(
-      myKeys,
-      myUrn,
-      contextUrn,
-      typeId,
-      payloadBytes,
-      options,
-    );
-
-    // ✅ Feed the dumb strategy explicitly
+    // Explicitly attach recipients for the Dumb Broadcast Strategy
     ctx.recipients = recipients;
 
-    const result = await this.broadcastStrategy.send(ctx);
-
-    this.processPostSend(result, options.isEphemeral, myUrn, myKeys);
-    return result;
+    return this.orchestrate(ctx, this.broadcastStrategy);
   }
 
-  // --- Helpers ---
+  // --- Internal Orchestration (The Execution Engine) ---
+  // Centralizes Storage, Resolution, Assembly, and Execution.
+
+  private async orchestrate(
+    ctx: SendContext,
+    strategy: SendStrategy,
+  ): Promise<OutboundResult> {
+    // 1. Storage (Persistence Only)
+    console.log('savaing msg', ctx.optimisticMsg);
+    if (!ctx.isEphemeral && ctx.shouldPersist) {
+      await this.storageService.saveMessage(ctx.optimisticMsg);
+    }
+
+    // 2. Resolution (Who gets what?)
+    // The Strategy resolves the destination URN into specific targets (Handles/Groups).
+    let targets: OutboundTarget[] = [];
+    try {
+      targets = await strategy.getTargets(ctx);
+    } catch (err) {
+      await this.handleFailure(ctx, err);
+      throw err;
+    }
+
+    // If targets is empty (e.g. Ephemeral Policy Limit), we return success (Soft Drop)
+    if (targets.length === 0) {
+      return {
+        message: ctx.optimisticMsg,
+        outcome: Promise.resolve('sent'),
+      };
+    }
+
+    // 3. Assembly & Execution (What?)
+    // We construct the payload (Encryption/Metadata) and execute the transport.
+    try {
+      if (ctx.isEphemeral) {
+        await this.executeEphemeral(targets, ctx);
+        return {
+          message: ctx.optimisticMsg,
+          outcome: Promise.resolve('sent'),
+        };
+      } else {
+        const outcome = this.executePersistent(targets, ctx);
+        return {
+          message: ctx.optimisticMsg,
+          outcome,
+        };
+      }
+    } catch (err) {
+      await this.handleFailure(ctx, err);
+      // We return 'failed' status but do not throw, so UI can show retry button.
+      return {
+        message: ctx.optimisticMsg,
+        outcome: Promise.resolve('failed'),
+      };
+    }
+  }
+
+  // --- Execution Helpers ---
+
+  private async executeEphemeral(targets: OutboundTarget[], ctx: SendContext) {
+    // Ephemeral messages use raw bytes (no metadata wrapping)
+    const payload = ctx.optimisticMsg.payloadBytes || new Uint8Array([]);
+
+    for (const target of targets) {
+      this.outboxWorker.sendEphemeralBatch(
+        target.recipients,
+        ctx.optimisticMsg.typeId,
+        payload,
+      );
+    }
+  }
+
+  private async executePersistent(
+    targets: OutboundTarget[],
+    ctx: SendContext,
+  ): Promise<MessageDeliveryStatus> {
+    const promises = targets.map((target) => {
+      const wirePayload = this.metadataService.wrap(
+        ctx.optimisticMsg.payloadBytes || new Uint8Array([]),
+        ctx.conversationUrn,
+        ctx.optimisticMsg.tags || [],
+      );
+
+      return this.outboxStorage.enqueue({
+        conversationUrn: target.conversationUrn,
+        recipients: target.recipients,
+        typeId: ctx.optimisticMsg.typeId,
+        payload: wirePayload,
+        messageId: ctx.optimisticMsg.id,
+        tags: ctx.optimisticMsg.tags,
+      });
+    });
+
+    await Promise.all(promises);
+
+    // ✅ FIX: Trigger the worker immediately after queuing.
+    // This ensures messages/invites don't sit in 'pending' status indefinitely.
+    this.outboxWorker.processQueue();
+
+    return 'pending';
+  }
+
+  private async handleFailure(ctx: SendContext, err: any) {
+    this.logger.error('Outbound failed', { err, msgId: ctx.optimisticMsg.id });
+    if (!ctx.isEphemeral) {
+      await this.storageService.updateMessageStatus(
+        [ctx.optimisticMsg.id],
+        'failed',
+      );
+    }
+  }
+
+  // --- Utility Methods ---
+
+  private getStrategy(recipientUrn: URN): SendStrategy {
+    // 1. Groups
+    if (recipientUrn.entityType === 'group') {
+      if (recipientUrn.namespace === 'messenger') {
+        // A. Network Group (Server-Side)
+        return this.networkGroupStrategy;
+      }
+      // B. Local Contact Group (Client-Side Resolution)
+      return this.contactGroupStrategy;
+    }
+
+    // 2. Default: Direct (1:1)
+    return this.directStrategy;
+  }
 
   private createContext(
-    myKeys: PrivateKeys,
-    myUrn: URN,
     conversationUrn: URN,
     typeId: URN,
     payloadBytes: Uint8Array,
@@ -120,9 +230,11 @@ export class OutboundService {
   ): SendContext {
     const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
 
+    let sender = this.sessionService.snapshot.networkUrn;
+
     const optimisticMsg: ChatMessage = {
       id: `msg-${crypto.randomUUID()}`,
-      senderId: myUrn,
+      senderId: sender,
       conversationUrn: conversationUrn,
       sentTimestamp: timestamp,
       typeId: typeId,
@@ -135,25 +247,12 @@ export class OutboundService {
     };
 
     return {
-      myKeys,
-      myUrn,
+      conversationUrn: conversationUrn,
       recipientUrn: conversationUrn,
       optimisticMsg,
       isEphemeral: options.isEphemeral ?? false,
       shouldPersist: options.shouldPersist ?? true,
-      // recipients is undefined by default, populated by Facade
+      recipients: undefined,
     };
-  }
-
-  private async processPostSend(
-    result: OutboundResult,
-    isEphemeral: boolean | undefined,
-    myUrn: URN,
-    myKeys: PrivateKeys,
-  ) {
-    if (!isEphemeral) {
-      await result.outcome;
-      this.outboxWorker.processQueue(myUrn, myKeys);
-    }
   }
 }

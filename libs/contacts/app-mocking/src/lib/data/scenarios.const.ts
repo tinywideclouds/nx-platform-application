@@ -1,9 +1,4 @@
-import {
-  Contact,
-  ContactGroup,
-  PendingIdentity,
-  BlockedIdentity,
-} from '@nx-platform-application/contacts-types';
+import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
 import {
   URN,
   ISODateTimeString,
@@ -69,8 +64,6 @@ export interface ScenarioData {
   contacts: Contact[];
   groups: ContactGroup[];
   links: IdentityLinkMock[];
-  pending: PendingIdentity[];
-  blocked: BlockedIdentity[];
 }
 
 export const scenarios: Record<string, ScenarioData> = {
@@ -78,8 +71,6 @@ export const scenarios: Record<string, ScenarioData> = {
     contacts: [],
     groups: [],
     links: [],
-    pending: [],
-    blocked: [],
   },
   populated: {
     contacts: [mockAlice, mockBob],
@@ -91,7 +82,5 @@ export const scenarios: Record<string, ScenarioData> = {
         scope: 'messenger',
       },
     ],
-    pending: [],
-    blocked: [],
   },
 };

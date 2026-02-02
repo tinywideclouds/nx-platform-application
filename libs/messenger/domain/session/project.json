@@ -1,25 +1,25 @@
 {
-  "name": "messenger-domain-sending",
+  "name": "messenger-domain-session",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/domain/sending/src",
+  "sourceRoot": "libs/messenger/domain/session/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:messenger", "layer:domain"],
+  "tags": ["scope:messenger"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/domain/sending",
-        "configFile": "libs/messenger/domain/sending/vite.config.mts"
+        "outputPath": "dist/libs/messenger/domain/session",
+        "configFile": "libs/messenger/domain/session/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/domain/sending",
+        "reportsDirectory": "coverage/libs/messenger/domain/session",
         "configFile": "libs/messenger/domain/quarantine/vitest.config.mts"
       }
     },

@@ -276,3 +276,6 @@ nx g @nx/workspace:move --project=contacts-domain-bridge --destination=libs/cont
 
 nx g @nx/workspace:move --project=messenger-infrastructure-db-schema --destination=libs/messenger/infrastructure/indexed-db --importPath=@nx-platform-application/messenger-infrastructure-indexed-db
 
+
+nx g @nx/angular:library --name=messenger-domain-session --directory=libs/messenger/domain/session --tags="scope:messenger" 
+

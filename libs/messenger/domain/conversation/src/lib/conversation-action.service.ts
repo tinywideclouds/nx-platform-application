@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import {
   MessageTypingIndicator,
@@ -25,33 +24,21 @@ export class ConversationActionService {
 
   private operationLock = Promise.resolve();
 
-  async sendMessage(
-    recipientUrn: URN,
-    text: string,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
+  async sendMessage(recipientUrn: URN, text: string): Promise<void> {
     const bytes = new TextEncoder().encode(text);
     const typeId = MessageTypeText;
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+    await this.sendGeneric(recipientUrn, typeId, bytes);
   }
 
-  async sendImage(
-    recipientUrn: URN,
-    content: ImageContent,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<string> {
+  async sendImage(recipientUrn: URN, content: ImageContent): Promise<string> {
     const bytes = new TextEncoder().encode(JSON.stringify(content));
     const typeId = MessageTypeImage;
-    return await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+    return await this.sendGeneric(recipientUrn, typeId, bytes);
   }
 
   async sendContactShare(
     recipientUrn: URN,
     data: ContactShareData,
-    myKeys: PrivateKeys,
-    myUrn: URN,
   ): Promise<void> {
     const payload = {
       kind: 'rich',
@@ -60,33 +47,23 @@ export class ConversationActionService {
     };
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     const typeId = MessageTypeContactShare;
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn);
+    await this.sendGeneric(recipientUrn, typeId, bytes);
   }
 
-  async sendTypingIndicator(
-    recipientUrn: URN,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
+  async sendTypingIndicator(recipientUrn: URN): Promise<void> {
     const typeId = MessageTypingIndicator;
     const bytes = new Uint8Array([]);
     await this.runExclusive(() =>
-      this.outbound.sendToConversation(
-        myKeys,
-        myUrn,
-        recipientUrn,
-        typeId,
-        bytes,
-        { isEphemeral: true, shouldPersist: false },
-      ),
+      this.outbound.sendToConversation(recipientUrn, typeId, bytes, {
+        isEphemeral: true,
+        shouldPersist: false,
+      }),
     );
   }
 
   async sendReadReceiptSignal(
     recipientUrn: URN,
     messageIds: string[],
-    myKeys: PrivateKeys,
-    myUrn: URN,
   ): Promise<void> {
     const data: ReadReceiptData = {
       messageIds,
@@ -95,7 +72,7 @@ export class ConversationActionService {
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     const typeId = MessageTypeReadReceipt;
 
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn, {
+    await this.sendGeneric(recipientUrn, typeId, bytes, {
       shouldPersist: false,
     });
   }
@@ -103,12 +80,10 @@ export class ConversationActionService {
   async sendAssetReveal(
     recipientUrn: URN,
     data: AssetRevealData,
-    myKeys: PrivateKeys,
-    myUrn: URN,
   ): Promise<void> {
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     const typeId = MessageTypeAssetReveal;
-    await this.sendGeneric(recipientUrn, typeId, bytes, myKeys, myUrn, {
+    await this.sendGeneric(recipientUrn, typeId, bytes, {
       shouldPersist: false,
     });
   }
@@ -120,14 +95,10 @@ export class ConversationActionService {
     recipientUrn: URN,
     typeId: URN,
     bytes: Uint8Array,
-    myKeys: PrivateKeys,
-    myUrn: URN,
     options?: SendOptions,
   ): Promise<string> {
     return this.runExclusive(async () => {
       const result = await this.outbound.sendToConversation(
-        myKeys,
-        myUrn,
         recipientUrn,
         typeId,
         bytes,
@@ -139,7 +110,7 @@ export class ConversationActionService {
 
         if (options?.shouldPersist ?? true) {
           // 1. Optimistic Update (Show 'pending' in Chat Window)
-          this.conversationState.upsertMessages([message], myUrn);
+          this.conversationState.upsertMessages([message]);
 
           // 2. Async Confirmation (Update to 'sent'/'failed')
           outcome.then((finalStatus) => {

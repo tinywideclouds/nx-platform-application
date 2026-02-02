@@ -104,6 +104,9 @@
       "@nx-platform-application/messenger-domain-sending": [
         "libs/messenger/domain/sending/src/index.ts"
       ],
+      "@nx-platform-application/messenger-domain-session": [
+        "libs/messenger/domain/session/src/index.ts"
+      ],
       "@nx-platform-application/messenger-infrastructure-asset-storage": [
         "libs/messenger/infrastructure/asset-storage/src/index.ts"
       ],

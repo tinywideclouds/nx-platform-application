@@ -50,6 +50,9 @@ import {
 // --- ENGINE ---
 import { StateEngine, PageState, AppDiagnosticState } from './state.engine';
 import { ContactGroup } from '@nx-platform-application/contacts-types';
+import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
+
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 const TYPING_DEBOUNCE_MS = 3000;
 
@@ -78,6 +81,7 @@ export class AppState {
   private readonly media = inject(ChatMediaFacade);
   private readonly syncService = inject(CloudSyncService);
   private readonly chatService = inject(ChatDataService);
+  private outboundService = inject(OutboundService);
 
   // General services
   private readonly authService = inject(IAuthService);
@@ -101,9 +105,11 @@ export class AppState {
 
   public readonly onboardingState = this.identity.onboardingState;
   public readonly isCeremonyActive = this.identity.isCeremonyActive;
-  public readonly myKeys = this.identity.myKeys;
+  // public readonly myKeys = this.identity.myKeys;
 
-  private readonly myKeys$ = toObservable(this.myKeys);
+  // private readonly myKeys$ = toObservable(this.myKeys);
+
+  private readonly sessionService = inject(SessionService);
 
   private readonly _typingSubject = new Subject<void>();
   public readonly typingTrigger$ = this._typingSubject
@@ -244,6 +250,8 @@ export class AppState {
     const user = this.authService.currentUser();
     const keys = this.identity.myKeys();
 
+    this.sessionService.initialize(user, user, keys);
+
     if (!user || !user.id || !keys) {
       this.logger.error('🛑 [AppState] Cannot boot: Missing credentials');
       return;
@@ -276,7 +284,7 @@ export class AppState {
     this.initOrchestration();
     this.initResumptionTriggers();
 
-    void this.outboxWorker.processQueue(user.id, keys);
+    void this.outboxWorker.processQueue();
 
     await Promise.allSettled(promises);
     this.bootStatus.set({ bootStage: 'READY' });
@@ -293,35 +301,31 @@ export class AppState {
   }
 
   private initResumptionTriggers(): void {
+    // 1. Reconnection Trigger
     this.liveService.status$
       .pipe(
         filter((status) => status === 'connected'),
-        skip(1),
+        skip(1), // Skip initial connection (handled by boot sequence)
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(async () => {
-        const urn = this.currentUserUrn();
-        const keys = this.myKeys();
-        if (urn && keys) {
-          this.logger.info(
-            '[ChatService] Socket reconnected. Processing Outbox.',
-          );
-          await this.outboxWorker.processQueue(urn, keys);
-        }
+      .subscribe(() => {
+        this.logger.info(
+          '[ChatService] Socket reconnected. Processing Outbox.',
+        );
+        // ✅ No arguments needed. Worker uses SessionService.
+        void this.outboxWorker.processQueue();
       });
 
-    combineLatest([
-      this.authService.sessionLoaded$.pipe(filter((s) => !!s)),
-      this.myKeys$.pipe(filter((k) => !!k)),
-    ])
-      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(async () => {
-        const urn = this.currentUserUrn();
-        const keys = this.myKeys();
-        if (urn && keys) {
-          this.logger.info('[ChatService] Session resumed. Processing Outbox.');
-          await this.outboxWorker.processQueue(urn, keys);
-        }
+    // 2. Boot/Resume Trigger
+    toObservable(this.sessionService.currentSession)
+      .pipe(
+        filter((s) => !!s), // ✅ Wait for SessionService to be populated (Keys + Auth)
+        take(1), // ✅ Run once on boot
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => {
+        this.logger.info('[ChatService] Session ready. Processing Outbox.');
+        void this.outboxWorker.processQueue();
       });
   }
 
@@ -330,8 +334,7 @@ export class AppState {
   // =================================================================
 
   public async loadConversation(urn: URN | null): Promise<void> {
-    const myUrn = this.currentUserUrn();
-    await this.conversationService.loadConversation(urn, myUrn);
+    await this.conversationService.loadConversation(urn);
   }
 
   public async sendDraft(draft: DraftMessage): Promise<void> {
@@ -349,27 +352,16 @@ export class AppState {
 
     if (draft.attachments.length > 0) {
       const firstAttachment = draft.attachments[0];
-      await this.media.sendImage(
-        recipient,
-        firstAttachment.file,
-        draft.text,
-        keys,
-        sender,
-      );
+      await this.media.sendImage(recipient, firstAttachment.file, draft.text);
       return;
     }
 
     if (draft.text.trim().length > 0) {
-      await this.conversationActions.sendMessage(
-        recipient,
-        draft.text,
-        keys,
-        sender,
-      );
+      await this.conversationActions.sendMessage(recipient, draft.text);
     }
 
     await this.chatService.refreshActiveConversations();
-    void this.outboxWorker.processQueue(sender, keys);
+    void this.outboxWorker.processQueue();
   }
 
   public async markAsRead(messageIds: string[]): Promise<void> {
@@ -381,15 +373,13 @@ export class AppState {
       await this.conversationActions.sendReadReceiptSignal(
         recipient,
         messageIds,
-        keys,
-        sender,
       );
       await this.storageService.applyReceipt(
         messageIds[messageIds.length - 1],
         sender,
         'read',
       );
-      void this.outboxWorker.processQueue(sender, keys);
+      void this.outboxWorker.processQueue();
     }
   }
 
@@ -403,7 +393,7 @@ export class AppState {
     const sender = this.currentUserUrn();
 
     if (recipient && keys && sender) {
-      this.conversationActions.sendTypingIndicator(recipient, keys, sender);
+      this.conversationActions.sendTypingIndicator(recipient);
     }
   }
 
@@ -475,7 +465,7 @@ export class AppState {
 
   public async sessionLogout(): Promise<void> {
     this.chatService.stopSyncSequence();
-    this.conversationService.loadConversation(null, null);
+    this.conversationService.loadConversation(null);
     await this.authService.logout();
   }
 
@@ -492,7 +482,7 @@ export class AppState {
     } catch (e) {
       this.logger.error('Device wipe failed', e);
     }
-    this.conversationService.loadConversation(null, null);
+    this.conversationService.loadConversation(null);
     await this.authService.logout();
   }
 
@@ -503,14 +493,9 @@ export class AppState {
     const keys = this.identity.myKeys();
     const sender = this.currentUserUrn();
     if (!keys || !sender) return;
-    await this.conversationActions.sendContactShare(
-      recipientUrn,
-      data,
-      keys,
-      sender,
-    );
+    await this.conversationActions.sendContactShare(recipientUrn, data);
     this.chatService.refreshActiveConversations();
-    void this.outboxWorker.processQueue(sender, keys);
+    void this.outboxWorker.processQueue();
   }
 
   public async acceptInvite(msg: ChatMessage): Promise<string> {
@@ -571,8 +556,6 @@ export class AppState {
     try {
       return await this.groupProtocol.provisionNetworkGroup(
         localGroupUrn,
-        keys,
-        me,
         name,
       );
     } catch (e) {

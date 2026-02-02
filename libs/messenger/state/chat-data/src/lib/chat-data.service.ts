@@ -162,19 +162,14 @@ export class ChatDataService {
 
   public async runIngestionCycle(): Promise<void> {
     return this.runExclusive(async () => {
-      const keys = this.identity.myKeys();
-      const user = this.authService.currentUser();
-      if (!keys || !user?.id) return;
-
       try {
         const result = await this.ingestionService.process(
-          keys,
           this.moderation.blockedSet(),
           50,
         );
 
         if (result.messages.length > 0) {
-          this.conversationService.upsertMessages(result.messages, user.id);
+          this.conversationService.upsertMessages(result.messages);
           await this.refreshActiveConversations();
         }
 

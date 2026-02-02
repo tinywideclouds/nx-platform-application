@@ -26,6 +26,8 @@ import { QuarantineService } from '@nx-platform-application/messenger-domain-qua
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
 import { ContactProtocolService } from '@nx-platform-application/messenger-domain-contact-protocol';
 
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
+
 export interface IngestionResult {
   messages: ChatMessage[];
   typingIndicators: URN[];
@@ -43,10 +45,12 @@ export class IngestionService {
 
   private groupProtocol = inject(GroupProtocolService);
   private contactProtocol = inject(ContactProtocolService);
+
+  private readonly sessionService = inject(SessionService);
+
   private logger = inject(Logger);
 
   async process(
-    myKeys: PrivateKeys,
     blockedSet: Set<string>,
     batchSize = 50,
   ): Promise<IngestionResult> {
@@ -72,12 +76,7 @@ export class IngestionService {
 
       for (const item of queue) {
         try {
-          await this.processSingleMessage(
-            item,
-            myKeys,
-            blockedSet,
-            finalResult,
-          );
+          await this.processSingleMessage(item, blockedSet, finalResult);
           processedIds.push(item.id);
         } catch (error) {
           this.logger.error(
@@ -102,10 +101,11 @@ export class IngestionService {
 
   private async processSingleMessage(
     item: QueuedMessage,
-    myKeys: PrivateKeys,
     blockedSet: Set<string>,
     accumulator: IngestionResult,
   ): Promise<void> {
+    const myKeys = this.sessionService.snapshot.keys;
+
     const transport: TransportMessage =
       await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
 

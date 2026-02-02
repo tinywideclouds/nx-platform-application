@@ -26,19 +26,16 @@ export const idGroupWork = URN.parse('urn:directory:group:work-shared');
 export const entityAlice: DirectoryEntity = {
   id: idAliceContact,
   type: URN.parse('urn:directory:type:user'),
-  lastSeenAt: now,
 };
 
 export const entityBobContact: DirectoryEntity = {
   id: idBobContact,
   type: URN.parse('urn:directory:type:user'),
-  lastSeenAt: now,
 };
 
 export const entityBobMessenger: DirectoryEntity = {
   id: idBobMessenger,
   type: URN.parse('urn:directory:type:user'),
-  lastSeenAt: now,
 };
 
 // --- 3. Groups ---

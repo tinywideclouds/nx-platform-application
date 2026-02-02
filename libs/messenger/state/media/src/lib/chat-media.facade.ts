@@ -7,7 +7,6 @@ import {
   VaultProvider,
   VaultDrivers,
 } from '@nx-platform-application/platform-infrastructure-storage';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { AssetStorageService } from '@nx-platform-application/messenger-infrastructure-asset-storage';
 import {
   ConversationService,
@@ -87,8 +86,6 @@ export class ChatMediaFacade {
     recipient: URN,
     file: File,
     caption: string | undefined,
-    keys: PrivateKeys,
-    sender: URN,
   ): Promise<void> {
     const isConnected = this.storageServiceInfra.isConnected();
     this.logger.info(
@@ -129,8 +126,6 @@ export class ChatMediaFacade {
       const messageId = await this.conversationActions.sendImage(
         recipient,
         payload,
-        keys,
-        sender,
       );
       this.logger.info(
         `[MediaFacade] Sent inline image. Message ID: ${messageId}`,
@@ -143,8 +138,6 @@ export class ChatMediaFacade {
           recipient,
           messageId,
           file,
-          keys,
-          sender,
           driveImage,
         ).catch((e) => {
           this.logger.error(
@@ -162,8 +155,6 @@ export class ChatMediaFacade {
     recipient: URN,
     messageId: string,
     file: File,
-    keys: PrivateKeys,
-    sender: URN,
     mediaMapId: string,
   ): Promise<void> {
     this.logger.info(
@@ -183,12 +174,7 @@ export class ChatMediaFacade {
         assets,
       };
 
-      await this.conversationActions.sendAssetReveal(
-        recipient,
-        signalData,
-        keys,
-        sender,
-      );
+      await this.conversationActions.sendAssetReveal(recipient, signalData);
 
       // 4. Local Patch (Update our own DB to show "Open" button)
       await this.patchLocalMessage(messageId, signalData);

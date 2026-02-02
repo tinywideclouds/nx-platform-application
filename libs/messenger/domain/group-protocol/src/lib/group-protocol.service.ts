@@ -20,6 +20,8 @@ import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
 
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
+
 // ✅ NEW DEPENDENCY
 import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
 
@@ -46,6 +48,8 @@ export class GroupProtocolService {
   private logger = inject(Logger);
   private identityResolver = inject(IdentityResolver);
 
+  private readonly sessionService = inject(SessionService);
+
   // ✅ Inject the Domain Service
   private conversationService = inject(ConversationService);
 
@@ -56,12 +60,7 @@ export class GroupProtocolService {
   /**
    * PROVISIONER: Creates a new Network Group from a Local Template.
    */
-  async provisionNetworkGroup(
-    localGroupUrn: URN,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-    name: string,
-  ): Promise<URN> {
+  async provisionNetworkGroup(localGroupUrn: URN, name: string): Promise<URN> {
     this.logger.info(
       `[GroupProtocol] Provisioning '${name}' from ${localGroupUrn.toString()}`,
     );
@@ -77,6 +76,7 @@ export class GroupProtocolService {
     // 2. Resolve Network Identities (Local -> Network)
     const roster: { networkId: URN; alias: string }[] = [];
     const invitees: URN[] = [];
+    const entities: DirectoryEntity[] = [];
 
     for (const p of participants) {
       const networkId = await this.identityResolver.resolveToHandle(p.id);
@@ -85,14 +85,17 @@ export class GroupProtocolService {
         roster.push({ networkId, alias: p.alias });
         invitees.push(networkId);
       }
+      entities.push({
+        id: networkId,
+        type: EntityTypeUser,
+      });
     }
 
     if (roster.length == 0) {
       throw new Error('No valid network participants found (need 2+)');
     }
 
-    // Add Myself
-    const myNetworkId = await this.identityResolver.resolveToHandle(myUrn);
+    const myNetworkId = this.sessionService.snapshot.networkUrn;
     roster.push({ networkId: myNetworkId, alias: 'Me' });
 
     // 3. Mint Network Identity
@@ -104,7 +107,6 @@ export class GroupProtocolService {
 
     // 4. Construct Directory Group State
     const memberState: Record<string, GroupMemberStatus> = {};
-    const entities: DirectoryEntity[] = [];
 
     roster.forEach((p) => {
       const idStr = p.networkId.toString();
@@ -112,11 +114,6 @@ export class GroupProtocolService {
       memberState[idStr] = p.networkId.equals(myNetworkId)
         ? 'joined'
         : 'invited';
-
-      entities.push({
-        id: p.networkId,
-        type: EntityTypeUser,
-      });
     });
 
     const newGroup: DirectoryGroup = {
@@ -140,7 +137,7 @@ export class GroupProtocolService {
       myNetworkId,
       name,
       snapshot,
-      `Invited by ${myUrn.entityId}`,
+      `Invited by ${myNetworkId.entityId}`,
     );
 
     const inviteBytes = this.parser.serialize(content);
@@ -151,8 +148,6 @@ export class GroupProtocolService {
     // Note: We ideally want { shouldPersist: false } here to keep 1:1 history clean,
     // but we respect the existing OutboundService contract for now.
     await this.outbound.broadcast(
-      myKeys,
-      myUrn,
       invitees,
       networkGroupUrn,
       MessageGroupInvite,
@@ -326,8 +321,6 @@ export class GroupProtocolService {
 
     // 3. Broadcast the Response
     await this.outbound.sendToConversation(
-      myKeys,
-      myUrn,
       groupUrn,
       MessageGroupInviteResponse,
       bytes,

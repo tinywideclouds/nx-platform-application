@@ -1,4 +1,3 @@
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
@@ -6,14 +5,17 @@ import {
 } from '@nx-platform-application/messenger-types';
 
 export interface SendContext {
-  myKeys: PrivateKeys;
-  myUrn: URN;
-  recipientUrn: URN; // The Context (Chat Window)
+  conversationUrn: URN;
+  recipientUrn: URN;
   optimisticMsg: ChatMessage;
   isEphemeral: boolean;
   shouldPersist: boolean;
-  // ✅ NEW: The "Dumb" Strategy just iterates this list
   recipients?: URN[];
+}
+
+export interface OutboundTarget {
+  conversationUrn: URN; // The 'Context' (User or Group)
+  recipients: URN[]; // The specific list of URN strings to fan-out to
 }
 
 export interface SendOptions {
@@ -28,5 +30,5 @@ export interface OutboundResult {
 }
 
 export abstract class SendStrategy {
-  abstract send(context: SendContext): Promise<OutboundResult>;
+  abstract getTargets(context: SendContext): Promise<OutboundTarget[]>;
 }

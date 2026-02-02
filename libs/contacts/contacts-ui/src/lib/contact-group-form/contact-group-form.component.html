@@ -98,7 +98,7 @@
     }
   </div>
 
-  @if (isEditing() && group()) {
+  @if (group() && isEditing() && !isNew()) {
     <div class="pt-8 border-t border-gray-100 mt-8 max-w-2xl">
       <button
         type="button"
