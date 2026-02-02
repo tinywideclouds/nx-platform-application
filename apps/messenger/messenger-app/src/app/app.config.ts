@@ -93,6 +93,9 @@ import {
   DirectoryMutationApi,
 } from '@nx-platform-application/directory-api';
 
+// ✅ NEW: Directory APIs
+import { DirectoryService } from '@nx-platform-application/directory-service';
+
 import {
   LOGGER_CONFIG,
   LogLevel,
@@ -178,7 +181,8 @@ const directoryProviders = environment.useMocks
     ]
   : [
       // TODO: Add Real HTTP Directory Service here when ready
-      // { provide: DirectoryQueryApi, useClass: HttpDirectoryService },
+      { provide: DirectoryQueryApi, useExisting: DirectoryService },
+      { provide: DirectoryMutationApi, useExisting: DirectoryService },
     ];
 
 const tokenProviders = [

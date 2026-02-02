@@ -18,7 +18,7 @@ import { MessagePart } from '../models';
         >
           {{ part.url }}
         </a>
-      } @else {
+      } @else if (part.type === 'text') {
         <span class="whitespace-pre-wrap">{{ part.content }}</span>
       }
     }

@@ -12,7 +12,6 @@ export class DirectoryEntityMapper {
     return {
       id: URN.parse(record.urn),
       type: URN.parse(record.type),
-      lastSeenAt: record.lastAccessed as ISODateTimeString,
     };
   }
 
@@ -20,7 +19,6 @@ export class DirectoryEntityMapper {
     return {
       urn: entity.id.toString(),
       type: entity.type.toString(),
-      lastAccessed: entity.lastSeenAt,
     };
   }
 }

@@ -14,7 +14,6 @@ export interface StorableDirectoryEntity {
   urn: string;
   /** Indexed: Allows querying by type (e.g. 'Give me all users') */
   type: string;
-  lastAccessed: string;
 }
 
 /**
