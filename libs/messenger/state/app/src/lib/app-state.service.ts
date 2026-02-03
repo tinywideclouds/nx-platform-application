@@ -1,5 +1,3 @@
-// libs/messenger/state/app/src/lib/app-state.service.ts
-
 import {
   Injectable,
   DestroyRef,
@@ -9,7 +7,7 @@ import {
   computed,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { Subject, combineLatest } from 'rxjs';
+import { Subject } from 'rxjs';
 import { throttleTime, filter, skip, take } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import {
@@ -26,6 +24,7 @@ import { ChatModerationFacade } from '@nx-platform-application/messenger-state-m
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 // --- DOMAIN SERVICES ---
 import {
@@ -50,20 +49,13 @@ import {
 // --- ENGINE ---
 import { StateEngine, PageState, AppDiagnosticState } from './state.engine';
 import { ContactGroup } from '@nx-platform-application/contacts-types';
-import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
-
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 const TYPING_DEBOUNCE_MS = 3000;
 
-/**
- * Structural capabilities of the current conversation.
- * Derived purely from the URN.
- */
 export interface ConversationCapabilities {
   kind: 'network-group' | 'local-group' | 'p2p';
-  canBroadcast: boolean; // True for Network Groups
-  canFork: boolean; // True for Network & Local Groups
+  canBroadcast: boolean;
+  canFork: boolean;
 }
 
 @Injectable({
@@ -74,27 +66,22 @@ export class AppState {
   private readonly destroyRef = inject(DestroyRef);
 
   // --- INJECTIONS ---
-
-  // State services
   private readonly identity = inject(ChatIdentityFacade);
+  private readonly sessionService = inject(SessionService); // ✅ The Source of Truth
   private readonly moderation = inject(ChatModerationFacade);
   private readonly media = inject(ChatMediaFacade);
   private readonly syncService = inject(CloudSyncService);
   private readonly chatService = inject(ChatDataService);
-  private outboundService = inject(OutboundService);
 
-  // General services
   private readonly authService = inject(IAuthService);
   private readonly addressBookManager = inject(AddressBookManagementApi);
   private readonly addressBookApi = inject(AddressBookApi);
 
-  // Domain layer
   private readonly outboxWorker = inject(OutboxWorkerService);
   private readonly groupProtocol = inject(GroupProtocolService);
   private readonly conversationService = inject(ConversationService);
   private readonly conversationActions = inject(ConversationActionService);
 
-  // Infrastructure
   private readonly settingsService = inject(LocalSettingsService);
   private readonly cryptoService = inject(MessengerCryptoService);
   private readonly storageService = inject(ChatStorageService);
@@ -105,11 +92,9 @@ export class AppState {
 
   public readonly onboardingState = this.identity.onboardingState;
   public readonly isCeremonyActive = this.identity.isCeremonyActive;
-  // public readonly myKeys = this.identity.myKeys;
 
-  // private readonly myKeys$ = toObservable(this.myKeys);
-
-  private readonly sessionService = inject(SessionService);
+  // ✅ Proxy: No local calculation. Directly from Facade.
+  public readonly currentUserUrn = this.identity.myUrn;
 
   private readonly _typingSubject = new Subject<void>();
   public readonly typingTrigger$ = this._typingSubject
@@ -119,49 +104,31 @@ export class AppState {
       this.performTypingNotification();
     });
 
-  public readonly currentUserUrn = computed(
-    () => this.authService.currentUser()?.id || null,
-  );
-
   public readonly showWizard = signal<boolean>(false);
   public readonly isCloudConnected = this.syncService.isConnected;
   public readonly isBackingUp = this.syncService.isSyncing;
 
-  // Messaging State
   public readonly selectedConversation =
     this.conversationService.selectedConversation;
   public readonly activeConversations = this.chatService.activeConversations;
   public readonly typingActivity = this.chatService.typingActivity;
   public readonly messages = this.conversationService.messages;
-
-  // UI Helpers from ChatData
   public readonly uiConversations = this.chatService.uiConversations;
-
   public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
   public readonly firstUnreadId = this.conversationService.firstUnreadId;
   public readonly readCursors = this.conversationService.readCursors;
   public readonly isRecipientKeyMissing =
     this.conversationService.isRecipientKeyMissing;
-
   public readonly activeLocalGroup = signal<ContactGroup | null>(null);
-
   public readonly blockedSet = this.moderation.blockedSet;
   public readonly isCloudAuthRequired =
     this.syncService.requiresUserInteraction;
 
-  // =================================================================
-  // 🧠 THE BRAIN: SIGNAL DERIVATION
-  // =================================================================
-
-  /**
-   * SIGNAL 1: CAPABILITIES (The "What Is It?")
-   * Driven purely by the URN structure. Used by Header/Menus.
-   */
+  // --- ENGINE ---
   public readonly capabilities = computed<ConversationCapabilities | null>(
     () => {
       const conv = this.selectedConversation();
       if (!conv) return null;
-
       const urn = conv.id;
       const isGroup = urn.entityType === 'group';
       const isNetwork = urn.namespace === 'messenger';
@@ -169,41 +136,22 @@ export class AppState {
       if (isNetwork && isGroup) {
         return { kind: 'network-group', canBroadcast: true, canFork: true };
       }
-
       if (isGroup) {
-        // Local Contact Group
         return { kind: 'local-group', canBroadcast: false, canFork: true };
       }
-
-      // Default: P2P User
       return { kind: 'p2p', canBroadcast: false, canFork: false };
     },
   );
 
-  /**
-   * SIGNAL 2: PAGE STATE (The "What's Happening?")
-   * Driven by Logic + Data. Used by the Main View Switch.
-   */
   public readonly pageState = computed<PageState>(() => {
-    // 1. Gather Inputs
     const conv = this.selectedConversation();
     if (!conv) return 'NOT_FOUND';
-
-    const urn = conv.id;
-    const msgs = this.messages();
-    const isLoading = this.isLoadingHistory();
-    const blocked = this.blockedSet();
-
-    // Resolve Boolean Flags
-    const isBlocked = blocked.has(urn.toString());
-
-    // 2. Delegate to Pure Logic Engine
     return StateEngine.resolvePageState({
-      urn,
-      messages: msgs,
-      isLoading,
-      isBlocked,
-      isQuarantined: false, // Future integration point
+      urn: conv.id,
+      messages: this.messages(),
+      isLoading: this.isLoadingHistory(),
+      isBlocked: this.blockedSet().has(conv.id.toString()),
+      isQuarantined: false,
     });
   });
 
@@ -211,6 +159,8 @@ export class AppState {
     this.logger.info('ChatService: Initializing via Facades...');
     this.identity.initialize();
 
+    // ✅ Boot Trigger
+    // We strictly trust the Facade. If it says READY, the SessionService is populated.
     effect(() => {
       const state = this.identity.onboardingState();
       if (state === 'READY' || state === 'OFFLINE_READY') {
@@ -221,17 +171,11 @@ export class AppState {
     effect(() => {
       const conv = this.selectedConversation();
       const urn = conv?.id;
-
       if (urn && urn.namespace === 'contacts' && urn.entityType === 'group') {
         this.addressBookApi
           .getGroup(urn)
-          .then((group) => {
-            this.activeLocalGroup.set(group || null);
-          })
-          .catch((err) => {
-            this.logger.error('Failed to load local group details', err);
-            this.activeLocalGroup.set(null);
-          });
+          .then((group) => this.activeLocalGroup.set(group || null))
+          .catch(() => this.activeLocalGroup.set(null));
       } else {
         this.activeLocalGroup.set(null);
       }
@@ -240,22 +184,15 @@ export class AppState {
     this.loadUiSettings();
   }
 
-  // --- BOOT SEQUENCING ---
-
   readonly bootStatus = signal<AppDiagnosticState>({ bootStage: 'IDLE' });
 
   private async bootDataLayer() {
     this.logger.info('🚀 [AppState] Identity Ready. Booting Data Layer...');
     this.bootStatus.set({ bootStage: 'CHECKING_AUTH' });
-    const user = this.authService.currentUser();
-    const keys = this.identity.myKeys();
 
-    this.sessionService.initialize(user, user, keys);
+    // ✅ CHECK REMOVED: No more manual checking of myKeys() or user.id
+    // The IdentityFacade guarantees these exist if we are here.
 
-    if (!user || !user.id || !keys) {
-      this.logger.error('🛑 [AppState] Cannot boot: Missing credentials');
-      return;
-    }
     const token = this.authService.getJwtToken();
     if (!token) {
       this.logger.error('🛑 [AppState] Cannot boot: Missing auth token');
@@ -263,23 +200,22 @@ export class AppState {
     }
 
     const promises: Promise<any>[] = [];
-
     this.bootStatus.update((s) => ({ ...s, bootStage: 'STARTING_CHAT_SYNC' }));
 
-    const chatTask = this.chatService
-      .startSyncSequence(token)
-      .then(() => this.logger.info('🟢 [AppState] Chat Sync Started'))
-      .catch((e) => this.logger.error('💥 [AppState] Chat Sync Failed', e));
-    promises.push(chatTask);
+    promises.push(
+      this.chatService
+        .startSyncSequence(token)
+        .then(() => this.logger.info('🟢 [AppState] Chat Sync Started'))
+        .catch((e) => this.logger.error('💥 [AppState] Chat Sync Failed', e)),
+    );
 
     this.bootStatus.update((s) => ({ ...s, bootStage: 'CHECKING_CLOUD' }));
-    this.logger.info('☁️ [AppState] Triggering Cloud Session Resume...');
-
-    const cloudTask = this.syncService
-      .resumeSession()
-      .then(() => this.logger.info('🔵 [AppState] Cloud Check Complete'))
-      .catch((e) => this.logger.error('⚠️ [AppState] Cloud Check Failed', e));
-    promises.push(cloudTask);
+    promises.push(
+      this.syncService
+        .resumeSession()
+        .then(() => this.logger.info('🔵 [AppState] Cloud Check Complete'))
+        .catch((e) => this.logger.error('⚠️ [AppState] Cloud Check Failed', e)),
+    );
 
     this.initOrchestration();
     this.initResumptionTriggers();
@@ -301,30 +237,25 @@ export class AppState {
   }
 
   private initResumptionTriggers(): void {
-    // 1. Reconnection Trigger
+    // 1. Reconnection
     this.liveService.status$
       .pipe(
         filter((status) => status === 'connected'),
-        skip(1), // Skip initial connection (handled by boot sequence)
+        skip(1),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => {
-        this.logger.info(
-          '[ChatService] Socket reconnected. Processing Outbox.',
-        );
-        // ✅ No arguments needed. Worker uses SessionService.
         void this.outboxWorker.processQueue();
       });
 
-    // 2. Boot/Resume Trigger
+    // 2. Boot/Resume
     toObservable(this.sessionService.currentSession)
       .pipe(
-        filter((s) => !!s), // ✅ Wait for SessionService to be populated (Keys + Auth)
-        take(1), // ✅ Run once on boot
+        filter((s) => !!s),
+        take(1),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => {
-        this.logger.info('[ChatService] Session ready. Processing Outbox.');
         void this.outboxWorker.processQueue();
       });
   }
@@ -338,25 +269,19 @@ export class AppState {
   }
 
   public async sendDraft(draft: DraftMessage): Promise<void> {
-    const keys = this.identity.myKeys();
-    const sender = this.currentUserUrn();
-
-    if (!keys || !sender) return;
-
+    // ✅ STRIPPED: No key/sender extraction.
     const recipient = this.selectedConversation()?.id;
-
-    if (!recipient) {
-      this.logger.warn('Attempted to send draft with no selected conversation');
-      return;
-    }
+    if (!recipient) return;
 
     if (draft.attachments.length > 0) {
-      const firstAttachment = draft.attachments[0];
-      await this.media.sendImage(recipient, firstAttachment.file, draft.text);
-      return;
-    }
-
-    if (draft.text.trim().length > 0) {
+      // ChatMediaFacade must now use SessionService internally
+      await this.media.sendImage(
+        recipient,
+        draft.attachments[0].file,
+        draft.text,
+      );
+    } else if (draft.text.trim().length > 0) {
+      // ConversationActions must now use SessionService internally
       await this.conversationActions.sendMessage(recipient, draft.text);
     }
 
@@ -365,15 +290,18 @@ export class AppState {
   }
 
   public async markAsRead(messageIds: string[]): Promise<void> {
+    // ✅ STRIPPED
     const recipient = this.selectedConversation()?.id;
-    const keys = this.identity.myKeys();
+    // We still need the sender URN for the DB record update (local storage),
+    // but we trust our 'currentUserUrn' signal which comes from Facade.
     const sender = this.currentUserUrn();
 
-    if (recipient && keys && sender && messageIds.length > 0) {
+    if (recipient && sender && messageIds.length > 0) {
       await this.conversationActions.sendReadReceiptSignal(
         recipient,
         messageIds,
       );
+      // Local DB update still requires explicit ID for now
       await this.storageService.applyReceipt(
         messageIds[messageIds.length - 1],
         sender,
@@ -383,16 +311,9 @@ export class AppState {
     }
   }
 
-  public notifyTyping(): void {
-    this._typingSubject.next();
-  }
-
   public performTypingNotification(): void {
     const recipient = this.selectedConversation()?.id;
-    const keys = this.identity.myKeys();
-    const sender = this.currentUserUrn();
-
-    if (recipient && keys && sender) {
+    if (recipient) {
       this.conversationActions.sendTypingIndicator(recipient);
     }
   }
@@ -422,35 +343,32 @@ export class AppState {
     await this.moderation.dismissPending(urns);
   }
 
-  public async block(
-    urns: URN[],
-    scope: 'messenger' | 'all' = 'messenger',
-  ): Promise<void> {
+  public async block(urns: URN[], scope: 'messenger' | 'all'): Promise<void> {
     await this.moderation.block(urns, scope);
     this.chatService.refreshActiveConversations();
   }
 
   // --- PAIRING DELEGATIONS ---
-  public async startTargetLinkSession(): Promise<DevicePairingSession> {
+  public async startTargetLinkSession() {
     return this.identity.startTargetLinkSession();
   }
-  public async startSourceLinkSession(): Promise<DevicePairingSession> {
+  public async startSourceLinkSession() {
     return this.identity.startSourceLinkSession();
   }
-  public async checkForSyncMessage(key: CryptoKey): Promise<boolean> {
+  public async checkForSyncMessage(key: CryptoKey) {
     return this.identity.checkForSyncMessage(key);
   }
-  public async redeemSourceSession(qrCode: string): Promise<void> {
+  public async redeemSourceSession(qrCode: string) {
     return this.identity.redeemSourceSession(qrCode);
   }
-  public async linkTargetDevice(qrCode: string): Promise<void> {
+  public async linkTargetDevice(qrCode: string) {
     return this.identity.linkTargetDevice(qrCode);
   }
-  public cancelLinking(): void {
+  public cancelLinking() {
     this.identity.cancelLinking();
   }
 
-  // --- MISC / UTILS ---
+  // --- MISC ---
 
   public isCloudEnabled(): boolean {
     return this.syncService.isConnected();
@@ -460,8 +378,6 @@ export class AppState {
     this.showWizard.set(active);
     if (!active) this.settingsService.setWizardSeen(true);
   }
-
-  // --- CLEANUP ---
 
   public async sessionLogout(): Promise<void> {
     this.chatService.stopSyncSequence();
@@ -490,29 +406,20 @@ export class AppState {
     recipientUrn: URN,
     data: ContactShareData,
   ): Promise<void> {
-    const keys = this.identity.myKeys();
-    const sender = this.currentUserUrn();
-    if (!keys || !sender) return;
+    // ✅ STRIPPED
     await this.conversationActions.sendContactShare(recipientUrn, data);
     this.chatService.refreshActiveConversations();
     void this.outboxWorker.processQueue();
   }
 
   public async acceptInvite(msg: ChatMessage): Promise<string> {
-    const keys = this.identity.myKeys();
-    const me = this.currentUserUrn();
-
-    if (!keys || !me) {
-      throw new Error('Cannot accept invite: Identity not ready');
-    }
-
-    return this.groupProtocol.acceptInvite(msg, keys, me);
+    // ✅ STRIPPED: No arguments needed. Protocol uses SessionService.
+    return this.groupProtocol.acceptInvite(msg);
   }
 
   public async rejectInvite(msg: ChatMessage): Promise<void> {
-    const keys = this.identity.myKeys();
-    const me = this.currentUserUrn();
-    if (keys && me) await this.groupProtocol.rejectInvite(msg, keys, me);
+    // ✅ STRIPPED
+    await this.groupProtocol.rejectInvite(msg);
   }
 
   public async recoverFailedMessage(
@@ -543,16 +450,7 @@ export class AppState {
     localGroupUrn: URN,
     name: string,
   ): Promise<URN | null> {
-    const keys = this.identity.myKeys();
-    const me = this.currentUserUrn();
-
-    if (!keys || !me) {
-      this.logger.warn(
-        '[AppState] Cannot upgrade group: Missing keys or identity.',
-      );
-      return null;
-    }
-
+    // ✅ STRIPPED: No keys/me passing.
     try {
       return await this.groupProtocol.provisionNetworkGroup(
         localGroupUrn,
@@ -566,6 +464,10 @@ export class AppState {
 
   public async startNewConversation(urn: URN, name: string): Promise<void> {
     this.conversationService.startNewConversation(urn, name);
+  }
+
+  public notifyTyping(): void {
+    this._typingSubject.next();
   }
 
   private loadUiSettings(): void {

@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
   URN,
@@ -17,6 +17,9 @@ import { DevicePairingService } from '@nx-platform-application/messenger-domain-
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
+// ✅ NEW: Import the Session Vault
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
+
 export type OnboardingState =
   | 'CHECKING'
   | 'READY'
@@ -34,9 +37,17 @@ export class ChatIdentityFacade {
   private readonly pairingService = inject(DevicePairingService);
   private readonly liveService = inject(ChatLiveDataService);
 
+  // ✅ NEW: Inject SessionService
+  private readonly sessionService = inject(SessionService);
+
   public readonly onboardingState = signal<OnboardingState>('CHECKING');
   public readonly isCeremonyActive = signal<boolean>(false);
   public readonly myKeys = signal<PrivateKeys | null>(null);
+
+  // ✅ NEW: Centralized URN helper (Does not break existing code)
+  public readonly myUrn = computed(() => {
+    return this.authService.currentUser()?.id || null;
+  });
 
   async initialize(): Promise<void> {
     try {
@@ -73,6 +84,8 @@ export class ChatIdentityFacade {
       // 1. Offline Mode
       if (localKeys && !isServerReachable) {
         this.myKeys.set(localKeys);
+        // ✅ NEW: Write to Vault
+        this.sessionService.initialize(senderUrn, senderUrn, localKeys);
         this.onboardingState.set('OFFLINE_READY');
         return;
       }
@@ -80,25 +93,24 @@ export class ChatIdentityFacade {
       // 2. New User OR Missing Server Keys
       if (!serverKeys && isServerReachable) {
         if (localKeys) {
-          // ✅ SELF-HEALING: We have keys, server lost them. Re-upload.
           this.logger.info(
             '[IdentityFacade] Local keys found but Server is empty. Re-uploading...',
           );
 
-          // Use the service to derive public keys from our local private ones
           const restoredPublicKeys =
             await this.cryptoService.loadMyPublicKeys(senderUrn);
 
           if (restoredPublicKeys) {
             await this.keyService.storeKeys(senderUrn, restoredPublicKeys);
             this.myKeys.set(localKeys);
+            // ✅ NEW: Write to Vault
+            this.sessionService.initialize(senderUrn, senderUrn, localKeys);
             this.onboardingState.set('READY');
             return;
           } else {
             this.logger.error(
               '[IdentityFacade] CRITICAL: Private keys exist but Public keys cannot be recovered.',
             );
-            // Fallthrough to GENERATING
           }
         }
 
@@ -125,6 +137,8 @@ export class ChatIdentityFacade {
       // 4. Success Case
       if (localKeys) {
         this.myKeys.set(localKeys);
+        // ✅ NEW: Write to Vault
+        this.sessionService.initialize(senderUrn, senderUrn, localKeys);
         this.onboardingState.set('READY');
       }
     } catch (error) {
@@ -150,12 +164,14 @@ export class ChatIdentityFacade {
   private async performFirstTimeSetup(urn: URN, email?: string): Promise<void> {
     const keys = await this.keyWorker.resetIdentityKeys(urn, email);
     this.myKeys.set(keys);
+    // ✅ NEW: Write to Vault
+    this.sessionService.initialize(urn, urn, keys);
     this.onboardingState.set('READY');
   }
 
   public async performIdentityReset(): Promise<void> {
     const user = this.authService.currentUser();
-    if (!user) return;
+    if (!user || !user.id) return;
 
     this.onboardingState.set('GENERATING');
     try {
@@ -164,6 +180,8 @@ export class ChatIdentityFacade {
         user.email,
       );
       this.myKeys.set(newKeys);
+      // ✅ NEW: Write to Vault
+      this.sessionService.initialize(user.id, user.id, newKeys);
       this.onboardingState.set('READY');
     } catch (e) {
       this.logger.error('[IdentityFacade] Reset failed', e);
@@ -171,13 +189,14 @@ export class ChatIdentityFacade {
     }
   }
 
-  // --- Device Pairing (The Ceremony) ---
+  // --- Device Pairing ---
 
   public cancelLinking(): void {
     this.isCeremonyActive.set(false);
   }
 
   public async startTargetLinkSession(): Promise<DevicePairingSession> {
+    // ... (No Changes) ...
     if (this.onboardingState() !== 'REQUIRES_LINKING') {
       throw new Error(
         'Device Linking is only available during onboarding halt.',
@@ -202,6 +221,7 @@ export class ChatIdentityFacade {
   public async checkForSyncMessage(
     sessionPrivateKey: CryptoKey,
   ): Promise<boolean> {
+    // ... (No Changes) ...
     const user = this.authService.currentUser();
     if (!user?.id || this.onboardingState() !== 'REQUIRES_LINKING')
       return false;
@@ -219,6 +239,7 @@ export class ChatIdentityFacade {
   }
 
   public async redeemSourceSession(qrCode: string): Promise<void> {
+    // ... (No Changes) ...
     const user = this.authService.currentUser();
     const currentState = this.onboardingState();
 
@@ -241,6 +262,7 @@ export class ChatIdentityFacade {
   }
 
   public async linkTargetDevice(qrCode: string): Promise<void> {
+    // ... (No Changes) ...
     const user = this.authService.currentUser();
     const keys = this.myKeys();
 
@@ -258,6 +280,7 @@ export class ChatIdentityFacade {
   }
 
   public async startSourceLinkSession(): Promise<DevicePairingSession> {
+    // ... (No Changes) ...
     const user = this.authService.currentUser();
     const keys = this.myKeys();
     if (!user?.id || !keys) throw new Error('Not authenticated');
@@ -278,6 +301,9 @@ export class ChatIdentityFacade {
     const user = this.authService.currentUser();
     if (user?.id) {
       await this.cryptoService.storeMyKeys(user.id, restoredKeys);
+      // ✅ NEW: Write to Vault
+      // Using initialize to be safe as this is a "first load" scenario for this session
+      this.sessionService.initialize(user.id, user.id, restoredKeys);
     }
     this.myKeys.set(restoredKeys);
     this.onboardingState.set('READY');

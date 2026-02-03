@@ -214,24 +214,16 @@ export class GroupProtocolService {
    * Sends a "Joined" signal back to the group.
    * Returns the Group URN for navigation.
    */
-  public async acceptInvite(
-    msg: ChatMessage,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<string> {
-    return this.respond(msg, myKeys, myUrn, 'joined');
+  public async acceptInvite(msg: ChatMessage): Promise<string> {
+    return this.respond(msg, 'joined');
   }
 
   /**
    * Processes an incoming Group Invite.
    * Sends a "Declined" signal back to the group.
    */
-  public async rejectInvite(
-    msg: ChatMessage,
-    myKeys: PrivateKeys,
-    myUrn: URN,
-  ): Promise<void> {
-    await this.respond(msg, myKeys, myUrn, 'declined');
+  public async rejectInvite(msg: ChatMessage): Promise<void> {
+    await this.respond(msg, 'declined');
   }
 
   /**
@@ -283,8 +275,6 @@ export class GroupProtocolService {
 
   private async respond(
     inviteMsg: ChatMessage,
-    myKeys: PrivateKeys,
-    myUrn: URN,
     status: 'joined' | 'declined',
   ): Promise<string> {
     const parsed = this.parser.parse(
@@ -299,16 +289,15 @@ export class GroupProtocolService {
     const inviteData = parsed.payload.data;
     const groupUrn = URN.parse(inviteData.groupUrn);
 
+    const networkIdentity = this.sessionService.snapshot.networkUrn;
+
     // 1. Update Directory locally if we are joining
     if (status === 'joined') {
-      const identity = await this.identityResolver.resolveToHandle(myUrn);
-      if (identity) {
-        await this.directoryMutation.updateMemberStatus(
-          groupUrn,
-          identity,
-          'joined',
-        );
-      }
+      await this.directoryMutation.updateMemberStatus(
+        groupUrn,
+        networkIdentity,
+        'joined',
+      );
     }
 
     // 2. Create Response Content
