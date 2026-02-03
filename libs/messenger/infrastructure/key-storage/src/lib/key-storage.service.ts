@@ -1,5 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { PublicKeyRecord } from './key-storage.models';
 import { KeyDatabase } from './db/key.database';
 
@@ -20,10 +23,11 @@ export class KeyStorageService {
    * @param timestamp The fetch timestamp for TTL calculations.
    */
   async storeKey(
-    urn: string,
+    keyURN: URN,
     keys: Record<string, string>,
     timestamp: ISODateTimeString,
   ): Promise<void> {
+    const urn = keyURN.toString();
     const record: PublicKeyRecord = { urn, keys, timestamp };
     await this.db.publicKeys.put(record);
   }
@@ -32,8 +36,9 @@ export class KeyStorageService {
    * Retrieves a cached public key record by URN.
    * @returns The record if found, or null.
    */
-  async getKey(urn: string): Promise<PublicKeyRecord | null> {
-    const record = await this.db.publicKeys.get(urn);
+  async getKey(urn: URN): Promise<PublicKeyRecord | null> {
+    const urnString = urn.toString();
+    const record = await this.db.publicKeys.get(urnString);
     return record || null;
   }
 

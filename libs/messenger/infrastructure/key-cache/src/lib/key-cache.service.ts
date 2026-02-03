@@ -21,8 +21,7 @@ export class KeyCacheService {
   private readonly KEY_TTL_MS = this.KEY_TTL_HOURS * 60 * 60 * 1000;
 
   public async getPublicKey(urn: URN): Promise<PublicKeys> {
-    const keyUrn = urn.toString();
-    const cachedEntry = await this.keyStorage.getKey(keyUrn);
+    const cachedEntry = await this.keyStorage.getKey(urn);
 
     if (cachedEntry) {
       const now = Temporal.Now.instant();
@@ -40,7 +39,7 @@ export class KeyCacheService {
     const newTimestamp = Temporal.Now.instant().toString() as ISODateTimeString;
     const serializableKeys = serializePublicKeysToJson(newKeys);
 
-    await this.keyStorage.storeKey(keyUrn, serializableKeys, newTimestamp);
+    await this.keyStorage.storeKey(urn, serializableKeys, newTimestamp);
 
     return newKeys;
   }
@@ -55,12 +54,15 @@ export class KeyCacheService {
   }
 
   public async storeKeys(urn: URN, keys: PublicKeys): Promise<void> {
+    //wait for keys to be stored on the microservice
     await this.secureKeyService.storeKeys(urn, keys);
 
+    //locally we store a json version
     const serializableKeys = serializePublicKeysToJson(keys);
     const timestamp = Temporal.Now.instant().toString() as ISODateTimeString;
 
-    await this.keyStorage.storeKey(urn.toString(), serializableKeys, timestamp);
+    //call local storage
+    await this.keyStorage.storeKey(urn, serializableKeys, timestamp);
   }
 
   public async clear(): Promise<void> {

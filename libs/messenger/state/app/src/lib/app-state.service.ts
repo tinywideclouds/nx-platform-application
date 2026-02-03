@@ -7,8 +7,15 @@ import {
   computed,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { Subject } from 'rxjs';
-import { throttleTime, filter, skip, take } from 'rxjs/operators';
+import { Subject, firstValueFrom } from 'rxjs'; // ✅ Added firstValueFrom
+import {
+  throttleTime,
+  filter,
+  skip,
+  take,
+  withLatestFrom,
+  map,
+} from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
@@ -24,7 +31,6 @@ import { ChatModerationFacade } from '@nx-platform-application/messenger-state-m
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 // --- DOMAIN SERVICES ---
 import {
@@ -33,6 +39,7 @@ import {
 } from '@nx-platform-application/messenger-domain-conversation';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 // --- INFRASTRUCTURE ---
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
@@ -67,7 +74,7 @@ export class AppState {
 
   // --- INJECTIONS ---
   private readonly identity = inject(ChatIdentityFacade);
-  private readonly sessionService = inject(SessionService); // ✅ The Source of Truth
+  private readonly sessionService = inject(SessionService);
   private readonly moderation = inject(ChatModerationFacade);
   private readonly media = inject(ChatMediaFacade);
   private readonly syncService = inject(CloudSyncService);
@@ -93,8 +100,14 @@ export class AppState {
   public readonly onboardingState = this.identity.onboardingState;
   public readonly isCeremonyActive = this.identity.isCeremonyActive;
 
-  // ✅ Proxy: No local calculation. Directly from Facade.
-  public readonly currentUserUrn = this.identity.myUrn;
+  // ✅ THE GATE: Captures Injection Context correctly
+  // This emits ONLY when the session is fully loaded and ready for Domain use.
+  private readonly sessionReady$ = toObservable(
+    this.sessionService.currentSession,
+  ).pipe(
+    filter((s) => !!s), // Block until not null
+    take(1), // We only need to know "Is it ready?" once for the waiter
+  );
 
   private readonly _typingSubject = new Subject<void>();
   public readonly typingTrigger$ = this._typingSubject
@@ -103,6 +116,8 @@ export class AppState {
     .subscribe(() => {
       this.performTypingNotification();
     });
+
+  public readonly currentUserUrn = this.identity.myUrn;
 
   public readonly showWizard = signal<boolean>(false);
   public readonly isCloudConnected = this.syncService.isConnected;
@@ -125,6 +140,7 @@ export class AppState {
     this.syncService.requiresUserInteraction;
 
   // --- ENGINE ---
+
   public readonly capabilities = computed<ConversationCapabilities | null>(
     () => {
       const conv = this.selectedConversation();
@@ -159,8 +175,6 @@ export class AppState {
     this.logger.info('ChatService: Initializing via Facades...');
     this.identity.initialize();
 
-    // ✅ Boot Trigger
-    // We strictly trust the Facade. If it says READY, the SessionService is populated.
     effect(() => {
       const state = this.identity.onboardingState();
       if (state === 'READY' || state === 'OFFLINE_READY') {
@@ -182,6 +196,7 @@ export class AppState {
     });
 
     this.loadUiSettings();
+    this.initResumptionTriggers();
   }
 
   readonly bootStatus = signal<AppDiagnosticState>({ bootStage: 'IDLE' });
@@ -189,9 +204,6 @@ export class AppState {
   private async bootDataLayer() {
     this.logger.info('🚀 [AppState] Identity Ready. Booting Data Layer...');
     this.bootStatus.set({ bootStage: 'CHECKING_AUTH' });
-
-    // ✅ CHECK REMOVED: No more manual checking of myKeys() or user.id
-    // The IdentityFacade guarantees these exist if we are here.
 
     const token = this.authService.getJwtToken();
     if (!token) {
@@ -218,8 +230,6 @@ export class AppState {
     );
 
     this.initOrchestration();
-    this.initResumptionTriggers();
-
     void this.outboxWorker.processQueue();
 
     await Promise.allSettled(promises);
@@ -227,8 +237,14 @@ export class AppState {
   }
 
   private initOrchestration() {
+    // ✅ AUTO-PROTECTION: Background tasks now wait for readiness automatically
     this.conversationService.readReceiptTrigger$
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        withLatestFrom(toObservable(this.sessionService.currentSession)), // Check session
+        filter(([_, session]) => !!session), // Only proceed if session exists
+        map(([ids, _]) => ids),
+      )
       .subscribe((ids) => this.markAsRead(ids));
   }
 
@@ -248,14 +264,11 @@ export class AppState {
         void this.outboxWorker.processQueue();
       });
 
-    // 2. Boot/Resume
-    toObservable(this.sessionService.currentSession)
-      .pipe(
-        filter((s) => !!s),
-        take(1),
-        takeUntilDestroyed(this.destroyRef),
-      )
+    // 2. Boot/Resume - Uses the Gate
+    this.sessionReady$
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
+        this.logger.info('[ChatService] Session ready. Processing Outbox.');
         void this.outboxWorker.processQueue();
       });
   }
@@ -265,23 +278,27 @@ export class AppState {
   // =================================================================
 
   public async loadConversation(urn: URN | null): Promise<void> {
+    // ✅ THE ONE PATCH: This is the only "Blind" entry point (Router).
+    // We treat this as a "Resolver" - we simply hold the line until we are ready.
+    if (urn && !this.sessionService.isReady) {
+      this.logger.info('[AppState] Load deferred: Waiting for Session...');
+      await firstValueFrom(this.sessionReady$);
+    }
     await this.conversationService.loadConversation(urn);
   }
 
   public async sendDraft(draft: DraftMessage): Promise<void> {
-    // ✅ STRIPPED: No key/sender extraction.
+    // No patch needed: UI checks Readiness before showing Send button.
     const recipient = this.selectedConversation()?.id;
     if (!recipient) return;
 
     if (draft.attachments.length > 0) {
-      // ChatMediaFacade must now use SessionService internally
       await this.media.sendImage(
         recipient,
         draft.attachments[0].file,
         draft.text,
       );
     } else if (draft.text.trim().length > 0) {
-      // ConversationActions must now use SessionService internally
       await this.conversationActions.sendMessage(recipient, draft.text);
     }
 
@@ -290,10 +307,8 @@ export class AppState {
   }
 
   public async markAsRead(messageIds: string[]): Promise<void> {
-    // ✅ STRIPPED
+    // No patch needed: Orchestration trigger is now guarded.
     const recipient = this.selectedConversation()?.id;
-    // We still need the sender URN for the DB record update (local storage),
-    // but we trust our 'currentUserUrn' signal which comes from Facade.
     const sender = this.currentUserUrn();
 
     if (recipient && sender && messageIds.length > 0) {
@@ -301,7 +316,6 @@ export class AppState {
         recipient,
         messageIds,
       );
-      // Local DB update still requires explicit ID for now
       await this.storageService.applyReceipt(
         messageIds[messageIds.length - 1],
         sender,
@@ -319,6 +333,7 @@ export class AppState {
   }
 
   // --- FACADE DELEGATIONS ---
+  // ... (No Changes) ...
 
   public async performIdentityReset(): Promise<void> {
     return this.identity.performIdentityReset();
@@ -406,19 +421,16 @@ export class AppState {
     recipientUrn: URN,
     data: ContactShareData,
   ): Promise<void> {
-    // ✅ STRIPPED
     await this.conversationActions.sendContactShare(recipientUrn, data);
     this.chatService.refreshActiveConversations();
     void this.outboxWorker.processQueue();
   }
 
   public async acceptInvite(msg: ChatMessage): Promise<string> {
-    // ✅ STRIPPED: No arguments needed. Protocol uses SessionService.
     return this.groupProtocol.acceptInvite(msg);
   }
 
   public async rejectInvite(msg: ChatMessage): Promise<void> {
-    // ✅ STRIPPED
     await this.groupProtocol.rejectInvite(msg);
   }
 
@@ -450,7 +462,6 @@ export class AppState {
     localGroupUrn: URN,
     name: string,
   ): Promise<URN | null> {
-    // ✅ STRIPPED: No keys/me passing.
     try {
       return await this.groupProtocol.provisionNetworkGroup(
         localGroupUrn,

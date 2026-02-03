@@ -19,6 +19,7 @@ export class SessionService {
    * Called by AppState on boot.
    */
   initialize(authUrn: URN, networkUrn: URN, keys: PrivateKeys) {
+    console.log('SESSION INITIALIZATION', authUrn, networkUrn);
     this._session.set({ authUrn, networkUrn, keys });
   }
 
