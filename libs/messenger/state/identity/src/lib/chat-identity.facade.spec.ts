@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatIdentityFacade } from './chat-identity.facade';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';

@@ -10,7 +10,7 @@ import { KeyCacheService } from '@nx-platform-application/messenger-infrastructu
 import {
   MessengerCryptoService,
   PrivateKeys,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 // REMOVED: MessageMetadataService import (No longer used)

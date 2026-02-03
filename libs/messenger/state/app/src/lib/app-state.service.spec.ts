@@ -36,7 +36,7 @@ import { AddressBookManagementApi } from '@nx-platform-application/contacts-api'
 // --- INFRA ---
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 

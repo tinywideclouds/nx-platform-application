@@ -5,8 +5,8 @@ import { URN } from '@nx-platform-application/platform-types';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
   MessengerCryptoService,
-  PrivateKeys,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+  WebCryptoKeys,
+} from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
@@ -48,7 +48,7 @@ export class ChatKeyService {
   public async resetIdentityKeys(
     userUrn: URN,
     userEmail?: string,
-  ): Promise<PrivateKeys> {
+  ): Promise<WebCryptoKeys> {
     this.logger.info('ChatKeyService: Resetting Identity Keys...');
 
     await this.cryptoService.clearKeys();

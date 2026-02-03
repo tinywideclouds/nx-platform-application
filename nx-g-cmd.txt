@@ -270,12 +270,16 @@ nx g @nx/angular:library --name=directory-app-mocking --directory=libs/directory
 
 nx g @nx/angular:library --name=directory-infrastructure-storage --directory=libs/directory/infrastructure/storage --tags="scope:directory"   
 
-
 nx g @nx/workspace:move --project=contacts-domain-bridge --destination=libs/contacts/domain/service --importPath=@nx-platform-application/contacts-domain-service
-
 
 nx g @nx/workspace:move --project=messenger-infrastructure-db-schema --destination=libs/messenger/infrastructure/indexed-db --importPath=@nx-platform-application/messenger-infrastructure-indexed-db
 
-
 nx g @nx/angular:library --name=messenger-domain-session --directory=libs/messenger/domain/session --tags="scope:messenger" 
 
+nx g @nx/angular:library --name=messenger-domain-key-manager --directory=libs/messenger/domain/key-manager --tags="scope:messenger" 
+
+nx g @nx/angular:library --name=messenger-infrastructure-message-security --directory=libs/messenger/infrastructure/message-security --tags="scope:messenger"   
+
+nx g @nx/angular:library --name=messenger-infrastructure-pairing-security --directory=libs/messenger/infrastructure/pairing-security --tags="scope:messenger"   
+
+nx g @nx/workspace:move --project=messenger-infrastructure-crypto-bridge --destination=libs/messenger/infrastructure/private-keys --importPath=@nx-platform-application/messenger-infrastructure-private-keys

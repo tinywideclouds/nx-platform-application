@@ -54,7 +54,7 @@ export class ConversationActionService {
     const typeId = MessageTypingIndicator;
     const bytes = new Uint8Array([]);
     await this.runExclusive(() =>
-      this.outbound.sendToConversation(recipientUrn, typeId, bytes, {
+      this.outbound.sendFromConversation(recipientUrn, typeId, bytes, {
         isEphemeral: true,
         shouldPersist: false,
       }),
@@ -98,7 +98,7 @@ export class ConversationActionService {
     options?: SendOptions,
   ): Promise<string> {
     return this.runExclusive(async () => {
-      const result = await this.outbound.sendToConversation(
+      const result = await this.outbound.sendFromConversation(
         recipientUrn,
         typeId,
         bytes,

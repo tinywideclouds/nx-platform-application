@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import {
   CryptoEngine,
   EncryptedPayload,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 /**
  * MOCK ENGINE:

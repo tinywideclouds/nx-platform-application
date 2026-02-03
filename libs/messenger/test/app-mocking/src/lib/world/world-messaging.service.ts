@@ -10,7 +10,7 @@ import {
   serializePayloadToProtoBytes,
 } from '@nx-platform-application/messenger-types';
 import { MockMessageDef } from '../types';
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 // ✅ BOUNDARIES

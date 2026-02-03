@@ -10,10 +10,7 @@ import {
   TransportMessage,
 } from '@nx-platform-application/messenger-types';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import {
-  MessengerCryptoService,
-  PrivateKeys,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
 
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
@@ -38,7 +35,7 @@ export interface IngestionResult {
 @Injectable({ providedIn: 'root' })
 export class IngestionService {
   private dataService = inject(ChatDataService);
-  private cryptoService = inject(MessengerCryptoService);
+  private cryptoService = inject(MessageSecurityService);
   private storageService = inject(ChatStorageService);
   private quarantineService = inject(QuarantineService);
   private parser = inject(MessageContentParser);

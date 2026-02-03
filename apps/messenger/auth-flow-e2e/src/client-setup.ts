@@ -19,7 +19,7 @@ import {
 import {
   MessengerCryptoService,
   CryptoEngine,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-private-keys';
 import {
   ChatDataService,
   ChatSendService,

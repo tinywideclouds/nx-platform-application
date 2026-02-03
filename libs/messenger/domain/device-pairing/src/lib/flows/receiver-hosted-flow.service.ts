@@ -2,10 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import {
-  MessengerCryptoService,
-  PrivateKeys,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   URN,
@@ -19,10 +16,14 @@ import {
 import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/messenger-domain-message-content';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
+import { PairingSecurityService } from '@nx-platform-application/messenger-infrastructure-pairing-security';
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
+
 @Injectable({ providedIn: 'root' })
 export class ReceiverHostedFlowService {
   private logger = inject(Logger);
-  private crypto = inject(MessengerCryptoService);
+  private crypto = inject(MessageSecurityService);
+  private pairing = inject(PairingSecurityService);
   private sendService = inject(ChatSendService);
   private identityResolver = inject(IdentityResolver);
 
@@ -33,7 +34,7 @@ export class ReceiverHostedFlowService {
   async startSession(): Promise<DevicePairingSession> {
     this.logger.info('[ReceiverFlow] Starting session (RSA)...');
 
-    const session = await this.crypto.generateReceiverSession();
+    const session = await this.pairing.generateReceiverSession();
 
     return {
       sessionId: session.sessionId,
@@ -50,12 +51,12 @@ export class ReceiverHostedFlowService {
    */
   async processScannedQr(
     qrCode: string,
-    myKeys: PrivateKeys,
+    myKeys: WebCryptoKeys,
     myUrn: URN,
   ): Promise<void> {
     this.logger.info('[ReceiverFlow] Processing scanned QR...');
 
-    const parsed = await this.crypto.parseQrCode(qrCode);
+    const parsed = await this.pairing.parseQrCode(qrCode);
     if (parsed.mode !== 'RECEIVER_HOSTED') {
       throw new Error(
         `[ReceiverFlow] Invalid QR Mode. Expected RECEIVER_HOSTED, got ${parsed.mode}`,
@@ -100,7 +101,7 @@ export class ReceiverHostedFlowService {
     await firstValueFrom(this.sendService.sendMessage(envelope));
   }
 
-  private async serializeKeys(keys: PrivateKeys): Promise<Uint8Array> {
+  private async serializeKeys(keys: WebCryptoKeys): Promise<Uint8Array> {
     const encJwk = await crypto.subtle.exportKey('jwk', keys.encKey);
     const sigJwk = await crypto.subtle.exportKey('jwk', keys.sigKey);
 

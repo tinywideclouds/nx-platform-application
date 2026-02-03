@@ -3,7 +3,7 @@ import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 import { Contact } from '@nx-platform-application/contacts-types';
 import { SecureKeyService } from '@nx-platform-application/messenger-infrastructure-key-access';
 import { WebKeyDbStore } from '@nx-platform-application/platform-infrastructure-web-key-storage';
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 import { MESSENGER_USERS, DEFAULT_USER } from '../data/users.const';

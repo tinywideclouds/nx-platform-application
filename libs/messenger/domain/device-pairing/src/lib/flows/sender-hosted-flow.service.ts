@@ -2,10 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Temporal } from '@js-temporal/polyfill';
 import { firstValueFrom } from 'rxjs';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import {
-  MessengerCryptoService,
-  PrivateKeys,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import {
   URN,
@@ -22,10 +19,14 @@ import { MESSAGE_TYPE_DEVICE_SYNC } from '@nx-platform-application/messenger-dom
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
 
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
+import { PairingSecurityService } from '@nx-platform-application/messenger-infrastructure-pairing-security';
+
 @Injectable({ providedIn: 'root' })
 export class SenderHostedFlowService {
   private logger = inject(Logger);
-  private crypto = inject(MessengerCryptoService);
+  private crypto = inject(MessageSecurityService);
+  private pairing = inject(PairingSecurityService);
   private sendService = inject(ChatSendService);
   private spy = inject(HotQueueMonitor);
 
@@ -37,13 +38,13 @@ export class SenderHostedFlowService {
    * Action: Generates AES Key, Encrypts Identity Keys, Sends to SELF (Dead Drop).
    */
   async startSession(
-    myKeys: PrivateKeys,
+    myKeys: WebCryptoKeys,
     myUrn: URN,
   ): Promise<DevicePairingSession> {
     this.logger.info('[SenderFlow] Starting session (AES)...');
 
     // 1. Generate AES Session Key
-    const session = await this.crypto.generateSenderSession();
+    const session = await this.pairing.generateSenderSession();
 
     // 2. Serialize Identity Keys
     const payloadBytes = await this.serializeKeys(myKeys);
@@ -105,10 +106,10 @@ export class SenderHostedFlowService {
   async redeemScannedQr(
     qrCode: string,
     myUrn: URN,
-  ): Promise<PrivateKeys | null> {
+  ): Promise<WebCryptoKeys | null> {
     this.logger.info('[SenderFlow] Redeeming scanned QR...');
 
-    const parsed = await this.crypto.parseQrCode(qrCode);
+    const parsed = await this.pairing.parseQrCode(qrCode);
     if (parsed.mode !== 'SENDER_HOSTED') {
       throw new Error(
         `[SenderFlow] Invalid QR Mode. Expected SENDER_HOSTED, got ${parsed.mode}`,
@@ -142,14 +143,14 @@ export class SenderHostedFlowService {
 
   // --- Internal Helpers ---
 
-  private async serializeKeys(keys: PrivateKeys): Promise<Uint8Array> {
+  private async serializeKeys(keys: WebCryptoKeys): Promise<Uint8Array> {
     const encJwk = await crypto.subtle.exportKey('jwk', keys.encKey);
     const sigJwk = await crypto.subtle.exportKey('jwk', keys.sigKey);
     const json = JSON.stringify({ enc: encJwk, sig: sigJwk });
     return new TextEncoder().encode(json);
   }
 
-  private async deserializeKeys(bytes: Uint8Array): Promise<PrivateKeys> {
+  private async deserializeKeys(bytes: Uint8Array): Promise<WebCryptoKeys> {
     const json = new TextDecoder().decode(bytes);
     const jwks = JSON.parse(json);
 

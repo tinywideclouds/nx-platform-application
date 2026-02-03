@@ -5,7 +5,7 @@ import { MockProvider } from 'ng-mocks';
 
 import { IngestionService } from './ingestion.service';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';

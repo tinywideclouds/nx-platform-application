@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import {
   MessageMetadataService,
   MessageContentParser,

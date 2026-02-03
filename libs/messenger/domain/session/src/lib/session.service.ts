@@ -1,12 +1,12 @@
 // libs/messenger/domain/session/src/lib/session.service.ts
 import { Injectable, signal, computed } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 export interface ActiveSession {
   authUrn: URN; // From OIDC/Auth (Who I am logged in as)
   networkUrn: URN; // From Directory (Who I am to the network)
-  keys: PrivateKeys; // My Identity Keys
+  keys: WebCryptoKeys; // My Identity Keys
 }
 
 @Injectable({ providedIn: 'root' })
@@ -18,15 +18,19 @@ export class SessionService {
   /**
    * Called by AppState on boot.
    */
-  initialize(authUrn: URN, networkUrn: URN, keys: PrivateKeys) {
-    console.log('SESSION INITIALIZATION', authUrn, networkUrn);
+  initialize(authUrn: URN, networkUrn: URN, keys: WebCryptoKeys) {
+    console.log(
+      'SESSION INITIALIZATION',
+      authUrn.toString(),
+      networkUrn.toString(),
+    );
     this._session.set({ authUrn, networkUrn, keys });
   }
 
   /**
    * Called on Key Rotation.
    */
-  updateKeys(newKeys: PrivateKeys) {
+  updateKeys(newKeys: WebCryptoKeys) {
     this._session.update((current) =>
       current ? { ...current, keys: newKeys } : null,
     );

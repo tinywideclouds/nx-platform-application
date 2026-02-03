@@ -13,7 +13,7 @@ import {
   MessageGroupInviteResponse,
   GroupInvitePayload,
 } from '@nx-platform-application/messenger-domain-message-content';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import {
   ChatMessage,

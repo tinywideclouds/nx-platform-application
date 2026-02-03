@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 // Flows
@@ -35,7 +35,7 @@ export class DevicePairingService {
   async pollForReceiverSync(
     sessionPrivateKey: CryptoKey,
     myUrn: URN,
-  ): Promise<PrivateKeys | null> {
+  ): Promise<WebCryptoKeys | null> {
     const payload = await this.spy.checkQueueForInvite(
       sessionPrivateKey,
       myUrn,
@@ -54,7 +54,7 @@ export class DevicePairingService {
    */
   async linkTargetDevice(
     qrCode: string,
-    myKeys: PrivateKeys,
+    myKeys: WebCryptoKeys,
     myUrn: URN,
   ): Promise<void> {
     return this.receiverFlow.processScannedQr(qrCode, myKeys, myUrn);
@@ -66,7 +66,7 @@ export class DevicePairingService {
    * Source: Starts session, Drops keys in Dead Drop, returns QR payload (AES).
    */
   async startSenderSession(
-    myKeys: PrivateKeys,
+    myKeys: WebCryptoKeys,
     myUrn: URN,
   ): Promise<DevicePairingSession> {
     return this.senderFlow.startSession(myKeys, myUrn);
@@ -78,13 +78,13 @@ export class DevicePairingService {
   async redeemSenderSession(
     qrCode: string,
     myUrn: URN,
-  ): Promise<PrivateKeys | null> {
+  ): Promise<WebCryptoKeys | null> {
     return this.senderFlow.redeemScannedQr(qrCode, myUrn);
   }
 
   // --- Shared Helper ---
 
-  private async deserializeKeys(bytes: Uint8Array): Promise<PrivateKeys> {
+  private async deserializeKeys(bytes: Uint8Array): Promise<WebCryptoKeys> {
     const json = new TextDecoder().decode(bytes);
     const jwks = JSON.parse(json);
 

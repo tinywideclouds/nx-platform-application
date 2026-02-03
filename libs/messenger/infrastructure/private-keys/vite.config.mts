@@ -7,14 +7,14 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 export default defineConfig(() => ({
   root: __dirname,
   cacheDir:
-    '../../../../node_modules/.vite/libs/messenger/infrastructure/messenger-crypto-bridge',
+    '../../../../node_modules/.vite/libs/messenger/infrastructure/messenger-private-keys',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
 
   build: {
     emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
-      name: 'messenger-crypto-bridge',
+      name: 'messenger-private-keys',
       fileName: (format: any) => `index.${format}.js`,
       formats: ['es' as const],
     },

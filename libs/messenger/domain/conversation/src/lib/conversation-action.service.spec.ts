@@ -9,7 +9,7 @@ import {
   ImageContent,
   MessageTypeImage,
 } from '@nx-platform-application/messenger-domain-message-content';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 

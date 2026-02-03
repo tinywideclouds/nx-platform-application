@@ -5,7 +5,7 @@ import {
   KeyNotFoundError,
 } from '@nx-platform-application/platform-types';
 import { ISecureKeyService } from '@nx-platform-application/messenger-infrastructure-key-access';
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { MockServerIdentityState } from '../types';
 import { SCENARIO_USERS } from '../scenarios/users.scenarios';
 

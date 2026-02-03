@@ -61,11 +61,11 @@ import {
   MockIntegrationApiService,
   MockCryptoEngine,
   MessengerScenarioDriver,
-  MockDirectoryService, // ✅ Imported Mock Directory
+  MockDirectoryService,
 } from '@nx-platform-application/lib-messenger-test-app-mocking';
 
 // --- OTHER ---
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { provideMessengerIdentity } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { IntegrationApiService } from '@nx-platform-application/platform-infrastructure-drive-integrations';
 import {

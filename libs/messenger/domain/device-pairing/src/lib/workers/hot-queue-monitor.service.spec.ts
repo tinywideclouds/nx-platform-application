@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HotQueueMonitor } from './hot-queue-monitor.service';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { URN } from '@nx-platform-application/platform-types';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';

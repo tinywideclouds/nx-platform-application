@@ -5,13 +5,13 @@ import { ChatDataService } from '@nx-platform-application/messenger-infrastructu
 import { TransportMessage } from '@nx-platform-application/messenger-types';
 import { MessageTypeDeviceSync } from '@nx-platform-application/messenger-domain-message-content';
 import { URN } from '@nx-platform-application/platform-types';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
 
 @Injectable({ providedIn: 'root' })
 export class HotQueueMonitor {
   private logger = inject(Logger);
   private dataService = inject(ChatDataService);
-  private crypto = inject(MessengerCryptoService);
+  private crypto = inject(MessageSecurityService);
 
   async checkQueueForInvite(
     sessionKey: CryptoKey,

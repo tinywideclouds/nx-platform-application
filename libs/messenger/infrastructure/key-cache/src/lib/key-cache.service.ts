@@ -21,6 +21,7 @@ export class KeyCacheService {
   private readonly KEY_TTL_MS = this.KEY_TTL_HOURS * 60 * 60 * 1000;
 
   public async getPublicKey(urn: URN): Promise<PublicKeys> {
+    console.log('CACHE GET', urn.toString());
     const cachedEntry = await this.keyStorage.getKey(urn);
 
     if (cachedEntry) {

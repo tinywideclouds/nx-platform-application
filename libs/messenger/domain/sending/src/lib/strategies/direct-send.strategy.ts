@@ -1,9 +1,10 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   SendStrategy,
   SendContext,
   OutboundTarget,
 } from '../send-strategy.interface';
+import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 @Injectable({ providedIn: 'root' })
 export class DirectSendStrategy implements SendStrategy {
@@ -11,7 +12,7 @@ export class DirectSendStrategy implements SendStrategy {
     // Pure Routing: Direct messages go to the recipient, in the recipient's context.
     return [
       {
-        conversationUrn: ctx.recipientUrn,
+        conversationUrn: ctx.conversationUrn,
         recipients: [ctx.recipientUrn],
       },
     ];

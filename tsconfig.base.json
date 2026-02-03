@@ -92,6 +92,9 @@
       "@nx-platform-application/messenger-domain-ingestion": [
         "libs/messenger/domain/ingestion/src/index.ts"
       ],
+      "@nx-platform-application/messenger-domain-key-manager": [
+        "libs/messenger/domain/key-manager/src/index.ts"
+      ],
       "@nx-platform-application/messenger-domain-message-content": [
         "libs/messenger/domain/message-content/src/index.ts"
       ],
@@ -116,9 +119,6 @@
       "@nx-platform-application/messenger-infrastructure-chat-storage": [
         "libs/messenger/infrastructure/chat-storage/src/index.ts"
       ],
-      "@nx-platform-application/messenger-infrastructure-crypto-bridge": [
-        "libs/messenger/infrastructure/crypto-bridge/src/index.ts"
-      ],
       "@nx-platform-application/messenger-infrastructure-device-notifications": [
         "libs/messenger/infrastructure/device-notifications/src/index.ts"
       ],
@@ -139,6 +139,15 @@
       ],
       "@nx-platform-application/messenger-infrastructure-local-settings": [
         "libs/messenger/infrastructure/local-settings/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-message-security": [
+        "libs/messenger/infrastructure/message-security/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-pairing-security": [
+        "libs/messenger/infrastructure/pairing-security/src/index.ts"
+      ],
+      "@nx-platform-application/messenger-infrastructure-private-keys": [
+        "libs/messenger/infrastructure/private-keys/src/index.ts"
       ],
       "@nx-platform-application/messenger-protos": [
         "libs/messenger/protos/src/index.ts"

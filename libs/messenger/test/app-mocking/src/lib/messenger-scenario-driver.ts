@@ -33,7 +33,7 @@ import { KeyCacheService } from '@nx-platform-application/messenger-infrastructu
 import {
   MessengerCryptoService,
   CryptoEngine,
-} from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+} from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 import { MESSENGER_SCENARIOS } from './scenarios/index';
 import { MessengerScenarioData, ScenarioItem } from './types';

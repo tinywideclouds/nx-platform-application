@@ -9,7 +9,7 @@ import {
   OutboundTask,
 } from '@nx-platform-application/messenger-types';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { OutboxStorage } from '@nx-platform-application/messenger-infrastructure-chat-storage';
@@ -21,7 +21,7 @@ import { SessionService } from '@nx-platform-application/messenger-domain-sessio
 export class OutboxWorkerService {
   private readonly outbox = inject(OutboxStorage);
   private readonly keyCache = inject(KeyCacheService);
-  private readonly crypto = inject(MessengerCryptoService);
+  private readonly crypto = inject(MessageSecurityService);
   private readonly sendService = inject(ChatSendService);
   private readonly logger = inject(Logger);
 
@@ -131,6 +131,8 @@ export class OutboxWorkerService {
     // Always use myNetworkUrn for sending
 
     const session = this.sessionService.snapshot;
+
+    console.log('SENDING FROM ', session.networkUrn);
 
     // 3. Create Transport Envelope
     const transportPayload: TransportMessage = {

@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import {
   ChatStorageService,
@@ -13,6 +13,7 @@ import {
 } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
+  Conversation,
   MessageDeliveryStatus,
 } from '@nx-platform-application/messenger-types';
 import {
@@ -44,6 +45,8 @@ export class OutboundService {
   private storageService = inject(ChatStorageService);
   private outboxStorage = inject(OutboxStorage);
 
+  private identityResolver = inject(IdentityResolver);
+
   // Data Assembly Services (Centralized)
   private metadataService = inject(MessageMetadataService);
 
@@ -57,7 +60,7 @@ export class OutboundService {
 
   // --- 1. Standard Routing (The "Smart" Router) ---
   // Routes based on whether the target is a User, a Network Group, or a Local Contact List.
-  async sendToConversation(
+  async sendFromConversation(
     recipientUrn: URN,
     typeId: URN,
     payloadBytes: Uint8Array,
@@ -101,7 +104,6 @@ export class OutboundService {
     strategy: SendStrategy,
   ): Promise<OutboundResult> {
     // 1. Storage (Persistence Only)
-    console.log('savaing msg', ctx.optimisticMsg);
     if (!ctx.isEphemeral && ctx.shouldPersist) {
       await this.storageService.saveMessage(ctx.optimisticMsg);
     }
@@ -124,17 +126,21 @@ export class OutboundService {
       };
     }
 
+    targets = await this.resolveTargets(targets);
+
+    console.log('got final targets', targets);
+
     // 3. Assembly & Execution (What?)
     // We construct the payload (Encryption/Metadata) and execute the transport.
     try {
       if (ctx.isEphemeral) {
-        await this.executeEphemeral(targets, ctx);
+        await this.executeSendEphemeral(targets, ctx);
         return {
           message: ctx.optimisticMsg,
           outcome: Promise.resolve('sent'),
         };
       } else {
-        const outcome = this.executePersistent(targets, ctx);
+        const outcome = this.executeSendPersistent(targets, ctx);
         return {
           message: ctx.optimisticMsg,
           outcome,
@@ -150,9 +156,51 @@ export class OutboundService {
     }
   }
 
+  /**
+   * ✅ FIX: Correctly maps Local Contact URNs -> Network URNs
+   * Uses Promise.all to handle async lookups and filters failures.
+   */
+  private async resolveTargets(
+    targets: OutboundTarget[],
+  ): Promise<OutboundTarget[]> {
+    const resolvedTargets = await Promise.all(
+      targets.map(async (t) => {
+        // Resolve all recipients in parallel
+        const recipientPromises = t.recipients.map((r) =>
+          this.resolveNetworkUrn(r).catch((e) => {
+            this.logger.warn(`[Outbound] Failed to resolve recipient ${r}`, e);
+            return null;
+          }),
+        );
+
+        const recipients = await Promise.all(recipientPromises);
+
+        // Filter out nulls (failed resolutions)
+        const validRecipients = recipients.filter((r): r is URN => !!r);
+
+        return {
+          conversationUrn: t.conversationUrn,
+          recipients: validRecipients,
+        };
+      }),
+    );
+
+    return resolvedTargets;
+  }
+
+  private async resolveNetworkUrn(strategyUrn: URN): Promise<URN> {
+    if (strategyUrn.namespace === 'contacts') {
+      return this.identityResolver.resolveToHandle(strategyUrn);
+    }
+    return strategyUrn;
+  }
+
   // --- Execution Helpers ---
 
-  private async executeEphemeral(targets: OutboundTarget[], ctx: SendContext) {
+  private async executeSendEphemeral(
+    targets: OutboundTarget[],
+    ctx: SendContext,
+  ) {
     // Ephemeral messages use raw bytes (no metadata wrapping)
     const payload = ctx.optimisticMsg.payloadBytes || new Uint8Array([]);
 
@@ -165,7 +213,7 @@ export class OutboundService {
     }
   }
 
-  private async executePersistent(
+  private async executeSendPersistent(
     targets: OutboundTarget[],
     ctx: SendContext,
   ): Promise<MessageDeliveryStatus> {

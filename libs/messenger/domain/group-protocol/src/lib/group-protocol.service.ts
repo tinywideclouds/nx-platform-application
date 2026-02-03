@@ -14,7 +14,7 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
 
@@ -309,7 +309,7 @@ export class GroupProtocolService {
     const bytes = this.parser.serialize(content);
 
     // 3. Broadcast the Response
-    await this.outbound.sendToConversation(
+    await this.outbound.sendFromConversation(
       groupUrn,
       MessageGroupInviteResponse,
       bytes,

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IdentitySettingsContentComponent } from './identity-settings-content.component';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { ChatService } from '@nx-platform-application/messenger-state-app';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';

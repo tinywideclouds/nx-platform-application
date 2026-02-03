@@ -11,7 +11,7 @@ import {
   serializePayloadToProtoBytes,
 } from '@nx-platform-application/messenger-types';
 import { MessageTypeText } from '@nx-platform-application/messenger-domain-message-content';
-import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { CryptoEngine } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 import { MockServerNetworkState } from '../types';

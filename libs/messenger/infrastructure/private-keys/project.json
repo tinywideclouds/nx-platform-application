@@ -1,7 +1,7 @@
 {
   "name": "messenger-infrastructure-crypto-bridge",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/messenger/infrastructure/crypto-bridge/src",
+  "sourceRoot": "libs/messenger/infrastructure/private-keys/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:messenger", "layer:infrastructure"],
@@ -11,17 +11,17 @@
       "outputs": ["{options.outputPath}", "{options.outputHtmlPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/messenger/infrastructure/crypto-bridge",
-        "outputHtmlPath": "dist/test-reports/libs/messenger/infrastructure/crypto-bridge/index.html",
-        "configFile": "libs/messenger/infrastructure/crypto-bridge/vite.config.mts"
+        "outputPath": "dist/libs/messenger/infrastructure/private-keys",
+        "outputHtmlPath": "dist/test-reports/libs/messenger/infrastructure/private-keys/index.html",
+        "configFile": "libs/messenger/infrastructure/private-keys/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "coverage/libs/messenger/infrastructure/crypto-bridge",
-        "configFile": "libs/messenger/infrastructure/crypto-bridge/vitest.config.mts"
+        "reportsDirectory": "coverage/libs/messenger/infrastructure/private-keys",
+        "configFile": "libs/messenger/infrastructure/private-keys/vitest.config.mts"
       }
     },
     "lint": {

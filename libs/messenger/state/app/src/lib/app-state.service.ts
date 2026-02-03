@@ -7,7 +7,7 @@ import {
   computed,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { Subject, firstValueFrom } from 'rxjs'; // ✅ Added firstValueFrom
+import { Subject, firstValueFrom } from 'rxjs';
 import {
   throttleTime,
   filter,
@@ -25,26 +25,23 @@ import {
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
 
-// --- FACADES & STATE ---
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
-// --- DOMAIN SERVICES ---
 import {
   ConversationService,
   ConversationActionService,
 } from '@nx-platform-application/messenger-domain-conversation';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
-// --- INFRASTRUCTURE ---
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-crypto-bridge';
+import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
@@ -53,7 +50,6 @@ import {
   AddressBookApi,
 } from '@nx-platform-application/contacts-api';
 
-// --- ENGINE ---
 import { StateEngine, PageState, AppDiagnosticState } from './state.engine';
 import { ContactGroup } from '@nx-platform-application/contacts-types';
 
@@ -100,14 +96,16 @@ export class AppState {
   public readonly onboardingState = this.identity.onboardingState;
   public readonly isCeremonyActive = this.identity.isCeremonyActive;
 
-  // ✅ THE GATE: Captures Injection Context correctly
-  // This emits ONLY when the session is fully loaded and ready for Domain use.
+  // ✅ FIELD: Safe Observable creation (Injection Context guaranteed)
   private readonly sessionReady$ = toObservable(
     this.sessionService.currentSession,
   ).pipe(
-    filter((s) => !!s), // Block until not null
-    take(1), // We only need to know "Is it ready?" once for the waiter
+    filter((s) => !!s),
+    take(1),
   );
+
+  // ✅ FIELD: Continuous session stream for pipelines
+  private readonly session$ = toObservable(this.sessionService.currentSession);
 
   private readonly _typingSubject = new Subject<void>();
   public readonly typingTrigger$ = this._typingSubject
@@ -175,6 +173,7 @@ export class AppState {
     this.logger.info('ChatService: Initializing via Facades...');
     this.identity.initialize();
 
+    // 1. Reactive Boot Trigger
     effect(() => {
       const state = this.identity.onboardingState();
       if (state === 'READY' || state === 'OFFLINE_READY') {
@@ -182,6 +181,7 @@ export class AppState {
       }
     });
 
+    // 2. Reactive Group Loader
     effect(() => {
       const conv = this.selectedConversation();
       const urn = conv?.id;
@@ -196,11 +196,15 @@ export class AppState {
     });
 
     this.loadUiSettings();
-    this.initResumptionTriggers();
+
+    // 3. Setup Listeners immediately (Sync)
+    this.setupOrchestration();
+    this.setupResumptionTriggers();
   }
 
   readonly bootStatus = signal<AppDiagnosticState>({ bootStage: 'IDLE' });
 
+  // ✅ EXECUTION ONLY: No reactive setup here.
   private async bootDataLayer() {
     this.logger.info('🚀 [AppState] Identity Ready. Booting Data Layer...');
     this.bootStatus.set({ bootStage: 'CHECKING_AUTH' });
@@ -229,30 +233,26 @@ export class AppState {
         .catch((e) => this.logger.error('⚠️ [AppState] Cloud Check Failed', e)),
     );
 
-    this.initOrchestration();
+    // Orchestration is already wired in constructor.
+
     void this.outboxWorker.processQueue();
 
     await Promise.allSettled(promises);
     this.bootStatus.set({ bootStage: 'READY' });
   }
 
-  private initOrchestration() {
-    // ✅ AUTO-PROTECTION: Background tasks now wait for readiness automatically
+  private setupOrchestration() {
     this.conversationService.readReceiptTrigger$
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        withLatestFrom(toObservable(this.sessionService.currentSession)), // Check session
-        filter(([_, session]) => !!session), // Only proceed if session exists
+        withLatestFrom(this.session$),
+        filter(([_, session]) => !!session),
         map(([ids, _]) => ids),
       )
       .subscribe((ids) => this.markAsRead(ids));
   }
 
-  public async connectCloud(): Promise<void> {
-    await this.syncService.connect('google-drive');
-  }
-
-  private initResumptionTriggers(): void {
+  private setupResumptionTriggers(): void {
     // 1. Reconnection
     this.liveService.status$
       .pipe(
@@ -264,7 +264,7 @@ export class AppState {
         void this.outboxWorker.processQueue();
       });
 
-    // 2. Boot/Resume - Uses the Gate
+    // 2. Boot/Resume
     this.sessionReady$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -274,12 +274,10 @@ export class AppState {
   }
 
   // =================================================================
-  // PUBLIC ACTIONS (User Intent)
+  // PUBLIC ACTIONS
   // =================================================================
 
   public async loadConversation(urn: URN | null): Promise<void> {
-    // ✅ THE ONE PATCH: This is the only "Blind" entry point (Router).
-    // We treat this as a "Resolver" - we simply hold the line until we are ready.
     if (urn && !this.sessionService.isReady) {
       this.logger.info('[AppState] Load deferred: Waiting for Session...');
       await firstValueFrom(this.sessionReady$);
@@ -288,7 +286,6 @@ export class AppState {
   }
 
   public async sendDraft(draft: DraftMessage): Promise<void> {
-    // No patch needed: UI checks Readiness before showing Send button.
     const recipient = this.selectedConversation()?.id;
     if (!recipient) return;
 
@@ -307,7 +304,6 @@ export class AppState {
   }
 
   public async markAsRead(messageIds: string[]): Promise<void> {
-    // No patch needed: Orchestration trigger is now guarded.
     const recipient = this.selectedConversation()?.id;
     const sender = this.currentUserUrn();
 
@@ -333,7 +329,6 @@ export class AppState {
   }
 
   // --- FACADE DELEGATIONS ---
-  // ... (No Changes) ...
 
   public async performIdentityReset(): Promise<void> {
     return this.identity.performIdentityReset();
@@ -384,6 +379,11 @@ export class AppState {
   }
 
   // --- MISC ---
+
+  // ✅ RESTORED
+  public async connectCloud(): Promise<void> {
+    await this.syncService.connect('google-drive');
+  }
 
   public isCloudEnabled(): boolean {
     return this.syncService.isConnected();

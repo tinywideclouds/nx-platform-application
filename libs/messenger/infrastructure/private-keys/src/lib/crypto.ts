@@ -9,6 +9,16 @@ export interface EncryptedPayload {
   encryptedData: Uint8Array;
 }
 
+export const rsaOaepImportParams: RsaHashedImportParams = {
+  name: 'RSA-OAEP',
+  hash: 'SHA-256',
+};
+
+export const rsaPssImportParams: RsaHashedImportParams = {
+  name: 'RSA-PSS',
+  hash: 'SHA-256',
+};
+
 /**
  * A class that encapsulates cryptographic operations using the Web Crypto API.
  */
@@ -57,11 +67,11 @@ export class CryptoEngine {
   }
 
   /**
-   * Encrypts a plaintext payload using a hybrid encryption scheme.
+   * Encrypts a Uint8Array payload using a hybrid encryption scheme.
    */
   async encrypt(
     publicKey: CryptoKey,
-    plaintext: Uint8Array,
+    sourceData: Uint8Array,
   ): Promise<EncryptedPayload> {
     // 1. Generate a temporary symmetric key
     const aesKey = await crypto.subtle.generateKey(
@@ -75,7 +85,7 @@ export class CryptoEngine {
     const encryptedContent = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       aesKey,
-      new Uint8Array(plaintext),
+      new Uint8Array(sourceData),
     );
 
     const encryptedData = new Uint8Array(
