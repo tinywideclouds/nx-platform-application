@@ -19,7 +19,7 @@ import { WebCryptoKeys } from './types';
 @Injectable({
   providedIn: 'root',
 })
-export class MessengerCryptoService {
+export class PrivateKeyService {
   private logger = inject(Logger);
   private cryptoEngine = inject(CryptoEngine);
   private storage: WebKeyStorageProvider = inject(WebKeyDbStore);

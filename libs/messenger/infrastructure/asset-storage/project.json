@@ -15,6 +15,15 @@
         "configFile": "libs/messenger/infrastructure/asset-storage/vite.config.mts"
       }
     },
+
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/messenger/infrastructure/asset-storage",
+        "configFile": "libs/messenger/infrastructure/asset-storage/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

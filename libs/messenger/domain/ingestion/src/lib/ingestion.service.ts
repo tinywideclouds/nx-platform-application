@@ -18,6 +18,8 @@ import {
   MessageContentParser,
   ReadReceiptData,
   AssetRevealData,
+  ParsedMessage,
+  MessageSnippetFactory,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
@@ -39,6 +41,7 @@ export class IngestionService {
   private storageService = inject(ChatStorageService);
   private quarantineService = inject(QuarantineService);
   private parser = inject(MessageContentParser);
+  private snippetGenerator = inject(MessageSnippetFactory);
 
   private groupProtocol = inject(GroupProtocolService);
   private contactProtocol = inject(ContactProtocolService);
@@ -168,7 +171,7 @@ export class IngestionService {
   }
 
   private async handleContent(
-    parsed: any,
+    parsed: ParsedMessage & { kind: 'content' },
     transport: TransportMessage,
     queueId: string,
     canonicalSenderUrn: URN,
@@ -212,17 +215,18 @@ export class IngestionService {
       await this.contactProtocol.ensureSession(canonicalSenderUrn);
     }
 
+    const snippet = this.snippetGenerator.createSnippet(parsed);
+
     const chatMessage: ChatMessage = {
       id: canonicalId,
       senderId: canonicalSenderUrn,
       sentTimestamp: transport.sentTimestamp as ISODateTimeString,
       typeId: transport.typeId,
+      snippet: snippet,
       status: 'received',
       conversationUrn: conversationUrn!,
       tags: parsed.tags,
       payloadBytes: this.parser.serialize(parsed.payload),
-      textContent:
-        parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
     };
 
     console.log('handling context save', chatMessage);

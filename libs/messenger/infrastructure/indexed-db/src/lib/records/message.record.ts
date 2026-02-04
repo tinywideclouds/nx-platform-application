@@ -12,6 +12,7 @@ export interface MessageRecord {
   conversationUrn: string; // FK to Conversation Index
   sentTimestamp: ISODateTimeString;
   typeId: string;
+  snippet?: string;
   payloadBytes: Uint8Array;
   status: MessageDeliveryStatus;
   receiptMap?: Record<string, MessageDeliveryStatus>;

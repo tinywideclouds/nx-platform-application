@@ -37,7 +37,7 @@ describe('ChatStorageService', () => {
     conversationUrn: convUrn,
     senderId: URN.parse('urn:contacts:user:me'),
     sentTimestamp: sentTimestamp as ISODateTimeString,
-    // FIX: Explicitly set the Text Type URN so generateSnippet works
+    snippet: text,
     typeId: URN.parse('urn:message:type:text'),
     payloadBytes: new TextEncoder().encode(text),
     status,

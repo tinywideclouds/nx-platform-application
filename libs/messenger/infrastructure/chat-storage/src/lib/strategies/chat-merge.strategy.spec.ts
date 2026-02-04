@@ -10,7 +10,7 @@ describe('ChatMergeStrategy', () => {
   const TEST_URN = URN.parse('urn:messenger:conversation:test-id-1');
 
   const base: Conversation = {
-    conversationUrn: TEST_URN,
+    id: TEST_URN,
     name: 'Test Chat',
     snippet: 'Hello',
     lastActivityTimestamp: '2024-06-01T12:00:00Z' as ISODateTimeString,

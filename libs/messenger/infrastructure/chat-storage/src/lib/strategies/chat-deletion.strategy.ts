@@ -6,15 +6,15 @@ import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 import {
   MessengerDatabase,
-  MessageMapper,
   MessageRecord,
-  generateSnippet,
+  // MessageMapper, // [REMOVED] No longer needed for snippet generation
+  // generateSnippet, // [REMOVED]
 } from '@nx-platform-application/messenger-infrastructure-indexed-db';
 
 @Injectable({ providedIn: 'root' })
 export class ChatDeletionStrategy {
   private readonly db = inject(MessengerDatabase);
-  private readonly mapper = inject(MessageMapper);
+  // private readonly mapper = inject(MessageMapper); // [REMOVED]
 
   /**
    * Deletes a message locally, creates a Tombstone for sync, and corrects the
@@ -58,11 +58,10 @@ export class ChatDeletionStrategy {
             .first()) as MessageRecord | undefined;
 
           if (previousMsg) {
-            const prevSmart = this.mapper.toDomain(previousMsg);
-
+            // ✅ USE STORED SNIPPET: No parsing required.
             await this.db.conversations.update(conversationUrnStr, {
               lastActivityTimestamp: previousMsg.sentTimestamp,
-              snippet: generateSnippet(prevSmart),
+              snippet: previousMsg.snippet || '',
             });
           } else {
             // Edge Case: No messages left in conversation

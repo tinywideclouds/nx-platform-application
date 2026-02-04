@@ -70,21 +70,25 @@ The infrastructure is organized by the **Technical Capability** it provides.
 - **Key Storage (`infrastructure-key-storage`):**
   - Stores the Public Keys of known contacts.
   - Stores the Private Identity Keys of the current user (Exportable/Non-Exportable).
-- **Key Cache (`infrastructure-key-cache`):**
-  - A "Smart Repository" implementation.
-  - Orchestrates `KeyAccess` (Network) and `KeyStorage` (Disk) to provide a "Read-Through" cache strategy (Stale-While-Revalidate).
 
-### 4. Security
+### 4. Security & Caching
 
-**Role:** The Cryptographic Engine.
+**Role:** The Trust Engine.
 
-- **Crypto Bridge (`infrastructure-crypto-bridge`):**
-  - Wraps the browser's `Web Crypto API` (SubtleCrypto).
-  - **Responsibilities:**
-    - Generating RSA-OAEP / ECDSA Keypairs.
-    - Encrypting/Decrypting payloads (AES-GCM).
-    - Signing messages and verifying signatures.
-  - **Why a Bridge?** The Web Crypto API is complex and verbose. This bridge provides a simplified, high-level API (e.g., `encryptPayload(data, key)`).
+- **Private Keys (`private-keys`):**
+  - **Role:** The Mechanic (Local Vault).
+  - Wraps `IndexedDB` to securely store the user's Identity Keys.
+  - Provides the low-level `CryptoEngine` wrapper for `Web Crypto API`.
+- **Message Security (`message-security`):**
+  - **Role:** The Protocol (Sealed Sender).
+  - Stateless service that implements the "Sign-then-Encrypt" and "Decrypt-then-Verify" pipeline.
+  - Consumes `TransportMessage` and produces `SecureEnvelope`.
+- **Pairing Security (`pairing-security`):**
+  - **Role:** The Handshake (Device Linking).
+  - Generates and parses the ephemeral QR payloads (`rh` / `sh` modes) used to link a new device.
+- **Key Cache (`key-cache`):**
+  - **Read-Through Cache.** Orchestrates `KeyAccess` (Network) and `KeyStorage` (Disk).
+  - Implements TTL (Time-To-Live) logic to auto-rotate stale keys.
 
 ---
 

@@ -19,7 +19,6 @@ import {
   ConversationMapper,
   ConversationIndexRecord,
   DeletedMessageRecord,
-  generateSnippet,
 } from '@nx-platform-application/messenger-infrastructure-indexed-db';
 
 import { ChatDeletionStrategy } from '../strategies/chat-deletion.strategy';
@@ -199,7 +198,7 @@ export class ChatStorageService
 
     if (isNewer) {
       update.lastActivityTimestamp = sentTime;
-      update.snippet = generateSnippet(message);
+      update.snippet = message.snippet || 'unknown';
       if (message.status === 'received') {
         update.unreadCount = (existing?.unreadCount || 0) + 1;
       }

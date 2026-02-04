@@ -6,7 +6,6 @@ import {
   CryptoEngine,
   rsaOaepImportParams,
 } from '@nx-platform-application/messenger-infrastructure-private-keys';
-import { SecureKeyService } from '@nx-platform-application/messenger-infrastructure-key-access';
 
 export interface ReceiverSession {
   sessionId: string;
@@ -31,7 +30,6 @@ export interface ParsedQr {
 export class PairingSecurityService {
   private readonly logger = inject(Logger);
 
-  private keyService = inject(SecureKeyService);
   private readonly cryptoEngine = inject(CryptoEngine);
 
   public async generateReceiverSession(): Promise<ReceiverSession> {

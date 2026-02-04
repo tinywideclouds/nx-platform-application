@@ -1,51 +1,41 @@
-# 📖 @nx-platform-application/messenger-crypto-bridge
+# 📖 Messenger Infrastructure: Private Keys
 
-This library is the central **Crypto Engine** for the Messenger application. It implements the "Sealed Sender" cryptographic model and manages the user's local and remote keys.
+> **Role:** The Mechanic (Local Vault)  
+> **Responsibility:** Manages the lifecycle of the user's _Local Identity_ (Private Keys).
 
-It is an orchestrator service, not a pure helper. It injects lower-level services to perform its tasks.
+This library serves as the **Hardware Abstraction Layer** for the device's cryptographic identity. It interfaces directly with the browser's `IndexedDB` and `Web Crypto API` to securely create, store, and retrieve keys.
+
+**It is strictly a Local Service.** It does _not_ know about the network, the backend API, or the "Sealed Sender" protocol.
+
+## Architecture
 
 ## Dependencies
 
-- **`@nx-platform-application/platform-web-key-storage`**: Used to `saveJwk` and `loadJwk` from IndexedDB.
-- **`@nx-platform-application/messenger-key-access`**: Used to `getKey` (for recipients) and `storeKeys` (for ourself) from the backend API.
-- **`@nx-platform-application/messenger-types`**: Used to serialize/deserialize the inner `EncryptedMessagePayload` to/from Protobuf bytes.
-- **`./crypto.ts`**: A pure, local helper class that wraps the Web Crypto API for generating keys, encrypting, and signing.
+- **`@nx-platform-application/platform-web-key-storage`**: Persists keys to IndexedDB.
+- **`./crypto.ts`**: Helper wrapping the Web Crypto API.
 
-## Primary API
+## API: `PrivateKeyService`
 
-### `MessengerCryptoService`
+### 1. Key Lifecycle
 
-An `@Injectable` Angular service that provides the application's core cryptographic functions.
+- **`generateAndStoreKeys(urn)`**:
+  - Generates RSA-OAEP (Encryption) and RSA-PSS (Signing) pairs.
+  - **Saves** Private Keys to the local `IndexedDB`.
+  - **Returns** the `PrivateKeys` (for the session) and `PublicKeys` (for the caller to publish).
+- **`loadMyKeys(urn)`**:
+  - Retrieves the `WebCryptoKeys` (CryptoKey objects) from storage.
+  - Used during session initialization.
 
-#### Key Management
+### 2. Import / Export
 
-- **`generateAndStoreKeys(userUrn: URN): Promise<...>`**
-  - This is the main "onboarding" method.
-  - Generates both an encryption (RSA-OAEP) and signing (RSA-PSS) key pair.
-  - Saves both private key pairs to IndexedDB via `platform-web-key-storage`.
-  - Uploads the public keys to the backend via `messenger-key-access` (`SecureKeyService`).
+- **`storeMyKeys(urn, keys)`**:
+  - Imports `CryptoKey` objects (e.g., from Device Linking) into local storage.
 
-- **`loadMyKeys(userUrn: URN): Promise<PrivateKeys | null>`**
-  - Used on application startup.
-  - Loads the user's private encryption and signing keys from IndexedDB.
+- **`loadMyPublicKeys(urn)`**:
+  - Derives the `PublicKeys` (SPKI bytes) from the stored identity.
+  - Used by the Domain Layer to "Repair" the public directory if it gets out of sync.
 
-#### Crypto Flow
+### 3. Helpers
 
-- **`encryptAndSign(payload: EncryptedMessagePayload, recipientId: URN, ...): Promise<SecureEnvelope>`**
-  - Implements the **Sealed Sender (Outgoing)** logic.
-  - Serializes the `EncryptedMessagePayload` into Protobuf bytes.
-  - Performs hybrid encryption (AES-GCM + RSA-OAEP) of the bytes for the recipient.
-  - Signs the _ciphertext_ with the user's private signing key.
-  - Returns a `SecureEnvelope` ready to be sent.
-
-- **`verifyAndDecrypt(envelope: SecureEnvelope, myPrivateKeys: ...): Promise<EncryptedMessagePayload>`**
-  - Implements the **Sealed Sender (Incoming)** logic.
-  - Decrypts the `encryptedData` blob using AES-GCM (Authenticated Encryption).
-  - Deserializes the resulting bytes into an `EncryptedMessagePayload`.
-  - Fetches the _claimed_ sender's public _signing_ key from `messenger-key-access`.
-  - **Verifies the signature.** If invalid, it throws an error.
-  - Returns the deserialized `EncryptedMessagePayload`.
-
-## Running unit tests
-
-Run `nx test  ` to execute the unit tests for this library.
+- **`verifyKeysMatch(urn, remoteKeys)`**:
+  - A utility to byte-compare the local public identity against a remote set of keys.

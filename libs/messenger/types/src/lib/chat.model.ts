@@ -15,10 +15,10 @@ export interface ChatMessage extends Message {
   conversationUrn: URN;
 
   tags?: URN[];
+  snippet?: string;
 
   // Storage holds bytes; View computes text.
   payloadBytes?: Uint8Array;
-  textContent?: string;
   status?: MessageDeliveryStatus;
   receiptMap?: Record<string, MessageDeliveryStatus>;
 }

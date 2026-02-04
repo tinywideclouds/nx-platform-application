@@ -13,6 +13,3 @@ export * from './lib/mappers/message.mapper';
 export * from './lib/mappers/conversation.mapper';
 export * from './lib/mappers/outbox.mapper';
 export * from './lib/mappers/quarantine.mapper';
-
-// 4. Utilities (Shared Logic)
-export * from './lib/utilities';

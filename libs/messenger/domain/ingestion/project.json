@@ -15,6 +15,14 @@
         "configFile": "libs/messenger/domain/ingestion/vite.config.mts"
       }
     },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../../coverage/libs/messenger/domain/ingestion",
+        "configFile": "libs/messenger/domain/ingestion/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

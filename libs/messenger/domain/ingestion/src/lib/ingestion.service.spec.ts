@@ -5,27 +5,31 @@ import { MockProvider } from 'ng-mocks';
 
 import { IngestionService } from './ingestion.service';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
+import {
+  MessageContentParser,
+  MessageSnippetFactory,
+} from '@nx-platform-application/messenger-domain-message-content';
 import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 
-import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
+// ✅ Fix: Import the Protocol Services to mock them
+import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
+import { ContactProtocolService } from '@nx-platform-application/messenger-domain-contact-protocol';
 
+import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
 import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 describe('IngestionService', () => {
   let service: IngestionService;
   let storage: ChatStorageService;
-  let dataService: ChatDataService;
   let quarantine: QuarantineService;
 
   const myUrn = URN.parse('urn:contacts:user:me');
   const aliceUrn = URN.parse('urn:contacts:user:alice');
   const groupUrn = URN.parse('urn:messenger:group:team');
-
-  const mockKeys = { encKey: {} as any, sigKey: {} as any };
 
   const mockQueuedMsg: QueuedMessage = {
     id: 'router-id-1',
@@ -46,17 +50,25 @@ describe('IngestionService', () => {
     TestBed.configureTestingModule({
       providers: [
         IngestionService,
+
+        // --- Infrastructure Mocks ---
         MockProvider(ChatDataService, {
           getMessageBatch: vi.fn().mockReturnValue(of([mockQueuedMsg])),
           acknowledge: vi.fn().mockReturnValue(of(undefined)),
         }),
-        MockProvider(MessengerCryptoService, {
+        MockProvider(MessageSecurityService, {
           verifyAndDecrypt: vi.fn().mockResolvedValue(mockTransport),
         }),
         MockProvider(ChatStorageService, {
           saveMessage: vi.fn().mockResolvedValue(true),
           applyReceipt: vi.fn().mockResolvedValue(undefined),
         }),
+        MockProvider(SessionService, {
+          snapshot: { keys: { encKey: {} as any, sigKey: {} as any } } as any,
+        }),
+        MockProvider(Logger),
+
+        // --- Domain Mocks (Gatekeeping & Parsing) ---
         MockProvider(QuarantineService, {
           process: vi.fn().mockResolvedValue(aliceUrn),
         }),
@@ -67,30 +79,43 @@ describe('IngestionService', () => {
             tags: [],
             payload: { kind: 'text', text: 'hello' },
           }),
+          serialize: vi.fn().mockReturnValue(new Uint8Array([1])),
         }),
-        // ✅ NEW: Directory Mutation API Mock
+        MockProvider(MessageSnippetFactory, {
+          createSnippet: vi.fn().mockReturnValue('Mock Snippet'),
+        }),
+
+        // --- Protocol Mocks (The Fix) ---
+        // These mocks prevent the test from trying to load AddressBookApi or OutboxStorage
+        MockProvider(GroupProtocolService, {
+          processIncomingInvite: vi.fn().mockResolvedValue(undefined),
+          processSignal: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(ContactProtocolService, {
+          ensureSession: vi.fn().mockResolvedValue(undefined),
+        }),
+
+        // External APIs
         MockProvider(DirectoryMutationApi, {
           updateMemberStatus: vi.fn().mockResolvedValue(undefined),
         }),
-        MockProvider(Logger),
       ],
     });
 
     service = TestBed.inject(IngestionService);
     storage = TestBed.inject(ChatStorageService);
-    dataService = TestBed.inject(ChatDataService);
     quarantine = TestBed.inject(QuarantineService);
   });
 
   describe('The Airlock Flow (Content)', () => {
-    it('should parse and save message if Quarantine approves', async () => {
-      const result = await service.process(mockKeys, myUrn, new Set());
+    it('should parse and save message with generated SNIPPET if Quarantine approves', async () => {
+      const result = await service.process(new Set());
 
       expect(quarantine.process).toHaveBeenCalled();
       expect(storage.saveMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           senderId: aliceUrn,
-          textContent: 'hello',
+          snippet: 'Mock Snippet', // ✅ Verifies the factory was called
         }),
       );
       expect(result.messages.length).toBe(1);

@@ -5,21 +5,14 @@ import { ChatDeletionStrategy } from './chat-deletion.strategy';
 import {
   MessengerDatabase,
   MessageRecord,
-  MessageMapper,
 } from '@nx-platform-application/messenger-infrastructure-indexed-db';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
-import { ChatMessage } from '@nx-platform-application/messenger-types';
-import { MockProvider } from 'ng-mocks';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 import 'fake-indexeddb/auto';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 describe('ChatDeletionStrategy', () => {
   let strategy: ChatDeletionStrategy;
   let db: MessengerDatabase;
-  let mapper: MessageMapper;
 
   const mockUrn = 'urn:contacts:user:bob';
 
@@ -34,6 +27,8 @@ describe('ChatDeletionStrategy', () => {
     sentTimestamp: timestamp as ISODateTimeString,
     typeId: 'urn:message:type:text',
     payloadBytes: new TextEncoder().encode(text),
+    // ✅ NEW: Populate snippet in test data
+    snippet: text,
     status: 'sent',
     conversationUrn: mockUrn,
   });
@@ -41,26 +36,16 @@ describe('ChatDeletionStrategy', () => {
   beforeEach(async () => {
     await Dexie.delete('messenger');
 
-    // Partial mock of a domain message for the mapper return value
-    const mockDomainMsg: Partial<ChatMessage> = {
-      typeId: URN.parse('urn:message:type:text'),
-      payloadBytes: new TextEncoder().encode('Previous'),
-      textContent: 'Previous',
-    };
-
     TestBed.configureTestingModule({
       providers: [
         ChatDeletionStrategy,
         MessengerDatabase,
-        MockProvider(MessageMapper, {
-          toDomain: vi.fn().mockReturnValue(mockDomainMsg),
-        }),
+        // Removed MessageMapper mock as it's no longer used
       ],
     });
 
     strategy = TestBed.inject(ChatDeletionStrategy);
     db = TestBed.inject(MessengerDatabase);
-    mapper = TestBed.inject(MessageMapper);
 
     await db.open();
   });
@@ -93,9 +78,9 @@ describe('ChatDeletionStrategy', () => {
 
       await db.conversations.put({
         conversationUrn: mockUrn,
+        name: 'put conversation',
         lastActivityTimestamp: '2024-01-01T10:05:00Z' as ISODateTimeString,
         snippet: 'Mistake',
-        previewType: 'text',
         unreadCount: 0,
         genesisTimestamp: null,
         lastModified: '' as ISODateTimeString,
@@ -110,8 +95,8 @@ describe('ChatDeletionStrategy', () => {
       // Should roll back to the timestamp of m1
       expect(index?.lastActivityTimestamp).toBe('2024-01-01T10:00:00Z');
 
-      // Verify mapper was used to generate the new snippet
-      expect(mapper.toDomain).toHaveBeenCalled();
+      // ✅ Verify snippet rolled back using the stored data (no parsing)
+      expect(index?.snippet).toBe('Previous');
     });
   });
 });
