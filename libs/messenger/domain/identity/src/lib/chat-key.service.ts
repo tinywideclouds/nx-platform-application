@@ -4,7 +4,7 @@ import { URN } from '@nx-platform-application/platform-types';
 
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
-  MessengerCryptoService,
+  PrivateKeyService,
   WebCryptoKeys,
 } from '@nx-platform-application/messenger-infrastructure-private-keys';
 
@@ -14,7 +14,7 @@ import { IdentityResolver } from '@nx-platform-application/messenger-domain-iden
 export class ChatKeyService {
   private logger = inject(Logger);
   private keyService = inject(KeyCacheService);
-  private cryptoService = inject(MessengerCryptoService);
+  private cryptoService = inject(PrivateKeyService);
   private identityResolver = inject(IdentityResolver);
 
   /**

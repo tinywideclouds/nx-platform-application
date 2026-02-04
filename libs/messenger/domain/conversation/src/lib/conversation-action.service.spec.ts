@@ -8,8 +8,9 @@ import {
   MessageTypingIndicator,
   ImageContent,
   MessageTypeImage,
+  TextContent,
+  MessageTypeText,
 } from '@nx-platform-application/messenger-domain-message-content';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -20,14 +21,14 @@ describe('ConversationActionService', () => {
 
   const mockUrn = URN.parse('urn:contacts:user:me');
   const recipientUrn = URN.parse('urn:contacts:user:bob');
-  const mockKeys = {} as PrivateKeys;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
         ConversationActionService,
         MockProvider(OutboundService, {
-          sendMessage: vi.fn().mockResolvedValue({
+          // Mock the specific method used by the service
+          sendFromConversation: vi.fn().mockResolvedValue({
             message: { id: 'msg-1' } as any,
             outcome: Promise.resolve('sent'),
           }),
@@ -35,7 +36,11 @@ describe('ConversationActionService', () => {
         MockProvider(ConversationService, {
           upsertMessages: vi.fn(),
           updateMessageStatusInSignal: vi.fn(),
-          selectedConversation: signal(recipientUrn),
+          selectedConversation: signal({
+            id: recipientUrn,
+            name: 'Bob',
+            conversationUrn: recipientUrn,
+          } as any),
         }),
       ],
     });
@@ -45,66 +50,59 @@ describe('ConversationActionService', () => {
     conversationState = TestBed.inject(ConversationService);
   });
 
-  it('should delegate sendMessage to OutboundService', async () => {
-    await service.sendMessage(recipientUrn, 'Hello', mockKeys, mockUrn);
+  it('should delegate sendMessage (Text) as an Object payload', async () => {
+    await service.sendMessage(recipientUrn, 'Hello');
 
-    expect(outbound.sendMessage).toHaveBeenCalled();
+    const calls = vi.mocked(outbound.sendFromConversation).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [to, type, payload] = calls[0];
+
+    expect(to.toString()).toBe(recipientUrn.toString());
+    expect(type.toString()).toBe(MessageTypeText.toString());
+
+    // ✅ VERIFY: Payload is the Object, not bytes
+    expect(payload).toEqual({ kind: 'text', text: 'Hello' } as TextContent);
+
     expect(conversationState.upsertMessages).toHaveBeenCalled();
   });
 
-  it('should delegate sendImage to OutboundService with correct type and payload', async () => {
-    // ✅ FIX: Use updated ImageContent interface (inlineImage)
+  it('should delegate sendImage as an Object payload', async () => {
     const imageData: ImageContent = {
       kind: 'image',
-      inlineImage: 'data:abc', // Replaces thumbnailBase64
-      remoteUrl: 'pending', // Optional but good for testing
-      decryptionKey: 'none',
+      inlineImage: 'data:abc',
       mimeType: 'image/png',
       width: 100,
       height: 100,
       sizeBytes: 1024,
-    } as any; // Cast to satisfy partial mock if needed, or strictly match interface
+    } as any;
 
-    await service.sendImage(recipientUrn, imageData, mockKeys, mockUrn);
+    await service.sendImage(recipientUrn, imageData);
 
-    // Capture the arguments from the first call
-    const calls = vi.mocked(outbound.sendMessage).mock.calls;
+    const calls = vi.mocked(outbound.sendFromConversation).mock.calls;
     expect(calls).toHaveLength(1);
-    const args = calls[0];
+    const [to, type, payload] = calls[0];
 
-    // Arg 2: Recipient
-    expect(args[2].toString()).toBe(recipientUrn.toString());
+    expect(to.toString()).toBe(recipientUrn.toString());
+    expect(type.toString()).toBe(MessageTypeImage.toString());
 
-    // Arg 3: Type ID (Image) - ✅ FIX: Compare URN strings
-    expect(args[3].toString()).toBe(MessageTypeImage.toString());
-
-    // Arg 4: Payload (Uint8Array)
-    const payloadBytes = args[4] as Uint8Array;
-
-    // If this is undefined or not a buffer, the TextDecoder below will fail.
-    expect(payloadBytes).toBeDefined();
-
-    // Verify Payload Content (Decode JSON)
-    const decoded = JSON.parse(new TextDecoder().decode(payloadBytes));
-    expect(decoded.kind).toBe('image');
-    expect(decoded.inlineImage).toBe('data:abc');
-    expect(decoded.width).toBe(100);
-
-    // Arg 5: Options (undefined for standard messages)
-    expect(args[5]).toBeUndefined();
+    // ✅ VERIFY: Payload is the Object
+    expect(payload).toBe(imageData);
   });
 
-  it('should delegate typing indicator to OutboundService as ephemeral', async () => {
-    await service.sendTypingIndicator(recipientUrn, mockKeys, mockUrn);
+  it('should delegate typing indicator as Bytes (Signal)', async () => {
+    await service.sendTypingIndicator(recipientUrn);
 
-    const calls = vi.mocked(outbound.sendMessage).mock.calls;
+    const calls = vi.mocked(outbound.sendFromConversation).mock.calls;
     expect(calls).toHaveLength(1);
     const args = calls[0];
 
-    // Check Type - ✅ FIX: Use URN constant
-    expect(args[3].toString()).toBe(MessageTypingIndicator.toString());
+    // Check Type
+    expect(args[1].toString()).toBe(MessageTypingIndicator.toString());
+
+    // Check Payload is empty bytes
+    expect(args[2]).toBeInstanceOf(Uint8Array);
 
     // Check Ephemeral Flag
-    expect(args[5]).toEqual(expect.objectContaining({ isEphemeral: true }));
+    expect(args[3]).toEqual(expect.objectContaining({ isEphemeral: true }));
   });
 });

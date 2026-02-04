@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { ReceiverHostedFlowService } from './receiver-hosted-flow.service';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
+// ✅ NEW IMPORTS
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
+import { PairingSecurityService } from '@nx-platform-application/messenger-infrastructure-pairing-security';
+
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
@@ -24,11 +27,16 @@ vi.stubGlobal(
 describe('ReceiverHostedFlowService', () => {
   let service: ReceiverHostedFlowService;
 
-  const mockCrypto = {
+  // ✅ Split Mocks
+  const mockPairing = {
     generateReceiverSession: vi.fn(),
     parseQrCode: vi.fn(),
+  };
+
+  const mockSecurity = {
     encryptSyncMessage: vi.fn(),
   };
+
   const mockSend = { sendMessage: vi.fn() };
   const mockIdentityResolver = {
     resolveToHandle: vi.fn(),
@@ -39,7 +47,9 @@ describe('ReceiverHostedFlowService', () => {
     TestBed.configureTestingModule({
       providers: [
         ReceiverHostedFlowService,
-        { provide: MessengerCryptoService, useValue: mockCrypto },
+        // ✅ Provide the correct services
+        { provide: PairingSecurityService, useValue: mockPairing },
+        { provide: MessageSecurityService, useValue: mockSecurity },
         { provide: ChatSendService, useValue: mockSend },
         { provide: IdentityResolver, useValue: mockIdentityResolver },
         { provide: Logger, useValue: { info: vi.fn(), warn: vi.fn() } },
@@ -54,7 +64,8 @@ describe('ReceiverHostedFlowService', () => {
     const myHandleUrn = URN.parse('urn:lookup:email:me@test.com');
 
     it('processScannedQr should resolve identity and send to HANDLE', async () => {
-      mockCrypto.parseQrCode.mockResolvedValue({
+      // Setup
+      mockPairing.parseQrCode.mockResolvedValue({
         mode: 'RECEIVER_HOSTED',
         key: 'target-pub-key',
       });
@@ -62,11 +73,13 @@ describe('ReceiverHostedFlowService', () => {
       mockIdentityResolver.resolveToHandle.mockResolvedValue(myHandleUrn);
 
       const mockEnvelope = { isEphemeral: false, recipientId: null };
-      mockCrypto.encryptSyncMessage.mockResolvedValue(mockEnvelope);
+      mockSecurity.encryptSyncMessage.mockResolvedValue(mockEnvelope);
       mockSend.sendMessage.mockReturnValue(of(void 0));
 
+      // Act
       await service.processScannedQr('qr', myKeys, myAuthUrn);
 
+      // Assert
       expect(mockIdentityResolver.resolveToHandle).toHaveBeenCalledWith(
         myAuthUrn,
       );

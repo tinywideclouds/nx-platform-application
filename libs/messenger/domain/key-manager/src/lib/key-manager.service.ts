@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { URN, PublicKeys } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
-  MessengerCryptoService,
+  PrivateKeyService,
   WebCryptoKeys,
 } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
@@ -10,7 +10,7 @@ import { KeyCacheService } from '@nx-platform-application/messenger-infrastructu
 @Injectable({ providedIn: 'root' })
 export class KeyLifecycleService {
   private readonly logger = inject(Logger);
-  private readonly crypto = inject(MessengerCryptoService);
+  private readonly crypto = inject(PrivateKeyService);
   private readonly cache = inject(KeyCacheService);
 
   /**

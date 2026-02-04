@@ -57,8 +57,7 @@ export class MockLocalStorageBuilder {
         tags: [],
 
         // Optional: Pre-fill textContent for debugging
-        textContent:
-          item.payload.kind === 'text' ? item.payload.text : undefined,
+        snippet: item.payload.kind === 'text' ? item.payload.text : undefined,
       };
 
       messages.push(message);

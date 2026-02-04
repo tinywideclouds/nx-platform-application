@@ -31,8 +31,8 @@ import { ContactsStorageService } from '@nx-platform-application/contacts-infras
 import { KeyStorageService } from '@nx-platform-application/messenger-infrastructure-key-storage';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import {
-  MessengerCryptoService,
   CryptoEngine,
+  PrivateKeyService,
 } from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 import { MESSENGER_SCENARIOS } from './scenarios/index';
@@ -60,7 +60,7 @@ export class MessengerScenarioDriver {
   private chatStorage = inject(ChatStorageService);
   private contactsStorage = inject(ContactsStorageService);
   private publicKeysStorage = inject(KeyStorageService);
-  private messengerCrypto = inject(MessengerCryptoService);
+  private messengerCrypto = inject(PrivateKeyService);
   private outboxStorage = inject(OutboxStorage);
   private quarantineStorage = inject(QuarantineStorage);
   private keyCache = inject(KeyCacheService);

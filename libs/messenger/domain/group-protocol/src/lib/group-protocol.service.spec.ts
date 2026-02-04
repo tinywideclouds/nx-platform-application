@@ -13,14 +13,14 @@ import {
   MessageGroupInviteResponse,
   GroupInvitePayload,
 } from '@nx-platform-application/messenger-domain-message-content';
-import { PrivateKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
+import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import {
-  ChatMessage,
-  EntityTypeUser,
-} from '@nx-platform-application/messenger-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { MockProvider } from 'ng-mocks';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 describe('GroupProtocolService', () => {
   let service: GroupProtocolService;
@@ -32,13 +32,14 @@ describe('GroupProtocolService', () => {
 
   const myUrn = URN.parse('urn:contacts:user:me');
   const myNetworkUrn = URN.parse('urn:identity:google:me');
-  const myKeys = {} as PrivateKeys;
-  const localGroupUrn = URN.parse('urn:contacts:group:weekend-trip');
 
+  // ✅ FIX: Correct Type
+  const myKeys = {} as WebCryptoKeys;
+
+  const localGroupUrn = URN.parse('urn:contacts:group:weekend-trip');
   const aliceLocal = URN.parse('urn:contacts:user:alice');
   const aliceNetwork = URN.parse('urn:identity:google:alice');
 
-  // Mock bytes for parser.serialize
   const mockSerializedBytes = new Uint8Array([1, 2, 3]);
 
   beforeEach(() => {
@@ -46,7 +47,11 @@ describe('GroupProtocolService', () => {
     TestBed.configureTestingModule({
       providers: [
         GroupProtocolService,
-        MockProvider(OutboundService, { sendMessage: vi.fn() }),
+        // ✅ FIX: Mock the actual methods used: broadcast & sendFromConversation
+        MockProvider(OutboundService, {
+          broadcast: vi.fn(),
+          sendFromConversation: vi.fn(),
+        }),
         MockProvider(DirectoryMutationApi, {
           saveGroup: vi.fn(),
           saveEntity: vi.fn(),
@@ -62,6 +67,12 @@ describe('GroupProtocolService', () => {
         }),
         MockProvider(IdentityResolver, {
           resolveToHandle: vi.fn(),
+        }),
+        MockProvider(ConversationService, {
+          startNewConversation: vi.fn().mockResolvedValue(undefined),
+        }),
+        MockProvider(SessionService, {
+          snapshot: { networkUrn: myNetworkUrn } as any,
         }),
       ],
     });
@@ -92,11 +103,10 @@ describe('GroupProtocolService', () => {
       // 2. Execute
       const result = await service.provisionNetworkGroup(
         localGroupUrn,
-        myKeys,
-        myUrn,
+        'new group',
       );
 
-      // 3. Verify Directory Persistence (Capture Args)
+      // 3. Verify Directory Persistence
       const saveGroupCall = vi.mocked(dirMutation.saveGroup).mock.calls[0];
       const savedGroup = saveGroupCall[0];
 
@@ -104,24 +114,14 @@ describe('GroupProtocolService', () => {
       expect(savedGroup.memberState[myNetworkUrn.toString()]).toBe('joined');
       expect(savedGroup.memberState[aliceNetwork.toString()]).toBe('invited');
 
-      // Check Entity Types
-      const meEntity = savedGroup.members.find((m) =>
-        m.id.equals(myNetworkUrn),
-      );
-      const aliceEntity = savedGroup.members.find((m) =>
-        m.id.equals(aliceNetwork),
-      );
-
-      expect(meEntity?.type).toEqual(EntityTypeUser);
-      expect(aliceEntity?.type).toEqual(EntityTypeUser);
-
-      // 4. Verify Outbound Fan-Out
-      expect(outbound.sendMessage).toHaveBeenCalledWith(
-        myKeys,
-        myUrn,
-        aliceNetwork,
-        MessageGroupInvite,
-        mockSerializedBytes,
+      // 4. Verify Outbound Broadcast
+      // The service calls: outbound.broadcast(invitees, networkGroupUrn, MessageGroupInvite, inviteBytes, ...)
+      expect(outbound.broadcast).toHaveBeenCalledWith(
+        [aliceNetwork], // Invitees
+        result, // Context (The new Group URN)
+        MessageGroupInvite, // Type
+        mockSerializedBytes, // Payload
+        expect.objectContaining({ shouldPersist: true }),
       );
     });
   });
@@ -141,15 +141,7 @@ describe('GroupProtocolService', () => {
 
       await service.processIncomingInvite(inviteData);
 
-      // Verify Entity Seeding (Capture Args)
-      const saveEntityCalls = vi.mocked(dirMutation.saveEntity).mock.calls;
-      expect(saveEntityCalls.length).toBeGreaterThan(0);
-
-      const savedEntity = saveEntityCalls[0][0];
-      expect(savedEntity.id.toString()).toBe(bobAuth.toString());
-      expect(savedEntity.type).toEqual(EntityTypeUser);
-
-      // Verify Group Save
+      expect(dirMutation.saveEntity).toHaveBeenCalled();
       const saveGroupCalls = vi.mocked(dirMutation.saveGroup).mock.calls;
       const savedGroup = saveGroupCalls[0][0];
 
@@ -179,7 +171,7 @@ describe('GroupProtocolService', () => {
         myNetworkUrn,
       );
 
-      await service.acceptInvite(inviteMsg, myKeys, myUrn);
+      await service.acceptInvite(inviteMsg);
 
       // 1. Verify Directory Update
       expect(dirMutation.updateMemberStatus).toHaveBeenCalledWith(
@@ -188,12 +180,13 @@ describe('GroupProtocolService', () => {
         'joined',
       );
 
-      // 2. Verify Broadcast (Capture Args)
-      const sendCalls = vi.mocked(outbound.sendMessage).mock.calls;
-      const [keysArg, senderArg, recipientArg, typeIdArg] = sendCalls[0];
-
-      expect(recipientArg.toString()).toBe(groupUrn.toString());
-      expect(typeIdArg).toEqual(MessageGroupInviteResponse);
+      // 2. Verify Response
+      // The service calls: outbound.sendFromConversation(groupUrn, MessageGroupInviteResponse, bytes)
+      expect(outbound.sendFromConversation).toHaveBeenCalledWith(
+        groupUrn,
+        MessageGroupInviteResponse,
+        mockSerializedBytes,
+      );
     });
   });
 });

@@ -21,7 +21,6 @@ export class QuarantineMapper {
       payloadBytes: record.payloadBytes,
       status: 'received',
       tags: [],
-      textContent: undefined,
     };
   }
 

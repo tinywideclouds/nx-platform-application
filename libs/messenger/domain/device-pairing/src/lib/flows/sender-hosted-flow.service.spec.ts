@@ -1,6 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { SenderHostedFlowService } from './sender-hosted-flow.service';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
+
+// ✅ NEW IMPORTS
+import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
+import { PairingSecurityService } from '@nx-platform-application/messenger-infrastructure-pairing-security';
+
 import { ChatSendService } from '@nx-platform-application/messenger-infrastructure-chat-access';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 import { HotQueueMonitor } from '../workers/hot-queue-monitor.service';
@@ -36,11 +40,16 @@ vi.stubGlobal(
 describe('SenderHostedFlowService', () => {
   let service: SenderHostedFlowService;
 
-  const mockCrypto = {
+  // ✅ Split Mocks
+  const mockPairing = {
     generateSenderSession: vi.fn(),
-    encryptSyncOffer: vi.fn(),
     parseQrCode: vi.fn(),
   };
+
+  const mockSecurity = {
+    encryptSyncOffer: vi.fn(),
+  };
+
   const mockSend = { sendMessage: vi.fn() };
   const mockSpy = { checkQueueForInvite: vi.fn() };
   const mockIdentityResolver = {
@@ -52,7 +61,9 @@ describe('SenderHostedFlowService', () => {
     TestBed.configureTestingModule({
       providers: [
         SenderHostedFlowService,
-        { provide: MessengerCryptoService, useValue: mockCrypto },
+        // ✅ Provide correct services
+        { provide: PairingSecurityService, useValue: mockPairing },
+        { provide: MessageSecurityService, useValue: mockSecurity },
         { provide: ChatSendService, useValue: mockSend },
         { provide: HotQueueMonitor, useValue: mockSpy },
         { provide: IdentityResolver, useValue: mockIdentityResolver },
@@ -71,14 +82,14 @@ describe('SenderHostedFlowService', () => {
       const myHandleUrn = URN.parse('urn:lookup:email:me@test.com');
       const myKeys = {} as any;
 
-      mockCrypto.generateSenderSession.mockResolvedValue({
+      mockPairing.generateSenderSession.mockResolvedValue({
         oneTimeKey: 'aes-key',
         qrPayload: 'qr',
       });
       mockIdentityResolver.resolveToHandle.mockResolvedValue(myHandleUrn);
 
       const mockEnvelope = { recipientId: null, isEphemeral: false };
-      mockCrypto.encryptSyncOffer.mockResolvedValue(mockEnvelope);
+      mockSecurity.encryptSyncOffer.mockResolvedValue(mockEnvelope);
       mockSend.sendMessage.mockReturnValue(of(void 0));
 
       await service.startSession(myKeys, myAuthUrn);
@@ -95,13 +106,13 @@ describe('SenderHostedFlowService', () => {
       const myAuthUrn = URN.parse('urn:auth:google:123');
       const myKeys = {} as any;
 
-      mockCrypto.generateSenderSession.mockResolvedValue({ oneTimeKey: 'k' });
+      mockPairing.generateSenderSession.mockResolvedValue({ oneTimeKey: 'k' });
       mockIdentityResolver.resolveToHandle.mockRejectedValue(
         new Error('Not found'),
       );
 
       const mockEnvelope = { recipientId: null };
-      mockCrypto.encryptSyncOffer.mockResolvedValue(mockEnvelope);
+      mockSecurity.encryptSyncOffer.mockResolvedValue(mockEnvelope);
       mockSend.sendMessage.mockReturnValue(of(void 0));
 
       await service.startSession(myKeys, myAuthUrn);
@@ -112,7 +123,7 @@ describe('SenderHostedFlowService', () => {
 
   describe('Target (New Device)', () => {
     it('redeemScannedQr should throw on Mode Mismatch', async () => {
-      mockCrypto.parseQrCode.mockResolvedValue({ mode: 'RECEIVER_HOSTED' });
+      mockPairing.parseQrCode.mockResolvedValue({ mode: 'RECEIVER_HOSTED' });
       await expect(
         service.redeemScannedQr('qr', URN.parse('urn:contacts:user:me')),
       ).rejects.toThrow('Invalid QR Mode');

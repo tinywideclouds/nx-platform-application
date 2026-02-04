@@ -112,7 +112,7 @@ export class ChatModerationFacade {
             conversationUrn: targetConversationUrn || parsed.conversationId,
             tags: parsed.tags,
             payloadBytes: this.parser.serialize(parsed.payload),
-            textContent:
+            snippet:
               parsed.payload.kind === 'text' ? parsed.payload.text : undefined,
           });
         }

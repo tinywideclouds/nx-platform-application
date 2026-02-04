@@ -15,7 +15,7 @@ import { from } from 'rxjs';
 
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { AppState } from '@nx-platform-application/messenger-state-app';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
+import { PrivateKeyService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 
 export interface FingerprintState {
@@ -44,7 +44,7 @@ export class IdentitySettingsContentComponent {
 
   private authService = inject(IAuthService);
   private appState = inject(AppState);
-  private cryptoService = inject(MessengerCryptoService);
+  private cryptoService = inject(PrivateKeyService);
   private liveService = inject(ChatLiveDataService);
 
   // --- WIZARD TOGGLE ---

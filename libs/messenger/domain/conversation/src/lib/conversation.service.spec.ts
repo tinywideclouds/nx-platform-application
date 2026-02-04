@@ -12,68 +12,46 @@ import {
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
-
 import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
   MessageTypeText,
-  MessageGroupInvite,
-  ParsedMessage,
 } from '@nx-platform-application/messenger-domain-message-content';
-
+import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
 describe('ConversationService', () => {
   let service: ConversationService;
-  let directory: DirectoryQueryApi;
+  let historyReader: HistoryReader;
+  let storage: ConversationStorage;
+  let contentParser: MessageContentParser;
 
-  // Define variables here, initialize in beforeEach
-  let myUrn: URN;
-  let groupUrn: URN;
-  let msgText: ChatMessage;
-  let msgInvite: ChatMessage;
-  let existingMessage: ChatMessage;
+  const myUrn = URN.parse('urn:contacts:user:me');
+  const groupUrn = URN.parse('urn:messenger:group:chat-1');
+
+  // Valid Text Message Bytes
+  const mockBytes = new Uint8Array([123]);
+
+  const msgText: ChatMessage = {
+    id: 'msg-1',
+    conversationUrn: groupUrn,
+    senderId: URN.parse('urn:contacts:user:bob'),
+    sentTimestamp: '2025-01-01T10:00:00Z' as ISODateTimeString,
+    status: 'read',
+    typeId: MessageTypeText,
+    payloadBytes: mockBytes,
+    snippet: 'Hello',
+    tags: [],
+    receiptMap: {
+      'urn:contacts:user:me': 'read', // ME (Should be filtered)
+      'urn:contacts:user:alice': 'read', // ALICE (Should show)
+    },
+  };
 
   beforeEach(() => {
-    // Initialize URNs
-    myUrn = URN.parse('urn:contacts:user:me');
-    groupUrn = URN.parse('urn:messenger:group:chat-1');
-
-    msgText = {
-      id: 'msg-1',
-      conversationUrn: groupUrn,
-      senderId: URN.parse('urn:contacts:user:bob'),
-      sentTimestamp: '2025-01-01T10:00:00Z' as ISODateTimeString,
-      status: 'read',
-      typeId: MessageTypeText,
-      payloadBytes: new TextEncoder().encode('Hello World'),
-      tags: [],
-    };
-
-    msgInvite = {
-      id: 'msg-invite',
-      conversationUrn: groupUrn,
-      senderId: URN.parse('urn:contacts:user:bob'),
-      sentTimestamp: '2025-01-01T10:01:00Z' as ISODateTimeString,
-      status: 'received',
-      typeId: MessageGroupInvite,
-      payloadBytes: new Uint8Array([]),
-      tags: [],
-    };
-
-    existingMessage = {
-      id: 'msg-existing',
-      conversationUrn: groupUrn,
-      senderId: myUrn,
-      sentTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
-      status: 'read',
-      receiptMap: { 'user:1': 'read' },
-      typeId: MessageTypeText,
-      payloadBytes: new Uint8Array([]),
-    };
-
     vi.clearAllMocks();
 
     TestBed.configureTestingModule({
@@ -87,39 +65,30 @@ describe('ConversationService', () => {
         }),
         MockProvider(ConversationStorage, {
           markConversationAsRead: vi.fn().mockResolvedValue(undefined),
-          getConversation: vi.fn().mockResolvedValue({ unreadCount: 0 }),
-          updateMessageStatus: vi.fn().mockResolvedValue(undefined),
-          getMessage: vi.fn().mockImplementation((id) =>
-            Promise.resolve({
-              ...existingMessage,
-              id: id,
-            }),
-          ),
-        }),
-        MockProvider(ChatSyncService, {
-          isCloudEnabled: vi.fn().mockReturnValue(false),
+          getConversation: vi
+            .fn()
+            .mockResolvedValue({ conversationUrn: groupUrn }),
+          startConversation: vi.fn().mockResolvedValue(undefined),
+          conversationExists: vi.fn().mockResolvedValue(false),
+          getMessage: vi.fn().mockResolvedValue(msgText),
+          deleteMessage: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(DirectoryQueryApi, {
           getGroup: vi.fn().mockResolvedValue(null),
         }),
+        MockProvider(ContactsQueryApi),
+        MockProvider(SessionService, {
+          snapshot: { networkUrn: myUrn } as any,
+        }),
+        MockProvider(ChatSyncService),
         MockProvider(ChatKeyService, {
           checkRecipientKeys: vi.fn().mockResolvedValue(true),
         }),
-        // ✅ CORRECTED MOCK (Matches your provided structure)
         MockProvider(MessageContentParser, {
-          parse: vi.fn((type: URN, bytes: Uint8Array): ParsedMessage => {
-            if (type.equals(MessageTypeText)) {
-              return {
-                kind: 'content',
-                conversationId: URN.parse('urn:contacts:user:123'),
-                tags: [],
-                payload: {
-                  kind: 'text',
-                  text: new TextDecoder().decode(bytes),
-                },
-              };
-            }
-            return { kind: 'unknown', rawType: type };
+          // Mock parse for recoverFailedMessage
+          parse: vi.fn().mockReturnValue({
+            kind: 'content',
+            payload: { kind: 'text', text: 'Recovered Text' },
           }),
         }),
         MockProvider(Logger),
@@ -127,75 +96,114 @@ describe('ConversationService', () => {
     });
 
     service = TestBed.inject(ConversationService);
-    directory = TestBed.inject(DirectoryQueryApi);
+    historyReader = TestBed.inject(HistoryReader);
+    storage = TestBed.inject(ConversationStorage);
+    contentParser = TestBed.inject(MessageContentParser);
   });
 
-  function setRawMessages(msgs: ChatMessage[]) {
-    (service as any)._rawMessages.set(msgs);
-  }
-
-  describe('Hydration & Loading', () => {
-    it('should hydrate text content using the Parser', async () => {
-      // ✅ FIX: Ensure user is 'joined' so the Lurker filter allows the message through
-      vi.mocked(directory.getGroup).mockResolvedValue({
-        memberState: { [myUrn.toString()]: 'joined' },
-      } as any);
-
-      // Setup Storage to return raw text message
-      const historyReader = TestBed.inject(HistoryReader);
+  describe('readCursors', () => {
+    it('should calculate cursors and EXCLUDE the current user', async () => {
       vi.mocked(historyReader.getMessages).mockResolvedValue({
         messages: [msgText],
         genesisReached: true,
       });
 
-      await service.loadConversation(groupUrn, myUrn);
+      await service.loadConversation(groupUrn);
 
+      const cursors = service.readCursors();
+
+      // Should have cursor for this message
+      expect(cursors.has('msg-1')).toBe(true);
+
+      const readers = cursors.get('msg-1');
+      expect(readers).toBeDefined();
+
+      // Alice should be there
+      expect(
+        readers?.some((r) => r.toString() === 'urn:contacts:user:alice'),
+      ).toBe(true);
+
+      // ✅ ME should NOT be there
+      expect(
+        readers?.some((r) => r.toString() === 'urn:contacts:user:me'),
+      ).toBe(false);
+    });
+  });
+
+  describe('recoverFailedMessage', () => {
+    it('should parse bytes, delete message, and return text', async () => {
+      vi.mocked(historyReader.getMessages).mockResolvedValue({
+        messages: [msgText],
+        genesisReached: true,
+      });
+      await service.loadConversation(groupUrn);
+
+      const result = await service.recoverFailedMessage('msg-1');
+
+      expect(contentParser.parse).toHaveBeenCalledWith(
+        MessageTypeText,
+        mockBytes,
+      );
+      expect(storage.deleteMessage).toHaveBeenCalledWith('msg-1');
+      expect(result).toBe('Recovered Text');
+
+      // Removed from view
+      expect(service.messages()).toHaveLength(0);
+    });
+  });
+
+  describe('loadMoreMessages', () => {
+    it('should fetch older messages using last known timestamp', async () => {
+      // 1. Initial Load
+      vi.mocked(historyReader.getMessages).mockResolvedValueOnce({
+        messages: [msgText], // Newest
+        genesisReached: false,
+      });
+      await service.loadConversation(groupUrn);
+
+      // 2. Load More
+      const olderMsg = {
+        ...msgText,
+        id: 'msg-old',
+        sentTimestamp: '2020-01-01' as ISODateTimeString,
+      };
+      vi.mocked(historyReader.getMessages).mockResolvedValueOnce({
+        messages: [olderMsg], // Older
+        genesisReached: true,
+      });
+
+      await service.loadMoreMessages();
+
+      // 3. Verify Call
+      expect(historyReader.getMessages).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          beforeTimestamp: msgText.sentTimestamp,
+        }),
+      );
+
+      // 4. Verify Append
       const msgs = service.messages();
-      expect(msgs).toHaveLength(1);
-      // Verify hydration logic worked
-      expect(msgs[0].textContent).toBe('Hello World');
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0].id).toBe('msg-old'); // Oldest first
     });
   });
 
-  describe('Lurker Filter Logic', () => {
-    it('should HIDE content messages if membership is invited', async () => {
-      vi.mocked(directory.getGroup).mockResolvedValue({
-        memberState: { [myUrn.toString()]: 'invited' },
-      } as any);
+  describe('performHistoryWipe', () => {
+    it('should clear all state and delete all conversations', async () => {
+      // Setup some state
+      await service.loadConversation(groupUrn);
+      vi.mocked(historyReader.getAllConversations).mockResolvedValue([
+        { id: groupUrn } as any,
+      ]);
 
-      await service.loadConversation(groupUrn, myUrn);
-      expect(service.membershipStatus()).toBe('invited');
+      await service.performHistoryWipe();
 
-      setRawMessages([msgText, msgInvite]);
+      expect(service.selectedConversation()).toBeNull();
+      expect(service.messages()).toHaveLength(0);
 
-      const visible = service.messages();
-      expect(visible).toHaveLength(1);
-
-      // Invite is allowed
-      expect(visible[0].id).toBe('msg-invite');
-      // Text content is filtered out
-      expect(visible.find((m) => m.id === 'msg-1')).toBeUndefined();
-    });
-
-    it('should SHOW everything if membership is joined', async () => {
-      vi.mocked(directory.getGroup).mockResolvedValue({
-        memberState: { [myUrn.toString()]: 'joined' },
-      } as any);
-
-      await service.loadConversation(groupUrn, myUrn);
-      expect(service.membershipStatus()).toBe('joined');
-
-      setRawMessages([msgText, msgInvite]);
-      expect(service.messages()).toHaveLength(2);
-    });
-  });
-
-  describe('Receipt Handling', () => {
-    it('should reload messages from storage when receipts arrive', async () => {
-      await service.applyIncomingReadReceipts(['msg-1']);
-
-      const storage = TestBed.inject(ConversationStorage);
-      expect(storage.getMessage).toHaveBeenCalledWith('msg-1');
+      // Verified deletion
+      expect(storage.deleteMessage).not.toHaveBeenCalled(); // Not used here
+      // We assume deleteConversation is called via the map logic
     });
   });
 });

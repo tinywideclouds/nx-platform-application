@@ -41,7 +41,7 @@ import { GroupProtocolService } from '@nx-platform-application/messenger-domain-
 
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
+import { PrivateKeyService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
@@ -86,7 +86,7 @@ export class AppState {
   private readonly conversationActions = inject(ConversationActionService);
 
   private readonly settingsService = inject(LocalSettingsService);
-  private readonly cryptoService = inject(MessengerCryptoService);
+  private readonly cryptoService = inject(PrivateKeyService);
   private readonly storageService = inject(ChatStorageService);
   private readonly liveService = inject(ChatLiveDataService);
   private readonly keyService = inject(KeyCacheService);

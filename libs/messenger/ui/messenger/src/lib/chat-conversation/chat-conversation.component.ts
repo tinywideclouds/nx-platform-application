@@ -106,18 +106,34 @@ export class ChatConversationComponent {
     return map.get(msgId) || [];
   }
 
+  private secondPulse = toSignal(
+    interval(1000).pipe(map(() => Temporal.Now.instant())),
+    { initialValue: Temporal.Now.instant() },
+  );
+  /**
+   * FIX: Correctly derives typing status from the Activity Map.
+   * 1. Accesses .id.toString() instead of the object.
+   * 2. Checks time diff to auto-hide after 5 seconds.
+   */
   showTypingIndicator = computed(() => {
-    const urn = this.selectedConversation();
-    if (!urn) return false;
+    const conversation = this.selectedConversation();
     const activityMap = this.typingActivity();
-    const lastActive = activityMap.get(urn.toString());
+    const _pulse = this.secondPulse(); // Trigger re-calc every second
+
+    if (!conversation) return false;
+
+    // The map is keyed by User URNs.
+    // In 1:1 chats, the Conversation ID IS the User URN.
+    const key = conversation.id.toString();
+    const lastActive = activityMap.get(key);
+
     if (!lastActive) return false;
-    try {
-      const duration = this.now().since(lastActive);
-      return duration.total({ unit: 'millisecond' }) < 5000;
-    } catch {
-      return false;
-    }
+
+    // Check expiry (5 seconds)
+    const now = Temporal.Now.instant();
+    const diff = now.since(lastActive).total({ unit: 'seconds' });
+
+    return diff < 5;
   });
 
   isMyMessage = (msg: ChatMessage): boolean => {
@@ -203,9 +219,9 @@ export class ChatConversationComponent {
     if (show) {
       const msgs = this.chatMessages();
       const latest = msgs[msgs.length - 1];
-      if (latest?.textContent) {
+      if (latest?.snippet) {
         this.snackBar
-          .open(`New: "${latest.textContent.slice(0, 30)}..."`, 'Scroll Down', {
+          .open(`New: "${latest.snippet}..."`, 'Scroll Down', {
             duration: 5000,
           })
           .onAction()
