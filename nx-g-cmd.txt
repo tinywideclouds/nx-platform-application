@@ -283,3 +283,7 @@ nx g @nx/angular:library --name=messenger-infrastructure-message-security --dire
 nx g @nx/angular:library --name=messenger-infrastructure-pairing-security --directory=libs/messenger/infrastructure/pairing-security --tags="scope:messenger"   
 
 nx g @nx/workspace:move --project=messenger-infrastructure-crypto-bridge --destination=libs/messenger/infrastructure/private-keys --importPath=@nx-platform-application/messenger-infrastructure-private-keys
+
+nx g @nx/angular:library --name=messenger-state-active-chat-facade --directory=libs/messenger/state/active-chat-facade --tags="scope:messenger" 
+
+nx g @nx/workspace:move --project=messenger-state-active-chat-facade --destination=libs/messenger/state/active-chat --importPath=@nx-platform-application/messenger-state-active-chat

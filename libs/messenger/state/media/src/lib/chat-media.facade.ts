@@ -2,16 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 import {
-  AssetResult,
   DriverCapabilities,
   VaultProvider,
   VaultDrivers,
+  AssetResult,
 } from '@nx-platform-application/platform-infrastructure-storage';
 import { AssetStorageService } from '@nx-platform-application/messenger-infrastructure-asset-storage';
-import {
-  ConversationService,
-  ConversationActionService,
-} from '@nx-platform-application/messenger-domain-conversation';
+import { ConversationActionService } from '@nx-platform-application/messenger-domain-conversation';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   MessageContentParser,
@@ -20,6 +17,7 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 import { StorageService } from '@nx-platform-application/platform-domain-storage';
 import { ImageProcessingService } from '@nx-platform-application/platform-tools-image-processing';
+import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
 
 const driveImage = 'driveImage';
 
@@ -27,29 +25,18 @@ const driveImage = 'driveImage';
 export class ChatMediaFacade {
   private readonly logger = inject(Logger);
   private readonly assetStorage = inject(AssetStorageService);
-  private readonly conversationService = inject(ConversationService);
   private readonly conversationActions = inject(ConversationActionService);
   private readonly storageServiceDb = inject(ChatStorageService);
   private readonly parser = inject(MessageContentParser);
-
-  // Logic Injections
+  private readonly activeChat = inject(ActiveChatFacade);
   private readonly storageServiceInfra = inject(StorageService);
   private readonly imageProcessor = inject(ImageProcessingService);
-
-  // Inject the "Menu" of drivers
   private drivers = inject(VaultDrivers);
 
-  /**
-   * Helper to find the correct driver for an asset.
-   */
   private getDriver(providerId: string): VaultProvider | undefined {
     return this.drivers.find((d) => d.providerId === providerId);
   }
 
-  /**
-   * Returns the capabilities for a specific asset.
-   * The UI uses this to show/hide the "Enhance" or "Quick View" buttons.
-   */
   public getCapabilities(providerId: string): DriverCapabilities {
     const driver = this.getDriver(providerId);
     return driver
@@ -93,7 +80,6 @@ export class ChatMediaFacade {
     );
 
     try {
-      // 1. Calculate Original Metadata
       const bitmap = await createImageBitmap(file);
       const metadata = {
         width: bitmap.width,
@@ -104,7 +90,6 @@ export class ChatMediaFacade {
       };
       bitmap.close();
 
-      // 2. Generate "Chat Quality" Inline Image (Unified Path)
       const inlineBlob = await this.imageProcessor.resize(file, {
         width: 64,
         quality: 0.7,
@@ -112,31 +97,30 @@ export class ChatMediaFacade {
       });
       const base64 = await this.imageProcessor.toBase64(inlineBlob);
 
-      // 3. Construct Initial Payload
       const payload: ImageContent = {
         kind: 'image',
-        inlineImage: base64, // <--- High Quality Inline (Immediate)
-        assets: undefined, // <--- Pending Upload
+        inlineImage: base64,
+        assets: undefined,
         decryptionKey: undefined,
         caption,
         ...metadata,
       };
 
-      // 4. Send Immediately
-      const messageId = await this.conversationActions.sendImage(
+      // ✅ FIX: Destructure ID from the returned ChatMessage object
+      const message = await this.conversationActions.sendImage(
         recipient,
         payload,
       );
+      const messageId = message.id;
+
       this.logger.info(
         `[MediaFacade] Sent inline image. Message ID: ${messageId}`,
       );
 
-      // 5. Conditional Enrichment (Background Upload)
       if (isConnected) {
-        // We upload the ORIGINAL file to preserve max quality in the Vault
         this.processBackgroundUpload(
           recipient,
-          messageId,
+          messageId, // correctly passing string
           file,
           driveImage,
         ).catch((e) => {
@@ -162,25 +146,19 @@ export class ChatMediaFacade {
     );
 
     try {
-      // 1. Upload to Vault (Google/Dropbox/etc)
-      // Expects AssetResult: { uploads: string[], provider: '...' }
       const result = await this.assetStorage.upload(file);
-
       const assets: Record<string, AssetResult> = { [mediaMapId]: result };
-      // 3. Signal (Reveal) to Recipient
-      // We send the ID (provider reference) so they can "Download" it later
+
       const signalData: AssetRevealData = {
         messageId,
         assets,
       };
 
       await this.conversationActions.sendAssetReveal(recipient, signalData);
-
-      // 4. Local Patch (Update our own DB to show "Open" button)
       await this.patchLocalMessage(messageId, signalData);
 
-      // 5. UI Refresh
-      await this.conversationService.reloadMessages([messageId]);
+      // Refresh UI via ActiveChatFacade
+      await this.activeChat.refreshMessages([messageId]);
 
       this.logger.info(`[MediaFacade] Upload complete for ${messageId}`);
     } catch (e) {
@@ -189,31 +167,24 @@ export class ChatMediaFacade {
     }
   }
 
-  /**
-   * Generates a High-Res thumbnail from a source Blob and patches the local message.
-   */
   async upgradeInlineImage(messageId: string, sourceBlob: Blob): Promise<void> {
     try {
-      // 1. Resize (Client-side computation)
-      // 720px is a great balance for "HD Thumbnail"
       const resizedBlob = await this.imageProcessor.resize(sourceBlob, {
         width: 720,
         format: 'image/png',
         quality: 0.85,
       });
 
-      // 2. Encode to Base64 (for inline storage/display)
       const base64 = await this.imageProcessor.toBase64(resizedBlob);
 
       await this.patchLocalMessage(messageId, {
-        inlineImage: base64, // Overwrites the low-res placeholder
+        inlineImage: base64,
       });
 
-      // ✅ FIX 2: Tell the ConversationService to refresh this message in the UI
-      await this.conversationService.reloadMessages([messageId]);
+      await this.activeChat.refreshMessages([messageId]);
     } catch (e) {
       console.error('[ChatFacade] Failed to upgrade thumbnail', e);
-      throw e; // Re-throw so component can handle UI state
+      throw e;
     }
   }
 

@@ -158,6 +158,9 @@
       "@nx-platform-application/messenger-settings-ui": [
         "libs/messenger/ui/settings/src/index.ts"
       ],
+      "@nx-platform-application/messenger-state-active-chat": [
+        "libs/messenger/state/active-chat/src/index.ts"
+      ],
       "@nx-platform-application/messenger-state-app": [
         "libs/messenger/state/app/src/index.ts"
       ],

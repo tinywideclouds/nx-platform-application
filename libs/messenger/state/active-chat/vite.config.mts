@@ -6,13 +6,13 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../node_modules/.vite/libs/messenger/state/chat-data',
+  cacheDir: '../../../node_modules/.vite/libs/messenger/state/active-chat',
   plugins: [angular(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
   build: {
     emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
-      name: 'messenger-state-chat-data',
+      name: 'messenger-state-active-chat',
       fileName: (format: any) => `index.${format}.js`,
       formats: ['es' as const],
     },

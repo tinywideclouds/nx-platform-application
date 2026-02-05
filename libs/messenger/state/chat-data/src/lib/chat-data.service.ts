@@ -24,18 +24,17 @@ import { IngestionService } from '@nx-platform-application/messenger-domain-inge
 // Facades
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
+import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
 
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
-
 import { ContactSummary } from '@nx-platform-application/contacts-types';
 
 export interface UIChatParticipant extends Resource {
-  initials: string; // Visual fallback
-  pictureUrl?: string; // Visual enhancement
+  initials: string;
+  pictureUrl?: string;
   isActive?: boolean;
 }
 
-// THE ONLY UI TYPE
 export interface UIConversation extends Conversation, UIChatParticipant {}
 
 @Injectable({ providedIn: 'root' })
@@ -52,6 +51,9 @@ export class ChatDataService {
   private readonly identity = inject(ChatIdentityFacade);
   private readonly moderation = inject(ChatModerationFacade);
 
+  // ✅ NEW: We inject the Active Chat View Model to push updates to it
+  private readonly activeChat = inject(ActiveChatFacade);
+
   // --- STATE ---
   private readonly _activeConversations = signal<Conversation[]>([]);
 
@@ -67,9 +69,10 @@ export class ChatDataService {
     new Map(),
   );
 
-  // --- THE UI SIGNAL (Zero Mapping, just Extending) ---
+  // --- THE UI SIGNAL ---
   public readonly uiConversations: Signal<UIConversation[]> = computed(() => {
-    const conversations = this.conversationService.allConversations();
+    // ✅ FIX: Derive from local state, not the (now removed) service signal
+    const conversations = this.activeConversations();
     const identities = this.identityCache();
 
     return conversations.map((c) => {
@@ -79,13 +82,13 @@ export class ChatDataService {
       // 1. Resolve Display Name (Alias > Original Name)
       const displayName = cached?.alias || c.name || 'Unknown';
 
-      // 2. Return UIConversation (Spread ...c + Visuals)
+      // 2. Return UIConversation
       return {
-        ...c, // Inherit all ID, Timestamp, Snippet, etc.
-        name: displayName, // Override name if alias exists
-        pictureUrl: cached?.profilePictureUrl, // Add Image
-        initials: this.generateInitials(displayName), // Add Initials
-        // isActive is undefined here; set by the Component/Router logic
+        ...c,
+        name: displayName,
+        pictureUrl: cached?.profilePictureUrl,
+        initials: this.generateInitials(displayName),
+        // isActive is set by the Component/Router logic
       };
     });
   });
@@ -98,21 +101,13 @@ export class ChatDataService {
 
   // --- ACTIONS ---
 
-  // now handled in domain layer automatically
-  // public clearUnreadCount(urn: URN): void {
-  //   this._activeConversations.update((list) => {
-  //     if (list.length === 0) return list;
-  //     return list.map((c) => (c.id.equals(urn) ? { ...c, unreadCount: 0 } : c));
-  //   });
-  // }
-
   public async refreshActiveConversations(): Promise<void> {
-    // Just ask the service to refresh its own state
-    await this.conversationService.refreshConversationList();
+    // ✅ FIX: Use the Promise-based method from the stateless service
+    const conversations = await this.conversationService.getAllConversations();
+    this._activeConversations.set(conversations);
 
-    // We can still trigger identity fetching based on the new list
-    const newList = this.conversationService.allConversations();
-    this.fetchMissingIdentities(newList);
+    // Trigger identity fetching based on the new list
+    this.fetchMissingIdentities(conversations);
   }
 
   private async fetchMissingIdentities(conversations: Conversation[]) {
@@ -168,25 +163,26 @@ export class ChatDataService {
           50,
         );
 
+        // 1. Notify Active Chat (View Model)
+        // We do this by ID reference. The Facade will re-fetch if these IDs match the open chat.
+        const allChangedIds = [
+          ...result.messages.map((m) => m.id),
+          ...result.readReceipts,
+          ...result.patchedMessageIds,
+        ];
+
+        if (allChangedIds.length > 0) {
+          await this.activeChat.refreshMessages(allChangedIds);
+        }
+
+        // 2. Refresh List (Sidebar)
         if (result.messages.length > 0) {
-          this.conversationService.upsertMessages(result.messages);
           await this.refreshActiveConversations();
         }
 
+        // 3. Update Typing Indicators
         if (result.typingIndicators.length > 0 || result.messages.length > 0) {
           this.updateTypingActivity(result.typingIndicators, result.messages);
-        }
-
-        if (result.readReceipts.length > 0) {
-          await this.conversationService.applyIncomingReadReceipts(
-            result.readReceipts,
-          );
-        }
-
-        if (result.patchedMessageIds.length > 0) {
-          await this.conversationService.reloadMessages(
-            result.patchedMessageIds,
-          );
         }
       } catch (e) {
         this.logger.error('[Ingestion] Failed', e);
@@ -220,9 +216,12 @@ export class ChatDataService {
       const newMap = new Map(map);
       const now = Temporal.Now.instant();
       indicators.forEach((urn) => newMap.set(urn.toString(), now));
+
+      // Clear typing indicator if a real message arrived from that user
       realMessages.forEach((msg) => {
-        if (newMap.has(msg.senderId.toString())) {
-          newMap.delete(msg.senderId.toString());
+        const key = msg.senderId.toString();
+        if (newMap.has(key)) {
+          newMap.delete(key);
         }
       });
       return newMap;

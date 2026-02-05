@@ -8,37 +8,27 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Subject, firstValueFrom } from 'rxjs';
-import {
-  throttleTime,
-  filter,
-  skip,
-  take,
-  withLatestFrom,
-  map,
-} from 'rxjs/operators';
+import { throttleTime, filter, skip, take } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   DraftMessage,
-  DevicePairingSession,
 } from '@nx-platform-application/messenger-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
 
+// --- STATE LIBS ---
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
+import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
 
-import {
-  ConversationService,
-  ConversationActionService,
-} from '@nx-platform-application/messenger-domain-conversation';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import { OutboxWorkerService } from '@nx-platform-application/messenger-domain-outbox';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
 
+// --- INFRA ---
 import { LocalSettingsService } from '@nx-platform-application/messenger-infrastructure-local-settings';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { PrivateKeyService } from '@nx-platform-application/messenger-infrastructure-private-keys';
@@ -52,6 +42,7 @@ import {
 
 import { StateEngine, PageState, AppDiagnosticState } from './state.engine';
 import { ContactGroup } from '@nx-platform-application/contacts-types';
+import { ContactShareData } from '@nx-platform-application/messenger-domain-message-content';
 
 const TYPING_DEBOUNCE_MS = 3000;
 
@@ -76,14 +67,20 @@ export class AppState {
   private readonly syncService = inject(CloudSyncService);
   private readonly chatService = inject(ChatDataService);
 
+  // ✅ REPLACED: Single Facade for Active Chat
+  private readonly activeChat = inject(ActiveChatFacade);
+
+  // Aliases to maintain legacy internal usage within this file if needed
+  // (Or simply replace usage below)
+  private readonly conversationService = this.activeChat;
+  private readonly conversationActions = this.activeChat;
+
   private readonly authService = inject(IAuthService);
   private readonly addressBookManager = inject(AddressBookManagementApi);
   private readonly addressBookApi = inject(AddressBookApi);
 
   private readonly outboxWorker = inject(OutboxWorkerService);
   private readonly groupProtocol = inject(GroupProtocolService);
-  private readonly conversationService = inject(ConversationService);
-  private readonly conversationActions = inject(ConversationActionService);
 
   private readonly settingsService = inject(LocalSettingsService);
   private readonly cryptoService = inject(PrivateKeyService);
@@ -96,16 +93,12 @@ export class AppState {
   public readonly onboardingState = this.identity.onboardingState;
   public readonly isCeremonyActive = this.identity.isCeremonyActive;
 
-  // ✅ FIELD: Safe Observable creation (Injection Context guaranteed)
   private readonly sessionReady$ = toObservable(
     this.sessionService.currentSession,
   ).pipe(
     filter((s) => !!s),
     take(1),
   );
-
-  // ✅ FIELD: Continuous session stream for pipelines
-  private readonly session$ = toObservable(this.sessionService.currentSession);
 
   private readonly _typingSubject = new Subject<void>();
   public readonly typingTrigger$ = this._typingSubject
@@ -121,17 +114,19 @@ export class AppState {
   public readonly isCloudConnected = this.syncService.isConnected;
   public readonly isBackingUp = this.syncService.isSyncing;
 
-  public readonly selectedConversation =
-    this.conversationService.selectedConversation;
+  // ✅ PROXY: Delegating to ActiveChatFacade
+  public readonly selectedConversation = this.activeChat.selectedConversation;
+  public readonly messages = this.activeChat.messages;
+  public readonly isLoadingHistory = this.activeChat.isLoadingHistory;
+  public readonly firstUnreadId = this.activeChat.firstUnreadId;
+  public readonly readCursors = this.activeChat.readCursors;
+  public readonly isRecipientKeyMissing = this.activeChat.isRecipientKeyMissing;
+  public readonly readReceiptTrigger$ = this.activeChat.readReceiptTrigger$;
+
   public readonly activeConversations = this.chatService.activeConversations;
   public readonly typingActivity = this.chatService.typingActivity;
-  public readonly messages = this.conversationService.messages;
   public readonly uiConversations = this.chatService.uiConversations;
-  public readonly isLoadingHistory = this.conversationService.isLoadingHistory;
-  public readonly firstUnreadId = this.conversationService.firstUnreadId;
-  public readonly readCursors = this.conversationService.readCursors;
-  public readonly isRecipientKeyMissing =
-    this.conversationService.isRecipientKeyMissing;
+
   public readonly activeLocalGroup = signal<ContactGroup | null>(null);
   public readonly blockedSet = this.moderation.blockedSet;
   public readonly isCloudAuthRequired =
@@ -170,10 +165,8 @@ export class AppState {
   });
 
   constructor() {
-    this.logger.info('ChatService: Initializing via Facades...');
     this.identity.initialize();
 
-    // 1. Reactive Boot Trigger
     effect(() => {
       const state = this.identity.onboardingState();
       if (state === 'READY' || state === 'OFFLINE_READY') {
@@ -181,7 +174,6 @@ export class AppState {
       }
     });
 
-    // 2. Reactive Group Loader
     effect(() => {
       const conv = this.selectedConversation();
       const urn = conv?.id;
@@ -196,44 +188,23 @@ export class AppState {
     });
 
     this.loadUiSettings();
-
-    // 3. Setup Listeners immediately (Sync)
-    this.setupOrchestration();
     this.setupResumptionTriggers();
   }
 
   readonly bootStatus = signal<AppDiagnosticState>({ bootStage: 'IDLE' });
 
-  // ✅ EXECUTION ONLY: No reactive setup here.
   private async bootDataLayer() {
-    this.logger.info('🚀 [AppState] Identity Ready. Booting Data Layer...');
     this.bootStatus.set({ bootStage: 'CHECKING_AUTH' });
-
     const token = this.authService.getJwtToken();
-    if (!token) {
-      this.logger.error('🛑 [AppState] Cannot boot: Missing auth token');
-      return;
-    }
+    if (!token) return;
 
     const promises: Promise<any>[] = [];
     this.bootStatus.update((s) => ({ ...s, bootStage: 'STARTING_CHAT_SYNC' }));
 
-    promises.push(
-      this.chatService
-        .startSyncSequence(token)
-        .then(() => this.logger.info('🟢 [AppState] Chat Sync Started'))
-        .catch((e) => this.logger.error('💥 [AppState] Chat Sync Failed', e)),
-    );
+    promises.push(this.chatService.startSyncSequence(token));
 
     this.bootStatus.update((s) => ({ ...s, bootStage: 'CHECKING_CLOUD' }));
-    promises.push(
-      this.syncService
-        .resumeSession()
-        .then(() => this.logger.info('🔵 [AppState] Cloud Check Complete'))
-        .catch((e) => this.logger.error('⚠️ [AppState] Cloud Check Failed', e)),
-    );
-
-    // Orchestration is already wired in constructor.
+    promises.push(this.syncService.resumeSession());
 
     void this.outboxWorker.processQueue();
 
@@ -241,19 +212,7 @@ export class AppState {
     this.bootStatus.set({ bootStage: 'READY' });
   }
 
-  private setupOrchestration() {
-    this.conversationService.readReceiptTrigger$
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        withLatestFrom(this.session$),
-        filter(([_, session]) => !!session),
-        map(([ids, _]) => ids),
-      )
-      .subscribe((ids) => this.markAsRead(ids));
-  }
-
   private setupResumptionTriggers(): void {
-    // 1. Reconnection
     this.liveService.status$
       .pipe(
         filter((status) => status === 'connected'),
@@ -264,11 +223,9 @@ export class AppState {
         void this.outboxWorker.processQueue();
       });
 
-    // 2. Boot/Resume
     this.sessionReady$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
-        this.logger.info('[ChatService] Session ready. Processing Outbox.');
         void this.outboxWorker.processQueue();
       });
   }
@@ -279,10 +236,9 @@ export class AppState {
 
   public async loadConversation(urn: URN | null): Promise<void> {
     if (urn && !this.sessionService.isReady) {
-      this.logger.info('[AppState] Load deferred: Waiting for Session...');
       await firstValueFrom(this.sessionReady$);
     }
-    await this.conversationService.loadConversation(urn);
+    await this.activeChat.loadConversation(urn);
   }
 
   public async sendDraft(draft: DraftMessage): Promise<void> {
@@ -296,39 +252,21 @@ export class AppState {
         draft.text,
       );
     } else if (draft.text.trim().length > 0) {
-      await this.conversationActions.sendMessage(recipient, draft.text);
+      await this.activeChat.sendMessage(recipient, draft.text);
     }
 
     await this.chatService.refreshActiveConversations();
     void this.outboxWorker.processQueue();
   }
 
-  public async markAsRead(messageIds: string[]): Promise<void> {
-    const recipient = this.selectedConversation()?.id;
-    const sender = this.currentUserUrn();
-
-    if (recipient && sender && messageIds.length > 0) {
-      await this.conversationActions.sendReadReceiptSignal(
-        recipient,
-        messageIds,
-      );
-      await this.storageService.applyReceipt(
-        messageIds[messageIds.length - 1],
-        sender,
-        'read',
-      );
-      void this.outboxWorker.processQueue();
-    }
-  }
-
   public performTypingNotification(): void {
     const recipient = this.selectedConversation()?.id;
     if (recipient) {
-      this.conversationActions.sendTypingIndicator(recipient);
+      this.activeChat.sendTypingIndicator(recipient);
     }
   }
 
-  // --- FACADE DELEGATIONS ---
+  // --- PROXIES ---
 
   public async performIdentityReset(): Promise<void> {
     return this.identity.performIdentityReset();
@@ -358,7 +296,7 @@ export class AppState {
     this.chatService.refreshActiveConversations();
   }
 
-  // --- PAIRING DELEGATIONS ---
+  // --- PAIRING ---
   public async startTargetLinkSession() {
     return this.identity.startTargetLinkSession();
   }
@@ -380,7 +318,6 @@ export class AppState {
 
   // --- MISC ---
 
-  // ✅ RESTORED
   public async connectCloud(): Promise<void> {
     await this.syncService.connect('google-drive');
   }
@@ -396,7 +333,7 @@ export class AppState {
 
   public async sessionLogout(): Promise<void> {
     this.chatService.stopSyncSequence();
-    this.conversationService.loadConversation(null);
+    this.activeChat.loadConversation(null);
     await this.authService.logout();
   }
 
@@ -413,17 +350,8 @@ export class AppState {
     } catch (e) {
       this.logger.error('Device wipe failed', e);
     }
-    this.conversationService.loadConversation(null);
+    this.activeChat.loadConversation(null);
     await this.authService.logout();
-  }
-
-  public async sendContactShare(
-    recipientUrn: URN,
-    data: ContactShareData,
-  ): Promise<void> {
-    await this.conversationActions.sendContactShare(recipientUrn, data);
-    this.chatService.refreshActiveConversations();
-    void this.outboxWorker.processQueue();
   }
 
   public async acceptInvite(msg: ChatMessage): Promise<string> {
@@ -437,25 +365,11 @@ export class AppState {
   public async recoverFailedMessage(
     messageId: string,
   ): Promise<string | undefined> {
-    return this.conversationService.recoverFailedMessage(messageId);
-  }
-
-  public async clearLocalMessages(): Promise<void> {
-    await this.conversationService.performHistoryWipe();
-    this.chatService.refreshActiveConversations();
-  }
-
-  public async clearLocalContacts(): Promise<void> {
-    await this.addressBookManager.clearDatabase();
-    this.chatService.refreshActiveConversations();
-  }
-
-  public async resetIdentityKeys(): Promise<void> {
-    return this.identity.performIdentityReset();
+    return this.activeChat.recoverFailedMessage(messageId);
   }
 
   public async loadMoreMessages(): Promise<void> {
-    return this.conversationService.loadMoreMessages();
+    return this.activeChat.loadMoreMessages();
   }
 
   public async provisionNetworkGroup(
@@ -474,7 +388,7 @@ export class AppState {
   }
 
   public async startNewConversation(urn: URN, name: string): Promise<void> {
-    this.conversationService.startNewConversation(urn, name);
+    this.activeChat.startNewConversation(urn, name);
   }
 
   public notifyTyping(): void {
@@ -485,5 +399,29 @@ export class AppState {
     this.settingsService
       .getWizardSeen()
       .then((seen) => this.showWizard.set(!seen));
+  }
+
+  public async sendContactShare(
+    recipient: URN,
+    data: ContactShareData,
+  ): Promise<void> {
+    await this.activeChat.sendContactShare(recipient, data);
+  }
+
+  // FIX TS2339: clearLocalMessages
+  public async clearLocalMessages(): Promise<void> {
+    await this.activeChat.performHistoryWipe();
+    this.chatService.refreshActiveConversations();
+  }
+
+  // FIX TS2339: clearLocalContacts
+  public async clearLocalContacts(): Promise<void> {
+    await this.addressBookManager.clearDatabase();
+    this.chatService.refreshActiveConversations();
+  }
+
+  // FIX TS2339: resetIdentityKeys
+  public async resetIdentityKeys(): Promise<void> {
+    return this.identity.performIdentityReset();
   }
 }
