@@ -5,12 +5,9 @@ import {
   ChangeDetectionStrategy,
   signal,
 } from '@angular/core';
-
 import { Router, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
-import { from } from 'rxjs';
-import { Temporal } from '@js-temporal/polyfill';
 
 // UI Layouts & Toolkits
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
@@ -26,20 +23,15 @@ import { ContactsSidebarComponent } from '@nx-platform-application/contacts-ui';
 import { MessageRequestReviewComponent } from '../message-request-review/message-request-review.component';
 import { StickyWizardComponent } from '@nx-platform-application/messenger-settings-ui';
 
-// State & Data
+// ✅ STATE LAYERS (Strict Separation)
 import { AppState } from '@nx-platform-application/messenger-state-app';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
-
-// Domain & Logic
-import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
-import { AddressBookManagementApi } from '@nx-platform-application/contacts-api';
+import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
+import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 
 // Types
 import { Contact, ContactGroup } from '@nx-platform-application/contacts-types';
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 
 // Material
@@ -76,26 +68,24 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 export class MessengerChatPageComponent {
   protected router = inject(Router);
   private route = inject(ActivatedRoute);
-
-  // State Services
-  private appState = inject(AppState);
-  private chatData = inject(ChatDataService);
-
-  // Action Services
-  private addressBookManager = inject(AddressBookManagementApi);
-  private quarantine = inject(QuarantineService);
-
-  // UI Utilities
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
+  // ✅ INJECTED STATE
+  private appState = inject(AppState); // For Wizard (Global Mode)
+  private chatData = inject(ChatDataService); // For List
+  private activeChat = inject(ActiveChatFacade); // For Selection
+  private moderation = inject(ChatModerationFacade); // For Requests/Blocking
+
   // --- UI SIGNALS ---
 
-  showDetail = computed(() => !!this.appState.selectedConversation());
+  // Detail View State (Driven by ActiveChat)
+  showDetail = computed(() => !!this.activeChat.selectedConversation());
 
-  // Direct check against the UI Source
+  // Empty State (Driven by ChatData)
   hasConversations = computed(() => this.chatData.uiConversations().length > 0);
 
+  // Global Wizard Mode (Driven by AppState)
   showWizard = this.appState.showWizard;
 
   sidebarMode = toSignal(
@@ -108,32 +98,23 @@ export class MessengerChatPageComponent {
   searchQuery = signal<string>('');
   showRequestsPane = signal(false);
 
-  // --- QUARANTINE DATA ---
+  // --- MODERATION DATA ---
 
-  pendingRequests = toSignal(from(this.quarantine.getPendingRequests()), {
-    initialValue: [] as URN[],
-  });
-
+  pendingRequests = this.moderation.pendingRequests;
   previewMessages = signal<Record<string, ChatMessage[]>>({});
   loadingPreviews = signal<Set<string>>(new Set());
 
-  // --- THE CORE LIST (Zero Mapping) ---
+  // --- LIST PROJECTION ---
 
-  /**
-   * Consumes UIConversation[] directly.
-   * Handles local filtering and adding 'isActive' state.
-   */
   conversationsList = computed(() => {
     const all = this.chatData.uiConversations();
     const query = this.searchQuery().toLowerCase().trim();
-    const activeUrn = this.appState.selectedConversation()?.id;
+    const activeUrn = this.activeChat.selectedConversation()?.id;
 
-    // 1. Filter
     const filtered = !query
       ? all
       : all.filter((item) => item.name.toLowerCase().includes(query));
 
-    // 2. Attach UI State (isActive) - No data transformation
     return filtered.map((item) => ({
       ...item,
       isActive: activeUrn ? activeUrn.equals(item.id) : false,
@@ -165,11 +146,18 @@ export class MessengerChatPageComponent {
   toggleRequestsPane() {
     this.showRequestsPane.update((v) => !v);
     if (this.showRequestsPane()) {
-      this.appState.loadConversation(null);
+      // Clear active selection via Facade when opening requests
+      this.activeChat.loadConversation(null);
     }
   }
 
-  // --- QUARANTINE ACTIONS ---
+  // --- GLOBAL ACTIONS (AppState) ---
+
+  onCloseWizard() {
+    this.appState.setWizardActive(false);
+  }
+
+  // --- MODERATION ACTIONS (Delegated to Facade) ---
 
   async onPeekRequests(urn: URN) {
     const urnStr = urn.toString();
@@ -178,7 +166,10 @@ export class MessengerChatPageComponent {
     this.loadingPreviews.update((s) => new Set(s).add(urnStr));
 
     try {
-      const messages = await this.appState.getQuarantinedMessages(urn);
+      // Facade handles the domain fetch
+      const messages = await this.moderation.getQuarantinedMessages(urn);
+
+      // UI decodes bytes for preview rendering
       const viewMessages = messages.map((m) => ({
         ...m,
         textContent: new TextDecoder().decode(m.payloadBytes),
@@ -203,39 +194,24 @@ export class MessengerChatPageComponent {
     try {
       this.showFeedback('Accepting request...');
 
-      const newContactId = URN.parse(
-        `urn:contacts:user:${crypto.randomUUID()}`,
-      );
-      const isEmail = urn.entityType === 'email';
-      const initialAlias = isEmail ? urn.entityId : 'New Contact';
-      const now = Temporal.Now.instant().toString() as ISODateTimeString;
+      // ✅ STATE LAYER handles Contact Creation, Message Promotion & Data Refresh
+      const newUrn = await this.moderation.promoteQuarantinedMessages(urn);
 
-      const newContact: Contact = {
-        id: newContactId,
-        alias: initialAlias,
-        firstName: '',
-        surname: '',
-        email: isEmail ? urn.entityId : '',
-        emailAddresses: isEmail ? [urn.entityId] : [],
-        phoneNumbers: [],
-        serviceContacts: {
-          messenger: { id: urn, alias: initialAlias, lastSeen: now },
-        },
-        lastModified: now,
-      };
+      // Force UI list refresh to see new contact immediately
+      await this.chatData.refreshActiveConversations();
 
-      await this.addressBookManager.saveContact(newContact);
-      await this.appState.promoteQuarantinedMessages(urn, newContactId);
-
-      this.showFeedback('Contact created. Opening details...');
+      this.showFeedback('Request accepted');
       this.showRequestsPane.set(false);
 
-      this.router.navigate(
-        ['/messenger/contacts/edit', newContactId.toString()],
-        { queryParams: { returnUrl: '/messenger/conversations' } },
-      );
+      if (newUrn) {
+        this.router.navigate([
+          '/messenger',
+          'conversations',
+          newUrn.toString(),
+        ]);
+      }
     } catch (e) {
-      console.error('Failed to accept request', e);
+      console.error(e);
       this.showFeedback('Failed to accept request', true);
     }
   }
@@ -253,7 +229,8 @@ export class MessengerChatPageComponent {
 
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
-        await this.appState.block([event.urn], event.scope);
+        await this.moderation.block([event.urn], event.scope);
+        await this.chatData.refreshActiveConversations();
         this.showFeedback(`Blocked sender`);
       }
     });
@@ -272,7 +249,7 @@ export class MessengerChatPageComponent {
 
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
-        await this.appState.dismissPending([urn]);
+        await this.moderation.dismissPending([urn]);
         this.showFeedback(`Dismissed request`);
       }
     });
@@ -293,7 +270,8 @@ export class MessengerChatPageComponent {
 
     dialogRef.afterClosed().subscribe(async (confirmed) => {
       if (confirmed) {
-        await this.appState.block(allUrns, 'messenger');
+        await this.moderation.block(allUrns, 'messenger');
+        await this.chatData.refreshActiveConversations();
         this.showFeedback('Blocked all requests');
       }
     });
@@ -304,9 +282,5 @@ export class MessengerChatPageComponent {
       duration: 3000,
       panelClass: isError ? 'bg-red-500' : '',
     });
-  }
-
-  onCloseWizard() {
-    this.appState.setWizardActive(false);
   }
 }

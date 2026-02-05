@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
 import {
   URN,
   QueuedMessage,
@@ -50,6 +50,9 @@ export class IngestionService {
 
   private logger = inject(Logger);
 
+  private readonly _dataIngested = new Subject<IngestionResult>();
+  public readonly dataIngested$ = this._dataIngested.asObservable();
+
   async process(
     blockedSet: Set<string>,
     batchSize = 50,
@@ -95,6 +98,8 @@ export class IngestionService {
         hasMore = false;
       }
     }
+
+    this._dataIngested.next(finalResult);
 
     return finalResult;
   }

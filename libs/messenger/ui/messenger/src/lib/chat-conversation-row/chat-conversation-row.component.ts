@@ -6,7 +6,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatTooltipModule } from '@angular/material/tooltip'; // ✅ Needed for the eyes
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';

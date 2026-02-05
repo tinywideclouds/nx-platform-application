@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Subject } from 'rxjs';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   OutboundService,
@@ -20,12 +21,17 @@ import {
   RichContent,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 
 @Injectable({ providedIn: 'root' })
 export class ConversationActionService {
   private outbound = inject(OutboundService);
+  private storage = inject(ChatStorageService);
   private operationLock = Promise.resolve();
 
+  // "Hey application, I just marked a conversation as read."
+  private readonly _readReceiptsSent = new Subject<URN>();
+  public readonly readReceiptsSent$ = this._readReceiptsSent.asObservable();
   /**
    * Sends a text message. Returns the optimistic message object for UI updates.
    */
@@ -69,8 +75,29 @@ export class ConversationActionService {
     );
   }
 
-  async sendReadReceiptSignal(
-    recipientUrn: URN,
+  public async markMessagesAsRead(
+    conversationUrn: URN,
+    messageIds: string[],
+  ): Promise<void> {
+    //we don't mind how long this takes
+    this.sendReadReceiptSignal(conversationUrn, messageIds);
+
+    await this.updateLocalMessages(conversationUrn, messageIds);
+    this._readReceiptsSent.next(conversationUrn);
+  }
+
+  private async updateLocalMessages(
+    conversationUrn: URN,
+    messageIds: string[],
+  ): Promise<void> {
+    if (messageIds.length === 0) return;
+
+    // 1. Update the individual messages (Blue ticks for us)
+    await this.storage.markMessagesAsRead(conversationUrn, messageIds);
+  }
+
+  private async sendReadReceiptSignal(
+    conversationUrn: URN,
     messageIds: string[],
   ): Promise<void> {
     const data: ReadReceiptData = {
@@ -80,7 +107,7 @@ export class ConversationActionService {
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     const typeId = MessageTypeReadReceipt;
 
-    await this.sendGeneric(recipientUrn, typeId, bytes, {
+    await this.sendGeneric(conversationUrn, typeId, bytes, {
       shouldPersist: false,
     });
   }

@@ -12,7 +12,7 @@ import {
   ChatImageMessageComponent,
   ChatSystemMessageComponent,
   ChatTextRendererComponent,
-  ChatInviteMessageComponent, // ✅ Ensure this is exported
+  ChatInviteMessageComponent,
 } from '@nx-platform-application/messenger-ui-chat';
 
 import { ContactNamePipe } from '@nx-platform-application/contacts-ui';

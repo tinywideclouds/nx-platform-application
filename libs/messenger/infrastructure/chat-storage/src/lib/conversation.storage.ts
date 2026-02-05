@@ -45,6 +45,13 @@ export abstract class ConversationStorage {
 
   abstract markConversationAsRead(urn: URN): Promise<void>;
 
+  // this is for local updates of incoming message use updateMessageStatus for network driven updates of sent messages
+  // use updateMessageStatus
+  abstract markMessagesAsRead(
+    conversationUrn: URN,
+    messageIds: string[],
+  ): Promise<void>;
+
   abstract getMessage(id: string): Promise<ChatMessage | undefined>;
 
   abstract updateMessageStatus(

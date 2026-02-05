@@ -1,5 +1,5 @@
 import { Component, inject, input, computed } from '@angular/core';
-import { CommonModule } from '@angular/common'; // ✅ Need Common for @if
+import { CommonModule } from '@angular/common';
 import { URN } from '@nx-platform-application/platform-types';
 import { AppState } from '@nx-platform-application/messenger-state-app';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';

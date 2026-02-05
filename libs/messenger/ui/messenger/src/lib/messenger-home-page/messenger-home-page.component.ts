@@ -18,9 +18,9 @@ import {
 import { LogoutDialogComponent } from '../logout-dialog/logout-dialog.component';
 import { DeviceLinkWizardComponent } from '../device-link-wizard/device-link-wizard.component';
 
-// SERVICES
-import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
+// ✅ STATE LAYERS (Infrastructure Removed)
 import { AppState } from '@nx-platform-application/messenger-state-app';
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 
 @Component({
   selector: 'messenger-home-page',
@@ -38,21 +38,22 @@ import { AppState } from '@nx-platform-application/messenger-state-app';
 export class MessengerHomePageComponent {
   private router = inject(Router);
   private dialog = inject(MatDialog);
-  private authService = inject(IAuthService);
+
+  // ✅ Facades
   private appState = inject(AppState);
+  private identity = inject(ChatIdentityFacade);
 
   // --- STATE ---
-  currentUser = this.authService.currentUser;
+  // Proxy via Identity Facade
+  currentUser = this.identity.currentUser;
 
-  // ✅ New: Halt State Check
-  // If true, the Wizard Overlay renders and blocks interaction.
+  // Halt State Check (Driven by Identity State)
   showDeviceLinkWizard = computed(
-    () => this.appState.onboardingState() === 'REQUIRES_LINKING',
+    () => this.identity.onboardingState() === 'REQUIRES_LINKING',
   );
 
   /**
    * Derives the active sidebar state strictly from the URL.
-   * Now only tracks 'conversations' vs 'contacts'.
    */
   activeView = toSignal(
     this.router.events.pipe(
@@ -81,12 +82,16 @@ export class MessengerHomePageComponent {
     this.dialog
       .open(LogoutDialogComponent)
       .afterClosed()
-      .subscribe((confirmed) => {
+      .subscribe(async (confirmed) => {
         if (confirmed) {
-          this.authService.logout().subscribe({
-            next: () => this.router.navigate(['/login']),
-            error: () => this.router.navigate(['/login']),
-          });
+          try {
+            // ✅ Global Session Teardown (AppState)
+            await this.appState.sessionLogout();
+          } catch (e) {
+            console.error('Logout failed', e);
+          } finally {
+            this.router.navigate(['/login']);
+          }
         }
       });
   }

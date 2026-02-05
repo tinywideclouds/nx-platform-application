@@ -30,8 +30,10 @@ export class ChatIdentityFacade {
   public readonly onboardingState = signal<OnboardingState>('CHECKING');
   public readonly isCeremonyActive = signal<boolean>(false);
 
+  public readonly currentUser = this.authService.currentUser;
+
   public readonly myUrn = computed(() => {
-    const user = this.authService.currentUser();
+    const user = this.currentUser();
     return user?.email
       ? URN.create('email', user.email, 'lookup')
       : user?.id || null;

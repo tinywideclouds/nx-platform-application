@@ -219,6 +219,41 @@ export class ChatStorageService
     });
   }
 
+  async markMessagesAsRead(
+    conversationUrn: URN,
+    messageIds: string[],
+  ): Promise<void> {
+    const urnStr = conversationUrn.toString();
+
+    // ✅ ATOMIC TRANSACTION
+    // Locks both tables so the UI never sees a partial state.
+    await this.db.transaction(
+      'rw',
+      [this.db.messages, this.db.conversations],
+      async () => {
+        // 1. Update the specific messages to 'read'
+        // (Using Promise.all because Dexie bulkUpdate is strictly for keys)
+        await Promise.all(
+          messageIds.map((id) =>
+            this.db.messages.update(id, { status: 'read' }),
+          ),
+        );
+
+        // 2. The Truth Check
+        // Count how many 'received' (unread) messages remain for this chat.
+        const realCount = await this.db.messages
+          .where('conversationUrn')
+          .equals(urnStr)
+          .filter((m) => m.status === 'received')
+          .count();
+
+        // 3. Update the Aggregate
+        // The Sidebar listens to this specific field.
+        await this.db.conversations.update(urnStr, { unreadCount: realCount });
+      },
+    );
+  }
+
   async updateMessageStatus(
     messageIds: string[],
     status: MessageDeliveryStatus,

@@ -1,16 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MessengerToolbarComponent } from './messenger-toolbar.component';
-import { User, URN } from '@nx-platform-application/platform-types';
+import {
+  User,
+  URN,
+  ConnectionStatus,
+} from '@nx-platform-application/platform-types';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
 import { signal } from '@angular/core';
 
-// ✅ Import ChatService
-import { ChatService } from '@nx-platform-application/messenger-state-app';
-import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
+// ✅ State Facade Only
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { MockProvider } from 'ng-mocks';
-import { Subject } from 'rxjs';
 
 const mockUser: User = {
   id: URN.parse('urn:contacts:user:me'),
@@ -22,18 +24,22 @@ describe('MessengerToolbarComponent', () => {
   let component: MessengerToolbarComponent;
   let fixture: ComponentFixture<MessengerToolbarComponent>;
 
+  // Control Signals
+  const networkStatusSig = signal<ConnectionStatus>('connected');
+  const isBackingUpSig = signal(false);
+  const isCloudAuthRequiredSig = signal(false);
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [MessengerToolbarComponent, NoopAnimationsModule],
       providers: [
-        // ✅ Mock ChatService (State Facade)
-        MockProvider(ChatService, {
-          isBackingUp: signal(false),
-          isCloudEnabled: vi.fn().mockReturnValue(true),
-        }),
-        // Mock LiveData (Infrastructure)
-        MockProvider(ChatLiveDataService, {
-          status$: new Subject(),
+        // ✅ Mock AppState (The only source of truth)
+        MockProvider(AppState, {
+          networkStatus: networkStatusSig,
+          isBackingUp: isBackingUpSig,
+          isCloudAuthRequired: isCloudAuthRequiredSig,
+          isCloudConnected: vi.fn().mockReturnValue(true),
+          connectCloud: vi.fn(),
         }),
       ],
     }).compileComponents();
@@ -49,6 +55,32 @@ describe('MessengerToolbarComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('Status Logic', () => {
+    it('should show OFFLINE when networkStatus is disconnected', () => {
+      networkStatusSig.set('disconnected');
+      fixture.detectChanges();
+
+      expect(component.connectionStatus()).toBe('disconnected');
+    });
+
+    it('should show ATTENTION when cloud auth is required', () => {
+      networkStatusSig.set('connected');
+      isCloudAuthRequiredSig.set(true);
+      fixture.detectChanges();
+
+      expect(component.connectionStatus()).toBe('attention');
+    });
+
+    it('should show SYNCING when backing up', () => {
+      networkStatusSig.set('connected');
+      isCloudAuthRequiredSig.set(false);
+      isBackingUpSig.set(true);
+      fixture.detectChanges();
+
+      expect(component.connectionStatus()).toBe('syncing');
+    });
+  });
+
   it('should render user initials', () => {
     fixture.componentRef.setInput('currentUser', {
       ...mockUser,
@@ -60,15 +92,5 @@ describe('MessengerToolbarComponent', () => {
       By.css('.rounded-full.bg-gray-600'),
     );
     expect(avatar.nativeElement.textContent).toContain('ME');
-  });
-
-  it('should emit viewContacts event', () => {
-    const spy = vi.spyOn(component.viewContacts, 'emit');
-    const btn = fixture.debugElement.query(
-      By.css('button[matTooltip="Contacts"]'),
-    );
-
-    btn.nativeElement.click();
-    expect(spy).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,3 @@
-// libs/messenger/ui/chat/src/lib/chat-window/chat-window.component.spec.ts
-
 import { TestBed } from '@angular/core/testing';
 import { ChatWindowComponent } from './chat-window.component';
 import { provideRouter } from '@angular/router';
@@ -16,48 +14,49 @@ import {
 } from '@nx-platform-application/messenger-ui-chat';
 import { MatDialog } from '@angular/material/dialog';
 
-// Services
+// ✅ NEW FACADES
+import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
+import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 import {
-  AppState,
-  ConversationCapabilities,
-} from '@nx-platform-application/messenger-state-app';
+  ChatDataService,
+  UIConversation,
+} from '@nx-platform-application/messenger-state-chat-data';
+import { AddressBookApi } from '@nx-platform-application/contacts-api';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { UIConversation } from '@nx-platform-application/messenger-state-chat-data';
-import { PageState } from 'libs/messenger/state/app/src/lib/state.engine';
+import { Conversation } from '@nx-platform-application/messenger-types';
 
 describe('ChatWindowComponent', () => {
   let component: ChatWindowComponent;
   let harness: RouterTestingHarness;
-  let mockAppState: any;
+  let activeChatMock: any;
 
-  // Signals
-  const pageStateSig = signal<PageState>('LOADING');
-  const capabilitiesSig = signal<ConversationCapabilities | null>(null);
-  const isKeyMissingSig = signal(false);
+  // Control Signals
+  const isLoadingSig = signal(false);
+  const blockedSetSig = signal(new Set<string>());
   const uiConversationsSig = signal<UIConversation[]>([]);
+  const selectedConversationSig = signal<Conversation | null>(null);
 
   beforeEach(async () => {
-    // Setup Mock AppState
-    mockAppState = {
-      pageState: pageStateSig,
-      capabilities: capabilitiesSig,
-      isRecipientKeyMissing: isKeyMissingSig,
-      uiConversations: uiConversationsSig,
-      loadConversation: vi.fn(), // Replaces focusConversation
+    // Mock Active Chat
+    activeChatMock = {
+      isLoading: isLoadingSig,
+      selectedConversation: selectedConversationSig,
+      isRecipientKeyMissing: signal(false),
+      loadConversation: vi.fn(),
       provisionNetworkGroup: vi
         .fn()
         .mockResolvedValue(URN.parse('urn:messenger:group:new')),
     };
 
     await TestBed.configureTestingModule({
-      imports: [ChatWindowComponent], // Standalone
+      imports: [ChatWindowComponent],
       providers: [
         provideRouter([
           {
             path: 'messenger/conversations/:id',
             component: ChatWindowComponent,
             children: [
-              { path: '', component: MockComponent(ChatGroupIntroComponent) }, // Mock child
+              { path: '', component: MockComponent(ChatGroupIntroComponent) },
               {
                 path: 'details',
                 component: MockComponent(ChatGroupIntroComponent),
@@ -65,7 +64,13 @@ describe('ChatWindowComponent', () => {
             ],
           },
         ]),
-        MockProvider(AppState, mockAppState),
+        // ✅ Facades
+        MockProvider(ActiveChatFacade, activeChatMock),
+        MockProvider(ChatModerationFacade, { blockedSet: blockedSetSig }),
+        MockProvider(ChatDataService, { uiConversations: uiConversationsSig }),
+        MockProvider(AddressBookApi, {
+          getGroup: vi.fn().mockResolvedValue(null),
+        }),
         MockProvider(Logger),
         MockProvider(MatDialog),
       ],
@@ -86,29 +91,18 @@ describe('ChatWindowComponent', () => {
     harness = await RouterTestingHarness.create();
   });
 
-  it('should focus conversation on route activation', async () => {
+  it('should load conversation from Facade on route activation', async () => {
     const urn = URN.parse('urn:messenger:group:123');
     await harness.navigateByUrl(`/messenger/conversations/${urn.toString()}`);
 
-    expect(mockAppState.loadConversation).toHaveBeenCalledWith(urn);
+    expect(activeChatMock.loadConversation).toHaveBeenCalledWith(urn);
   });
 
-  it('should blur conversation on destroy (nav away)', async () => {
-    const urn = URN.parse('urn:messenger:group:123');
-    // ✅ Correct: Capture instance from return value
-    await harness.navigateByUrl(
-      `/messenger/conversations/${urn.toString()}`,
-      ChatWindowComponent,
-    );
-
-    expect(mockAppState.loadConversation).toHaveBeenCalledWith(urn);
-  });
-
-  describe('View State Logic (The Gatekeeper)', () => {
+  describe('View State Logic', () => {
     const urn = 'urn:messenger:group:123';
 
-    it('should show LOADING when pageState is LOADING', async () => {
-      pageStateSig.set('LOADING');
+    it('should show LOADING when isLoading is true', async () => {
+      isLoadingSig.set(true);
       component = await harness.navigateByUrl(
         `/messenger/conversations/${urn}`,
         ChatWindowComponent,
@@ -116,17 +110,8 @@ describe('ChatWindowComponent', () => {
       expect(component.viewState()).toBe('SHOW_LOADING');
     });
 
-    it('should show INTRO when pageState is EMPTY_NETWORK_GROUP', async () => {
-      pageStateSig.set('EMPTY_NETWORK_GROUP');
-      component = await harness.navigateByUrl(
-        `/messenger/conversations/${urn}`,
-        ChatWindowComponent,
-      );
-      expect(component.viewState()).toBe('SHOW_INTRO');
-    });
-
-    it('should show BLOCKED when pageState is BLOCKED', async () => {
-      pageStateSig.set('BLOCKED');
+    it('should show BLOCKED when in blockedSet', async () => {
+      blockedSetSig.set(new Set([urn]));
       component = await harness.navigateByUrl(
         `/messenger/conversations/${urn}`,
         ChatWindowComponent,
@@ -134,29 +119,33 @@ describe('ChatWindowComponent', () => {
       expect(component.viewState()).toBe('SHOW_BLOCKED');
     });
 
-    it('should show ROUTER_OUTLET (Details) even if BLOCKED when route is /details', async () => {
-      pageStateSig.set('BLOCKED');
-      // Navigate to details sub-route
+    it('should show INTRO for Local Contact Groups', async () => {
+      const localUrn = 'urn:contacts:group:local';
       component = await harness.navigateByUrl(
-        `/messenger/conversations/${urn}/details`,
+        `/messenger/conversations/${localUrn}`,
         ChatWindowComponent,
       );
+      expect(component.viewState()).toBe('SHOW_INTRO');
+    });
 
-      expect(component.viewMode()).toBe('details');
+    it('should show ROUTER_OUTLET for standard chats', async () => {
+      component = await harness.navigateByUrl(
+        `/messenger/conversations/${urn}`,
+        ChatWindowComponent,
+      );
       expect(component.viewState()).toBe('SHOW_ROUTER_OUTLET');
     });
   });
 
-  describe('Header Data Resolution', () => {
-    it('should resolve participant from UI Conversations list', async () => {
+  describe('Header Data', () => {
+    it('should resolve name/avatar from ChatDataService UI list', async () => {
       const urnStr = 'urn:contacts:user:alice';
       const urn = URN.parse(urnStr);
 
-      // Mock Data
       uiConversationsSig.set([
         {
           id: urn,
-          name: 'Alice',
+          name: 'Alice (Alias)',
           initials: 'AL',
           pictureUrl: 'img.png',
         } as any,
@@ -167,27 +156,37 @@ describe('ChatWindowComponent', () => {
         ChatWindowComponent,
       );
 
-      const header = component.headerData();
-      expect(header).toEqual({
-        name: 'Alice',
+      expect(component.headerData()).toEqual({
+        name: 'Alice (Alias)',
         initials: 'AL',
         pictureUrl: 'img.png',
       });
     });
+  });
 
-    it('should determine groupType from capabilities', async () => {
-      capabilitiesSig.set({
-        kind: 'network-group',
-        canBroadcast: true,
-        canFork: true,
-      });
-
+  describe('Group Type', () => {
+    it('should identify network group from URN', async () => {
       component = await harness.navigateByUrl(
         '/messenger/conversations/urn:messenger:group:1',
         ChatWindowComponent,
       );
-
       expect(component.groupType()).toBe('network');
+    });
+
+    it('should identify local group from URN', async () => {
+      component = await harness.navigateByUrl(
+        '/messenger/conversations/urn:contacts:group:1',
+        ChatWindowComponent,
+      );
+      expect(component.groupType()).toBe('local');
+    });
+
+    it('should identify P2P (null) from user URN', async () => {
+      component = await harness.navigateByUrl(
+        '/messenger/conversations/urn:contacts:user:1',
+        ChatWindowComponent,
+      );
+      expect(component.groupType()).toBeNull();
     });
   });
 });

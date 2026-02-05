@@ -18,7 +18,10 @@ import { Conversation } from '@nx-platform-application/messenger-types';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 
 // Domain
-import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
+import {
+  ConversationActionService,
+  ConversationService,
+} from '@nx-platform-application/messenger-domain-conversation';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 
 // Facades
@@ -48,11 +51,10 @@ export class ChatDataService {
   private readonly ingestionService = inject(IngestionService);
   private readonly conversationService = inject(ConversationService);
   private readonly contactsQuery = inject(ContactsQueryApi);
-  private readonly identity = inject(ChatIdentityFacade);
   private readonly moderation = inject(ChatModerationFacade);
 
   // ✅ NEW: We inject the Active Chat View Model to push updates to it
-  private readonly activeChat = inject(ActiveChatFacade);
+  private readonly conversationActions = inject(ConversationActionService);
 
   // --- STATE ---
   private readonly _activeConversations = signal<Conversation[]>([]);
@@ -163,18 +165,6 @@ export class ChatDataService {
           50,
         );
 
-        // 1. Notify Active Chat (View Model)
-        // We do this by ID reference. The Facade will re-fetch if these IDs match the open chat.
-        const allChangedIds = [
-          ...result.messages.map((m) => m.id),
-          ...result.readReceipts,
-          ...result.patchedMessageIds,
-        ];
-
-        if (allChangedIds.length > 0) {
-          await this.activeChat.refreshMessages(allChangedIds);
-        }
-
         // 2. Refresh List (Sidebar)
         if (result.messages.length > 0) {
           await this.refreshActiveConversations();
@@ -209,6 +199,12 @@ export class ChatDataService {
         }),
       )
       .subscribe(() => void this.runIngestionCycle());
+
+    this.conversationActions.readReceiptsSent$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(async () => {
+        await this.refreshActiveConversations();
+      });
   }
 
   private updateTypingActivity(indicators: URN[], realMessages: any[]): void {

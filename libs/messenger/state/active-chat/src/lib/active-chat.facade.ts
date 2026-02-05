@@ -4,9 +4,9 @@ import {
   signal,
   WritableSignal,
   computed,
-  DestroyRef,
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { URN } from '@nx-platform-application/platform-types';
 import {
   Conversation,
@@ -16,6 +16,7 @@ import {
   ConversationService,
   ConversationActionService,
 } from '@nx-platform-application/messenger-domain-conversation';
+import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import {
   MessageGroupInvite,
@@ -30,6 +31,7 @@ import { GroupProtocolService } from '@nx-platform-application/messenger-domain-
 export class ActiveChatFacade {
   private service = inject(ConversationService);
   private actions = inject(ConversationActionService);
+  private ingestion = inject(IngestionService);
   private session = inject(SessionService);
   private groupProtocol = inject(GroupProtocolService);
 
@@ -115,6 +117,28 @@ export class ActiveChatFacade {
     return cursors;
   });
 
+  constructor() {
+    // ✅ LISTENER: Incoming Data
+    // "When the Domain ingests new messages, I check if they belong to my view."
+    this.ingestion.dataIngested$
+      .pipe(takeUntilDestroyed())
+      .subscribe((result) => {
+        const allChangedIds = [
+          ...result.messages.map((m) => m.id),
+          ...result.readReceipts,
+          ...result.patchedMessageIds,
+        ];
+        if (allChangedIds.length > 0) {
+          // If active, refresh view
+          const currentUrn = this.selectedConversation()?.id;
+          if (currentUrn) {
+            // Logic to reload/patch messages for this URN
+            this.loadConversation(currentUrn); // Simplest refresh
+          }
+        }
+      });
+  }
+
   // --- ACTIONS (Read / State) ---
 
   async loadConversation(urn: URN | null): Promise<void> {
@@ -139,7 +163,7 @@ export class ActiveChatFacade {
       this.isRecipientKeyMissing.set(ctx.isRecipientKeyMissing);
       this.firstUnreadId.set(ctx.firstUnreadId);
 
-      this.processLocalReadReceipts(ctx.messages);
+      this.processLocalRead(ctx.messages);
     } finally {
       this.isLoading.set(false);
     }
@@ -226,13 +250,6 @@ export class ActiveChatFacade {
     this.upsertMessages([msg]);
   }
 
-  async sendReadReceiptSignal(
-    recipient: URN,
-    messageIds: string[],
-  ): Promise<void> {
-    await this.actions.sendReadReceiptSignal(recipient, messageIds);
-  }
-
   // --- HELPERS ---
 
   private upsertMessages(newMsgs: ChatMessage[]) {
@@ -242,7 +259,7 @@ export class ActiveChatFacade {
     const relevant = newMsgs.filter((m) => m.conversationUrn.equals(activeUrn));
     if (relevant.length === 0) return;
 
-    this.processLocalReadReceipts(relevant);
+    this.processLocalRead(relevant);
 
     this._rawMessages.update((current) => {
       const map = new Map(current.map((m) => [m.id, m]));
@@ -262,22 +279,28 @@ export class ActiveChatFacade {
     this.isRecipientKeyMissing.set(false);
   }
 
-  private processLocalReadReceipts(messages: ChatMessage[]) {
+  private processLocalRead(messages: ChatMessage[]) {
     const myUrn = this.session.snapshot.networkUrn;
     if (!myUrn) return;
 
+    // 1. Filter: Find messages that are visually unread
     const unreadIds = messages
       .filter((m) => !m.senderId.equals(myUrn) && m.status !== 'read')
       .map((m) => m.id);
 
     if (unreadIds.length > 0) {
-      // 1. Notify listeners
-      this.readReceiptTrigger$.next(unreadIds);
-
-      // 2. Auto-Send Network Receipt
       const currentUrn = this.selectedConversation()?.id;
+
       if (currentUrn) {
-        this.actions.sendReadReceiptSignal(currentUrn, unreadIds);
+        // ✅ THE TRUTH ESTABLISHED
+        // The user has seen these messages. We execute the consequences in parallel.
+
+        // Consequence A: Persistence (Updates Sidebar Badge)
+        // Consequence B: Protocol (Updates Sender's UI)
+        this.actions.markMessagesAsRead(currentUrn, unreadIds);
+
+        // Consequence C: Internal State (Triggers any local UI effects)
+        this.readReceiptTrigger$.next(unreadIds);
       }
     }
   }
@@ -297,5 +320,13 @@ export class ActiveChatFacade {
       // Log error in state layer
       return null;
     }
+  }
+
+  async acceptGroupInvite(msg: ChatMessage): Promise<string> {
+    return this.groupProtocol.acceptInvite(msg);
+  }
+
+  async rejectGroupInvite(msg: ChatMessage): Promise<void> {
+    return this.groupProtocol.rejectInvite(msg);
   }
 }

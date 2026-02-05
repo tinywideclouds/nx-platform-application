@@ -39,6 +39,10 @@ export class ChatModerationFacade {
     { initialValue: null },
   );
 
+  public readonly pendingRequests = toSignal(
+    from(this.quarantineService.getPendingRequests()),
+    { initialValue: [] as URN[] },
+  );
   // Compute a fast lookup set for the UI
   public readonly blockedSet: Signal<Set<string>> = computed(() => {
     const group = this.blockListGroup();
@@ -87,7 +91,7 @@ export class ChatModerationFacade {
   public async promoteQuarantinedMessages(
     senderUrn: URN,
     targetConversationUrn?: URN,
-  ): Promise<void> {
+  ): Promise<URN | void> {
     const messages =
       await this.quarantineService.retrieveForInspection(senderUrn);
 
@@ -131,5 +135,7 @@ export class ChatModerationFacade {
     }
 
     await this.quarantineService.reject(senderUrn);
+
+    return senderUrn;
   }
 }

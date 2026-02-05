@@ -4,7 +4,6 @@ import {
   inject,
   signal,
   computed,
-  OnInit,
   DestroyRef,
 } from '@angular/core';
 import { Router } from '@angular/router';
@@ -16,9 +15,10 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
+// ✅ STATE LAYERS
 import { AppState } from '@nx-platform-application/messenger-state-app';
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 
-// ✅ Import Shared UI
 import {
   DeviceLinkQrDisplayComponent,
   DeviceLinkScannerUiComponent,
@@ -45,8 +45,11 @@ export type LinkMode = 'SHOW' | 'SCAN' | 'REVIEW';
   styleUrl: './device-link-wizard.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DeviceLinkWizardComponent implements OnInit {
+export class DeviceLinkWizardComponent {
+  // ✅ Architecture: Identity handles the keys, AppState handles the logout
+  private identity = inject(ChatIdentityFacade);
   private appState = inject(AppState);
+
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private logger = inject(Logger);
@@ -72,14 +75,9 @@ export class DeviceLinkWizardComponent implements OnInit {
   private pollInterval: any;
 
   constructor() {
-    // Register cleanup
     this.destroyRef.onDestroy(() => {
       this.stopPolling();
     });
-  }
-
-  ngOnInit() {
-    /* Implicit */
   }
 
   // --- Dynamic Content Helpers ---
@@ -134,16 +132,17 @@ export class DeviceLinkWizardComponent implements OnInit {
     this.step.set('LINKING');
     this.mode.set('SHOW');
     try {
-      const session = await this.appState.startTargetLinkSession();
+      // ✅ Call Identity Facade
+      const session = await this.identity.startTargetLinkSession();
       this.logger.info('Started linking session', session);
       this.session.set(session);
       if (session.privateKey) this.startPolling(session.privateKey);
     } catch (e) {
+      this.logger.error('Failed to start linking session', e);
       this.step.set('CHOICE');
     }
   }
 
-  // ✅ Switching Modes
   switchToScan() {
     this.stopPolling();
     this.session.set(null);
@@ -154,10 +153,9 @@ export class DeviceLinkWizardComponent implements OnInit {
   switchToShow() {
     this.stopPolling();
     this.mode.set('SHOW');
-    this.startLinking(); // Restart generation
+    this.startLinking();
   }
 
-  // ✅ Scan Result -> Review
   onScanResult(qrCode: string) {
     this.scannedRaw.set(qrCode);
     this.mode.set('REVIEW');
@@ -168,10 +166,12 @@ export class DeviceLinkWizardComponent implements OnInit {
     if (!code) return;
     try {
       this.snackBar.open('Retrieving keys...', '', { duration: 2000 });
-      await this.appState.redeemSourceSession(code);
+      // ✅ Call Identity Facade
+      await this.identity.redeemSourceSession(code);
       this.snackBar.open('Success! Device linked.', 'Close', {
         duration: 3000,
       });
+      // Logic complete, navigation or state update handled by Facade/Router guards
     } catch (e) {
       this.logger.error('Linking failed', e);
       this.snackBar.open('Failed to link.', 'Retry', { duration: 5000 });
@@ -179,12 +179,13 @@ export class DeviceLinkWizardComponent implements OnInit {
   }
 
   async confirmReset() {
-    await this.appState.performIdentityReset();
+    // ✅ Call Identity Facade
+    await this.identity.performIdentityReset();
   }
 
   async onLogout() {
     try {
-      // ✅ FIX: Ensure we wait for the logout observable/promise to complete
+      // ✅ Call AppState (Global Concern)
       await this.appState.sessionLogout();
     } catch (e) {
       console.error('Logout error', e);
@@ -198,7 +199,8 @@ export class DeviceLinkWizardComponent implements OnInit {
     this.stopPolling();
     this.pollInterval = setInterval(async () => {
       try {
-        const found = await this.appState.checkForSyncMessage(sessionPrivKey);
+        // ✅ Call Identity Facade
+        const found = await this.identity.checkForSyncMessage(sessionPrivKey);
         if (found) this.stopPolling();
       } catch (e) {
         console.error('Polling error', e);
