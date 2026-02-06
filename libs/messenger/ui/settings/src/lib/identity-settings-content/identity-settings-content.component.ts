@@ -15,8 +15,10 @@ import { from } from 'rxjs';
 
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
 import { AppState } from '@nx-platform-application/messenger-state-app';
-import { PrivateKeyService } from '@nx-platform-application/messenger-infrastructure-private-keys';
-import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
+
+// ✅ NEW: Correct State Layers
+import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 
 export interface FingerprintState {
   value: string;
@@ -39,16 +41,16 @@ export interface FingerprintState {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IdentitySettingsContentComponent {
-  // Controlled by Parent (Page vs Sticky Wizard)
   isWizard = input(false);
 
   private authService = inject(IAuthService);
   private appState = inject(AppState);
-  private cryptoService = inject(PrivateKeyService);
-  private liveService = inject(ChatLiveDataService);
+
+  // ✅ Architecture Fixed
+  private identity = inject(ChatIdentityFacade);
+  private chatData = inject(ChatDataService);
 
   // --- WIZARD TOGGLE ---
-  // Connects directly to ChatService state
   wizardActive = this.appState.showWizard;
 
   onToggleWizard(active: boolean): void {
@@ -64,11 +66,12 @@ export class IdentitySettingsContentComponent {
     return user.alias.slice(0, 2).toUpperCase();
   });
 
-  connectionStatus = toSignal(this.liveService.status$, {
+  // ✅ CORRECT SOURCE: ChatDataService owns the connection
+  connectionStatus = toSignal(this.chatData.liveConnection, {
     initialValue: 'disconnected',
   });
 
-  // Load fingerprint on init
+  // Load fingerprint via Facade
   fingerprintState = toSignal(from(this.loadFingerprint()), {
     initialValue: {
       value: 'Loading...',
@@ -78,21 +81,9 @@ export class IdentitySettingsContentComponent {
   });
 
   private async loadFingerprint(): Promise<FingerprintState> {
-    const urn = this.currentUser()?.id;
-    if (!urn)
-      return { value: 'Not Logged In', isLoading: false, success: false };
-
     try {
-      const keys = await this.cryptoService.loadMyPublicKeys(urn);
-      if (keys?.encKey) {
-        const fp = await this.cryptoService.getFingerprint(keys.encKey);
-        return { value: fp, isLoading: false, success: true };
-      }
-      return {
-        value: 'No Identity Keys Found',
-        isLoading: false,
-        success: false,
-      };
+      const fp = await this.identity.loadMyFingerprint();
+      return { value: fp, isLoading: false, success: true };
     } catch (e) {
       return {
         value: 'Error loading fingerprint',

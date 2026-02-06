@@ -1,6 +1,8 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject } from 'rxjs';
-import { URN } from '@nx-platform-application/platform-types';
+import { auditTime } from 'rxjs/operators';
+import { Priority, URN } from '@nx-platform-application/platform-types';
 import {
   OutboundService,
   SendOptions,
@@ -27,15 +29,41 @@ import { ChatStorageService } from '@nx-platform-application/messenger-infrastru
 export class ConversationActionService {
   private outbound = inject(OutboundService);
   private storage = inject(ChatStorageService);
+  private destroyRef = inject(DestroyRef);
   private operationLock = Promise.resolve();
 
-  // "Hey application, I just marked a conversation as read."
+  // Signals
   private readonly _readReceiptsSent = new Subject<URN>();
   public readonly readReceiptsSent$ = this._readReceiptsSent.asObservable();
+
+  // --- Optimization: Batching ---
+  private pendingReadReceipts = new Map<string, Set<string>>();
+  private readTrigger$ = new Subject<void>();
+  private readonly READ_BATCH_TIME_MS = 1000;
+
+  // --- Optimization: Throttling ---
+  private lastTypingSentTime = 0;
+  private readonly TYPING_THROTTLE_MS = 3000;
+
+  constructor() {
+    // Modern Reactive Setup:
+    // Auto-unsubscribes when the service/context is destroyed.
+    this.readTrigger$
+      .pipe(auditTime(this.READ_BATCH_TIME_MS), takeUntilDestroyed())
+      .subscribe(() => {
+        this.flushReadReceipts();
+      });
+
+    // Ensure flush on destroy (edge case safety)
+    this.destroyRef.onDestroy(() => this.flushReadReceipts());
+  }
+
   /**
    * Sends a text message. Returns the optimistic message object for UI updates.
    */
   async sendMessage(recipientUrn: URN, text: string): Promise<ChatMessage> {
+    this.lastTypingSentTime = 0; // Reset throttle immediately
+
     const payload: TextContent = { kind: 'text', text };
     const typeId = MessageTypeText;
     return await this.sendGeneric(recipientUrn, typeId, payload);
@@ -62,38 +90,66 @@ export class ConversationActionService {
     return await this.sendGeneric(recipientUrn, typeId, payload);
   }
 
-  // --- SIGNALS (No UI return needed, fire & forget) ---
-
   async sendTypingIndicator(recipientUrn: URN): Promise<void> {
+    const now = Date.now();
+    // Efficient leading-edge throttle.
+    // We use imperative check here to avoid overhead of creating RxJS objects
+    // for every single keystroke.
+    if (now - this.lastTypingSentTime < this.TYPING_THROTTLE_MS) {
+      return;
+    }
+    this.lastTypingSentTime = now;
+
     const typeId = MessageTypingIndicator;
     const bytes = new Uint8Array([]);
-    await this.runExclusive(() =>
+
+    // Fire & Forget (don't block UI)
+    this.runExclusive(() =>
       this.outbound.sendFromConversation(recipientUrn, typeId, bytes, {
         isEphemeral: true,
         shouldPersist: false,
       }),
-    );
+    ).catch((err) => {
+      // Silent catch for background indicators
+    });
   }
 
   public async markMessagesAsRead(
     conversationUrn: URN,
     messageIds: string[],
   ): Promise<void> {
-    //we don't mind how long this takes
-    this.sendReadReceiptSignal(conversationUrn, messageIds);
-
-    await this.updateLocalMessages(conversationUrn, messageIds);
-    this._readReceiptsSent.next(conversationUrn);
-  }
-
-  private async updateLocalMessages(
-    conversationUrn: URN,
-    messageIds: string[],
-  ): Promise<void> {
     if (messageIds.length === 0) return;
 
-    // 1. Update the individual messages (Blue ticks for us)
+    // 1. Optimistic Update (Immediate)
     await this.storage.markMessagesAsRead(conversationUrn, messageIds);
+
+    // 2. Queue for Network
+    const key = conversationUrn.toString();
+    if (!this.pendingReadReceipts.has(key)) {
+      this.pendingReadReceipts.set(key, new Set());
+    }
+    const currentSet = this.pendingReadReceipts.get(key)!;
+    messageIds.forEach((id) => currentSet.add(id));
+
+    // 3. Trigger Reactive Batch
+    this.readTrigger$.next();
+  }
+
+  private async flushReadReceipts() {
+    for (const [urnStr, idSet] of this.pendingReadReceipts.entries()) {
+      if (idSet.size === 0) continue;
+
+      const urn = URN.parse(urnStr);
+      const ids = Array.from(idSet);
+      this.pendingReadReceipts.delete(urnStr);
+
+      try {
+        await this.sendReadReceiptSignal(urn, ids);
+        this._readReceiptsSent.next(urn);
+      } catch (err) {
+        // Log error but don't crash the loop
+      }
+    }
   }
 
   private async sendReadReceiptSignal(
@@ -109,6 +165,7 @@ export class ConversationActionService {
 
     await this.sendGeneric(conversationUrn, typeId, bytes, {
       shouldPersist: false,
+      priority: Priority.High,
     });
   }
 
@@ -123,10 +180,6 @@ export class ConversationActionService {
     });
   }
 
-  /**
-   * Generic sender wrapper.
-   * Now returns the ChatMessage to allow the Caller (State Layer) to handle Optimistic UI.
-   */
   private async sendGeneric(
     recipientUrn: URN,
     typeId: URN,

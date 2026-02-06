@@ -15,24 +15,39 @@ export class KeyLifecycleService {
 
   /**
    * Orchestrates the creation of a fresh identity.
-   * * 1. Calls CryptoService to generate KeyPairs (Private + Public).
-   * 2. CryptoService saves Private Keys to IndexedDB (implicitly).
-   * 3. WE explicitly take the Public Keys and push them to the KeyCacheService.
-   * 4. Returns Private Keys for the active Session.
+   * 1. Calls CryptoService to generate KeyPairs.
+   * 2. Publishes Public Keys to the Cache/Network for the Auth URN.
+   * 3. (Optional) Publishes Public Keys for a Network Alias (e.g., Email URN).
+   * 4. Returns Private Keys.
    */
-  async createIdentity(authUrn: URN): Promise<WebCryptoKeys> {
+  async createIdentity(authUrn: URN, networkUrn?: URN): Promise<WebCryptoKeys> {
     this.logger.info(`[KeyLifecycle] Creating new identity for ${authUrn}`);
 
     // 1. Generate via Crypto Bridge
-    // This returns { privateKeys: PrivateKeys, publicKeys: PublicKeys }
     const generated = await this.crypto.generateAndStoreKeys(authUrn);
 
-    // 2. Publish PUBLIC keys (Uint8Arrays) to Cache/Network
-    // This primes the local cache AND uploads to the Key Service
+    // 2. Publish PUBLIC keys for the Auth Identity
     await this.cache.storeKeys(authUrn, generated.publicKeys);
 
-    // 3. Return PRIVATE keys (CryptoKey objects) for the Session
+    // 3. Publish for Network Alias (if different)
+    if (networkUrn && !networkUrn.equals(authUrn)) {
+      this.logger.info(
+        `[KeyLifecycle] Publishing alias keys for ${networkUrn}`,
+      );
+      await this.cache.storeKeys(networkUrn, generated.publicKeys);
+    }
+
+    // 4. Return PRIVATE keys
     return generated.privateKeys;
+  }
+
+  /**
+   * Domain Action: Flush the local knowledge of the network.
+   * Used when keys seem stale or during debugging.
+   */
+  async clearCache(): Promise<void> {
+    this.logger.warn('[KeyLifecycle] Clearing Public Key Cache');
+    await this.cache.clear();
   }
 
   /**
@@ -40,31 +55,24 @@ export class KeyLifecycleService {
    * Checks if Public Keys are missing from the cache and repairs them if needed.
    */
   async restoreIdentity(authUrn: URN): Promise<WebCryptoKeys | null> {
-    // 1. Load Private Keys (CryptoKey objects)
+    // 1. Load Private Keys
     const privateKeys = await this.crypto.loadMyKeys(authUrn);
     if (!privateKeys) return null;
 
-    // 2. Self-Healing: Ensure Public Keys are in the cache
-    // (In case the cache was wiped but keys persisted, or we are on a new device with synced keys)
+    // 2. Self-Healing
     try {
       const hasPublic = await this.cache.hasKeys(authUrn);
-
       if (!hasPublic) {
         this.logger.warn(
           '[KeyLifecycle] Public keys missing from cache. Repairing...',
         );
-
-        // We assume CryptoService can retrieve the raw Public Keys associated with this user
-        // without needing to regenerate them.
         const publicBytes = await this.crypto.loadMyPublicKeys(authUrn);
-
         if (publicBytes) {
           await this.cache.storeKeys(authUrn, publicBytes);
         }
       }
     } catch (e) {
       this.logger.error('[KeyLifecycle] Restore consistency check failed', e);
-      // We don't block here; if we have private keys, we can likely still decrypt incoming messages.
     }
 
     return privateKeys;
@@ -76,12 +84,10 @@ export class KeyLifecycleService {
   async importIdentity(authUrn: URN, keys: WebCryptoKeys): Promise<void> {
     this.logger.info(`[KeyLifecycle] Importing identity for ${authUrn}`);
 
-    // 1. Save Private Keys to local secure storage
+    // 1. Save Private Keys
     await this.crypto.storeMyKeys(authUrn, keys);
 
-    // 2. We need to ensure the Public Keys are also cached.
-    // Since 'keys' is just PrivateKeys (CryptoKey), we need to derive or fetch the public part.
-    // The CryptoService should be able to derive them or we fetch from network.
+    // 2. Ensure Public Keys are cached
     const publicBytes = await this.crypto.loadMyPublicKeys(authUrn);
     if (publicBytes) {
       await this.cache.storeKeys(authUrn, publicBytes);
@@ -89,16 +95,28 @@ export class KeyLifecycleService {
   }
 
   async checkIntegrity(urn: URN): Promise<boolean> {
-    // 1. Get Local
     const localPub = await this.crypto.loadMyPublicKeys(urn);
     if (!localPub) return false;
 
-    // 2. Get Remote
-    const remotePub = await this.cache.getPublicKey(urn); // or getPublicKey
-    if (!remotePub) return false; // or handle logic
+    const remotePub = await this.cache.getPublicKey(urn);
+    if (!remotePub) return false;
 
-    // 3. Domain Logic: Compare
     return this.keysAreEqual(localPub, remotePub);
+  }
+
+  async loadFingerprint(urn: URN): Promise<string> {
+    if (!urn) return '';
+
+    try {
+      const keys = await this.crypto.loadMyPublicKeys(urn);
+      if (keys?.encKey) {
+        return await this.crypto.getFingerprint(keys.encKey);
+      }
+      return '';
+    } catch (e) {
+      this.logger.warn('error loading fingerprint', e);
+      return '';
+    }
   }
 
   private keysAreEqual(a: PublicKeys, b: PublicKeys): boolean {

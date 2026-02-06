@@ -5,21 +5,16 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
-describe('ChatKeyService', () => {
+describe('ChatKeyService (Domain: Them)', () => {
   let service: ChatKeyService;
 
   const mockKeyService = {
     hasKeys: vi.fn(),
-    storeKeys: vi.fn(),
   };
-  const mockCryptoService = {
-    clearKeys: vi.fn(),
-    generateAndStoreKeys: vi.fn(),
-  };
+
   const mockResolver = {
     resolveToHandle: vi.fn(),
   };
@@ -34,7 +29,6 @@ describe('ChatKeyService', () => {
       providers: [
         ChatKeyService,
         MockProvider(KeyCacheService, mockKeyService),
-        MockProvider(MessengerCryptoService, mockCryptoService),
         MockProvider(IdentityResolver, mockResolver),
         MockProvider(Logger),
       ],
@@ -55,7 +49,7 @@ describe('ChatKeyService', () => {
       expect(result).toBe(true);
     });
 
-    it('should log warning/return false if keys are missing', async () => {
+    it('should return false if keys are missing', async () => {
       mockResolver.resolveToHandle.mockResolvedValue(handleUrn);
       mockKeyService.hasKeys.mockResolvedValue(false);
 
@@ -71,28 +65,13 @@ describe('ChatKeyService', () => {
       expect(result).toBe(true);
       expect(mockResolver.resolveToHandle).not.toHaveBeenCalled();
     });
-  });
 
-  describe('resetIdentityKeys', () => {
-    it('should wipe, generate, and upload keys', async () => {
-      const myUrn = URN.parse('urn:auth:google:me');
-      const myEmail = 'me@test.com';
-      const mockKeyResult = { privateKeys: {}, publicKeys: {} };
+    it('should return false on error', async () => {
+      mockResolver.resolveToHandle.mockRejectedValue(new Error('Network Fail'));
 
-      mockCryptoService.generateAndStoreKeys.mockResolvedValue(mockKeyResult);
+      const result = await service.checkRecipientKeys(contactUrn);
 
-      await service.resetIdentityKeys(myUrn, myEmail);
-
-      expect(mockCryptoService.clearKeys).toHaveBeenCalled();
-      expect(mockCryptoService.generateAndStoreKeys).toHaveBeenCalledWith(
-        myUrn,
-      );
-
-      // Robust check: Inspect the URN string rather than object structure
-      const [capturedUrn, capturedKeys] =
-        mockKeyService.storeKeys.mock.calls[0];
-      expect(capturedUrn.toString()).toBe('urn:lookup:email:me@test.com');
-      expect(capturedKeys).toBe(mockKeyResult.publicKeys);
+      expect(result).toBe(false);
     });
   });
 });

@@ -17,6 +17,7 @@ export class OutboxMapper {
       conversationUrn: domain.conversationUrn.toString(),
       typeId: domain.typeId.toString(),
       tags: domain.tags.map((t) => t.toString()),
+      priority: domain.priority,
       recipients: domain.recipients.map((r) => ({
         ...r,
         urn: r.urn.toString(),
@@ -33,6 +34,7 @@ export class OutboxMapper {
       typeId: URN.parse(record.typeId),
       tags: record.tags.map((t) => URN.parse(t)),
       createdAt: record.createdAt as ISODateTimeString,
+      priority: record.priority,
       recipients: record.recipients.map((r) => ({
         ...r,
         urn: URN.parse(r.urn),

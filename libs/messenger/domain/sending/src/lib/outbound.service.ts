@@ -9,13 +9,13 @@ import {
 import {
   URN,
   ISODateTimeString,
+  Priority,
 } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   MessageDeliveryStatus,
 } from '@nx-platform-application/messenger-types';
 import {
-  MessageTypeText,
   MessageMetadataService,
   MessageContentParser,
   MessageSnippetFactory,
@@ -50,7 +50,7 @@ export class OutboundService {
   private identityResolver = inject(IdentityResolver);
   private metadataService = inject(MessageMetadataService);
 
-  // ✅ NEW: Content Handling Dependencies
+  // Content Handling Dependencies
   private contentParser = inject(MessageContentParser);
   private snippetFactory = inject(MessageSnippetFactory);
 
@@ -66,7 +66,7 @@ export class OutboundService {
   async sendFromConversation(
     recipientUrn: URN,
     typeId: URN,
-    content: ContentPayload | Uint8Array, // ✅ UPDATED Signature
+    content: ContentPayload | Uint8Array,
     options: SendOptions = {},
   ): Promise<OutboundResult> {
     const ctx = this.createContext(recipientUrn, typeId, content, options);
@@ -79,7 +79,7 @@ export class OutboundService {
     recipients: URN[],
     conversationUrn: URN,
     typeId: URN,
-    content: ContentPayload | Uint8Array, // ✅ UPDATED Signature
+    content: ContentPayload | Uint8Array,
     options: SendOptions = {},
   ): Promise<OutboundResult> {
     const ctx = this.createContext(conversationUrn, typeId, content, options);
@@ -203,6 +203,7 @@ export class OutboundService {
         payload: wirePayload,
         messageId: ctx.optimisticMsg.id,
         tags: ctx.optimisticMsg.tags,
+        priority: ctx.priority,
       });
     });
 
@@ -286,6 +287,7 @@ export class OutboundService {
       optimisticMsg,
       isEphemeral: options.isEphemeral ?? false,
       shouldPersist: options.shouldPersist ?? true,
+      priority: options.priority ?? Priority.Normal,
       recipients: undefined,
     };
   }

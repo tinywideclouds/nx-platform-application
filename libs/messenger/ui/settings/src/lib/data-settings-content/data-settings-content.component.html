@@ -70,6 +70,28 @@
 
       <a
         mat-list-item
+        (click)="onClearDirectory()"
+        class="cursor-pointer hover:bg-orange-50 group"
+      >
+        <mat-icon
+          matListItemIcon
+          class="text-gray-400 group-hover:text-orange-500"
+          >dns</mat-icon
+        >
+        <span
+          matListItemTitle
+          class="font-medium text-sm text-gray-900 group-hover:text-orange-700"
+          >Clear Network Directory</span
+        >
+        <span
+          matListItemLine
+          class="text-xs text-gray-500 group-hover:text-orange-400"
+          >Flush cache of discovered groups and entities</span
+        >
+      </a>
+
+      <a
+        mat-list-item
         (click)="onSecureLogout()"
         class="cursor-pointer hover:bg-red-50 group"
       >

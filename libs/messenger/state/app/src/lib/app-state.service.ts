@@ -22,6 +22,7 @@ import { ChatModerationFacade } from '@nx-platform-application/messenger-state-m
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import { DirectoryManagementApi } from '@nx-platform-application/directory-api';
 import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
 
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
@@ -67,7 +68,7 @@ export class AppState {
   private readonly syncService = inject(CloudSyncService);
   private readonly chatService = inject(ChatDataService);
 
-  // ✅ REPLACED: Single Facade for Active Chat
+  private readonly directory = inject(DirectoryManagementApi);
   private readonly activeChat = inject(ActiveChatFacade);
 
   // Aliases to maintain legacy internal usage within this file if needed
@@ -346,6 +347,7 @@ export class AppState {
         this.keyService.clear(),
         this.cryptoService.clearKeys(),
         this.outboxWorker.clearAllTasks(),
+        this.directory.clear(),
       ]);
     } catch (e) {
       this.logger.error('Device wipe failed', e);

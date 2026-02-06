@@ -56,3 +56,11 @@ export abstract class DirectoryMutationApi {
     status: GroupMemberStatus,
   ): Promise<void>;
 }
+
+export abstract class DirectoryManagementApi {
+  /**
+   * Danger Zone: Wipes the entire Directory Cache.
+   * Should only be used during Secure Logout or Debugging.
+   */
+  abstract clear(): Promise<void>;
+}

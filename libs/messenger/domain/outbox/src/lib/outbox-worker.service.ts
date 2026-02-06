@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
   ISODateTimeString,
+  Priority,
   URN,
 } from '@nx-platform-application/platform-types';
 import {
@@ -44,7 +45,7 @@ export class OutboxWorkerService {
         // }
         this.pendingTrigger = false; // Reset flag at start of loop
         const pendingTasks = await this.outbox.getPendingTasks();
-        console.log(`found ${pendingTasks.length} pending tasks`);
+        console.log(`OUTBOX WORKER found ${pendingTasks.length} pending tasks`);
         for (const task of pendingTasks) {
           await this.processTask(task);
         }
@@ -68,6 +69,7 @@ export class OutboxWorkerService {
           typeId,
           undefined,
           true,
+          Priority.Low,
         );
       } catch (e) {
         this.logger.warn(
@@ -96,6 +98,8 @@ export class OutboxWorkerService {
           // If parentMessageId exists (Broadcast), use it.
           // Otherwise use the task's messageId.
           task.parentMessageId || task.messageId,
+          false,
+          task.priority,
         );
 
         recipient.status = 'sent';
@@ -124,6 +128,7 @@ export class OutboxWorkerService {
     typeId: URN,
     messageId?: string,
     isEphemeral = false,
+    priority: Priority = 1,
   ): Promise<void> {
     // 2. Fetch Keys
     const recipientKeys = await this.keyCache.getPublicKey(targetRoutingUrn);
@@ -132,12 +137,20 @@ export class OutboxWorkerService {
 
     const session = this.sessionService.snapshot;
 
-    console.log('SENDING FROM ', session.networkUrn);
+    const now = Temporal.Now.instant().toString();
+
+    console.log(
+      'SENDING FROM ',
+      session.networkUrn,
+      isEphemeral,
+      priority,
+      now,
+    );
 
     // 3. Create Transport Envelope
     const transportPayload: TransportMessage = {
       senderId: session.networkUrn,
-      sentTimestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+      sentTimestamp: now as ISODateTimeString,
       typeId: typeId,
       payloadBytes: finalPayloadBytes,
 
@@ -155,6 +168,9 @@ export class OutboxWorkerService {
 
     if (isEphemeral) {
       envelope.isEphemeral = true;
+      envelope.priority = Priority.Low;
+    } else {
+      envelope.priority = priority;
     }
 
     // 5. Send

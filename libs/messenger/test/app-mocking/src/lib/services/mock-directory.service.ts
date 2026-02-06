@@ -3,6 +3,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   DirectoryQueryApi,
   DirectoryMutationApi,
+  DirectoryManagementApi,
 } from '@nx-platform-application/directory-api';
 import {
   DirectoryGroup,
@@ -13,7 +14,7 @@ import { MockServerDirectoryState } from '../types';
 
 @Injectable({ providedIn: 'root' })
 export class MockDirectoryService
-  implements DirectoryQueryApi, DirectoryMutationApi
+  implements DirectoryQueryApi, DirectoryMutationApi, DirectoryManagementApi
 {
   // --- IN-MEMORY DB ---
   private groups = new Map<string, DirectoryGroup>();
@@ -69,6 +70,13 @@ export class MockDirectoryService
   async saveEntity(entity: DirectoryEntity): Promise<void> {
     console.log(`[MockDirectory] 💾 Saved Entity ${entity.id}`);
     this.entities.set(entity.id.toString(), entity);
+  }
+
+  // Just remove groups
+  async clear(): Promise<void> {
+    this.entities.clear();
+    this.groups.clear();
+    return;
   }
 
   async updateMemberStatus(

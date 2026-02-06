@@ -1,14 +1,27 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DeviceLinkPageComponent } from './device-link-page.component';
-import { ChatService } from '@nx-platform-application/messenger-state-app';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+// ✅ NEW: Import Facade
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
+import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
 describe('DeviceLinkPageComponent', () => {
   let component: DeviceLinkPageComponent;
   let fixture: ComponentFixture<DeviceLinkPageComponent>;
+  let facade: ChatIdentityFacade; // Typed variable for the mock
 
-  const mockChatService = {
+  // Mock Data
+  const mockSession: DevicePairingSession = {
+    sessionId: 'sess-123',
+    qrPayload: 'mock-qr-data',
+    publicKey: { algorithm: { name: 'ECDH' } } as any,
+    privateKey: { algorithm: { name: 'ECDH' } } as any,
+    mode: 'SENDER_HOSTED',
+  };
+
+  const mockFacade = {
     linkTargetDevice: vi.fn(),
     startSourceLinkSession: vi.fn(),
   };
@@ -23,13 +36,15 @@ describe('DeviceLinkPageComponent', () => {
     await TestBed.configureTestingModule({
       imports: [DeviceLinkPageComponent],
       providers: [
-        { provide: ChatService, useValue: mockChatService },
+        // ✅ Swap Legacy Service for Facade Mock
+        { provide: ChatIdentityFacade, useValue: mockFacade },
         { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(DeviceLinkPageComponent);
     component = fixture.componentInstance;
+    facade = TestBed.inject(ChatIdentityFacade);
     fixture.detectChanges();
   });
 
@@ -37,28 +52,18 @@ describe('DeviceLinkPageComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should toggle scanning state', () => {
-    // Initial
-    expect(component.isLinking()).toBe(false);
-
-    // Note: The component does not have a public 'isScanning' signal in the uploaded file,
-    // but it has 'isShowingCode'. Assuming the test meant to check default state or available signals.
-    // Based on uploaded file: isLinking default is false.
-    expect(component.isLinking()).toBe(false);
-  });
-
-  describe('handleScan', () => {
-    it('should call service and show success message', async () => {
+  describe('Scanning Mode (Linking a new device)', () => {
+    it('should call facade.linkTargetDevice on successful scan', async () => {
       // Arrange
-      const mockQr = '{"sid":"123"}';
-      mockChatService.linkTargetDevice.mockResolvedValue(undefined);
+      const qrCode = '{"sid":"123"}';
+      mockFacade.linkTargetDevice.mockResolvedValue(undefined);
 
       // Act
-      await component.handleScan(mockQr);
+      await component.handleScan(qrCode);
 
       // Assert
-      expect(component.isLinking()).toBe(false); // Finished loading
-      expect(mockChatService.linkTargetDevice).toHaveBeenCalledWith(mockQr);
+      expect(component.isLinking()).toBe(false); // Should unlock UI
+      expect(facade.linkTargetDevice).toHaveBeenCalledWith(qrCode);
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         expect.stringContaining('successfully'),
         expect.anything(),
@@ -66,20 +71,61 @@ describe('DeviceLinkPageComponent', () => {
       );
     });
 
-    it('should show error message on failure', async () => {
+    it('should handle linking errors gracefully', async () => {
       // Arrange
-      mockChatService.linkTargetDevice.mockRejectedValue(new Error('Bad QR'));
+      mockFacade.linkTargetDevice.mockRejectedValue(new Error('Invalid QR'));
 
       // Act
       await component.handleScan('bad-qr');
 
       // Assert
-      expect(component.isLinking()).toBe(false);
+      expect(component.isLinking()).toBe(false); // Should unlock UI
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         expect.stringContaining('Failed'),
         expect.anything(),
         expect.anything(),
       );
+    });
+  });
+
+  describe('Display Mode (Showing code to be scanned)', () => {
+    it('should start a source session when enabling show mode', async () => {
+      // Arrange
+      mockFacade.startSourceLinkSession.mockResolvedValue(mockSession);
+
+      // Act
+      await component.enableShowMode();
+
+      // Assert
+      expect(facade.startSourceLinkSession).toHaveBeenCalled();
+      expect(component.isShowingCode()).toBe(true);
+      expect(component.session()).toEqual(mockSession);
+    });
+
+    it('should revert state if session generation fails', async () => {
+      // Arrange
+      mockFacade.startSourceLinkSession.mockRejectedValue(new Error('Network'));
+
+      // Act
+      await component.enableShowMode();
+
+      // Assert
+      expect(component.isShowingCode()).toBe(false);
+      expect(component.session()).toBeNull();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should clear session when switching back to scan mode', () => {
+      // Set initial state
+      component.session.set(mockSession);
+      component.isShowingCode.set(true);
+
+      // Act
+      component.switchToScanMode();
+
+      // Assert
+      expect(component.isShowingCode()).toBe(false);
+      expect(component.session()).toBeNull();
     });
   });
 });

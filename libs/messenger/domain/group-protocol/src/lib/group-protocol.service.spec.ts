@@ -33,7 +33,6 @@ describe('GroupProtocolService', () => {
   const myUrn = URN.parse('urn:contacts:user:me');
   const myNetworkUrn = URN.parse('urn:identity:google:me');
 
-  // ✅ FIX: Correct Type
   const myKeys = {} as WebCryptoKeys;
 
   const localGroupUrn = URN.parse('urn:contacts:group:weekend-trip');
@@ -47,7 +46,6 @@ describe('GroupProtocolService', () => {
     TestBed.configureTestingModule({
       providers: [
         GroupProtocolService,
-        // ✅ FIX: Mock the actual methods used: broadcast & sendFromConversation
         MockProvider(OutboundService, {
           broadcast: vi.fn(),
           sendFromConversation: vi.fn(),
@@ -115,10 +113,9 @@ describe('GroupProtocolService', () => {
       expect(savedGroup.memberState[aliceNetwork.toString()]).toBe('invited');
 
       // 4. Verify Outbound Broadcast
-      // The service calls: outbound.broadcast(invitees, networkGroupUrn, MessageGroupInvite, inviteBytes, ...)
       expect(outbound.broadcast).toHaveBeenCalledWith(
         [aliceNetwork], // Invitees
-        result, // Context (The new Group URN)
+        result, // Context
         MessageGroupInvite, // Type
         mockSerializedBytes, // Payload
         expect.objectContaining({ shouldPersist: true }),
@@ -127,7 +124,7 @@ describe('GroupProtocolService', () => {
   });
 
   describe('processIncomingInvite', () => {
-    it('should seed Directory Entities and save Directory Group', async () => {
+    it('should seed Directory but exclude SELF from the Roster', async () => {
       const inviterAuth = URN.parse('urn:identity:google:inviter');
       const bobAuth = URN.parse('urn:identity:google:bob');
       const groupUrnStr = 'urn:messenger:group:net-1';
@@ -136,7 +133,10 @@ describe('GroupProtocolService', () => {
         groupUrn: groupUrnStr,
         name: 'Project X',
         inviterUrn: inviterAuth.toString(),
-        participants: [{ urn: bobAuth.toString(), alias: 'Bob' }],
+        participants: [
+          { urn: bobAuth.toString(), alias: 'Bob' },
+          { urn: myNetworkUrn.toString(), alias: 'Me' }, // 👈 I am in the list
+        ],
       };
 
       await service.processIncomingInvite(inviteData);
@@ -146,7 +146,10 @@ describe('GroupProtocolService', () => {
       const savedGroup = saveGroupCalls[0][0];
 
       expect(savedGroup.id.toString()).toBe(groupUrnStr);
+      // Bob should be there
       expect(savedGroup.memberState[bobAuth.toString()]).toBe('invited');
+      // 🛑 I should NOT be there (Self-Exclusion)
+      expect(savedGroup.memberState[myNetworkUrn.toString()]).toBeUndefined();
     });
   });
 
@@ -173,15 +176,12 @@ describe('GroupProtocolService', () => {
 
       await service.acceptInvite(inviteMsg);
 
-      // 1. Verify Directory Update
       expect(dirMutation.updateMemberStatus).toHaveBeenCalledWith(
         groupUrn,
         myNetworkUrn,
         'joined',
       );
 
-      // 2. Verify Response
-      // The service calls: outbound.sendFromConversation(groupUrn, MessageGroupInviteResponse, bytes)
       expect(outbound.sendFromConversation).toHaveBeenCalledWith(
         groupUrn,
         MessageGroupInviteResponse,

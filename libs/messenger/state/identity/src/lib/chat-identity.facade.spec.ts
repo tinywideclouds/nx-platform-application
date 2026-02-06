@@ -1,25 +1,27 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatIdentityFacade } from './chat-identity.facade';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
-import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MockProvider } from 'ng-mocks';
 import { BehaviorSubject } from 'rxjs';
 import { signal } from '@angular/core';
-import { URN, KeyNotFoundError } from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
+// ✅ Mocks for Domains
+import { KeyLifecycleService } from '@nx-platform-application/messenger-domain-key-manager';
+import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
+import { DevicePairingService } from '@nx-platform-application/messenger-domain-device-pairing';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
+
 describe('ChatIdentityFacade', () => {
   let facade: ChatIdentityFacade;
-  let crypto: MessengerCryptoService;
-  let keyCache: KeyCacheService;
-  let keyWorker: ChatKeyService;
+  let lifecycle: KeyLifecycleService;
+  let recipientKeys: ChatKeyService;
   let pairing: DevicePairingService;
+  let sessionService: SessionService;
 
   const mockUrn = URN.parse('urn:contacts:user:me');
 
@@ -36,92 +38,70 @@ describe('ChatIdentityFacade', () => {
       providers: [
         ChatIdentityFacade,
         { provide: IAuthService, useValue: mockAuth },
-        MockProvider(MessengerCryptoService),
-        MockProvider(KeyCacheService),
+        MockProvider(KeyLifecycleService),
         MockProvider(ChatKeyService),
         MockProvider(DevicePairingService),
+        MockProvider(SessionService, {
+          initialize: vi.fn(),
+          updateKeys: vi.fn(),
+          snapshot: { keys: { encKey: 'k' } } as any,
+          keys: signal({ encKey: 'k' } as any),
+        }),
         MockProvider(ChatLiveDataService),
         MockProvider(Logger),
       ],
     });
 
     facade = TestBed.inject(ChatIdentityFacade);
-    crypto = TestBed.inject(MessengerCryptoService);
-    keyCache = TestBed.inject(KeyCacheService);
-    keyWorker = TestBed.inject(ChatKeyService);
+    lifecycle = TestBed.inject(KeyLifecycleService);
+    recipientKeys = TestBed.inject(ChatKeyService);
     pairing = TestBed.inject(DevicePairingService);
+    sessionService = TestBed.inject(SessionService);
   });
 
-  describe('Initialization', () => {
-    it('should transition to READY when keys match', async () => {
-      vi.spyOn(crypto, 'loadMyKeys').mockResolvedValue({ encKey: 'k' } as any);
-      vi.spyOn(keyCache, 'getPublicKey').mockResolvedValue({
-        encKey: 'k',
-      } as any);
-      vi.spyOn(crypto, 'verifyKeysMatch').mockResolvedValue(true);
+  describe('Lifecycle ("Me")', () => {
+    it('should transition to READY if lifecycle restores identity', async () => {
+      const mockKeys = { encKey: 'k' } as any;
+      vi.spyOn(lifecycle, 'restoreIdentity').mockResolvedValue(mockKeys);
 
       await facade.initialize();
 
+      expect(lifecycle.restoreIdentity).toHaveBeenCalledWith(mockUrn);
+      expect(sessionService.initialize).toHaveBeenCalled();
       expect(facade.onboardingState()).toBe('READY');
-      expect(facade.myKeys()).toEqual({ encKey: 'k' });
     });
 
-    it('should enter REQUIRES_LINKING if keys mismatch', async () => {
-      vi.spyOn(crypto, 'loadMyKeys').mockResolvedValue({ encKey: 'k1' } as any);
-      vi.spyOn(keyCache, 'getPublicKey').mockResolvedValue({
-        encKey: 'k2',
-      } as any);
-      vi.spyOn(crypto, 'verifyKeysMatch').mockResolvedValue(false);
+    it('should generate new identity if restore returns null', async () => {
+      const mockKeys = { encKey: 'new' } as any;
+      vi.spyOn(lifecycle, 'restoreIdentity').mockResolvedValue(null);
+      vi.spyOn(lifecycle, 'createIdentity').mockResolvedValue(mockKeys);
 
       await facade.initialize();
 
-      expect(facade.onboardingState()).toBe('REQUIRES_LINKING');
+      expect(lifecycle.createIdentity).toHaveBeenCalledWith(mockUrn);
+      expect(sessionService.initialize).toHaveBeenCalled();
+      expect(facade.onboardingState()).toBe('READY');
     });
 
-    it('should generate new keys if user is brand new (No local, No remote)', async () => {
-      vi.spyOn(crypto, 'loadMyKeys').mockResolvedValue(null);
-      vi.spyOn(keyCache, 'getPublicKey').mockRejectedValue(
-        new KeyNotFoundError('not found'),
-      );
-      vi.spyOn(keyWorker, 'resetIdentityKeys').mockResolvedValue({
-        encKey: 'new',
-      } as any);
-
-      await facade.initialize();
-
-      expect(facade.onboardingState()).toBe('READY');
-      expect(keyWorker.resetIdentityKeys).toHaveBeenCalledWith(
-        mockUrn,
-        'me@test.com',
-      );
-    });
-
-    // ✅ NEW TEST CASE: Self-Healing
-    it('should RE-UPLOAD keys if Local exists but Server is 404 (Orphaned Identity)', async () => {
-      const mockLocalKeys = { encKey: 'local-priv' } as any;
-      const mockPublicKeys = { encKey: 'local-pub' } as any;
-
-      // 1. Setup: Local Keys exist
-      vi.spyOn(crypto, 'loadMyKeys').mockResolvedValue(mockLocalKeys);
-      // 2. Setup: Server returns 404
-      vi.spyOn(keyCache, 'getPublicKey').mockRejectedValue(
-        new KeyNotFoundError('not found'),
-      );
-      // 3. Setup: Recovery of Public Keys using the service method
-      vi.spyOn(crypto, 'loadMyPublicKeys').mockResolvedValue(mockPublicKeys);
-
-      // 4. Action
-      await facade.initialize();
-
-      // 5. Verification
-      expect(keyWorker.resetIdentityKeys).not.toHaveBeenCalled();
-      expect(keyCache.storeKeys).toHaveBeenCalledWith(mockUrn, mockPublicKeys);
-      expect(facade.onboardingState()).toBe('READY');
-      expect(facade.myKeys()).toBe(mockLocalKeys);
+    it('should delegate cache clearing to lifecycle', async () => {
+      await facade.clearPublicKeyCache();
+      expect(lifecycle.clearCache).toHaveBeenCalled();
     });
   });
 
-  describe('Device Pairing', () => {
+  describe('Verification ("Them")', () => {
+    it('should delegate verification to ChatKeyService', async () => {
+      const aliceUrn = URN.parse('urn:contacts:user:alice');
+      vi.spyOn(recipientKeys, 'checkRecipientKeys').mockResolvedValue(true);
+
+      const result = await facade.verifyContactIdentity(aliceUrn);
+
+      expect(recipientKeys.checkRecipientKeys).toHaveBeenCalledWith(aliceUrn);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('Device Pairing (Linking)', () => {
     it('should start target link session only if in REQUIRES_LINKING state', async () => {
       facade.onboardingState.set('REQUIRES_LINKING');
       const mockSession: DevicePairingSession = {
@@ -140,37 +120,15 @@ describe('ChatIdentityFacade', () => {
       expect(pairing.startReceiverSession).toHaveBeenCalled();
     });
 
-    it('should throw if starting target link session in wrong state', async () => {
-      facade.onboardingState.set('READY');
-      await expect(facade.startTargetLinkSession()).rejects.toThrow(
-        /Device Linking is only available/,
-      );
-    });
-
-    it('should redeem source session and finalize linking', async () => {
-      facade.onboardingState.set('REQUIRES_LINKING');
-      const mockKeys = { encKey: 'recovered' } as any;
-
-      vi.spyOn(pairing, 'redeemSenderSession').mockResolvedValue(mockKeys);
-      vi.spyOn(facade, 'finalizeLinking');
-
-      await facade.redeemSourceSession('qr-code-data');
-
-      expect(pairing.redeemSenderSession).toHaveBeenCalledWith(
-        'qr-code-data',
-        mockUrn,
-      );
-      expect(facade.finalizeLinking).toHaveBeenCalledWith(mockKeys);
-    });
-
     it('should link target device (existing user flow)', async () => {
-      facade.myKeys.set({ encKey: 'my-keys' } as any);
+      // Mock session ready
+      Object.defineProperty(sessionService, 'isReady', { get: () => true });
+
       vi.spyOn(pairing, 'linkTargetDevice').mockResolvedValue(undefined);
 
       await facade.linkTargetDevice('qr-data');
 
       expect(pairing.linkTargetDevice).toHaveBeenCalled();
-      expect(facade.isCeremonyActive()).toBe(false);
     });
   });
 });

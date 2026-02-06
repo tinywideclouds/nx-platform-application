@@ -4,7 +4,7 @@ import {
   HttpClientTestingModule,
   HttpTestingController,
 } from '@angular/common/http/testing';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, toArray } from 'rxjs';
 import { Mock, vi } from 'vitest';
 import {
   URN,
@@ -90,6 +90,44 @@ describe('ChatDataService', () => {
 
       expect(mockDeserialize).toHaveBeenCalledWith(mockMessagesJsonResponse);
       expect(result).toEqual(mockSmartQueuedMessages);
+    });
+  });
+
+  describe('getAllMessages (Drain)', () => {
+    it('should recursively fetch pages until a partial batch is returned', async () => {
+      // 1. Setup Mock Data
+      // Batch 1: Full (50 items)
+      const batch1 = Array(50).fill(mockSmartQueuedMessages[0]);
+      // Batch 2: Partial (10 items) -> Should stop here
+      const batch2 = Array(10).fill(mockSmartQueuedMessages[0]);
+
+      mockDeserialize
+        .mockReturnValueOnce(batch1) // First call
+        .mockReturnValueOnce(batch2); // Second call
+
+      // 2. Call the Drain Method
+      const stream$ = service.getAllMessages();
+      const resultPromise = firstValueFrom(stream$.pipe(toArray()));
+
+      // 3. Handle Request 1 (Expect 50)
+      const req1 = httpMock.expectOne(
+        (r) =>
+          r.url === `${baseApiUrl}/messages` && r.params.get('limit') === '50',
+      );
+      req1.flush({ messages: [] }); // Payload doesn't matter, mockDeserialize controls return
+
+      // 4. Handle Request 2 (Expect 50 again due to recursion)
+      const req2 = httpMock.expectOne(
+        (r) =>
+          r.url === `${baseApiUrl}/messages` && r.params.get('limit') === '50',
+      );
+      req2.flush({ messages: [] });
+
+      // 5. Verify Results
+      const allBatches = await resultPromise;
+      expect(allBatches.length).toBe(2); // Should have emitted twice
+      expect(allBatches[0]).toEqual(batch1);
+      expect(allBatches[1]).toEqual(batch2);
     });
   });
 

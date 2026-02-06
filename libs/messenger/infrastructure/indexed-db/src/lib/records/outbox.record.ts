@@ -2,6 +2,7 @@ import {
   DeliveryStatus,
   RecipientProgress,
 } from '@nx-platform-application/messenger-types';
+import { Priority } from '@nx-platform-application/platform-types';
 
 /**
  * Represents the flat DB record for an outbox task.
@@ -15,6 +16,7 @@ export interface OutboxRecord {
   typeId: string;
   payload: Uint8Array;
   tags: string[];
+  priority: Priority;
 
   // Stored as JSON-compatible array, URNs flattend to strings
   recipients: {

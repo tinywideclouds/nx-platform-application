@@ -110,6 +110,12 @@ export class MockChatDataService implements IChatDataService {
     return of(batch);
   }
 
+  getAllMessages(): Observable<QueuedMessage[]> {
+    // TODO make this get all if > 100 fine for now...
+    const batch = this.serverQueue.slice(0, 100);
+    return of(batch);
+  }
+
   acknowledge(messageIds: string[]): Observable<void> {
     this.logger.info(`🗑 Acking messages: ${messageIds.length}`);
     this.serverQueue = this.serverQueue.filter(

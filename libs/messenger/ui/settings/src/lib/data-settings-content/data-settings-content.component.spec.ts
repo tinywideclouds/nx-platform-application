@@ -1,24 +1,29 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DataSettingsContentComponent } from './data-settings-content.component';
-import { ChatService } from '@nx-platform-application/messenger-state-app';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MockProvider, MockComponent } from 'ng-mocks';
+import { MockComponent, MockProvider } from 'ng-mocks';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { signal } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { MessengerSyncCardComponent } from '../messenger-sync-card/messenger-sync-card.component';
+
+// ✅ NEW: Directory API
+import { DirectoryManagementApi } from '@nx-platform-application/directory-api';
 
 describe('DataSettingsContentComponent', () => {
   let component: DataSettingsContentComponent;
   let fixture: ComponentFixture<DataSettingsContentComponent>;
 
-  const mockChatService = {
-    messages: signal([{ id: '1' }, { id: '2' }]), // Real signal mock
+  const mockAppState = {
     clearLocalMessages: vi.fn().mockResolvedValue(undefined),
     clearLocalContacts: vi.fn().mockResolvedValue(undefined),
     fullDeviceWipe: vi.fn().mockResolvedValue(undefined),
+  };
+
+  const mockDirectory = {
+    clear: vi.fn().mockResolvedValue(undefined),
   };
 
   const mockDialog = {
@@ -29,7 +34,8 @@ describe('DataSettingsContentComponent', () => {
     await TestBed.configureTestingModule({
       imports: [DataSettingsContentComponent],
       providers: [
-        { provide: ChatService, useValue: mockChatService },
+        { provide: AppState, useValue: mockAppState },
+        { provide: DirectoryManagementApi, useValue: mockDirectory }, // ✅
         { provide: MatDialog, useValue: mockDialog },
         MockProvider(MatSnackBar),
         MockProvider(Logger),
@@ -45,15 +51,18 @@ describe('DataSettingsContentComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should display the real message count from the service', () => {
-    expect(fixture.nativeElement.textContent).toContain('2');
-    mockChatService.messages.set([]);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('0');
-  });
-
   it('should call clearLocalContacts when requested', async () => {
     await component.onClearContacts();
-    expect(mockChatService.clearLocalContacts).toHaveBeenCalled();
+    expect(mockAppState.clearLocalContacts).toHaveBeenCalled();
+  });
+
+  it('should call directory.clear when requested', async () => {
+    await component.onClearDirectory();
+    expect(mockDirectory.clear).toHaveBeenCalled();
+  });
+
+  it('should call fullDeviceWipe when secure logout is requested', async () => {
+    await component.onSecureLogout();
+    expect(mockAppState.fullDeviceWipe).toHaveBeenCalled();
   });
 });

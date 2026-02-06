@@ -1,7 +1,7 @@
 //libs/messenger/infrastructure/chat-access/src/lib/chat-data.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, map, expand, EMPTY } from 'rxjs';
 import {
   QueuedMessage,
   deserializeJsonToQueuedMessages,
@@ -37,6 +37,20 @@ export class ChatDataService implements IChatDataService {
       .pipe(
         map((jsonResponse) => deserializeJsonToQueuedMessages(jsonResponse)),
       );
+  }
+
+  getAllMessages(): Observable<QueuedMessage[]> {
+    const BATCH_SIZE = 50;
+
+    return this.getMessageBatch(BATCH_SIZE).pipe(
+      expand((batch) => {
+        // If we received a full batch, there is likely more data.
+        // Recursively call getMessageBatch to fetch the next page.
+        return batch.length === BATCH_SIZE
+          ? this.getMessageBatch(BATCH_SIZE)
+          : EMPTY;
+      }),
+    );
   }
 
   /**

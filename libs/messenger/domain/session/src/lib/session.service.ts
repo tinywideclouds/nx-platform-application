@@ -14,6 +14,10 @@ export class SessionService {
   // We use a private signal to hold state, but expose specific snapshots
   private _session = signal<ActiveSession | null>(null);
 
+  // ✅ NEW: Reactive access specifically to keys
+  // This allows Facades to expose 'myKeys' easily
+  public readonly keys = computed(() => this._session()?.keys ?? null);
+
   public readonly currentSession = this._session.asReadonly();
   /**
    * Called by AppState on boot.

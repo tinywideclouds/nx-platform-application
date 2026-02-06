@@ -3,31 +3,32 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 
 import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
-import {
-  PrivateKeyService,
-  WebCryptoKeys,
-} from '@nx-platform-application/messenger-infrastructure-private-keys';
-
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
 
 @Injectable({ providedIn: 'root' })
 export class ChatKeyService {
   private logger = inject(Logger);
   private keyService = inject(KeyCacheService);
-  private cryptoService = inject(PrivateKeyService);
   private identityResolver = inject(IdentityResolver);
+
+  // 🗑️ REMOVED: private cryptoService = inject(PrivateKeyService);
+  // This service no longer manages the current user's private identity.
 
   /**
    * Checks if valid public keys exist for a recipient.
    * Handles identity resolution automatically via the Adapter.
+   *
+   * @param urn The generic URN (e.g., 'urn:contacts:user:alice')
+   * @returns true if keys exist in cache/network
    */
   public async checkRecipientKeys(urn: URN): Promise<boolean> {
+    // We only check keys for users, not groups (which have different key distribution)
     if (urn.entityType !== 'user') {
       return true;
     }
 
     try {
-      // 1. Resolve Contact -> Handle
+      // 1. Resolve Contact -> Handle (e.g. email URN)
       const targetUrn = await this.identityResolver.resolveToHandle(urn);
 
       // 2. Check Cache/Network for keys
@@ -35,32 +36,13 @@ export class ChatKeyService {
 
       if (!hasKeys) {
         this.logger.warn(
-          `Recipient ${urn} (Target: ${targetUrn}) is missing public keys.`,
+          `[ChatKeyService] Recipient ${urn} (Target: ${targetUrn}) is missing public keys.`,
         );
       }
       return hasKeys;
     } catch (e) {
-      this.logger.error('Failed to check recipient keys', e);
-      return false; // Fail safe
+      this.logger.error('[ChatKeyService] Failed to check recipient keys', e);
+      return false; // Fail safe: Assume no keys if check errors
     }
-  }
-
-  public async resetIdentityKeys(
-    userUrn: URN,
-    userEmail?: string,
-  ): Promise<WebCryptoKeys> {
-    this.logger.info('ChatKeyService: Resetting Identity Keys...');
-
-    await this.cryptoService.clearKeys();
-
-    const result = await this.cryptoService.generateAndStoreKeys(userUrn);
-
-    if (userEmail) {
-      const handleUrn = URN.create('email', userEmail, 'lookup');
-      this.logger.info(`Re-claiming public handle: ${handleUrn.toString()}`);
-      await this.keyService.storeKeys(handleUrn, result.publicKeys);
-    }
-
-    return result.privateKeys;
   }
 }

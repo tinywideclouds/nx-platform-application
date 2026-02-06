@@ -1,31 +1,15 @@
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom, Subject } from 'rxjs';
-import {
-  URN,
-  QueuedMessage,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
-import {
-  ChatMessage,
-  TransportMessage,
-} from '@nx-platform-application/messenger-types';
+import { Subject, firstValueFrom } from 'rxjs';
+import { concatMap } from 'rxjs/operators';
+import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
+import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
-
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import {
-  MessageContentParser,
-  ReadReceiptData,
-  AssetRevealData,
-  ParsedMessage,
-  MessageSnippetFactory,
-} from '@nx-platform-application/messenger-domain-message-content';
-import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
-import { ContactProtocolService } from '@nx-platform-application/messenger-domain-contact-protocol';
 
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
+import { MessageClassifier } from './message-classifier.service';
+import { MessageMutationHelper } from './message-mutation.helper';
 
 export interface IngestionResult {
   messages: ChatMessage[];
@@ -36,283 +20,146 @@ export interface IngestionResult {
 
 @Injectable({ providedIn: 'root' })
 export class IngestionService {
+  private classifier = inject(MessageClassifier);
+  private mutationHelper = inject(MessageMutationHelper);
   private dataService = inject(ChatDataService);
-  private cryptoService = inject(MessageSecurityService);
   private storageService = inject(ChatStorageService);
-  private quarantineService = inject(QuarantineService);
-  private parser = inject(MessageContentParser);
-  private snippetGenerator = inject(MessageSnippetFactory);
-
   private groupProtocol = inject(GroupProtocolService);
-  private contactProtocol = inject(ContactProtocolService);
-
-  private readonly sessionService = inject(SessionService);
-
   private logger = inject(Logger);
 
   private readonly _dataIngested = new Subject<IngestionResult>();
   public readonly dataIngested$ = this._dataIngested.asObservable();
 
-  async process(
+  private isRunning = false;
+
+  public async process(blockedSet: Set<string>): Promise<void> {
+    // 1. Concurrency Lock
+    if (this.isRunning) return;
+    this.isRunning = true;
+
+    try {
+      // 2. The Drain Pipeline
+      // Stream batches until the queue is empty.
+      await firstValueFrom(
+        this.dataService
+          .getAllMessages()
+          .pipe(concatMap((batch) => this.processBatch(batch, blockedSet))),
+      );
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
+  private async processBatch(
+    batch: QueuedMessage[],
     blockedSet: Set<string>,
-    batchSize = 50,
-  ): Promise<IngestionResult> {
-    const finalResult: IngestionResult = {
+  ): Promise<void> {
+    if (batch.length === 0) return;
+
+    // --- STEP 1: CLASSIFY ---
+    const intents = await Promise.all(
+      batch.map((item) => this.classifier.classify(item, blockedSet)),
+    );
+
+    // --- STEP 2: SORT & BUCKET ---
+    const fastLaneSignals: URN[] = [];
+    const newMessages: ChatMessage[] = [];
+    const receiptsToApply: Array<{ urn: URN; ids: string[] }> = [];
+    const mutationsToRun: Array<any> = [];
+    const acks: string[] = [];
+
+    for (let i = 0; i < batch.length; i++) {
+      const intent = intents[i];
+      acks.push(batch[i].id); // Always ack consumed items
+
+      switch (intent.kind) {
+        case 'fast-lane':
+          fastLaneSignals.push(intent.urn);
+          break;
+        case 'slow-lane':
+          newMessages.push(intent.message);
+          break;
+        case 'receipt':
+          receiptsToApply.push({ urn: intent.urn, ids: intent.messageIds });
+          break;
+        case 'asset-reveal':
+          mutationsToRun.push(intent.patch);
+          break;
+        case 'group-invite':
+          await this.groupProtocol.processIncomingInvite(intent.data);
+          break;
+        case 'group-system': {
+          const sysMsg = await this.groupProtocol.processSignal(
+            intent.data,
+            intent.sender,
+            { messageId: intent.meta.id, sentAt: intent.meta.sentAt },
+          );
+          if (sysMsg) newMessages.push(sysMsg);
+          break;
+        }
+      }
+    }
+
+    // --- STEP 3: FAST LANE (Fire & Forget) ---
+    if (fastLaneSignals.length > 0) {
+      this.emitResult({ typingIndicators: fastLaneSignals });
+    }
+
+    // --- STEP 4: DURABLE LANE (Store -> Notify) ---
+    const hasDurableUpdates =
+      newMessages.length > 0 ||
+      receiptsToApply.length > 0 ||
+      mutationsToRun.length > 0;
+
+    if (hasDurableUpdates) {
+      // A. Parallel Storage Operations
+      // We do not use a transaction; we just ensure all writes complete.
+      const tasks: Promise<any>[] = [];
+
+      // 1. Insert New
+      if (newMessages.length > 0) {
+        tasks.push(this.storageService.bulkSaveMessages(newMessages));
+      }
+
+      // 2. Update Receipts
+      for (const r of receiptsToApply) {
+        for (const msgId of r.ids) {
+          tasks.push(this.storageService.applyReceipt(msgId, r.urn, 'read'));
+        }
+      }
+
+      // 3. Run Mutations (via Helper)
+      const successfulPatches: string[] = [];
+      for (const patch of mutationsToRun) {
+        tasks.push(
+          this.mutationHelper.applyAssetReveal(patch).then((id) => {
+            if (id) successfulPatches.push(id);
+          }),
+        );
+      }
+
+      // Wait for ALL storage ops to finish
+      await Promise.all(tasks);
+
+      // B. Notify UI (The "Truth" Moment)
+      this.emitResult({
+        messages: newMessages,
+        readReceipts: receiptsToApply.flatMap((r) => r.ids),
+        patchedMessageIds: successfulPatches,
+      });
+    }
+
+    // --- STEP 5: ACKNOWLEDGE ---
+    await firstValueFrom(this.dataService.acknowledge(acks));
+  }
+
+  private emitResult(partial: Partial<IngestionResult>) {
+    this._dataIngested.next({
       messages: [],
       typingIndicators: [],
       readReceipts: [],
       patchedMessageIds: [],
-    };
-
-    let hasMore = true;
-
-    while (hasMore) {
-      const queue = await firstValueFrom(
-        this.dataService.getMessageBatch(batchSize),
-      );
-
-      if (!queue || queue.length === 0) {
-        break;
-      }
-
-      const processedIds: string[] = [];
-
-      for (const item of queue) {
-        try {
-          await this.processSingleMessage(item, blockedSet, finalResult);
-          processedIds.push(item.id);
-        } catch (error) {
-          this.logger.error(
-            `[Ingestion] Failed to process msg ${item.id}`,
-            error,
-          );
-          processedIds.push(item.id);
-        }
-      }
-
-      if (processedIds.length > 0) {
-        await firstValueFrom(this.dataService.acknowledge(processedIds));
-      }
-
-      if (queue.length < batchSize) {
-        hasMore = false;
-      }
-    }
-
-    this._dataIngested.next(finalResult);
-
-    return finalResult;
-  }
-
-  private async processSingleMessage(
-    item: QueuedMessage,
-    blockedSet: Set<string>,
-    accumulator: IngestionResult,
-  ): Promise<void> {
-    const myKeys = this.sessionService.snapshot.keys;
-
-    const transport: TransportMessage =
-      await this.cryptoService.verifyAndDecrypt(item.envelope, myKeys);
-
-    const canonicalSenderUrn = await this.quarantineService.process(
-      transport,
-      blockedSet,
-    );
-
-    if (!canonicalSenderUrn) {
-      return;
-    }
-
-    await this.routeAndProcess(
-      transport,
-      item.id,
-      canonicalSenderUrn,
-      accumulator,
-    );
-  }
-
-  private async routeAndProcess(
-    transport: TransportMessage,
-    queueId: string,
-    canonicalSenderUrn: URN,
-    accumulator: IngestionResult,
-  ): Promise<void> {
-    const typeId = transport.typeId;
-    const isSignal = typeId.entityType === 'signal';
-
-    const parsed = this.parser.parse(typeId, transport.payloadBytes);
-
-    if (isSignal) {
-      if (parsed.kind === 'signal') {
-        await this.handleSignal(
-          parsed.payload,
-          canonicalSenderUrn,
-          accumulator,
-        );
-      } else {
-        this.logger.warn(
-          `[Ingestion] Signal Mismatch: Transport=Signal, Parser=${parsed.kind}`,
-        );
-      }
-      return;
-    }
-
-    if (parsed.kind === 'content') {
-      await this.handleContent(
-        parsed,
-        transport,
-        queueId,
-        canonicalSenderUrn,
-        accumulator,
-      );
-      return;
-    }
-
-    this.logger.warn(
-      `[Ingestion] Dropped Unhandled: Transport=${typeId.toString()}, Parser=${
-        parsed.kind
-      }`,
-    );
-  }
-
-  private async handleContent(
-    parsed: ParsedMessage & { kind: 'content' },
-    transport: TransportMessage,
-    queueId: string,
-    canonicalSenderUrn: URN,
-    accumulator: IngestionResult,
-  ): Promise<void> {
-    const canonicalId = transport.clientRecordId || queueId;
-
-    // CHECK - is the parsed.conversationId not always right - if not why not?
-    const conversationUrn =
-      parsed.conversationId.entityType === 'group'
-        ? parsed.conversationId
-        : canonicalSenderUrn;
-
-    if (parsed.kind === 'content' && parsed.payload.kind === 'group-invite') {
-      await this.groupProtocol.processIncomingInvite(parsed.payload.data);
-    }
-
-    if (parsed.payload.kind === 'group-system') {
-      try {
-        const systemMessage = await this.groupProtocol.processSignal(
-          parsed.payload.data,
-          canonicalSenderUrn,
-          { messageId: canonicalId, sentAt: transport.sentTimestamp },
-        );
-
-        // If Protocol returned a message, save it to history
-        if (systemMessage) {
-          await this.storageService.saveMessage(systemMessage);
-          accumulator.messages.push(systemMessage);
-        }
-
-        // 🚩 FIX: Stop here!
-        // Do not let the generic logic below overwrite this message.
-        console.log('saved system message', systemMessage);
-        return;
-      } catch (e) {
-        this.logger.error('[Ingestion] Failed to update group roster', e);
-      }
-    } else {
-      // "Before we save this DM, ensure the session exists."
-      await this.contactProtocol.ensureSession(canonicalSenderUrn);
-    }
-
-    const snippet = this.snippetGenerator.createSnippet(parsed);
-
-    const chatMessage: ChatMessage = {
-      id: canonicalId,
-      senderId: canonicalSenderUrn,
-      sentTimestamp: transport.sentTimestamp as ISODateTimeString,
-      typeId: transport.typeId,
-      snippet: snippet,
-      status: 'received',
-      conversationUrn: conversationUrn!,
-      tags: parsed.tags,
-      payloadBytes: this.parser.serialize(parsed.payload),
-    };
-
-    console.log('handling context save', chatMessage);
-    await this.storageService.saveMessage(chatMessage);
-    accumulator.messages.push(chatMessage);
-  }
-
-  private async handleSignal(
-    payload: any,
-    canonicalSenderUrn: URN,
-    accumulator: IngestionResult,
-  ): Promise<void> {
-    switch (payload.action) {
-      case 'typing': {
-        accumulator.typingIndicators.push(canonicalSenderUrn);
-        break;
-      }
-      case 'read-receipt': {
-        const rr = payload.data as ReadReceiptData;
-        const ids = rr?.messageIds || [];
-
-        console.log('handling read receipt', rr);
-        if (ids.length > 0) {
-          for (const msgId of ids) {
-            await this.storageService.applyReceipt(
-              msgId,
-              canonicalSenderUrn,
-              'read',
-            );
-          }
-          accumulator.readReceipts.push(...ids);
-        }
-        break;
-      }
-      case 'asset-reveal': {
-        const patch = payload.data as AssetRevealData;
-        const patchedId = await this.handleAssetReveal(patch);
-        if (patchedId) {
-          accumulator.patchedMessageIds.push(patchedId);
-        }
-        break;
-      }
-      default: {
-        this.logger.warn(
-          `[Ingestion] Unhandled Signal Action: ${payload.action}`,
-        );
-      }
-    }
-  }
-
-  private async handleAssetReveal(
-    patch: AssetRevealData,
-  ): Promise<string | null> {
-    const msg = await this.storageService.getMessage(patch.messageId);
-    if (!msg) return null;
-
-    try {
-      if (!msg.payloadBytes) {
-        return null;
-      }
-
-      const parsed = this.parser.parse(msg.typeId, msg.payloadBytes);
-      if (parsed.kind !== 'content') {
-        return null;
-      }
-
-      const newPayload = {
-        ...parsed.payload,
-        assets: patch.assets,
-      };
-
-      const newBytes = this.parser.serialize(newPayload);
-
-      await this.storageService.updateMessagePayload(patch.messageId, newBytes);
-      return patch.messageId;
-    } catch (e) {
-      this.logger.error(
-        `[Ingestion] Failed to patch message ${patch.messageId}`,
-        e,
-      );
-      return null;
-    }
+      ...partial,
+    });
   }
 }

@@ -19,7 +19,6 @@ const mockDomainGroup: DirectoryGroup = {
     {
       id: mockUserUrn,
       type: URN.parse('urn:directory:type:user'),
-      lastSeenAt: now as ISODateTimeString,
     },
   ],
   memberState: { [mockUserUrn.toString()]: 'joined' },
@@ -35,11 +34,13 @@ describe('DirectoryService', () => {
     mockStorage = {
       saveEntity: vi.fn(),
       saveGroup: vi.fn(),
+      updateMemberStatus: vi.fn(),
       getEntity: vi.fn(),
       getEntities: vi.fn(),
       getGroup: vi.fn(),
       getGroupMetadata: vi.fn(),
-      updateMemberStatus: vi.fn(),
+      clearDatabase: vi.fn(), // ✅ Added mock
+      bulkUpsert: vi.fn(),
     } as unknown as DirectoryStorageService;
 
     // 2. Configure Bed
@@ -88,8 +89,17 @@ describe('DirectoryService', () => {
         mockGroupUrn,
         mockUserUrn,
         'left',
-        expect.any(String), // We verify it adds a timestamp
+        now,
       );
+    });
+  });
+
+  // --- MANAGEMENT DELEGATION ---
+
+  describe('Delegation (Management)', () => {
+    it('should delegate clear() to storage.clearDatabase()', async () => {
+      await service.clear();
+      expect(mockStorage.clearDatabase).toHaveBeenCalled();
     });
   });
 });

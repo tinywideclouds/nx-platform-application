@@ -120,7 +120,7 @@ export class GroupProtocolService {
       id: networkGroupUrn,
       members: entities,
       memberState,
-      lastUpdated: now as any,
+      lastUpdated: now as ISODateTimeString,
     };
 
     // 5. Persist to Directory (Corrected from AddressBook)
@@ -168,6 +168,7 @@ export class GroupProtocolService {
   async processIncomingInvite(groupInvite: GroupInvitePayload): Promise<void> {
     const groupUrn = URN.parse(groupInvite.groupUrn);
     const now = Temporal.Now.instant().toString();
+    const myUrn = this.sessionService.snapshot.networkUrn;
 
     const entities: DirectoryEntity[] = [];
     const memberState: Record<string, GroupMemberStatus> = {};
@@ -178,6 +179,10 @@ export class GroupProtocolService {
         if (!p.urn) continue;
         const pUrn = URN.parse(p.urn);
 
+        //don't add myself
+        if (pUrn.equals(myUrn)) {
+          continue;
+        }
         // Seed the Entity in Directory (Idempotent)
         const entity: DirectoryEntity = {
           id: pUrn,
@@ -200,7 +205,7 @@ export class GroupProtocolService {
       id: groupUrn,
       members: entities,
       memberState,
-      lastUpdated: now as any,
+      lastUpdated: now as ISODateTimeString,
     };
 
     await this.directoryMutation.saveGroup(group);
@@ -227,7 +232,7 @@ export class GroupProtocolService {
   }
 
   /**
-   * ✅ NEW: Protocol Controller
+   * Protocol Controller
    * Consumes a signal, updates state, and decides what history to create.
    */
   async processSignal(

@@ -57,6 +57,7 @@ export class DexieOutboxStorage implements OutboxStorage {
       payload: request.payload,
       tags: request.tags || [],
       recipients,
+      priority: request.priority,
       status: 'queued',
       createdAt: now,
     };

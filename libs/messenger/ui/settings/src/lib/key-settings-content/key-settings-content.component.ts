@@ -14,8 +14,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { AppState } from '@nx-platform-application/messenger-state-app';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
+// ✅ NEW: Identity Facade
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
+
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { NotificationPermissionButtonComponent } from '../notification-permission-button/notification-permission-button';
@@ -40,8 +41,9 @@ export class KeySettingsContentComponent {
   // Controlled by Parent (Page vs Sticky Wizard)
   isWizard = input(false);
 
-  private appState = inject(AppState);
-  private keyCache = inject(KeyCacheService);
+  // ✅ Architecture Fixed: Use Facade
+  private identity = inject(ChatIdentityFacade);
+
   private router = inject(Router);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -56,7 +58,8 @@ export class KeySettingsContentComponent {
 
   async onClearKeyCache(): Promise<void> {
     try {
-      await this.keyCache.clear();
+      // ✅ Call Facade
+      await this.identity.clearPublicKeyCache();
       this.snackBar.open('Public Key Cache cleared.', 'OK', { duration: 3000 });
     } catch (e) {
       this.logger.error('Failed to clear key cache', e);
@@ -77,7 +80,8 @@ export class KeySettingsContentComponent {
 
     if (await firstValueFrom(ref.afterClosed())) {
       try {
-        await this.appState.resetIdentityKeys();
+        // ✅ Call Facade
+        await this.identity.performIdentityReset();
         this.snackBar.open('Identity keys regenerated.', 'OK', {
           duration: 3000,
         });

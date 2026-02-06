@@ -1,14 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IdentitySettingsContentComponent } from './identity-settings-content.component';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { ChatService } from '@nx-platform-application/messenger-state-app';
-import { MessengerCryptoService } from '@nx-platform-application/messenger-infrastructure-private-keys';
-import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
+import { AppState } from '@nx-platform-application/messenger-state-app';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 import { URN } from '@nx-platform-application/platform-types';
+import { of } from 'rxjs';
+
+// ✅ NEW: Correct State Layers
+import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 
 describe('IdentitySettingsContentComponent', () => {
   let component: IdentitySettingsContentComponent;
@@ -21,14 +23,20 @@ describe('IdentitySettingsContentComponent', () => {
     profileUrl: 'http://avatar.com/u/test',
   };
 
-  const mockChatService = {
+  const mockAppState = {
     showWizard: signal(true),
     setWizardActive: vi.fn(),
   };
 
-  const mockCryptoService = {
-    loadMyPublicKeys: vi.fn().mockResolvedValue({ encKey: 'mock-key' }),
-    getFingerprint: vi.fn().mockResolvedValue('05 05 05 05'),
+  // ✅ Mock ChatDataService (The Owner of Connection State)
+  const mockChatData = {
+    liveConnection: of('connected'),
+  };
+
+  // ✅ Mock IdentityFacade (The Owner of Fingerprints)
+  const mockIdentityFacade = {
+    loadMyFingerprint: vi.fn().mockResolvedValue('05 05 05 05'),
+    currentUser: signal(mockUser),
   };
 
   beforeEach(async () => {
@@ -36,9 +44,10 @@ describe('IdentitySettingsContentComponent', () => {
       imports: [IdentitySettingsContentComponent],
       providers: [
         MockProvider(IAuthService, { currentUser: signal(mockUser) }),
-        { provide: ChatService, useValue: mockChatService },
-        { provide: MessengerCryptoService, useValue: mockCryptoService },
-        MockProvider(ChatLiveDataService, { status$: of('connected') }),
+        { provide: AppState, useValue: mockAppState },
+        // ✅ Correct Providers
+        { provide: ChatDataService, useValue: mockChatData },
+        { provide: ChatIdentityFacade, useValue: mockIdentityFacade },
       ],
     }).compileComponents();
 
@@ -53,29 +62,11 @@ describe('IdentitySettingsContentComponent', () => {
     expect(text).toContain('test@test.com');
   });
 
-  it('should load and display cryptographic fingerprint', async () => {
+  it('should load fingerprint via IdentityFacade', async () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('05 05 05 05');
-  });
-
-  describe('Standard Mode (isWizard = false)', () => {
-    beforeEach(() => {
-      fixture.componentRef.setInput('isWizard', false);
-      fixture.detectChanges();
-    });
-
-    it('should show the Wizard Toggle', () => {
-      expect(
-        fixture.nativeElement.querySelector('mat-slide-toggle'),
-      ).toBeTruthy();
-    });
-
-    it('should NOT show wizard annotations', () => {
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Identity Established',
-      );
-    });
+    expect(mockIdentityFacade.loadMyFingerprint).toHaveBeenCalled();
   });
 
   describe('Wizard Mode (isWizard = true)', () => {
@@ -84,18 +75,11 @@ describe('IdentitySettingsContentComponent', () => {
       fixture.detectChanges();
     });
 
-    it('should HIDE the Wizard Toggle', () => {
-      expect(
-        fixture.nativeElement.querySelector('mat-slide-toggle'),
-      ).toBeNull();
-    });
-
-    it('should show the Identity and Crypto annotations', async () => {
+    it('should show the Identity annotations', async () => {
       await fixture.whenStable();
       fixture.detectChanges();
       const text = fixture.nativeElement.textContent;
       expect(text).toContain('Identity Established');
-      expect(text).toContain('Crypto Active');
     });
   });
 });

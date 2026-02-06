@@ -12,23 +12,21 @@ import { switchMap, EMPTY, interval } from 'rxjs';
 import { Resource, URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { IAuthService } from '@nx-platform-application/platform-infrastructure-auth-access';
-import { Conversation } from '@nx-platform-application/messenger-types';
+import {
+  Conversation,
+  ChatMessage,
+} from '@nx-platform-application/messenger-types';
 
-// Infrastructure
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
-
-// Domain
 import {
   ConversationActionService,
   ConversationService,
 } from '@nx-platform-application/messenger-domain-conversation';
-import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
-
-// Facades
-import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
+import {
+  IngestionService,
+  IngestionResult,
+} from '@nx-platform-application/messenger-domain-ingestion';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
-import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
-
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { ContactSummary } from '@nx-platform-application/contacts-types';
 
@@ -46,69 +44,55 @@ export class ChatDataService {
   private readonly destroyRef = inject(DestroyRef);
   private readonly authService = inject(IAuthService);
 
-  // Services
   private readonly liveService = inject(ChatLiveDataService);
   private readonly ingestionService = inject(IngestionService);
   private readonly conversationService = inject(ConversationService);
   private readonly contactsQuery = inject(ContactsQueryApi);
   private readonly moderation = inject(ChatModerationFacade);
-
-  // ✅ NEW: We inject the Active Chat View Model to push updates to it
   private readonly conversationActions = inject(ConversationActionService);
 
   // --- STATE ---
   private readonly _activeConversations = signal<Conversation[]>([]);
-
-  // Public Read-Only State (Raw Data)
   public readonly activeConversations = this._activeConversations.asReadonly();
-
-  // Cache stores the "Sauce" (Alias/Avatar)
+  public readonly liveConnection = this.liveService.status$;
   private readonly identityCache = signal<Map<string, ContactSummary>>(
     new Map(),
   );
-
   public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
     new Map(),
   );
 
-  // --- THE UI SIGNAL ---
   public readonly uiConversations: Signal<UIConversation[]> = computed(() => {
-    // ✅ FIX: Derive from local state, not the (now removed) service signal
     const conversations = this.activeConversations();
     const identities = this.identityCache();
 
     return conversations.map((c) => {
       const urnStr = c.id.toString();
       const cached = identities.get(urnStr);
-
-      // 1. Resolve Display Name (Alias > Original Name)
       const displayName = cached?.alias || c.name || 'Unknown';
-
-      // 2. Return UIConversation
       return {
         ...c,
         name: displayName,
         pictureUrl: cached?.profilePictureUrl,
         initials: this.generateInitials(displayName),
-        // isActive is set by the Component/Router logic
       };
     });
   });
 
-  private operationLock = Promise.resolve();
+  private isSyncing = false;
+  // ✅ LATCH: Stores overlapping triggers
+  private rerunRequested = false;
 
   constructor() {
     this.initLiveSubscriptions();
+    this.initIngestionSubscription(); // Listen to the firehose
   }
 
   // --- ACTIONS ---
 
   public async refreshActiveConversations(): Promise<void> {
-    // ✅ FIX: Use the Promise-based method from the stateless service
     const conversations = await this.conversationService.getAllConversations();
     this._activeConversations.set(conversations);
-
-    // Trigger identity fetching based on the new list
     this.fetchMissingIdentities(conversations);
   }
 
@@ -157,35 +141,67 @@ export class ChatDataService {
     this.typingActivity.set(new Map());
   }
 
-  public async runIngestionCycle(): Promise<void> {
-    return this.runExclusive(async () => {
-      try {
-        const result = await this.ingestionService.process(
-          this.moderation.blockedSet(),
-          50,
-        );
+  /**
+   * Triggers the drain cycle.
+   * Uses a Latch Pattern to ensure that if a signal arrives mid-sync,
+   * we run exactly one more time to catch the tail events.
+   */
+  private async runIngestionCycle(): Promise<void> {
+    if (this.isSyncing) {
+      this.rerunRequested = true;
+      return;
+    }
 
-        // 2. Refresh List (Sidebar)
-        if (result.messages.length > 0) {
-          await this.refreshActiveConversations();
-        }
+    this.isSyncing = true;
 
-        // 3. Update Typing Indicators
-        if (result.typingIndicators.length > 0 || result.messages.length > 0) {
-          this.updateTypingActivity(result.typingIndicators, result.messages);
-        }
-      } catch (e) {
-        this.logger.error('[Ingestion] Failed', e);
-      }
-    });
+    try {
+      do {
+        this.rerunRequested = false; // Reset before working
+
+        // We wait for the stream to fully drain (Promise<void>)
+        await this.ingestionService.process(this.moderation.blockedSet());
+
+        // Logic Loop: If rerunRequested became true while we were awaiting above,
+        // the loop condition handles it.
+      } while (this.rerunRequested);
+    } catch (e) {
+      this.logger.error('[Ingestion] Failed', e);
+    } finally {
+      this.isSyncing = false;
+      this.rerunRequested = false;
+    }
   }
 
   // --- HELPERS ---
 
+  private initIngestionSubscription(): void {
+    // The "Firehose" Handler
+    this.ingestionService.dataIngested$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(async (result: IngestionResult) => {
+        // 1. FAST LANE: Typing Indicators
+        if (result.typingIndicators.length > 0 || result.messages.length > 0) {
+          this.updateTypingActivity(result.typingIndicators, result.messages);
+        }
+
+        // 2. SLOW LANE: Durable Changes
+        const hasDurableChanges =
+          result.messages.length > 0 ||
+          result.patchedMessageIds.length > 0 ||
+          result.readReceipts.length > 0;
+
+        if (hasDurableChanges) {
+          await this.refreshActiveConversations();
+        }
+      });
+  }
+
   private initLiveSubscriptions(): void {
     this.liveService.incomingMessage$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.runIngestionCycle());
+      .subscribe(() => {
+        void this.runIngestionCycle();
+      });
 
     this.liveService.status$
       .pipe(
@@ -207,13 +223,18 @@ export class ChatDataService {
       });
   }
 
-  private updateTypingActivity(indicators: URN[], realMessages: any[]): void {
+  private updateTypingActivity(
+    indicators: URN[],
+    realMessages: ChatMessage[],
+  ): void {
     this.typingActivity.update((map) => {
       const newMap = new Map(map);
       const now = Temporal.Now.instant();
+
+      // Add new indicators
       indicators.forEach((urn) => newMap.set(urn.toString(), now));
 
-      // Clear typing indicator if a real message arrived from that user
+      // Remove typing bubble if the user actually sent a message
       realMessages.forEach((msg) => {
         const key = msg.senderId.toString();
         if (newMap.has(key)) {
@@ -235,19 +256,5 @@ export class ChatDataService {
     }
 
     return (words[0][0] + words[1][0]).toUpperCase();
-  }
-
-  private async runExclusive<T>(task: () => Promise<T>): Promise<T> {
-    const previousLock = this.operationLock;
-    let releaseLock: () => void;
-    this.operationLock = new Promise((resolve) => {
-      releaseLock = resolve;
-    });
-    try {
-      await previousLock;
-      return await task();
-    } finally {
-      releaseLock!();
-    }
   }
 }

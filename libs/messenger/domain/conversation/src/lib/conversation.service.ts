@@ -5,7 +5,6 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   Conversation,
-  MessageDeliveryStatus,
 } from '@nx-platform-application/messenger-types';
 
 import {

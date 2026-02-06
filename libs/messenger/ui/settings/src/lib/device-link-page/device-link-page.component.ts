@@ -10,10 +10,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-import { AppState } from '@nx-platform-application/messenger-state-app';
+// ✅ Facade (No AppState/ChatService)
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
 import { DevicePairingSession } from '@nx-platform-application/messenger-types';
 
-// ✅ Import Shared UI
 import { DeviceLinkQrDisplayComponent } from '../device-link-ui/device-link-qr-display/device-link-qr-display.component';
 import { DeviceLinkScannerUiComponent } from '../device-link-ui/device-link-scanner-ui/device-link-scanner-ui.component';
 
@@ -34,12 +34,12 @@ import { DeviceLinkScannerUiComponent } from '../device-link-ui/device-link-scan
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DeviceLinkPageComponent {
-  private appState = inject(AppState);
+  private identity = inject(ChatIdentityFacade);
   private snackBar = inject(MatSnackBar);
 
   // State
   isLinking = signal(false);
-  isShowingCode = signal(false); // Toggle between Scan vs Show
+  isShowingCode = signal(false);
   session = signal<DevicePairingSession | null>(null);
 
   // --- ACTIONS ---
@@ -47,7 +47,7 @@ export class DeviceLinkPageComponent {
   async handleScan(qrCode: string): Promise<void> {
     this.isLinking.set(true);
     try {
-      await this.appState.linkTargetDevice(qrCode);
+      await this.identity.linkTargetDevice(qrCode);
       this.snackBar.open('Device successfully linked!', 'Close', {
         duration: 5000,
       });
@@ -64,7 +64,7 @@ export class DeviceLinkPageComponent {
   async enableShowMode(): Promise<void> {
     this.isShowingCode.set(true);
     try {
-      const session = await this.appState.startSourceLinkSession();
+      const session = await this.identity.startSourceLinkSession();
       this.session.set(session);
     } catch (e) {
       this.snackBar.open('Could not generate secure code.', 'Close');

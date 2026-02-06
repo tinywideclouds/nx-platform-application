@@ -12,7 +12,6 @@ import {
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
-import { ChatSyncService } from '@nx-platform-application/messenger-domain-chat-sync';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
@@ -46,8 +45,8 @@ describe('ConversationService', () => {
     snippet: 'Hello',
     tags: [],
     receiptMap: {
-      'urn:contacts:user:me': 'read', // ME (Should be filtered)
-      'urn:contacts:user:alice': 'read', // ALICE (Should show)
+      'urn:contacts:user:me': 'read',
+      'urn:contacts:user:alice': 'read',
     },
   };
 
@@ -60,7 +59,7 @@ describe('ConversationService', () => {
         MockProvider(HistoryReader, {
           getMessages: vi
             .fn()
-            .mockResolvedValue({ messages: [], genesisReached: true }),
+            .mockResolvedValue({ messages: [msgText], genesisReached: true }),
           getAllConversations: vi.fn().mockResolvedValue([]),
         }),
         MockProvider(ConversationStorage, {
@@ -72,6 +71,7 @@ describe('ConversationService', () => {
           conversationExists: vi.fn().mockResolvedValue(false),
           getMessage: vi.fn().mockResolvedValue(msgText),
           deleteMessage: vi.fn().mockResolvedValue(undefined),
+          clearMessageHistory: vi.fn().mockResolvedValue(undefined),
         }),
         MockProvider(DirectoryQueryApi, {
           getGroup: vi.fn().mockResolvedValue(null),
@@ -80,12 +80,10 @@ describe('ConversationService', () => {
         MockProvider(SessionService, {
           snapshot: { networkUrn: myUrn } as any,
         }),
-        MockProvider(ChatSyncService),
         MockProvider(ChatKeyService, {
           checkRecipientKeys: vi.fn().mockResolvedValue(true),
         }),
         MockProvider(MessageContentParser, {
-          // Mock parse for recoverFailedMessage
           parse: vi.fn().mockReturnValue({
             kind: 'content',
             payload: { kind: 'text', text: 'Recovered Text' },
@@ -101,43 +99,23 @@ describe('ConversationService', () => {
     contentParser = TestBed.inject(MessageContentParser);
   });
 
-  describe('readCursors', () => {
-    it('should calculate cursors and EXCLUDE the current user', async () => {
-      vi.mocked(historyReader.getMessages).mockResolvedValue({
-        messages: [msgText],
-        genesisReached: true,
-      });
+  describe('loadContext', () => {
+    it('should fetch conversation data and mark as read', async () => {
+      const result = await service.loadContext(groupUrn);
 
-      await service.loadConversation(groupUrn);
+      expect(storage.getConversation).toHaveBeenCalledWith(groupUrn);
+      expect(storage.markConversationAsRead).toHaveBeenCalledWith(groupUrn);
+      expect(historyReader.getMessages).toHaveBeenCalled();
 
-      const cursors = service.readCursors();
-
-      // Should have cursor for this message
-      expect(cursors.has('msg-1')).toBe(true);
-
-      const readers = cursors.get('msg-1');
-      expect(readers).toBeDefined();
-
-      // Alice should be there
-      expect(
-        readers?.some((r) => r.toString() === 'urn:contacts:user:alice'),
-      ).toBe(true);
-
-      // ✅ ME should NOT be there
-      expect(
-        readers?.some((r) => r.toString() === 'urn:contacts:user:me'),
-      ).toBe(false);
+      // Verify Return Structure
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].id).toBe('msg-1');
+      expect(result.genesisReached).toBe(true);
     });
   });
 
   describe('recoverFailedMessage', () => {
     it('should parse bytes, delete message, and return text', async () => {
-      vi.mocked(historyReader.getMessages).mockResolvedValue({
-        messages: [msgText],
-        genesisReached: true,
-      });
-      await service.loadConversation(groupUrn);
-
       const result = await service.recoverFailedMessage('msg-1');
 
       expect(contentParser.parse).toHaveBeenCalledWith(
@@ -146,64 +124,28 @@ describe('ConversationService', () => {
       );
       expect(storage.deleteMessage).toHaveBeenCalledWith('msg-1');
       expect(result).toBe('Recovered Text');
-
-      // Removed from view
-      expect(service.messages()).toHaveLength(0);
     });
   });
 
   describe('loadMoreMessages', () => {
-    it('should fetch older messages using last known timestamp', async () => {
-      // 1. Initial Load
-      vi.mocked(historyReader.getMessages).mockResolvedValueOnce({
-        messages: [msgText], // Newest
-        genesisReached: false,
-      });
-      await service.loadConversation(groupUrn);
+    it('should delegate to HistoryReader directly', async () => {
+      const timestamp = '2020-01-01T00:00:00Z';
 
-      // 2. Load More
-      const olderMsg = {
-        ...msgText,
-        id: 'msg-old',
-        sentTimestamp: '2020-01-01' as ISODateTimeString,
-      };
-      vi.mocked(historyReader.getMessages).mockResolvedValueOnce({
-        messages: [olderMsg], // Older
-        genesisReached: true,
-      });
+      await service.loadMoreMessages(groupUrn, timestamp);
 
-      await service.loadMoreMessages();
-
-      // 3. Verify Call
-      expect(historyReader.getMessages).toHaveBeenLastCalledWith(
+      expect(historyReader.getMessages).toHaveBeenCalledWith(
         expect.objectContaining({
-          beforeTimestamp: msgText.sentTimestamp,
+          conversationUrn: groupUrn,
+          beforeTimestamp: timestamp,
         }),
       );
-
-      // 4. Verify Append
-      const msgs = service.messages();
-      expect(msgs).toHaveLength(2);
-      expect(msgs[0].id).toBe('msg-old'); // Oldest first
     });
   });
 
   describe('performHistoryWipe', () => {
-    it('should clear all state and delete all conversations', async () => {
-      // Setup some state
-      await service.loadConversation(groupUrn);
-      vi.mocked(historyReader.getAllConversations).mockResolvedValue([
-        { id: groupUrn } as any,
-      ]);
-
+    it('should delegate to storage', async () => {
       await service.performHistoryWipe();
-
-      expect(service.selectedConversation()).toBeNull();
-      expect(service.messages()).toHaveLength(0);
-
-      // Verified deletion
-      expect(storage.deleteMessage).not.toHaveBeenCalled(); // Not used here
-      // We assume deleteConversation is called via the map logic
+      expect(storage.clearMessageHistory).toHaveBeenCalled();
     });
   });
 });

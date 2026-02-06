@@ -1,124 +1,144 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
 import { IngestionService } from './ingestion.service';
 import { ChatDataService } from '@nx-platform-application/messenger-infrastructure-chat-access';
-import { MessageSecurityService } from '@nx-platform-application/messenger-infrastructure-message-security';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import {
-  MessageContentParser,
-  MessageSnippetFactory,
-} from '@nx-platform-application/messenger-domain-message-content';
-import { QuarantineService } from '@nx-platform-application/messenger-domain-quarantine';
-
-// ✅ Fix: Import the Protocol Services to mock them
 import { GroupProtocolService } from '@nx-platform-application/messenger-domain-group-protocol';
-import { ContactProtocolService } from '@nx-platform-application/messenger-domain-contact-protocol';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+import { URN } from '@nx-platform-application/platform-types';
 
-import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
-import { URN, QueuedMessage } from '@nx-platform-application/platform-types';
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
+import { MessageClassifier } from './message-classifier.service';
+import { MessageMutationHelper } from './message-mutation.helper';
+import { AssetRevealData } from '@nx-platform-application/messenger-domain-message-content';
 
 describe('IngestionService', () => {
   let service: IngestionService;
+  let dataService: ChatDataService;
+  let classifier: MessageClassifier;
   let storage: ChatStorageService;
-  let quarantine: QuarantineService;
+  let mutationHelper: MessageMutationHelper;
 
-  const myUrn = URN.parse('urn:contacts:user:me');
-  const aliceUrn = URN.parse('urn:contacts:user:alice');
-  const groupUrn = URN.parse('urn:messenger:group:team');
-
-  const mockQueuedMsg: QueuedMessage = {
-    id: 'router-id-1',
-    envelope: { recipientId: myUrn } as any,
-  };
-
-  const mockTransport = {
-    senderId: aliceUrn,
-    sentTimestamp: '2025-01-01T12:00:00Z',
-    typeId: URN.parse('urn:message:type:text'),
-    payloadBytes: new Uint8Array([1, 2, 3]),
-    clientRecordId: 'client-uuid-123',
-  };
+  // Mock Objects
+  const senderUrn = URN.parse('urn:contacts:user:alice');
+  const mockBatch = [
+    { id: 'q1', envelope: {} },
+    { id: 'q2', envelope: {} },
+  ] as any[];
 
   beforeEach(() => {
-    vi.clearAllMocks();
-
     TestBed.configureTestingModule({
       providers: [
         IngestionService,
-
-        // --- Infrastructure Mocks ---
         MockProvider(ChatDataService, {
-          getMessageBatch: vi.fn().mockReturnValue(of([mockQueuedMsg])),
-          acknowledge: vi.fn().mockReturnValue(of(undefined)),
+          getAllMessages: vi.fn().mockReturnValue(of(mockBatch)), // Stream returns 1 batch
+          acknowledge: vi.fn().mockReturnValue(of(void 0)),
         }),
-        MockProvider(MessageSecurityService, {
-          verifyAndDecrypt: vi.fn().mockResolvedValue(mockTransport),
-        }),
+        MockProvider(MessageClassifier),
+        MockProvider(MessageMutationHelper),
         MockProvider(ChatStorageService, {
-          saveMessage: vi.fn().mockResolvedValue(true),
+          bulkSaveMessages: vi.fn().mockResolvedValue(undefined),
           applyReceipt: vi.fn().mockResolvedValue(undefined),
         }),
-        MockProvider(SessionService, {
-          snapshot: { keys: { encKey: {} as any, sigKey: {} as any } } as any,
-        }),
+        MockProvider(GroupProtocolService),
         MockProvider(Logger),
-
-        // --- Domain Mocks (Gatekeeping & Parsing) ---
-        MockProvider(QuarantineService, {
-          process: vi.fn().mockResolvedValue(aliceUrn),
-        }),
-        MockProvider(MessageContentParser, {
-          parse: vi.fn().mockReturnValue({
-            kind: 'content',
-            conversationId: groupUrn,
-            tags: [],
-            payload: { kind: 'text', text: 'hello' },
-          }),
-          serialize: vi.fn().mockReturnValue(new Uint8Array([1])),
-        }),
-        MockProvider(MessageSnippetFactory, {
-          createSnippet: vi.fn().mockReturnValue('Mock Snippet'),
-        }),
-
-        // --- Protocol Mocks (The Fix) ---
-        // These mocks prevent the test from trying to load AddressBookApi or OutboxStorage
-        MockProvider(GroupProtocolService, {
-          processIncomingInvite: vi.fn().mockResolvedValue(undefined),
-          processSignal: vi.fn().mockResolvedValue(undefined),
-        }),
-        MockProvider(ContactProtocolService, {
-          ensureSession: vi.fn().mockResolvedValue(undefined),
-        }),
-
-        // External APIs
-        MockProvider(DirectoryMutationApi, {
-          updateMemberStatus: vi.fn().mockResolvedValue(undefined),
-        }),
       ],
     });
 
     service = TestBed.inject(IngestionService);
+    dataService = TestBed.inject(ChatDataService);
+    classifier = TestBed.inject(MessageClassifier);
     storage = TestBed.inject(ChatStorageService);
-    quarantine = TestBed.inject(QuarantineService);
+    mutationHelper = TestBed.inject(MessageMutationHelper);
   });
 
-  describe('The Airlock Flow (Content)', () => {
-    it('should parse and save message with generated SNIPPET if Quarantine approves', async () => {
-      const result = await service.process(new Set());
+  describe('The Pipeline', () => {
+    it('should split processing into Fast Lane and Slow Lane correctly', async () => {
+      // SETUP: Classifier returns mixed intents
+      vi.spyOn(classifier, 'classify')
+        .mockResolvedValueOnce({
+          kind: 'fast-lane',
+          urn: senderUrn,
+          payload: {},
+        }) // Item 1: Typing
+        .mockResolvedValueOnce({
+          kind: 'slow-lane',
+          message: { id: 'msg-real' } as any,
+        }); // Item 2: Message
 
-      expect(quarantine.process).toHaveBeenCalled();
-      expect(storage.saveMessage).toHaveBeenCalledWith(
+      // Spy on the output stream
+      const emissionSpy = vi.fn();
+      service.dataIngested$.subscribe(emissionSpy);
+
+      // EXECUTE
+      await service.process(new Set());
+
+      // VERIFY: Fast Lane
+      // Expect first emission to be ONLY typing (no messages)
+      expect(emissionSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          senderId: aliceUrn,
-          snippet: 'Mock Snippet', // ✅ Verifies the factory was called
+          typingIndicators: [senderUrn],
+          messages: [],
         }),
       );
-      expect(result.messages.length).toBe(1);
+
+      // VERIFY: Slow Lane (Storage)
+      expect(storage.bulkSaveMessages).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 'msg-real' })]),
+      );
+
+      // VERIFY: Slow Lane (Notification)
+      // Expect second emission to contain the message (AFTER storage)
+      expect(emissionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ id: 'msg-real' }),
+          ]),
+        }),
+      );
+
+      // VERIFY: Acknowledge
+      // Must ack both IDs (q1 and q2)
+      expect(dataService.acknowledge).toHaveBeenCalledWith(['q1', 'q2']);
+    });
+
+    it('should handle Asset Reveal mutations via the helper', async () => {
+      // SETUP: Classifier returns a mutation intent
+      const mockPatch: AssetRevealData = {
+        messageId: 'm1',
+        assets: {
+          'asset-001': { resourceId: 'res-123', provider: 'google-drive' },
+        },
+      };
+
+      vi.spyOn(dataService, 'getAllMessages').mockReturnValue(
+        of([mockBatch[0]]),
+      );
+      vi.spyOn(classifier, 'classify').mockResolvedValue({
+        kind: 'asset-reveal',
+        patch: mockPatch,
+      });
+
+      // Mock helper success
+      vi.spyOn(mutationHelper, 'applyAssetReveal').mockResolvedValue('m1');
+
+      const emissionSpy = vi.fn();
+      service.dataIngested$.subscribe(emissionSpy);
+
+      // EXECUTE
+      await service.process(new Set());
+
+      // VERIFY
+      expect(mutationHelper.applyAssetReveal).toHaveBeenCalledWith(mockPatch);
+
+      // Should emit the patched ID
+      expect(emissionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          patchedMessageIds: ['m1'],
+        }),
+      );
     });
   });
 });

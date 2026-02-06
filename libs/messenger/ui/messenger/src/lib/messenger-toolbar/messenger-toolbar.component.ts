@@ -7,7 +7,6 @@ import {
   computed,
   effect,
 } from '@angular/core';
-
 import { Router } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -24,7 +23,9 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { MessengerNetworkStatusComponent } from '../messenger-network-status/messenger-network-status.component';
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 
-import { AppState } from '@nx-platform-application/messenger-state-app';
+// ✅ NEW: Direct Domain Injection
+import { CloudSyncService } from '@nx-platform-application/messenger-state-cloud-sync';
+import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
 
 export type SidebarView = 'conversations' | 'contacts';
 
@@ -45,12 +46,13 @@ export type SidebarView = 'conversations' | 'contacts';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MessengerToolbarComponent {
-  private liveService = inject(ChatLiveDataService);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
 
-  // ✅ 2. Inject Facade
-  private appState = inject(AppState);
+  private chatData = inject(ChatDataService);
+
+  // ✅ Cloud Service for Sync Status
+  private syncService = inject(CloudSyncService);
 
   // --- Inputs / Outputs ---
   currentUser = input.required<User | null>();
@@ -62,19 +64,16 @@ export class MessengerToolbarComponent {
   logout = output<void>();
 
   // --- Raw Signals ---
-  private networkRaw = toSignal(this.liveService.status$, {
+  private networkRaw = toSignal(this.chatData.liveConnection, {
     initialValue: 'disconnected',
   });
 
-  // ✅ 3. Use Facade Signals
-  private isBackingUp = this.appState.isBackingUp;
-  private isCloudAuthRequired = this.appState.isCloudAuthRequired; // New signal
-
-  // Since isCloudEnabled is a getter on the service, we compute it once or wrap it.
-  private isCloudEnabled = computed(() => this.appState.isCloudConnected());
+  private isBackingUp = this.syncService.isSyncing;
+  private isCloudAuthRequired = this.syncService.requiresUserInteraction;
+  private isCloudEnabled = this.syncService.isConnected;
 
   constructor() {
-    // ✅ Effect: One-time Snackbar Alert
+    // Effect: One-time Snackbar Alert
     effect(() => {
       if (this.isCloudAuthRequired()) {
         this.snackBar
@@ -85,7 +84,7 @@ export class MessengerToolbarComponent {
           })
           .onAction()
           .subscribe(() => {
-            this.appState.connectCloud();
+            this.syncService.connect('google-drive');
           });
       }
     });
@@ -145,10 +144,10 @@ export class MessengerToolbarComponent {
     return user.alias.slice(0, 2).toUpperCase();
   }
 
-  // ✅ Action Handler
+  // Action Handler
   handleNetworkAction() {
     if (this.isCloudAuthRequired()) {
-      this.appState.connectCloud();
+      this.syncService.connect('google-drive');
     } else {
       this.router.navigate(['/messenger', 'settings', 'identity']);
     }

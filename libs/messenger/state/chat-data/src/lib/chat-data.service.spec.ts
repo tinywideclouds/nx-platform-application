@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ChatDataService } from './chat-data.service';
 import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach, afterEach, Mock } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import {
@@ -15,8 +15,14 @@ import { IAuthService } from '@nx-platform-application/platform-infrastructure-a
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 
 // Domain
-import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
-import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
+import {
+  ConversationService,
+  ConversationActionService,
+} from '@nx-platform-application/messenger-domain-conversation';
+import {
+  IngestionService,
+  IngestionResult,
+} from '@nx-platform-application/messenger-domain-ingestion';
 
 // Facades
 import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
@@ -24,20 +30,34 @@ import { ChatModerationFacade } from '@nx-platform-application/messenger-state-m
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { Conversation } from '@nx-platform-application/messenger-types';
 
-describe('ChatDataService (Data Orchestrator)', () => {
+/**
+ * Helper for deterministic async testing.
+ */
+function createDeferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+describe('ChatDataService', () => {
   let service: ChatDataService;
   let liveData: ChatLiveDataService;
   let ingestion: IngestionService;
   let conversation: ConversationService;
-  let authService: IAuthService;
 
   // --- MOCK STREAMS ---
   const incomingMessage$ = new Subject<void>();
   const status$ = new BehaviorSubject<any>('disconnected');
+  const readReceiptsSent$ = new Subject<void>();
+  const dataIngested$ = new Subject<IngestionResult>();
 
   // --- FIXTURES ---
   const mockUrn = URN.parse('urn:contacts:user:me');
   const mockKeys = { encKey: 'k', sigKey: 's' } as any;
+
+  const mockConversationActionService = {
+    readReceiptsSent$: readReceiptsSent$.asObservable(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -49,7 +69,7 @@ describe('ChatDataService (Data Orchestrator)', () => {
         MockProvider(Logger),
         MockProvider(IAuthService, {
           currentUser: signal({ id: mockUrn } as any),
-          getJwtToken: vi.fn().mockReturnValue(null), // Default to null so fallback is used
+          getJwtToken: vi.fn().mockReturnValue(null),
         }),
         MockProvider(ChatLiveDataService, {
           connect: vi.fn(),
@@ -58,19 +78,17 @@ describe('ChatDataService (Data Orchestrator)', () => {
           status$,
         }),
         MockProvider(IngestionService, {
-          process: vi.fn().mockResolvedValue({
-            messages: [],
-            typingIndicators: [],
-            readReceipts: [],
-            patchedMessageIds: [],
-          }),
+          process: vi.fn().mockResolvedValue(undefined),
+          dataIngested$: dataIngested$.asObservable(),
         }),
         MockProvider(ConversationService, {
-          loadConversationSummaries: vi.fn().mockResolvedValue([]),
-          upsertMessages: vi.fn().mockResolvedValue(undefined),
-          applyIncomingReadReceipts: vi.fn().mockResolvedValue(undefined),
-          reloadMessages: vi.fn().mockResolvedValue(undefined),
+          // ensure this is a spy
+          getAllConversations: vi.fn().mockResolvedValue([]),
         }),
+        {
+          provide: ConversationActionService,
+          useValue: mockConversationActionService,
+        },
         MockProvider(ChatIdentityFacade, {
           myKeys: signal(mockKeys),
         }),
@@ -87,200 +105,87 @@ describe('ChatDataService (Data Orchestrator)', () => {
     liveData = TestBed.inject(ChatLiveDataService);
     ingestion = TestBed.inject(IngestionService);
     conversation = TestBed.inject(ConversationService);
-    authService = TestBed.inject(IAuthService);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.useRealTimers();
   });
 
-  describe('UI Conversation Projection', () => {
-    it('should extend Domain Model with UI properties (Initials/Picture)', () => {
-      const domainConvo: Conversation = {
-        conversationUrn: URN.parse('urn:messenger:group:alpha'),
-        name: 'Project Alpha',
-        snippet: 'Launch codes...',
-        unreadCount: 5,
-        lastActivityTimestamp: '2025-01-01T12:00:00Z' as ISODateTimeString,
-        genesisTimestamp: null,
-        lastModified: '2025-01-01T12:00:00Z' as ISODateTimeString,
-      };
-
-      // Set the raw state
-      (service as any)._activeConversations.set([domainConvo]);
-
-      // Get the UI signal
-      const uiList = service.uiConversations();
-      expect(uiList).toHaveLength(1);
-      const entry = uiList[0];
-
-      // 1. Check inherited properties (Zero Mapping)
-      expect(entry.name).toBe('Project Alpha');
-      expect(entry.snippet).toBe('Launch codes...');
-      expect(entry.unreadCount).toBe(5);
-      // It should keep the original type, not cast to string
-      expect(entry.lastActivityTimestamp).toBe('2025-01-01T12:00:00Z');
-
-      // 2. Check Computed UI properties
-      expect(entry.initials).toBe('PA');
-      expect(entry.pictureUrl).toBeUndefined(); // No contact loaded yet
-    });
-  });
-
-  describe('Lifecycle', () => {
-    it('startSyncSequence should connect live service and run initial ingestion', async () => {
-      await service.startSyncSequence('mock-token');
-
-      // 1. Verify connect was called with a FUNCTION (Token Provider)
-      expect(liveData.connect).toHaveBeenCalledWith(expect.any(Function));
-
-      // 2. Capture the provider function
-      const tokenProvider = (liveData.connect as Mock).mock.calls[0][0];
-
-      // 3. Execute it to verify it resolves the correct token
-      expect(tokenProvider()).toBe('mock-token');
-
-      expect(conversation.loadConversationSummaries).toHaveBeenCalled();
-      expect(ingestion.process).toHaveBeenCalled();
-    });
-
-    it('stopSyncSequence should disconnect and clear state', () => {
-      const mockConvo = {
-        conversationUrn: URN.parse('urn:messenger:group:c1'),
-        name: 'Chat',
-        snippet: '',
-        unreadCount: 0,
-        lastActivityTimestamp: '2025-01-01T00:00:00Z' as ISODateTimeString,
-      } as Conversation;
-
-      (service as any)._activeConversations.set([mockConvo]);
-      service.stopSyncSequence();
-
-      expect(liveData.disconnect).toHaveBeenCalled();
-      expect(service.activeConversations()).toEqual([]);
-    });
-  });
-
-  describe('Ingestion Cycle (The Loop)', () => {
-    it('should process NEW MESSAGES correctly', async () => {
-      const mockMsg = { id: 'm1', senderId: mockUrn };
-      vi.spyOn(ingestion, 'process').mockResolvedValue({
-        messages: [mockMsg],
+  describe('Event-Driven Reactivity', () => {
+    it('should refresh conversations when Durable Messages arrive via stream', async () => {
+      // 1. Emit a batch with messages
+      // We explicitly provide senderId to avoid the "toString" crash in updateTypingActivity
+      dataIngested$.next({
+        messages: [{ id: 'm1', senderId: mockUrn } as any],
         typingIndicators: [],
         readReceipts: [],
         patchedMessageIds: [],
-      } as any);
+      });
 
-      await service.runIngestionCycle();
-
-      expect(conversation.upsertMessages).toHaveBeenCalledWith(
-        [mockMsg],
-        mockUrn,
+      // 2. Wait for async subscription to process
+      // ✅ FIX: Use vi.mocked() to access the .mock property safely
+      await vi.waitUntil(
+        () => vi.mocked(conversation.getAllConversations).mock.calls.length > 0,
       );
-      expect(conversation.loadConversationSummaries).toHaveBeenCalled();
+
+      // 3. Assert refresh called
+      expect(conversation.getAllConversations).toHaveBeenCalled();
     });
 
-    it('should process READ RECEIPTS correctly', async () => {
-      vi.spyOn(ingestion, 'process').mockResolvedValue({
+    it('should NOT refresh conversations for pure Typing Indicators', async () => {
+      // 1. Emit only typing
+      dataIngested$.next({
         messages: [],
-        typingIndicators: [],
-        readReceipts: ['m1', 'm2'],
-        patchedMessageIds: [],
-      } as any);
-
-      await service.runIngestionCycle();
-
-      expect(conversation.applyIncomingReadReceipts).toHaveBeenCalledWith([
-        'm1',
-        'm2',
-      ]);
-    });
-
-    it('should process PATCHES (Edits/Reveals) correctly', async () => {
-      vi.spyOn(ingestion, 'process').mockResolvedValue({
-        messages: [],
-        typingIndicators: [],
-        readReceipts: [],
-        patchedMessageIds: ['m5'],
-      } as any);
-
-      await service.runIngestionCycle();
-
-      expect(conversation.reloadMessages).toHaveBeenCalledWith(['m5']);
-    });
-
-    it('should update TYPING ACTIVITY', async () => {
-      const typerUrn = URN.parse('urn:contacts:user:alice');
-      vi.spyOn(ingestion, 'process').mockResolvedValue({
-        messages: [],
-        typingIndicators: [typerUrn],
+        typingIndicators: [mockUrn],
         readReceipts: [],
         patchedMessageIds: [],
-      } as any);
+      });
 
-      await service.runIngestionCycle();
+      // Allow event loop to tick
+      await new Promise(process.nextTick);
 
-      const activity = service.typingActivity();
-      expect(activity.has(typerUrn.toString())).toBe(true);
-    });
-
-    it('should remove typing indicator if a real message arrives from that user', async () => {
-      const aliceUrnString = 'urn:contacts:user:alice';
-      service.typingActivity.set(new Map([[aliceUrnString, {} as any]]));
-
-      const aliceMsg = { id: 'm9', senderId: URN.parse(aliceUrnString) };
-      vi.spyOn(ingestion, 'process').mockResolvedValue({
-        messages: [aliceMsg],
-        typingIndicators: [],
-        readReceipts: [],
-        patchedMessageIds: [],
-      } as any);
-
-      await service.runIngestionCycle();
-
-      const activity = service.typingActivity();
-      expect(activity.has(aliceUrnString)).toBe(false);
+      // 2. Assert no refresh
+      expect(conversation.getAllConversations).not.toHaveBeenCalled();
     });
   });
 
-  describe('Live Subscriptions (Zoneless)', () => {
-    it('should trigger ingestion on incomingMessage$', async () => {
-      let ingestionCalled = false;
-      vi.spyOn(ingestion, 'process').mockImplementation(async () => {
-        ingestionCalled = true;
-        return {
-          messages: [],
-          typingIndicators: [],
-          readReceipts: [],
-          patchedMessageIds: [],
-        } as any;
-      });
+  describe('Ingestion Cycle (Latch Logic)', () => {
+    it('should coalesce overlapping triggers into a sequential re-run', async () => {
+      // 1. Setup Control Objects
+      const run1 = createDeferred();
+      const run2 = createDeferred();
 
-      incomingMessage$.next();
+      // Mock sequence: First call waits for run1, Second waits for run2
+      vi.mocked(ingestion.process)
+        .mockReturnValueOnce(run1.promise)
+        .mockReturnValueOnce(run2.promise);
 
-      await Promise.resolve();
-      expect(ingestionCalled).toBe(true);
+      // 2. Start First Run (Hangs on run1)
+      const mainThread = (service as any).runIngestionCycle();
+
+      // 3. Trigger Second Run (Latch Test)
+      const latchedThread = (service as any).runIngestionCycle();
+
+      expect(ingestion.process).toHaveBeenCalledTimes(1);
+
+      // 4. Resolve Promises sequentially
+      run1.resolve();
+      await Promise.resolve(); // tick
+      run2.resolve();
+
+      // 5. Await the MAIN thread
+      await Promise.all([mainThread, latchedThread]);
+
+      // 6. Assert called twice
+      expect(ingestion.process).toHaveBeenCalledTimes(2);
     });
+  });
 
-    it('should trigger ingestion when polling fallback activates', async () => {
-      vi.useFakeTimers();
-
-      let calls = 0;
-      vi.spyOn(ingestion, 'process').mockImplementation(async () => {
-        calls++;
-        return {
-          messages: [],
-          typingIndicators: [],
-          readReceipts: [],
-          patchedMessageIds: [],
-        } as any;
-      });
-
-      status$.next('disconnected');
-
-      await vi.advanceTimersByTimeAsync(15_000);
-      expect(calls).toBeGreaterThan(0);
+  describe('Live Subscriptions', () => {
+    it('should trigger ingestion process on incomingMessage$', async () => {
+      incomingMessage$.next();
+      await Promise.resolve();
+      expect(ingestion.process).toHaveBeenCalled();
     });
   });
 });

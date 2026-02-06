@@ -1,4 +1,4 @@
-import { URN } from '@nx-platform-application/platform-types';
+import { Priority, URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   MessageDeliveryStatus,
@@ -10,6 +10,7 @@ export interface SendContext {
   optimisticMsg: ChatMessage;
   isEphemeral: boolean;
   shouldPersist: boolean;
+  priority: Priority;
   recipients?: URN[];
 }
 
@@ -22,6 +23,7 @@ export interface SendOptions {
   isEphemeral?: boolean;
   tags?: URN[];
   shouldPersist?: boolean;
+  priority?: Priority;
 }
 
 export interface OutboundResult {

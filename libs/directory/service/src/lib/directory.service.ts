@@ -55,4 +55,10 @@ export class DirectoryService
     const now = Temporal.Now.instant().toString();
     await this.storage.updateMemberStatus(groupUrn, memberUrn, status, now);
   }
+
+  // --- MANAGEMENT API (NEW) ---
+
+  async clear(): Promise<void> {
+    await this.storage.clearDatabase();
+  }
 }

@@ -1,7 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { KeySettingsContentComponent } from './key-settings-content.component';
-import { ChatService } from '@nx-platform-application/messenger-state-app';
-import { KeyCacheService } from '@nx-platform-application/messenger-infrastructure-key-cache';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
@@ -10,22 +8,33 @@ import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
+// ✅ NEW: Facade
+import { ChatIdentityFacade } from '@nx-platform-application/messenger-state-identity';
+
 describe('KeySettingsContentComponent', () => {
   let component: KeySettingsContentComponent;
   let fixture: ComponentFixture<KeySettingsContentComponent>;
+  let facade: ChatIdentityFacade;
 
   const mockRouter = { navigate: vi.fn() };
-  const mockKeyCache = { clear: vi.fn().mockResolvedValue(undefined) };
+
+  const mockFacade = {
+    clearPublicKeyCache: vi.fn().mockResolvedValue(undefined),
+    performIdentityReset: vi.fn().mockResolvedValue(undefined),
+  };
+
   const mockDialog = {
     open: vi.fn().mockReturnValue({ afterClosed: () => of(true) }),
   };
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+
     await TestBed.configureTestingModule({
       imports: [KeySettingsContentComponent],
       providers: [
-        MockProvider(ChatService),
-        { provide: KeyCacheService, useValue: mockKeyCache },
+        // ✅ Mock Facade instead of AppState/Infra
+        { provide: ChatIdentityFacade, useValue: mockFacade },
         { provide: Router, useValue: mockRouter },
         { provide: MatDialog, useValue: mockDialog },
         MockProvider(MatSnackBar),
@@ -35,6 +44,7 @@ describe('KeySettingsContentComponent', () => {
 
     fixture = TestBed.createComponent(KeySettingsContentComponent);
     component = fixture.componentInstance;
+    facade = TestBed.inject(ChatIdentityFacade);
     fixture.detectChanges();
   });
 
@@ -47,9 +57,15 @@ describe('KeySettingsContentComponent', () => {
     ]);
   });
 
-  it('should clear key cache and show snackbar', async () => {
+  it('should delegate cache clearing to the Facade', async () => {
     await component.onClearKeyCache();
-    expect(mockKeyCache.clear).toHaveBeenCalled();
+    expect(facade.clearPublicKeyCache).toHaveBeenCalled();
+  });
+
+  it('should delegate identity reset to the Facade', async () => {
+    // Triggers confirmation dialog (mocked to return true)
+    await component.onResetIdentity();
+    expect(facade.performIdentityReset).toHaveBeenCalled();
   });
 
   it('should show "Device Graph" annotation only in wizard mode', () => {

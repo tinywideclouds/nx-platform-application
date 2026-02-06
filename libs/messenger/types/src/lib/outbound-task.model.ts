@@ -1,6 +1,7 @@
 import {
   URN,
   ISODateTimeString,
+  Priority,
 } from '@nx-platform-application/platform-types';
 
 export type DeliveryStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -28,6 +29,7 @@ export interface OutboundMessageRequest {
 
   // Optional: Allow pre-minting ID if the domain needs to track it immediately
   messageId?: string;
+  priority: Priority;
 }
 
 export interface OutboundTask {
@@ -41,4 +43,5 @@ export interface OutboundTask {
   recipients: RecipientProgress[];
   status: DeliveryStatus;
   createdAt: ISODateTimeString;
+  priority: Priority;
 }

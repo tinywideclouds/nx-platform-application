@@ -9,7 +9,8 @@ import {
 } from '@nx-platform-application/platform-protos/secure/v1/envelope_pb';
 
 export enum Priority {
-  Low = 1,
+  Low = 0,
+  Normal = 1,
   // You can skip numbers. 'Medium' isn't required,
   // but if you added it without a value, it would auto-increment to 2.
   High = 5,
@@ -34,7 +35,7 @@ export interface SecureEnvelope {
  * (This is now an internal helper)
  */
 export function secureEnvelopeToProto(
-  envelope: SecureEnvelope
+  envelope: SecureEnvelope,
 ): SecureEnvelopePb {
   return create(SecureEnvelopePbSchema, {
     // SENDER_ID and MESSAGE_ID removed
@@ -54,7 +55,7 @@ export function secureEnvelopeToProto(
  * (This is now an internal helper)
  */
 export function secureEnvelopeFromProto(
-  envelopePb: SecureEnvelopePb
+  envelopePb: SecureEnvelopePb,
 ): SecureEnvelope {
   return {
     // SENDER_ID and MESSAGE_ID removed

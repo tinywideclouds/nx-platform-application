@@ -1,108 +1,93 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
 import { ConversationActionService } from './conversation-action.service';
-import { ConversationService } from './conversation.service';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
+import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { URN } from '@nx-platform-application/platform-types';
-import {
-  MessageTypingIndicator,
-  ImageContent,
-  MessageTypeImage,
-  TextContent,
-  MessageTypeText,
-} from '@nx-platform-application/messenger-domain-message-content';
 import { MockProvider } from 'ng-mocks';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 describe('ConversationActionService', () => {
   let service: ConversationActionService;
   let outbound: OutboundService;
-  let conversationState: ConversationService;
+  let storage: ChatStorageService;
 
-  const mockUrn = URN.parse('urn:contacts:user:me');
   const recipientUrn = URN.parse('urn:contacts:user:bob');
 
   beforeEach(() => {
+    vi.useFakeTimers();
+
     TestBed.configureTestingModule({
       providers: [
         ConversationActionService,
         MockProvider(OutboundService, {
-          // Mock the specific method used by the service
           sendFromConversation: vi.fn().mockResolvedValue({
             message: { id: 'msg-1' } as any,
             outcome: Promise.resolve('sent'),
           }),
         }),
-        MockProvider(ConversationService, {
-          upsertMessages: vi.fn(),
-          updateMessageStatusInSignal: vi.fn(),
-          selectedConversation: signal({
-            id: recipientUrn,
-            name: 'Bob',
-            conversationUrn: recipientUrn,
-          } as any),
+        MockProvider(ChatStorageService, {
+          markMessagesAsRead: vi.fn().mockResolvedValue(undefined),
         }),
       ],
     });
 
     service = TestBed.inject(ConversationActionService);
     outbound = TestBed.inject(OutboundService);
-    conversationState = TestBed.inject(ConversationService);
+    storage = TestBed.inject(ChatStorageService);
   });
 
-  it('should delegate sendMessage (Text) as an Object payload', async () => {
-    await service.sendMessage(recipientUrn, 'Hello');
-
-    const calls = vi.mocked(outbound.sendFromConversation).mock.calls;
-    expect(calls).toHaveLength(1);
-    const [to, type, payload] = calls[0];
-
-    expect(to.toString()).toBe(recipientUrn.toString());
-    expect(type.toString()).toBe(MessageTypeText.toString());
-
-    // ✅ VERIFY: Payload is the Object, not bytes
-    expect(payload).toEqual({ kind: 'text', text: 'Hello' } as TextContent);
-
-    expect(conversationState.upsertMessages).toHaveBeenCalled();
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('should delegate sendImage as an Object payload', async () => {
-    const imageData: ImageContent = {
-      kind: 'image',
-      inlineImage: 'data:abc',
-      mimeType: 'image/png',
-      width: 100,
-      height: 100,
-      sizeBytes: 1024,
-    } as any;
+  describe('sendMessage', () => {
+    it('should delegate sendMessage (Text) and reset throttle', async () => {
+      await service.sendTypingIndicator(recipientUrn);
+      expect(outbound.sendFromConversation).toHaveBeenCalledTimes(1);
 
-    await service.sendImage(recipientUrn, imageData);
+      await service.sendMessage(recipientUrn, 'Hello');
 
-    const calls = vi.mocked(outbound.sendFromConversation).mock.calls;
-    expect(calls).toHaveLength(1);
-    const [to, type, payload] = calls[0];
-
-    expect(to.toString()).toBe(recipientUrn.toString());
-    expect(type.toString()).toBe(MessageTypeImage.toString());
-
-    // ✅ VERIFY: Payload is the Object
-    expect(payload).toBe(imageData);
+      // Should allow immediate typing again
+      await service.sendTypingIndicator(recipientUrn);
+      expect(outbound.sendFromConversation).toHaveBeenCalledTimes(3);
+    });
   });
 
-  it('should delegate typing indicator as Bytes (Signal)', async () => {
-    await service.sendTypingIndicator(recipientUrn);
+  describe('sendTypingIndicator', () => {
+    it('should throttle outgoing indicators', async () => {
+      await service.sendTypingIndicator(recipientUrn);
+      await service.sendTypingIndicator(recipientUrn); // Dropped
+      expect(outbound.sendFromConversation).toHaveBeenCalledTimes(1);
 
-    const calls = vi.mocked(outbound.sendFromConversation).mock.calls;
-    expect(calls).toHaveLength(1);
-    const args = calls[0];
+      // Advance clock past the 3s throttle window
+      await vi.advanceTimersByTimeAsync(3001);
 
-    // Check Type
-    expect(args[1].toString()).toBe(MessageTypingIndicator.toString());
+      await service.sendTypingIndicator(recipientUrn);
+      expect(outbound.sendFromConversation).toHaveBeenCalledTimes(2);
+    });
+  });
 
-    // Check Payload is empty bytes
-    expect(args[2]).toBeInstanceOf(Uint8Array);
+  describe('markMessagesAsRead', () => {
+    it('should batch network requests via auditTime', async () => {
+      const ids1 = ['msg-1', 'msg-2'];
 
-    // Check Ephemeral Flag
-    expect(args[3]).toEqual(expect.objectContaining({ isEphemeral: true }));
+      // 1. Trigger Action
+      service.markMessagesAsRead(recipientUrn, ids1);
+
+      // Local storage hit immediately
+      expect(storage.markMessagesAsRead).toHaveBeenCalledWith(
+        recipientUrn,
+        ids1,
+      );
+
+      // Network NOT hit yet (waiting for auditTime)
+      expect(outbound.sendFromConversation).not.toHaveBeenCalled();
+
+      // 2. Advance Time and await async resolution
+      await vi.advanceTimersByTimeAsync(1100);
+
+      // 3. Network hit ONCE
+      expect(outbound.sendFromConversation).toHaveBeenCalledTimes(1);
+    });
   });
 });
