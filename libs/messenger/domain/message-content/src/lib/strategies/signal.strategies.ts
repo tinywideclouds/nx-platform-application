@@ -26,15 +26,23 @@ export class SignalParserStrategy implements ContentParserStrategy {
   parse(
     typeId: URN,
     content: Uint8Array,
-    _context: ParsingContext,
+    context: ParsingContext,
   ): ParsedMessage {
     if (typeId.equals(MessageTypeReadReceipt)) {
       const data = JSON.parse(this.decoder.decode(content)) as ReadReceiptData;
-      return { kind: 'signal', payload: { action: 'read-receipt', data } };
+      return {
+        kind: 'signal',
+        payload: { action: 'read-receipt', data },
+        conversationId: context.conversationId, // [UPDATE] Pass context
+      };
     }
 
     if (typeId.equals(MessageTypingIndicator)) {
-      return { kind: 'signal', payload: { action: 'typing', data: null } };
+      return {
+        kind: 'signal',
+        payload: { action: 'typing', data: null },
+        conversationId: context.conversationId, // [UPDATE] Pass context
+      };
     }
 
     throw new Error(`SignalStrategy cannot parse ${typeId.toString()}`);
@@ -53,26 +61,23 @@ export class SystemParserStrategy implements ContentParserStrategy {
     const decodedText = this.decoder.decode(content);
 
     try {
-      // Attempt to treat the system message as a structured signal
       const data = JSON.parse(decodedText);
 
-      // If the data contains our group status fields, categorize it correctly
       if (data && typeof data === 'object' && 'status' in data) {
         return {
           kind: 'content',
           conversationId: context.conversationId!,
           tags: context.tags,
           payload: {
-            kind: 'group-system', // ✅ This triggers the icons/formatting in the Pipe
+            kind: 'group-system',
             data: data,
           } as any,
         };
       }
     } catch (e) {
-      // If parsing fails, it's likely a legacy plain-text system message
+      // Legacy fallback
     }
 
-    // Fallback to the debug/plain-text behavior you had
     return {
       kind: 'content',
       conversationId: context.conversationId!,

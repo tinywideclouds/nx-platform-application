@@ -24,6 +24,7 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
+import { Temporal } from '@js-temporal/polyfill';
 
 @Injectable({ providedIn: 'root' })
 export class ConversationActionService {
@@ -42,8 +43,8 @@ export class ConversationActionService {
   private readonly READ_BATCH_TIME_MS = 1000;
 
   // --- Optimization: Throttling ---
-  private lastTypingSentTime = 0;
-  private readonly TYPING_THROTTLE_MS = 3000;
+  private lastTypingSentTime: Temporal.Instant | null = null;
+  private readonly TYPING_THROTTLE_SEC = 3;
 
   constructor() {
     // Modern Reactive Setup:
@@ -62,7 +63,7 @@ export class ConversationActionService {
    * Sends a text message. Returns the optimistic message object for UI updates.
    */
   async sendMessage(recipientUrn: URN, text: string): Promise<ChatMessage> {
-    this.lastTypingSentTime = 0; // Reset throttle immediately
+    this.lastTypingSentTime = null; // Reset throttle immediately
 
     const payload: TextContent = { kind: 'text', text };
     const typeId = MessageTypeText;
@@ -91,13 +92,15 @@ export class ConversationActionService {
   }
 
   async sendTypingIndicator(recipientUrn: URN): Promise<void> {
-    const now = Date.now();
-    // Efficient leading-edge throttle.
-    // We use imperative check here to avoid overhead of creating RxJS objects
-    // for every single keystroke.
-    if (now - this.lastTypingSentTime < this.TYPING_THROTTLE_MS) {
-      return;
+    const now = Temporal.Now.instant();
+
+    if (this.lastTypingSentTime) {
+      const diff = now.since(this.lastTypingSentTime).total({ unit: 'second' });
+      if (diff < this.TYPING_THROTTLE_SEC) {
+        return;
+      }
     }
+
     this.lastTypingSentTime = now;
 
     const typeId = MessageTypingIndicator;
@@ -158,7 +161,7 @@ export class ConversationActionService {
   ): Promise<void> {
     const data: ReadReceiptData = {
       messageIds,
-      readAt: new Date().toISOString(),
+      readAt: Temporal.Now.instant().toString(),
     };
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     const typeId = MessageTypeReadReceipt;

@@ -11,9 +11,14 @@ import { GroupProtocolService } from '@nx-platform-application/messenger-domain-
 import { MessageClassifier } from './message-classifier.service';
 import { MessageMutationHelper } from './message-mutation.helper';
 
+export interface TypingIndicator {
+  conversationId: URN;
+  senderId: URN;
+}
+
 export interface IngestionResult {
   messages: ChatMessage[];
-  typingIndicators: URN[];
+  typingIndicators: TypingIndicator[];
   readReceipts: string[];
   patchedMessageIds: string[];
 }
@@ -62,7 +67,7 @@ export class IngestionService {
     );
 
     // --- STEP 2: SORT & BUCKET ---
-    const fastLaneSignals: URN[] = [];
+    const typyingIndicators: TypingIndicator[] = [];
     const newMessages: ChatMessage[] = [];
     const receiptsToApply: Array<{ urn: URN; ids: string[] }> = [];
     const mutationsToRun: Array<any> = [];
@@ -73,10 +78,13 @@ export class IngestionService {
       acks.push(batch[i].id); // Always ack consumed items
 
       switch (intent.kind) {
-        case 'fast-lane':
-          fastLaneSignals.push(intent.urn);
+        case 'ephemeral':
+          typyingIndicators.push({
+            conversationId: intent.message.conversationId,
+            senderId: intent.message.senderId,
+          });
           break;
-        case 'slow-lane':
+        case 'durable':
           newMessages.push(intent.message);
           break;
         case 'receipt':
@@ -101,8 +109,8 @@ export class IngestionService {
     }
 
     // --- STEP 3: FAST LANE (Fire & Forget) ---
-    if (fastLaneSignals.length > 0) {
-      this.emitResult({ typingIndicators: fastLaneSignals });
+    if (typyingIndicators.length > 0) {
+      this.emitResult({ typingIndicators: typyingIndicators });
     }
 
     // --- STEP 4: DURABLE LANE (Store -> Notify) ---

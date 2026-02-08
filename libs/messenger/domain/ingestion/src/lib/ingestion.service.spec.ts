@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, Subject } from 'rxjs';
+import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from 'ng-mocks';
 
@@ -10,7 +10,10 @@ import { GroupProtocolService } from '@nx-platform-application/messenger-domain-
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { URN } from '@nx-platform-application/platform-types';
 
-import { MessageClassifier } from './message-classifier.service';
+import {
+  MessageClassifier,
+  IngestionIntent,
+} from './message-classifier.service';
 import { MessageMutationHelper } from './message-mutation.helper';
 import { AssetRevealData } from '@nx-platform-application/messenger-domain-message-content';
 
@@ -23,6 +26,8 @@ describe('IngestionService', () => {
 
   // Mock Objects
   const senderUrn = URN.parse('urn:contacts:user:alice');
+  const groupUrn = URN.parse('urn:messenger:group:alpha');
+
   const mockBatch = [
     { id: 'q1', envelope: {} },
     { id: 'q2', envelope: {} },
@@ -58,15 +63,20 @@ describe('IngestionService', () => {
     it('should split processing into Fast Lane and Slow Lane correctly', async () => {
       // SETUP: Classifier returns mixed intents
       vi.spyOn(classifier, 'classify')
+        // Item 1: Typing (SignalMessage)
         .mockResolvedValueOnce({
-          kind: 'fast-lane',
-          urn: senderUrn,
-          payload: {},
-        }) // Item 1: Typing
+          kind: 'ephemeral',
+          message: {
+            conversationId: groupUrn,
+            senderId: senderUrn,
+            payload: {},
+          },
+        } as IngestionIntent)
+        // Item 2: Message (Durable)
         .mockResolvedValueOnce({
-          kind: 'slow-lane',
+          kind: 'durable',
           message: { id: 'msg-real' } as any,
-        }); // Item 2: Message
+        } as IngestionIntent);
 
       // Spy on the output stream
       const emissionSpy = vi.fn();
@@ -79,8 +89,11 @@ describe('IngestionService', () => {
       // Expect first emission to be ONLY typing (no messages)
       expect(emissionSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          typingIndicators: [senderUrn],
           messages: [],
+          typingIndicators: [
+            // ✅ ASSERT: Structured Indicator
+            { conversationId: groupUrn, senderId: senderUrn },
+          ],
         }),
       );
 
@@ -100,7 +113,6 @@ describe('IngestionService', () => {
       );
 
       // VERIFY: Acknowledge
-      // Must ack both IDs (q1 and q2)
       expect(dataService.acknowledge).toHaveBeenCalledWith(['q1', 'q2']);
     });
 
@@ -119,7 +131,7 @@ describe('IngestionService', () => {
       vi.spyOn(classifier, 'classify').mockResolvedValue({
         kind: 'asset-reveal',
         patch: mockPatch,
-      });
+      } as IngestionIntent);
 
       // Mock helper success
       vi.spyOn(mutationHelper, 'applyAssetReveal').mockResolvedValue('m1');

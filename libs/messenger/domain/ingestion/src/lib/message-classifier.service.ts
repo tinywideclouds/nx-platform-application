@@ -20,11 +20,18 @@ import { QuarantineService } from '@nx-platform-application/messenger-domain-qua
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
+// ✅ NEW: Structured Signal carrier
+export interface SignalMessage {
+  conversationId: URN;
+  senderId: URN;
+  payload: any;
+}
+
 // --- THE CONTRACT ---
 // This tells the Ingestion Service exactly what to do next.
 export type IngestionIntent =
-  | { kind: 'fast-lane'; urn: URN; payload: any } // Typing, Pings (Ephemeral)
-  | { kind: 'slow-lane'; message: ChatMessage } // Real Messages (Durable)
+  | { kind: 'ephemeral'; message: SignalMessage } // ✅ UPDATED: Structured Ephemeral
+  | { kind: 'durable'; message: ChatMessage } // Real Messages (Durable)
   | { kind: 'receipt'; urn: URN; messageIds: string[] } // Receipts (Metadata)
   | { kind: 'asset-reveal'; patch: AssetRevealData } // Patches
   | { kind: 'group-invite'; data: any } // Protocol Action
@@ -76,7 +83,12 @@ export class MessageClassifier {
 
       // 4. Determine Intent
       if (parsed.kind === 'signal') {
-        return this.classifySignal(parsed.payload, sender);
+        // ✅ FIX: Resolve Conversation ID for Signals
+        const conversationId = parsed.conversationId
+          ? parsed.conversationId
+          : sender;
+
+        return this.classifySignal(parsed.payload, sender, conversationId);
       } else if (parsed.kind === 'content') {
         return this.classifyContent(parsed, transport, item.id, sender);
       }
@@ -88,10 +100,23 @@ export class MessageClassifier {
     }
   }
 
-  private classifySignal(payload: any, sender: URN): IngestionIntent {
+  private classifySignal(
+    payload: any,
+    sender: URN,
+    conversationId: URN,
+  ): IngestionIntent {
     switch (payload.action) {
       case 'typing':
-        return { kind: 'fast-lane', urn: sender, payload };
+      case 'ping':
+        // ✅ UPDATED: Return structured message
+        return {
+          kind: 'ephemeral',
+          message: {
+            conversationId,
+            senderId: sender,
+            payload,
+          },
+        };
       case 'read-receipt':
         return {
           kind: 'receipt',
@@ -151,6 +176,6 @@ export class MessageClassifier {
       payloadBytes: this.parser.serialize(parsed.payload),
     };
 
-    return { kind: 'slow-lane', message };
+    return { kind: 'durable', message };
   }
 }

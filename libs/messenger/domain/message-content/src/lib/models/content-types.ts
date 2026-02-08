@@ -116,13 +116,11 @@ export interface ReadReceiptData {
   readAt: string;
 }
 
-// ✅ NEW: Asset Reveal Data
 export interface AssetRevealData {
   messageId: string; // The ID of the message to patch
   assets: Record<string, AssetResult>;
 }
 
-// ✅ UPDATE: Add asset-reveal to SignalPayload union
 export interface SignalPayload {
   action:
     | 'read-receipt'
@@ -143,5 +141,5 @@ export type ParsedMessage =
       conversationId: URN;
       tags: URN[];
     }
-  | { kind: 'signal'; payload: SignalPayload }
+  | { kind: 'signal'; payload: SignalPayload; conversationId?: URN }
   | { kind: 'unknown'; rawType: URN; error?: string };

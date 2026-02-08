@@ -25,6 +25,7 @@ import {
 import {
   IngestionService,
   IngestionResult,
+  TypingIndicator,
 } from '@nx-platform-application/messenger-domain-ingestion';
 import { ChatModerationFacade } from '@nx-platform-application/messenger-state-moderation';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
@@ -37,6 +38,8 @@ export interface UIChatParticipant extends Resource {
 }
 
 export interface UIConversation extends Conversation, UIChatParticipant {}
+
+type TypingMap = Map<string, Map<string, Temporal.Instant>>;
 
 @Injectable({ providedIn: 'root' })
 export class ChatDataService {
@@ -58,9 +61,7 @@ export class ChatDataService {
   private readonly identityCache = signal<Map<string, ContactSummary>>(
     new Map(),
   );
-  public readonly typingActivity = signal<Map<string, Temporal.Instant>>(
-    new Map(),
-  );
+  public readonly typingActivity = signal<TypingMap>(new Map());
 
   public readonly uiConversations: Signal<UIConversation[]> = computed(() => {
     const conversations = this.activeConversations();
@@ -224,24 +225,50 @@ export class ChatDataService {
   }
 
   private updateTypingActivity(
-    indicators: URN[],
+    indicators: TypingIndicator[],
     realMessages: ChatMessage[],
   ): void {
-    this.typingActivity.update((map) => {
-      const newMap = new Map(map);
+    // We update the Nested Map: Conversation -> User -> Time
+    this.typingActivity.update((currentMap) => {
+      // Deep Clone (Map of Maps)
+      const nextMap = new Map<string, Map<string, Temporal.Instant>>();
+
+      // 1. Copy existing state
+      for (const [convId, userMap] of currentMap.entries()) {
+        nextMap.set(convId, new Map(userMap));
+      }
+
       const now = Temporal.Now.instant();
 
-      // Add new indicators
-      indicators.forEach((urn) => newMap.set(urn.toString(), now));
+      // 2. Add new indicators (Scoped to Conversation)
+      indicators.forEach((ind) => {
+        const convKey = ind.conversationId.toString();
+        const userKey = ind.senderId.toString();
 
-      // Remove typing bubble if the user actually sent a message
+        if (!nextMap.has(convKey)) {
+          nextMap.set(convKey, new Map());
+        }
+        nextMap.get(convKey)!.set(userKey, now);
+      });
+
+      // 3. Clear typing status if a real message arrives
       realMessages.forEach((msg) => {
-        const key = msg.senderId.toString();
-        if (newMap.has(key)) {
-          newMap.delete(key);
+        const convKey = msg.conversationUrn.toString();
+        const userKey = msg.senderId.toString();
+
+        if (nextMap.has(convKey)) {
+          const userMap = nextMap.get(convKey)!;
+          if (userMap.has(userKey)) {
+            userMap.delete(userKey);
+            // Cleanup empty conversations
+            if (userMap.size === 0) {
+              nextMap.delete(convKey);
+            }
+          }
         }
       });
-      return newMap;
+
+      return nextMap;
     });
   }
 

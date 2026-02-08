@@ -91,6 +91,7 @@ import { ContactsStateService } from '@nx-platform-application/contacts-state';
 import {
   DirectoryQueryApi,
   DirectoryMutationApi,
+  DirectoryManagementApi,
 } from '@nx-platform-application/directory-api';
 
 // ✅ NEW: Directory APIs
@@ -177,12 +178,14 @@ const directoryProviders = environment.useMocks
   ? [
       { provide: DirectoryQueryApi, useExisting: MockDirectoryService },
       { provide: DirectoryMutationApi, useExisting: MockDirectoryService },
+      { provide: DirectoryManagementApi, useExisting: MockDirectoryService },
       MockDirectoryService, // Ensure Class is available for Driver
     ]
   : [
       // TODO: Add Real HTTP Directory Service here when ready
       { provide: DirectoryQueryApi, useExisting: DirectoryService },
       { provide: DirectoryMutationApi, useExisting: DirectoryService },
+      { provide: DirectoryManagementApi, useExisting: DirectoryService },
     ];
 
 const tokenProviders = [

@@ -175,12 +175,21 @@ export class OutboundService {
     targets: OutboundTarget[],
     ctx: SendContext,
   ) {
-    const payload = ctx.optimisticMsg.payloadBytes || new Uint8Array([]);
+    // ✅ FIX: Wrap payload to ensure Conversation ID is transmitted
+    // This was previously sending "Naked" bytes, causing the receiver
+    // to lose the Group context.
+    const rawPayload = ctx.optimisticMsg.payloadBytes || new Uint8Array([]);
+    const wirePayload = this.metadataService.wrap(
+      rawPayload,
+      ctx.conversationUrn,
+      ctx.optimisticMsg.tags || [],
+    );
+
     for (const target of targets) {
       this.outboxWorker.sendEphemeralBatch(
         target.recipients,
         ctx.optimisticMsg.typeId,
-        payload,
+        wirePayload, // ✅ Sending wrapped payload
       );
     }
   }

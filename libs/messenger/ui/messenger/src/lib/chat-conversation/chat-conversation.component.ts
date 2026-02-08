@@ -6,18 +6,19 @@ import {
   effect,
   computed,
   viewChild,
+  DestroyRef,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { interval } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { interval, Subject, asyncScheduler } from 'rxjs';
+import { map, throttleTime } from 'rxjs/operators';
 import { CommonModule, DatePipe } from '@angular/common';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Temporal } from '@js-temporal/polyfill';
 
-// ✅ STATE LAYERS (Strictly No Domain)
+// ✅ STATE LAYERS
 import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
@@ -68,13 +69,14 @@ export class ChatConversationComponent {
   private chatData = inject(ChatDataService);
   private mediaFacade = inject(ChatMediaFacade);
   private identityFacade = inject(ChatIdentityFacade);
+  private destroyRef = inject(DestroyRef);
 
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
 
   autoScroll = viewChild.required<AutoScrollDirective>('autoScroll');
 
-  // --- STATE SIGNALS (Mapped from Facades) ---
+  // --- STATE SIGNALS ---
   chatMessages = this.activeChat.messages;
   currentUserUrn = this.identityFacade.myUrn;
   selectedConversation = this.activeChat.selectedConversation;
@@ -82,7 +84,7 @@ export class ChatConversationComponent {
   firstUnreadId = this.activeChat.firstUnreadId;
   readCursors = this.activeChat.readCursors;
 
-  // Global Typing Data
+  // ✅ Global Typing Data (Nested Map)
   typingActivity = this.chatData.typingActivity;
 
   // Local UI State
@@ -92,6 +94,9 @@ export class ChatConversationComponent {
   readonly TEXT_MESSAGE = TEXT_MESSAGE_TYPE;
   readonly IMAGE_MESSAGE = IMAGE_MESSAGE_TYPE;
   readonly GROUP_INVITE_MESSAGE = GROUP_INVITE_TYPE;
+
+  // Throttling Trigger
+  private readonly typingTrigger$ = new Subject<void>();
 
   private secondPulse = toSignal(
     interval(1000).pipe(map(() => Temporal.Now.instant())),
@@ -109,6 +114,19 @@ export class ChatConversationComponent {
         onCleanup(() => clearTimeout(timer));
       }
     });
+
+    // ✅ Typing Throttler
+    this.typingTrigger$
+      .pipe(
+        throttleTime(3000, asyncScheduler, { leading: true, trailing: false }),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        const recipient = this.selectedConversation()?.id;
+        if (recipient) {
+          this.activeChat.sendTypingIndicator(recipient);
+        }
+      });
   }
 
   // --- UI COMPUTED HELPERS ---
@@ -124,21 +142,28 @@ export class ChatConversationComponent {
 
   showTypingIndicator = computed(() => {
     const conversation = this.selectedConversation();
-    const activityMap = this.typingActivity();
-    const _pulse = this.secondPulse();
-
     if (!conversation) return false;
 
-    // Key is User URN (which matches Conversation ID in 1:1)
-    const key = conversation.id.toString();
-    const lastActive = activityMap.get(key);
+    const globalActivity = this.typingActivity();
+    // ✅ FIX: Look up the specific conversation's activity map
+    const conversationActivity = globalActivity.get(conversation.id.toString());
 
-    if (!lastActive) return false;
+    if (!conversationActivity || conversationActivity.size === 0) return false;
 
+    const _pulse = this.secondPulse(); // Reactivity trigger
     const now = Temporal.Now.instant();
-    const diff = now.since(lastActive).total({ unit: 'seconds' });
+    const myUrnStr = this.currentUserUrn()?.toString();
 
-    return diff < 5;
+    // Scan for ANY active typist in this conversation
+    for (const [userId, lastActive] of conversationActivity.entries()) {
+      // Don't show my own typing (echo cancellation)
+      if (userId === myUrnStr) continue;
+
+      const diff = now.since(lastActive).total({ unit: 'seconds' });
+      if (diff < 5) return true;
+    }
+
+    return false;
   });
 
   isMyMessage = (msg: ChatMessage): boolean => {
@@ -218,13 +243,9 @@ export class ChatConversationComponent {
   // --- ACTIONS ---
 
   onTyping(): void {
-    const recipient = this.selectedConversation()?.id;
-    if (recipient) {
-      this.activeChat.sendTypingIndicator(recipient);
-    }
+    this.typingTrigger$.next();
   }
 
-  // Matches (send)="onSendDraft($event)"
   async onSendDraft(draft: DraftMessage): Promise<void> {
     const recipient = this.selectedConversation()?.id;
     if (!recipient) return;
@@ -232,10 +253,8 @@ export class ChatConversationComponent {
     try {
       if (draft.attachments?.length) {
         const item = draft.attachments[0];
-        // ✅ State Facade for Media
         await this.mediaFacade.sendImage(recipient, item.file, draft.text);
       } else if (draft.text?.trim()) {
-        // ✅ State Facade for Text
         await this.activeChat.sendMessage(recipient, draft.text);
       }
     } catch (e) {
@@ -254,7 +273,6 @@ export class ChatConversationComponent {
 
   async onAcceptInvite(msg: ChatMessage): Promise<void> {
     try {
-      // ✅ Delegated to ActiveChatFacade (which must handle the Domain call)
       const groupUrn = await this.activeChat.acceptGroupInvite(msg);
       if (groupUrn) {
         this.router.navigate(['/messenger', 'conversations', groupUrn]);
@@ -265,7 +283,6 @@ export class ChatConversationComponent {
   }
 
   async onRejectInvite(msg: ChatMessage): Promise<void> {
-    // ✅ Delegated to ActiveChatFacade
     await this.activeChat.rejectGroupInvite(msg);
   }
 }
