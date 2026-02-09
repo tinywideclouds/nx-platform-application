@@ -7,7 +7,7 @@
     #autoScroll="appAutoScroll"
     class="flex-grow overflow-y-auto px-4 pt-4 pb-2 space-y-2 bg-gray-50 scroll-smooth"
   >
-    <h3>{{ myIdentity()?.toString() }}</h3>
+    <h3>{{ selectedConversation()?.id?.toString() }}</h3>
     <div class="mx-auto max-w-sm min-h-full flex flex-col w-full">
       @if (chatMessages().length === 0 && isLoading()) {
         <div
@@ -42,7 +42,6 @@
           }
 
           <div>
-            <div>{{ msg.senderId.toString() }}</div>
             <chat-conversation-row
               [message]="msg"
               [isMine]="msg.senderId.equals(myIdentity())"

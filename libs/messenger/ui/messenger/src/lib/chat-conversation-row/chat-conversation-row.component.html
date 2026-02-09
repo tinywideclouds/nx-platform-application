@@ -1,5 +1,4 @@
 <div class="flex w-full mb-1 transition-all" [ngClass]="layoutClass()">
-  <div>{{ isMine() }}</div>
   <div class="relative max-w-[85%] group flex flex-col">
     @if (isGroup() && !isMine() && !isSystem()) {
       <span

@@ -35,7 +35,7 @@
 
       <span>{{ ts | date: 'shortTime' }}</span>
 
-      <span> {{ status() }}</span>
+      <!-- <span> {{ status() }}</span> -->
 
       @if (direction() === 'outbound' && status() !== 'reference') {
         <span [matTooltip]="statusTooltip()" matTooltipPosition="left">

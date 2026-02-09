@@ -17,6 +17,8 @@ import {
 import {
   ConversationService,
   ConversationActionService,
+  ConversationResolution,
+  ConversationKind,
 } from '@nx-platform-application/messenger-domain-conversation';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
@@ -41,9 +43,13 @@ export class ActiveChatFacade {
 
   // --- STATE SIGNALS ---
   public readonly selectedConversation = signal<Conversation | null>(null);
-  public readonly membershipStatus = signal<'joined' | 'invited' | 'unknown'>(
-    'unknown',
-  );
+
+  // NEW: Holds the resolved kind (Direct vs Broadcast vs Consensus)
+  public readonly conversationKind = signal<ConversationKind | null>(null);
+
+  public readonly membershipStatus = signal<
+    'joined' | 'invited' | 'unknown' | 'active' | 'declined'
+  >('unknown');
 
   public readonly isLoading = signal(false);
   // ALIAS: Required by AppStateService (Backward Compatibility)
@@ -61,6 +67,12 @@ export class ActiveChatFacade {
 
   // --- COMPUTED VIEWS ---
 
+  // NEW: UI Helper for Invitation Mode
+  public readonly isInvitationPending = computed(() => {
+    const kind = this.conversationKind();
+    return kind?.type === 'consensus' && kind.myStatus === 'invited';
+  });
+
   public readonly messages = computed(() => {
     const raw = this._rawMessages();
     const status = this.membershipStatus();
@@ -68,9 +80,11 @@ export class ActiveChatFacade {
     const me = this.session.snapshot.networkUrn;
 
     if (active?.id.entityType !== 'group') return raw;
-    if (status === 'joined') return raw;
+    if (status === 'joined' || status === 'active') return raw;
 
     // If invited/unknown in a group, only show specific message types
+    // Note: The Service now also pre-filters this in loadInitialMessages,
+    // but we keep this safeguard for live updates/ingestion.
     return raw.filter(
       (m) =>
         m.typeId.equals(MessageGroupInviteResponse) ||
@@ -179,16 +193,31 @@ export class ActiveChatFacade {
     }
 
     try {
-      const ctx = await this.service.loadContext(urn);
+      // Phase 1: Resolution (Identify & Permissions)
+      const resolution = await this.service.resolveConversation(urn);
 
-      this.selectedConversation.set(ctx.conversation);
-      this._rawMessages.set(ctx.messages);
-      this.membershipStatus.set(ctx.membershipStatus);
-      this.genesisReached.set(ctx.genesisReached);
-      this.isRecipientKeyMissing.set(ctx.isRecipientKeyMissing);
-      this.firstUnreadId.set(ctx.firstUnreadId);
+      this.selectedConversation.set(resolution.conversation);
+      this.conversationKind.set(resolution.kind);
+      this.isRecipientKeyMissing.set(resolution.isRecipientKeyMissing);
 
-      this.processLocalRead(ctx.messages);
+      // Map membership status from Kind
+      if (resolution.kind.type === 'consensus') {
+        this.membershipStatus.set(resolution.kind.myStatus as any);
+      } else {
+        this.membershipStatus.set('joined');
+      }
+
+      // Phase 2: Content Load (Filtered by Service based on Kind)
+      const result = await this.service.loadInitialMessages(
+        urn,
+        resolution.kind,
+      );
+
+      this._rawMessages.set(result.messages);
+      this.genesisReached.set(result.genesisReached);
+      this.firstUnreadId.set(result.firstUnreadId);
+
+      this.processLocalRead(result.messages);
     } finally {
       this.isLoading.set(false);
     }
@@ -335,6 +364,7 @@ export class ActiveChatFacade {
 
   private reset() {
     this.selectedConversation.set(null);
+    this.conversationKind.set(null);
     this._rawMessages.set([]);
     this.membershipStatus.set('unknown');
     this.firstUnreadId.set(null);

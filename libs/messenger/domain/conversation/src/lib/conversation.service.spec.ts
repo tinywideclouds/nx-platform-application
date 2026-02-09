@@ -1,5 +1,7 @@
+// libs/messenger/domain/conversation/src/lib/conversation.service.spec.ts
+
 import { TestBed } from '@angular/core/testing';
-import { ConversationService } from './conversation.service';
+import { ConversationService, ConversationKind } from './conversation.service';
 import {
   ISODateTimeString,
   URN,
@@ -17,6 +19,7 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   MessageContentParser,
   MessageTypeText,
+  MessageTypeSystem,
 } from '@nx-platform-application/messenger-domain-message-content';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
@@ -99,21 +102,73 @@ describe('ConversationService', () => {
     contentParser = TestBed.inject(MessageContentParser);
   });
 
-  describe('loadContext', () => {
-    it('should fetch conversation data and mark as read', async () => {
-      const result = await service.loadContext(groupUrn);
+  describe('resolveConversation', () => {
+    it('should identify a 1:1 conversation and check keys', async () => {
+      const urn = URN.parse('urn:contacts:user:alice');
 
-      expect(storage.getConversation).toHaveBeenCalledWith(groupUrn);
-      expect(storage.markConversationAsRead).toHaveBeenCalledWith(groupUrn);
-      expect(historyReader.getMessages).toHaveBeenCalled();
+      const result = await service.resolveConversation(urn);
 
-      // Verify Return Structure
-      expect(result.messages).toHaveLength(1);
-      expect(result.messages[0].id).toBe('msg-1');
-      expect(result.genesisReached).toBe(true);
+      expect(storage.getConversation).toHaveBeenCalledWith(urn);
+      // Kind is returned ALONGSIDE the conversation, not inside it
+      expect(result.kind).toEqual({ type: 'direct', partnerId: urn });
+      expect(result.isRecipientKeyMissing).toBe(false);
+    });
+
+    it('should identify a Consensus Group when found in Directory', async () => {
+      const directory = TestBed.inject(DirectoryQueryApi);
+      vi.mocked(directory.getGroup).mockResolvedValue({
+        urn: groupUrn,
+        memberState: { [myUrn.toString()]: 'joined' },
+      } as any);
+
+      const result = await service.resolveConversation(groupUrn);
+
+      expect(result.kind).toEqual(
+        expect.objectContaining({
+          type: 'consensus',
+          myStatus: 'joined',
+        }),
+      );
     });
   });
 
+  describe('loadInitialMessages', () => {
+    it('should return all messages for a Joined Consensus Group', async () => {
+      const kind: ConversationKind = {
+        type: 'consensus',
+        myStatus: 'joined',
+        memberCount: 5,
+      };
+
+      const result = await service.loadInitialMessages(groupUrn, kind);
+
+      expect(historyReader.getMessages).toHaveBeenCalled();
+      expect(result.messages).toHaveLength(1); // msgText
+    });
+
+    it('should FILTER non-signal messages for an Invited Consensus Group', async () => {
+      // 1. Setup: Mixed History (Text + System)
+      const msgSystem = { ...msgText, id: 'sys-1', typeId: MessageTypeSystem };
+      vi.mocked(historyReader.getMessages).mockResolvedValue({
+        messages: [msgText, msgSystem], // Text, System
+        genesisReached: true,
+      });
+
+      // 2. Action: Load as 'Invited'
+      const kind: ConversationKind = {
+        type: 'consensus',
+        myStatus: 'invited',
+        memberCount: 5,
+      };
+      const result = await service.loadInitialMessages(groupUrn, kind);
+
+      // 3. Verify: Text is filtered out, System remains
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].id).toBe('sys-1');
+    });
+  });
+
+  // ... (Rest of tests remain unchanged)
   describe('recoverFailedMessage', () => {
     it('should parse bytes, delete message, and return text', async () => {
       const result = await service.recoverFailedMessage('msg-1');

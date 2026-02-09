@@ -27,12 +27,7 @@ import {
   ChatMessage,
   DraftMessage,
 } from '@nx-platform-application/messenger-types';
-import {
-  messageTagBroadcast,
-  TEXT_MESSAGE_TYPE,
-  IMAGE_MESSAGE_TYPE,
-  GROUP_INVITE_TYPE,
-} from '@nx-platform-application/messenger-domain-message-content';
+import { messageTagBroadcast } from '@nx-platform-application/messenger-domain-message-content';
 
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
 import {
@@ -67,7 +62,6 @@ export class ChatConversationComponent {
   private chatData = inject(ChatDataService);
   private mediaFacade = inject(ChatMediaFacade);
   private identityFacade = inject(ChatIdentityFacade);
-  private destroyRef = inject(DestroyRef);
 
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
@@ -77,9 +71,6 @@ export class ChatConversationComponent {
   // --- STATE SIGNALS ---
   chatMessages = this.activeChat.messages;
 
-  // ✅ Identity: Single Source of Truth
-  // 'myUrn' in the Facade already calculates the Network URN (e.g. urn:lookup:email...)
-  // which matches exactly what OutboundService stamps on messages.
   myIdentity = this.identityFacade.myUrn;
 
   selectedConversation = this.activeChat.selectedConversation;
@@ -133,8 +124,10 @@ export class ChatConversationComponent {
     return map.get(msgId) || [];
   }
 
+  // REFACTOR: Use the Facade's resolved Kind as the source of truth
   isGroupConversation = computed(() => {
-    return this.selectedConversation()?.id.entityType === 'group';
+    const kind = this.activeChat.conversationKind();
+    return kind?.type === 'consensus' || kind?.type === 'broadcast';
   });
 
   showTypingIndicator = computed(() => {

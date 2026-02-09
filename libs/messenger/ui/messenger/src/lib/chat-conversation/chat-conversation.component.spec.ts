@@ -9,6 +9,7 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+import { ConversationKind } from '@nx-platform-application/messenger-domain-conversation';
 import { AutoScrollDirective } from '@nx-platform-application/platform-ui-toolkit';
 import { signal } from '@angular/core';
 import { vi, describe, it, beforeEach, expect, afterEach } from 'vitest';
@@ -39,6 +40,11 @@ const mockActiveChat = {
   isLoading: signal(false),
   firstUnreadId: signal(null),
   readCursors: signal(new Map()),
+  // NEW: Mock Kind
+  conversationKind: signal<ConversationKind | null>({
+    type: 'direct',
+    partnerId: mockRecipientUrn,
+  }),
   sendTypingIndicator: vi.fn(),
   sendMessage: vi.fn(),
   recoverFailedMessage: vi.fn(),
@@ -88,6 +94,35 @@ describe('ChatConversationComponent', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  describe('Group Identification', () => {
+    it('should identify Consensus Group as a group', () => {
+      mockActiveChat.conversationKind.set({
+        type: 'consensus',
+        myStatus: 'joined',
+      });
+      fixture.detectChanges();
+      expect(component.isGroupConversation()).toBe(true);
+    });
+
+    it('should identify Broadcast List as a group', () => {
+      mockActiveChat.conversationKind.set({
+        type: 'broadcast',
+        recipients: [],
+      });
+      fixture.detectChanges();
+      expect(component.isGroupConversation()).toBe(true);
+    });
+
+    it('should NOT identify Direct chat as a group', () => {
+      mockActiveChat.conversationKind.set({
+        type: 'direct',
+        partnerId: mockRecipientUrn,
+      });
+      fixture.detectChanges();
+      expect(component.isGroupConversation()).toBe(false);
+    });
   });
 
   describe('Typing Indicators (Display)', () => {

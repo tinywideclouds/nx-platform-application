@@ -11,6 +11,8 @@ import {
 import {
   ConversationService,
   ConversationActionService,
+  ConversationResolution,
+  ConversationKind,
 } from '@nx-platform-application/messenger-domain-conversation';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
@@ -54,6 +56,22 @@ describe('ActiveChatFacade', () => {
     }),
     markMessagesAsRead: vi.fn(),
     sendTypingIndicator: vi.fn(),
+    sendImage: vi.fn().mockResolvedValue(mockMsg('img-1', 'Image', myUrn)),
+    sendContactShare: vi
+      .fn()
+      .mockResolvedValue(mockMsg('share-1', 'Contact', myUrn)),
+  };
+
+  const mockKind: ConversationKind = {
+    type: 'consensus',
+    myStatus: 'joined',
+    memberCount: 3,
+  };
+
+  const mockResolution: ConversationResolution = {
+    conversation: { id: chatUrn, name: 'Alpha' } as any,
+    kind: mockKind,
+    isRecipientKeyMissing: false,
   };
 
   beforeEach(() => {
@@ -63,13 +81,11 @@ describe('ActiveChatFacade', () => {
       providers: [
         ActiveChatFacade,
         MockProvider(ConversationService, {
-          // Default happy path for loading
-          loadContext: vi.fn().mockResolvedValue({
-            conversation: { id: chatUrn, name: 'Chat' },
+          // New 2-Stage Load Mocks
+          resolveConversation: vi.fn().mockResolvedValue(mockResolution),
+          loadInitialMessages: vi.fn().mockResolvedValue({
             messages: [],
-            membershipStatus: 'joined',
             genesisReached: true,
-            isRecipientKeyMissing: false,
             firstUnreadId: null,
           }),
           fetchMessages: vi.fn().mockResolvedValue([]),
@@ -103,18 +119,27 @@ describe('ActiveChatFacade', () => {
   describe('Initialization & Loading', () => {
     it('should load conversation context and update signals', async () => {
       const messages = [mockMsg('m1', 'Hi', myUrn)];
-      vi.mocked(service.loadContext).mockResolvedValue({
-        conversation: { id: chatUrn, name: 'Alpha' },
+
+      // 1. Resolve
+      vi.mocked(service.resolveConversation).mockResolvedValue(mockResolution);
+
+      // 2. Load Content
+      vi.mocked(service.loadInitialMessages).mockResolvedValue({
         messages,
-        membershipStatus: 'joined',
         genesisReached: true,
-        isRecipientKeyMissing: false,
         firstUnreadId: 'm1',
-      } as any);
+      });
 
       await facade.loadConversation(chatUrn);
 
+      expect(service.resolveConversation).toHaveBeenCalledWith(chatUrn);
+      expect(service.loadInitialMessages).toHaveBeenCalledWith(
+        chatUrn,
+        mockKind,
+      );
+
       expect(facade.selectedConversation()?.name).toBe('Alpha');
+      expect(facade.conversationKind()).toEqual(mockKind);
       expect(facade.messages()).toHaveLength(1);
       expect(facade.membershipStatus()).toBe('joined');
       expect(facade.firstUnreadId()).toBe('m1');
@@ -123,6 +148,7 @@ describe('ActiveChatFacade', () => {
     it('should reset state when loading null', async () => {
       await facade.loadConversation(null);
       expect(facade.selectedConversation()).toBeNull();
+      expect(facade.conversationKind()).toBeNull();
       expect(facade.messages()).toEqual([]);
     });
   });

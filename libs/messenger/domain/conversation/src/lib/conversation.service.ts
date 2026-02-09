@@ -1,3 +1,5 @@
+// libs/messenger/domain/conversation/src/lib/conversation.service.ts
+
 import { Injectable, inject } from '@angular/core';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { Temporal } from '@js-temporal/polyfill';
@@ -14,17 +16,36 @@ import {
 
 import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
 import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
-import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
+import {
+  MessageContentParser,
+  MessageGroupInvite,
+  MessageGroupInviteResponse,
+  MessageTypeSystem,
+} from '@nx-platform-application/messenger-domain-message-content';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { GroupMemberStatus } from '@nx-platform-application/directory-types';
 
-export interface ConversationContext {
+// --- NEW TYPES ---
+
+export type ConversationKind =
+  | { type: 'direct'; partnerId: URN }
+  | { type: 'broadcast'; recipients: URN[] }
+  | {
+      type: 'consensus';
+      myStatus: GroupMemberStatus | 'unknown';
+      memberCount?: number;
+    };
+
+export interface ConversationResolution {
   conversation: Conversation;
-  messages: ChatMessage[];
-  membershipStatus: GroupMemberStatus | 'unknown';
-  genesisReached: boolean;
+  kind: ConversationKind;
   isRecipientKeyMissing: boolean;
+}
+
+export interface InitialMessageLoad {
+  messages: ChatMessage[];
+  genesisReached: boolean;
   firstUnreadId: string | null;
 }
 
@@ -42,58 +63,69 @@ export class ConversationService {
   private contactsQuery = inject(ContactsQueryApi);
 
   /**
-   * PURE IO: Fetches all data required to render a conversation.
-   * Does not hold state.
+   * PHASE 1: RESOLUTION
+   * Identifies the nature of the conversation and the user's status within it.
+   * Does NOT load heavy message history.
    */
-  async loadContext(urn: URN): Promise<ConversationContext> {
-    let [conversation, membershipStatus] = await Promise.all([
-      this.storage.getConversation(urn),
-      this.resolveMembership(urn),
-    ]);
+  async resolveConversation(urn: URN): Promise<ConversationResolution> {
+    // 1. Fetch Metadata (Local Storage & Directory)
+    let conversation = await this.storage.getConversation(urn);
+    const kind = await this.determineKind(urn);
 
+    // 2. Fallback: Create ephemeral conversation object if not in DB
     if (!conversation) {
-      const contact = await this.contactsQuery.resolveIdentity(urn);
-      conversation = {
-        id: urn,
-        name: contact?.alias || 'New Chat',
-        lastActivityTimestamp: Temporal.Now.instant().toString() as any,
-        snippet: '',
-        unreadCount: 0,
-        genesisTimestamp: null,
-        lastModified: Temporal.Now.instant().toString() as any,
-      };
+      conversation = await this.createEphemeralConversation(urn);
     }
 
-    // 3. Mark Read
-    const unreadCount = conversation.unreadCount || 0;
-    // TODO - check this logic - why is this calling markConversationAsRead???
-    // actually I'm going to comment it out and see if it breaks anything (it shouldn't)
-    // await this.storage.markConversationAsRead(urn);
-
-    // 4. Check Keys
+    // 3. Check Keys (Security)
     const hasKeys = await this.keyService.checkRecipientKeys(urn);
 
-    // 5. Load History
-    const limit = Math.max(DEFAULT_PAGE_SIZE, unreadCount + 5);
+    return {
+      conversation,
+      kind,
+      isRecipientKeyMissing: !hasKeys,
+    };
+  }
+
+  /**
+   * PHASE 2: LOADING
+   * Fetches messages, applying filters based on the resolution kind.
+   */
+  async loadInitialMessages(
+    urn: URN,
+    kind: ConversationKind,
+  ): Promise<InitialMessageLoad> {
+    const conversation = await this.storage.getConversation(urn);
+    const limit = Math.max(
+      DEFAULT_PAGE_SIZE,
+      (conversation?.unreadCount || 0) + 5,
+    );
+
+    // 2. Load History
     const history = await this.historyReader.getMessages({
       conversationUrn: urn,
       limit,
     });
 
-    // 6. Calculate Unread Marker
-    const messages = history.messages.reverse(); // Oldest -> Newest
+    let messages = history.messages.reverse(); // Oldest -> Newest
+
+    // 3. Apply "Restricted View" Filter for Consensus Groups
+    // Only show Signals if invited; hide content until joined.
+    if (kind.type === 'consensus' && kind.myStatus === 'invited') {
+      messages = messages.filter((m) => this.isSignalMessage(m));
+    }
+
+    // 4. Calculate Unread Marker
     let firstUnreadId: string | null = null;
+    const unreadCount = conversation?.unreadCount || 0;
     if (unreadCount > 0 && messages.length > 0) {
       const boundary = Math.max(0, messages.length - unreadCount);
       if (messages[boundary]) firstUnreadId = messages[boundary].id;
     }
 
     return {
-      conversation,
       messages,
-      membershipStatus,
       genesisReached: history.genesisReached,
-      isRecipientKeyMissing: !hasKeys,
       firstUnreadId,
     };
   }
@@ -111,8 +143,6 @@ export class ConversationService {
       limit: DEFAULT_PAGE_SIZE,
       beforeTimestamp,
     });
-    // HistoryReader returns Newest -> Oldest.
-    // UI usually prepends these.
     return result.messages;
   }
 
@@ -176,23 +206,49 @@ export class ConversationService {
 
   // --- HELPERS ---
 
-  private async resolveMembership(
-    urn: URN,
-  ): Promise<GroupMemberStatus | 'unknown'> {
-    if (urn.entityType !== 'group') return 'joined';
-
-    try {
-      const group = await this.directory.getGroup(urn);
-      const myUrn = this.sessionService.snapshot.networkUrn?.toString();
-
-      if (group && myUrn) {
-        // Direct access. If the user is in the map, return the status.
-        // If undefined (not in map), fallback to 'unknown'.
-        return group.memberState[myUrn] ?? 'unknown';
+  private async determineKind(urn: URN): Promise<ConversationKind> {
+    // 1. Consensus Group (Directory)
+    if (urn.entityType === 'group') {
+      try {
+        const group = await this.directory.getGroup(urn);
+        if (group) {
+          const myUrn = this.sessionService.snapshot.networkUrn?.toString();
+          const status = myUrn
+            ? (group.memberState[myUrn] ?? 'unknown')
+            : 'unknown';
+          return {
+            type: 'consensus',
+            myStatus: status,
+            memberCount: Object.keys(group.memberState).length,
+          };
+        }
+      } catch (e) {
+        this.logger.warn('[ConversationService] Directory lookup failed', e);
       }
-    } catch (e) {
-      this.logger.warn('[ConversationService] Membership lookup failed', e);
     }
-    return 'unknown';
+
+    // 2. Default Direct (1:1)
+    return { type: 'direct', partnerId: urn };
+  }
+
+  private async createEphemeralConversation(urn: URN): Promise<Conversation> {
+    const contact = await this.contactsQuery.resolveIdentity(urn);
+    return {
+      id: urn,
+      name: contact?.alias || 'New Chat',
+      lastActivityTimestamp: Temporal.Now.instant().toString() as any,
+      snippet: '',
+      unreadCount: 0,
+      genesisTimestamp: null,
+      lastModified: Temporal.Now.instant().toString() as any,
+    };
+  }
+
+  private isSignalMessage(msg: ChatMessage): boolean {
+    return (
+      msg.typeId.equals(MessageTypeSystem) ||
+      msg.typeId.equals(MessageGroupInvite) ||
+      msg.typeId.equals(MessageGroupInviteResponse)
+    );
   }
 }

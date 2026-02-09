@@ -83,10 +83,11 @@ export class MessageClassifier {
 
       // 4. Determine Intent
       if (parsed.kind === 'signal') {
-        // ✅ FIX: Resolve Conversation ID for Signals
-        const conversationId = parsed.conversationId
-          ? parsed.conversationId
-          : sender;
+        // ✅ FIX: Normalize Conversation ID for Signals (Centralized)
+        const conversationId = this.normalizeConversationId(
+          parsed.conversationId,
+          sender,
+        );
 
         return this.classifySignal(parsed.payload, sender, conversationId);
       } else if (parsed.kind === 'content') {
@@ -156,10 +157,11 @@ export class MessageClassifier {
     }
 
     // Standard Chat Content
-    const conversationUrn =
-      parsed.conversationId.entityType === 'group'
-        ? parsed.conversationId
-        : sender;
+    // ✅ FIX: Use centralized normalization logic
+    const conversationUrn = this.normalizeConversationId(
+      parsed.conversationId,
+      sender,
+    );
 
     const snippet = this.snippetGenerator.createSnippet(parsed);
     const id = transport.clientRecordId || queueId;
@@ -177,5 +179,21 @@ export class MessageClassifier {
     };
 
     return { kind: 'durable', message };
+  }
+
+  /**
+   * CENTRALIZED LOGIC:
+   * Determines the canonical Conversation URN for an incoming item.
+   * - Groups: Respect the Group URN.
+   * - 1:1: Force it to be the Sender (so Bob's msg -> urn:bob).
+   */
+  private normalizeConversationId(
+    candidateId: URN | undefined,
+    sender: URN,
+  ): URN {
+    if (candidateId && candidateId.entityType === 'group') {
+      return candidateId;
+    }
+    return sender;
   }
 }
