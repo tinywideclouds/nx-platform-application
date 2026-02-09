@@ -21,6 +21,7 @@ export class ChatMessageBubbleComponent {
   timestamp = input<ISODateTimeString | string | undefined>(undefined);
   status = input<MessageDeliveryStatus | undefined>(undefined);
 
+  themeColor = input<string | null>(null);
   // ✅ dumb inputs: Parent tells us what to show
   isBroadcast = input(false);
   isGhost = input(false);

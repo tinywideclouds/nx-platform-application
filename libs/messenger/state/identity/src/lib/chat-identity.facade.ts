@@ -40,9 +40,13 @@ export class ChatIdentityFacade {
 
   public readonly myUrn = computed(() => {
     const user = this.currentUser();
-    return user?.email
-      ? URN.create('email', user.email, 'lookup')
-      : user?.id || null;
+
+    if (user?.email) {
+      return URN.create('email', user.email, 'lookup');
+    }
+
+    // No Email = No Identity = App is Loading
+    return null;
   });
 
   public readonly myKeys = this.sessionService.keys; // Expose keys for UI/Debugger

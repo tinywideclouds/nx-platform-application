@@ -18,7 +18,6 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Temporal } from '@js-temporal/polyfill';
 
-// ✅ STATE LAYERS
 import { ActiveChatFacade } from '@nx-platform-application/messenger-state-active-chat';
 import { ChatDataService } from '@nx-platform-application/messenger-state-chat-data';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
@@ -64,7 +63,6 @@ import { ChatConversationRowComponent } from '../chat-conversation-row/chat-conv
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatConversationComponent {
-  // --- INJECTIONS ---
   private activeChat = inject(ActiveChatFacade);
   private chatData = inject(ChatDataService);
   private mediaFacade = inject(ChatMediaFacade);
@@ -78,24 +76,20 @@ export class ChatConversationComponent {
 
   // --- STATE SIGNALS ---
   chatMessages = this.activeChat.messages;
-  currentUserUrn = this.identityFacade.myUrn;
+
+  // ✅ Identity: Single Source of Truth
+  // 'myUrn' in the Facade already calculates the Network URN (e.g. urn:lookup:email...)
+  // which matches exactly what OutboundService stamps on messages.
+  myIdentity = this.identityFacade.myUrn;
+
   selectedConversation = this.activeChat.selectedConversation;
   isLoading = this.activeChat.isLoading;
   firstUnreadId = this.activeChat.firstUnreadId;
   readCursors = this.activeChat.readCursors;
 
-  // ✅ Global Typing Data (Nested Map)
   typingActivity = this.chatData.typingActivity;
-
-  // Local UI State
   showNewMessageIndicator = signal(false);
 
-  // Constants
-  readonly TEXT_MESSAGE = TEXT_MESSAGE_TYPE;
-  readonly IMAGE_MESSAGE = IMAGE_MESSAGE_TYPE;
-  readonly GROUP_INVITE_MESSAGE = GROUP_INVITE_TYPE;
-
-  // Throttling Trigger
   private readonly typingTrigger$ = new Subject<void>();
 
   private secondPulse = toSignal(
@@ -115,7 +109,6 @@ export class ChatConversationComponent {
       }
     });
 
-    // ✅ Typing Throttler
     this.typingTrigger$
       .pipe(
         throttleTime(3000, asyncScheduler, { leading: true, trailing: false }),
@@ -129,7 +122,7 @@ export class ChatConversationComponent {
       });
   }
 
-  // --- UI COMPUTED HELPERS ---
+  // --- COMPUTED HELPERS ---
 
   getTypeId(msg: ChatMessage): string {
     return msg.typeId.entityId;
@@ -140,35 +133,38 @@ export class ChatConversationComponent {
     return map.get(msgId) || [];
   }
 
+  isGroupConversation = computed(() => {
+    return this.selectedConversation()?.id.entityType === 'group';
+  });
+
   showTypingIndicator = computed(() => {
     const conversation = this.selectedConversation();
     if (!conversation) return false;
 
     const globalActivity = this.typingActivity();
-    // ✅ FIX: Look up the specific conversation's activity map
     const conversationActivity = globalActivity.get(conversation.id.toString());
 
     if (!conversationActivity || conversationActivity.size === 0) return false;
 
-    const _pulse = this.secondPulse(); // Reactivity trigger
+    const _pulse = this.secondPulse();
     const now = Temporal.Now.instant();
-    const myUrnStr = this.currentUserUrn()?.toString();
+    const myUrnStr = this.myIdentity()?.toString();
 
-    // Scan for ANY active typist in this conversation
     for (const [userId, lastActive] of conversationActivity.entries()) {
-      // Don't show my own typing (echo cancellation)
       if (userId === myUrnStr) continue;
-
       const diff = now.since(lastActive).total({ unit: 'seconds' });
       if (diff < 5) return true;
     }
-
     return false;
   });
 
+  // ✅ FIX: Strict Identity Check
+  // No guess work. We match the computed Network URN against the message Sender.
   isMyMessage = (msg: ChatMessage): boolean => {
-    const myUrn = this.currentUserUrn();
-    return !!myUrn && msg.senderId.toString() === myUrn.toString();
+    const me = this.myIdentity();
+    if (!me) return false;
+
+    return msg.senderId.equals(me);
   };
 
   shouldShowDateDivider(msg: ChatMessage, index: number): boolean {
@@ -239,8 +235,6 @@ export class ChatConversationComponent {
       this.snackBar.dismiss();
     }
   }
-
-  // --- ACTIONS ---
 
   onTyping(): void {
     this.typingTrigger$.next();

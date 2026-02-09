@@ -10,12 +10,10 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 // Domain / UI Imports
-import {
-  SafeResourceUrlPipe,
-  SafeUrlPipe,
-} from '@nx-platform-application/platform-ui-pipes';
+import { SafeUrlPipe } from '@nx-platform-application/platform-ui-pipes';
 import { ChatMediaFacade } from '@nx-platform-application/messenger-state-media';
 import { DisplayMessage } from '../models';
 import { ChatTextRendererComponent } from '../chat-text-renderer/chat-text-renderer.component';
@@ -27,7 +25,7 @@ import { ChatTextRendererComponent } from '../chat-text-renderer/chat-text-rende
     CommonModule,
     MatIconModule,
     MatBadgeModule,
-    SafeResourceUrlPipe,
+    MatProgressSpinnerModule,
     SafeUrlPipe,
     ChatTextRendererComponent,
   ],
@@ -36,107 +34,123 @@ import { ChatTextRendererComponent } from '../chat-text-renderer/chat-text-rende
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatImageMessageComponent {
-  // ✅ UPDATE: Accepts the simplified DisplayMessage
   message = input.required<DisplayMessage>();
 
   private facade = inject(ChatMediaFacade);
   private snackBar = inject(MatSnackBar);
 
-  // this is static for now - we may make this dependent on drive implementation
-  preferDownload = true;
-
+  // --- STATE ---
+  isLightboxOpen = signal(false);
   isUpdatingThumbnail = signal(false);
+  activePreviewUrl = signal<string | null>(null);
+  isLoadingPreview = signal(false);
 
-  // ✅ HELPER: Access the image-specific data safely
-  // We assume the parent component only renders this if kind === 'image'
+  // --- COMPUTED HELPERS ---
   private imgData = computed(() => this.message().image!);
-
-  // ✅ HELPER: Expose parts for the template (Caption)
   parts = computed(() => this.message().parts);
-
-  // The inline image is always used for display
   displaySrc = computed(() => this.imgData().src);
+
+  // Heuristic: If base64 string > 20KB, it's likely the 720px HD version
+  isHd = computed(() => (this.displaySrc()?.length || 0) > 20_000);
+
+  // Layout Helpers
+  aspectRatio = computed(() => {
+    const { width, height } = this.imgData();
+    if (!width || !height) return '1 / 1';
+    return `${width} / ${height}`;
+  });
 
   private driveAsset = computed(() => {
     const assets = this.imgData().assets;
-    // We cast to any because the key is dynamic, but we know we look for 'driveImage'
     return assets ? (assets as any).driveImage : null;
   });
 
-  // --- CAPABILITIES ---
-  // What can we do with this specific image? (e.g. Google supports all, Dropbox might support less)
+  // Only show badge if we have the asset link AND we haven't upgraded yet
+  showHdBadge = computed(() => !!this.driveAsset() && !this.isHd());
+  mediaLinks = computed(() => !!this.driveAsset());
+
   capabilities = computed(() => {
     const asset = this.driveAsset();
     if (!asset)
       return { canEmbed: false, canLinkExternal: false, canDownload: false };
-    const providerCapabilities = this.facade.getCapabilities(asset.provider);
-    return providerCapabilities;
+    return this.facade.getCapabilities(asset.provider);
   });
 
-  // --- PREVIEW STATE ---
-  // If set, we show the modal overlay with the iframe
-  activePreviewUrl = signal<string | null>(null);
+  // --- ACTIONS ---
 
   async openPreview() {
+    // 1. If we already have the HD version inline, use it immediately.
+    // ✅ FIX: Set the activePreviewUrl so the template renders the "Sharp" version
+    if (this.isHd()) {
+      this.activePreviewUrl.set(this.displaySrc());
+      this.isLightboxOpen.set(true);
+      return;
+    }
+
+    // 2. Otherwise, fetch from cloud
     const asset = this.driveAsset();
-    if (!asset) return;
-    try {
-      //TODO decide if we need drive driven preview choice - do we get bytes or use a preview from provider
-      if (this.preferDownload) {
-        const url = await this.facade.getDownload(
-          asset.provider,
-          asset.resourceId,
-        );
-        this.activePreviewUrl.set(url);
-      } else {
-        // DO NOT REMOVE - WE ARE STILL ASSESSING PREVIEW OPTIONS
-        const url = await this.facade.getEmbedLink(
-          asset.provider,
-          asset.resourceId,
-        );
-
-        this.activePreviewUrl.set(url);
-      }
-    } catch (e) {
-      console.error('Failed to open preview', e);
-    }
-  }
-
-  // this is preview logic so we put it between the preview open/close methods
-  async updateThumbnail() {
-    const previewUrl = this.activePreviewUrl();
-    const messageId = this.message().id;
-
-    if (!messageId) {
-      console.warn('no message id found cannot patch image');
+    if (!asset) {
+      // Fallback: Open lightbox with whatever blurred thumbnail we have
+      this.isLightboxOpen.set(true);
+      return;
     }
 
-    if (!previewUrl || !messageId) return;
-
-    this.isUpdatingThumbnail.set(true);
+    this.isLightboxOpen.set(true);
+    this.isLoadingPreview.set(true);
 
     try {
-      // 1. Get the raw data from the current Blob URL
-      // This is instant (browser memory)
-      const blob = await fetch(previewUrl).then((r) => r.blob());
-
-      // 2. Delegate to Facade
-      await this.facade.upgradeInlineImage(messageId, blob);
-
-      // Optional: Show success toast/notification here?
-      this.snackBar.open('Inline image now hi-res', '', { duration: 2000 });
+      const url = await this.facade.getDownload(
+        asset.provider,
+        asset.resourceId,
+      );
+      this.activePreviewUrl.set(url);
     } catch (e) {
-      // Error handling
-      this.snackBar.open('Could not upgrade inline image', '', {
-        duration: 2000,
+      this.snackBar.open('Failed to load full image', 'Close', {
+        duration: 3000,
       });
     } finally {
-      this.isUpdatingThumbnail.set(false);
+      this.isLoadingPreview.set(false);
     }
   }
 
   closePreview() {
+    this.isLightboxOpen.set(false);
     this.activePreviewUrl.set(null);
+  }
+
+  async updateThumbnail() {
+    const messageId = this.message().id;
+    if (!messageId) return;
+
+    this.isUpdatingThumbnail.set(true);
+
+    try {
+      // 1. Get URL (either from cache or request it)
+      let previewUrl = this.activePreviewUrl();
+      if (!previewUrl) {
+        const asset = this.driveAsset();
+        if (asset) {
+          previewUrl = await this.facade.getDownload(
+            asset.provider,
+            asset.resourceId,
+          );
+        }
+      }
+
+      if (!previewUrl) throw new Error('No source available');
+
+      // 2. Fetch Blob
+      const blob = await fetch(previewUrl).then((r) => r.blob());
+
+      // 3. Delegate to Facade (Resize & Patch)
+      await this.facade.upgradeInlineImage(messageId, blob);
+
+      this.snackBar.open('Saved to chat', '', { duration: 2000 });
+    } catch (e) {
+      this.snackBar.open('Upgrade failed', '', { duration: 2000 });
+    } finally {
+      this.isUpdatingThumbnail.set(false);
+    }
   }
 
   async downloadOriginal(event: MouseEvent) {
@@ -148,15 +162,13 @@ export class ChatImageMessageComponent {
         asset.provider,
         asset.resourceId,
       );
-
-      // Trigger the download
       const link = document.createElement('a');
       link.href = url;
-      link.download = asset.filename || 'download';
+      link.download = asset.filename || 'download.png';
       link.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('Failed to download', e);
+      console.error('Download failed', e);
     }
   }
 
@@ -170,21 +182,7 @@ export class ChatImageMessageComponent {
       );
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (e) {
-      console.error('Failed to open external link', e);
+      console.error('Failed to open external', e);
     }
   }
-
-  // Checks if the 'original' asset exists in the record
-  // This will flip from FALSE -> TRUE when the background patch arrives
-  mediaLinks = computed(() => {
-    const assets = this.imgData().assets;
-    if (!assets) return false;
-
-    const mediaMap = (assets as any).driveImage;
-    // Check for your specific key. We used 'original' in the discussion.
-    // Also ensuring 'assets' is not undefined/null
-    return !!(assets && mediaMap);
-  });
-
-  altText = computed(() => 'Image Attachment');
 }

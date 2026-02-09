@@ -17,11 +17,12 @@ import { ChatKeyService } from '@nx-platform-application/messenger-domain-identi
 import { MessageContentParser } from '@nx-platform-application/messenger-domain-message-content';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
+import { GroupMemberStatus } from '@nx-platform-application/directory-types';
 
 export interface ConversationContext {
   conversation: Conversation;
   messages: ChatMessage[];
-  membershipStatus: 'joined' | 'invited' | 'unknown';
+  membershipStatus: GroupMemberStatus | 'unknown';
   genesisReached: boolean;
   isRecipientKeyMissing: boolean;
   firstUnreadId: string | null;
@@ -45,11 +46,11 @@ export class ConversationService {
    * Does not hold state.
    */
   async loadContext(urn: URN): Promise<ConversationContext> {
-    // 1. Resolve Membership (Parallelizable)
-    const membershipPromise = this.resolveMembership(urn);
+    let [conversation, membershipStatus] = await Promise.all([
+      this.storage.getConversation(urn),
+      this.resolveMembership(urn),
+    ]);
 
-    // 2. Resolve Metadata / Create Shell
-    let conversation = await this.storage.getConversation(urn);
     if (!conversation) {
       const contact = await this.contactsQuery.resolveIdentity(urn);
       conversation = {
@@ -65,7 +66,9 @@ export class ConversationService {
 
     // 3. Mark Read
     const unreadCount = conversation.unreadCount || 0;
-    await this.storage.markConversationAsRead(urn);
+    // TODO - check this logic - why is this calling markConversationAsRead???
+    // actually I'm going to comment it out and see if it breaks anything (it shouldn't)
+    // await this.storage.markConversationAsRead(urn);
 
     // 4. Check Keys
     const hasKeys = await this.keyService.checkRecipientKeys(urn);
@@ -88,7 +91,7 @@ export class ConversationService {
     return {
       conversation,
       messages,
-      membershipStatus: await membershipPromise,
+      membershipStatus,
       genesisReached: history.genesisReached,
       isRecipientKeyMissing: !hasKeys,
       firstUnreadId,
@@ -175,16 +178,20 @@ export class ConversationService {
 
   private async resolveMembership(
     urn: URN,
-  ): Promise<'joined' | 'invited' | 'unknown'> {
+  ): Promise<GroupMemberStatus | 'unknown'> {
     if (urn.entityType !== 'group') return 'joined';
+
     try {
       const group = await this.directory.getGroup(urn);
       const myUrn = this.sessionService.snapshot.networkUrn?.toString();
-      if (group && myUrn && group.memberState[myUrn]) {
-        return group.memberState[myUrn] as any;
+
+      if (group && myUrn) {
+        // Direct access. If the user is in the map, return the status.
+        // If undefined (not in map), fallback to 'unknown'.
+        return group.memberState[myUrn] ?? 'unknown';
       }
     } catch (e) {
-      /* ignore */
+      this.logger.warn('[ConversationService] Membership lookup failed', e);
     }
     return 'unknown';
   }

@@ -1,62 +1,62 @@
 :host {
   display: block;
-  // Optional: Ensure the host itself doesn't overflow on tiny screens
+  /* Allow the host to shrink if the parent bubble shrinks */
   max-width: 100%;
 }
 
-.chat-image {
-  // 1. "Retina" Math:
-  // Source is 720px. Displaying at 360px = 2.0 Pixel Density.
-  // This guarantees sharp rendering on iPhones/Macs/High-DPI.
-  width: auto;
-  max-width: 360px;
+.image-bubble-container {
+  /* 1. Explicit Preferred Width (Fixes Tiny Bubble Bug) */
+  width: 280px;
+  /* 2. Safety Valve for Mobile */
+  max-width: 100%;
 
-  // 2. Vertical Constraint:
-  // Prevents tall portrait images (screenshots) from breaking the flow.
-  max-height: 400px;
+  /* 3. Vertical Constraint */
+  max-height: 350px;
 
-  // 3. Layout safety
-  min-width: 150px;
-  min-height: 150px;
+  /* 4. Clipping Logic */
+  overflow: hidden;
+  position: relative;
 
-  // 4. Visuals
-  border-radius: 0.375rem;
-  transition: filter 0.3s ease;
-}
+  border-radius: 0.25rem;
+  background-color: #f3f4f6;
 
-.image-container {
-  transition: opacity 0.3s ease;
+  /* 5. Image Constraint */
+  img.chat-bubble-image {
+    display: block;
+    width: 100%;
+    height: 100%;
 
-  &.uploading {
-    opacity: 0.8;
-
-    .image-content {
-      filter: grayscale(0.3);
-    }
+    /* Crucial: Fills the box, cropping excess */
+    object-fit: cover;
+    object-position: center;
   }
 }
 
-.image-content {
-  width: 100%;
-  height: auto;
-  max-width: 100%;
-  // Ensure minimum touch target size and prevent layout shift
-  min-width: 120px;
-  min-height: 120px;
-  object-fit: cover;
-  border-radius: 0.375rem; // rounded-md
-  transition: filter 0.3s ease;
+// Lightbox Animations
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
 }
 
-.pending-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(0, 0, 0, 0.2);
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.caption {
-  word-wrap: break-word;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }

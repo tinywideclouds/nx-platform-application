@@ -32,7 +32,7 @@ export type MessageDeliveryStatus =
   | 'delivered' // Delivery is a general signal - group messages do not necessarily track all receipts
   | 'reference'; // Message is a reference to another message (History only, no delivery tracking)
 
-// This will be the view model for the participant (contact or group)
+// This will be the view model for the participant (contact or group) - extend Resource i.e has  id: URN
 export interface Conversation extends Resource {
   name: string; // ✅ Required
 

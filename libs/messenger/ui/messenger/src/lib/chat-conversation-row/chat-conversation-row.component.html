@@ -1,5 +1,14 @@
 <div class="flex w-full mb-1 transition-all" [ngClass]="layoutClass()">
-  <div class="relative max-w-[85%] group">
+  <div>{{ isMine() }}</div>
+  <div class="relative max-w-[85%] group flex flex-col">
+    @if (isGroup() && !isMine() && !isSystem()) {
+      <span
+        class="text-[10px] text-gray-500 ml-1 mb-0.5 font-medium select-none"
+      >
+        {{ message().senderId | contactName }}
+      </span>
+    }
+
     <chat-message-bubble
       [direction]="direction()"
       [timestamp]="message().sentTimestamp"
@@ -8,6 +17,7 @@
       [isGhost]="isGhost()"
       [isSystem]="isSystem()"
       [statusTooltip]="statusTooltip()"
+      [themeColor]="bubbleColor()"
     >
       <chat-message-renderer
         [message]="message()"
@@ -20,19 +30,21 @@
 
     @if (readCursors().length > 0) {
       <div
-        class="absolute top-0 z-10 cursor-container flex flex-col space-y-1"
-        [class.right-full]="isMine()"
-        [class.mr-2]="isMine()"
-        [class.left-full]="!isMine()"
-        [class.ml-2]="!isMine()"
+        class="absolute top-full z-10 cursor-container flex space-x-1 mt-1"
+        [class.right-0]="isMine()"
+        [class.left-0]="!isMine()"
       >
         @for (urn of readCursors(); track urn.toString()) {
           <div
-            class="cursor-avatar looking-right"
+            class="cursor-avatar"
             [matTooltip]="'' + (urn | contactName)"
-            matTooltipPosition="above"
+            matTooltipPosition="below"
           >
-            👀
+            <div
+              class="w-4 h-4 rounded-full bg-blue-500 text-[8px] text-white flex items-center justify-center border border-white ring-1 ring-blue-100"
+            >
+              {{ (urn | contactName).slice(0, 1) }}
+            </div>
           </div>
         }
       </div>

@@ -7,6 +7,7 @@
     #autoScroll="appAutoScroll"
     class="flex-grow overflow-y-auto px-4 pt-4 pb-2 space-y-2 bg-gray-50 scroll-smooth"
   >
+    <h3>{{ myIdentity()?.toString() }}</h3>
     <div class="mx-auto max-w-sm min-h-full flex flex-col w-full">
       @if (chatMessages().length === 0 && isLoading()) {
         <div
@@ -40,18 +41,22 @@
             <chat-message-divider type="new-messages" label="New Messages" />
           }
 
-          <chat-conversation-row
-            [message]="msg"
-            [isMine]="isMyMessage(msg)"
-            [readCursors]="getReadCursorsForMessage(msg.id)"
-            [isBroadcast]="isBroadcast(msg)"
-            [isGhost]="isGhost(msg)"
-            [statusTooltip]="getReceiptSummary(msg)"
-            (retry)="onRetryMessage(msg)"
-            (action)="onContentAction($event)"
-            (acceptInvite)="onAcceptInvite($event)"
-            (rejectInvite)="onRejectInvite($event)"
-          />
+          <div>
+            <div>{{ msg.senderId.toString() }}</div>
+            <chat-conversation-row
+              [message]="msg"
+              [isMine]="msg.senderId.equals(myIdentity())"
+              [isGroup]="isGroupConversation()"
+              [readCursors]="getReadCursorsForMessage(msg.id)"
+              [isBroadcast]="isBroadcast(msg)"
+              [isGhost]="isGhost(msg)"
+              [statusTooltip]="getReceiptSummary(msg)"
+              (retry)="onRetryMessage(msg)"
+              (action)="onContentAction($event)"
+              (acceptInvite)="onAcceptInvite($event)"
+              (rejectInvite)="onRejectInvite($event)"
+            />
+          </div>
         }
       }
 

@@ -154,12 +154,27 @@ export class AppState {
   );
 
   public readonly pageState = computed<PageState>(() => {
-    const conv = this.selectedConversation();
+    const conv = this.activeChat.selectedConversation();
     if (!conv) return 'NOT_FOUND';
+
+    // 1. STRICT GATE: Identity
+    // If we don't know who "Me" is, we cannot render the UI safely.
+    // This is the only "System" dependency we block on.
+    const hasIdentity = !!this.identity.myUrn();
+
+    // 2. DATA GATE: Local History
+    // We wait for the local SQLite/IndexedDB query to return messages.
+    const isHistoryLoading = this.activeChat.isLoading();
+
     return StateEngine.resolvePageState({
       urn: conv.id,
-      messages: this.messages(),
-      isLoading: this.isLoadingHistory(),
+      messages: this.activeChat.messages(),
+
+      // 3. RESOLUTION
+      // We are loading if Identity is missing OR History is reading.
+      // We DO NOT wait for "System Boot" (Sync, Cloud, Outbox).
+      isLoading: !hasIdentity || isHistoryLoading,
+
       isBlocked: this.blockedSet().has(conv.id.toString()),
       isQuarantined: false,
     });

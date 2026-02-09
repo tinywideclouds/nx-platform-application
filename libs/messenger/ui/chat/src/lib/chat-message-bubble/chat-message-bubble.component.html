@@ -2,10 +2,14 @@
   class="rounded-lg p-3 shadow-sm animate-pop-in origin-center block w-fit max-w-full relative"
   [ngClass]="{
     'bg-blue-600 text-white rounded-br-sm': direction() === 'outbound',
-    'bg-white text-gray-800 border border-gray-100 rounded-bl-sm':
+
+    'text-gray-800 border border-gray-100 rounded-bl-sm':
       direction() === 'inbound',
+    'bg-white': direction() === 'inbound' && !themeColor(),
+
     'opacity-80 saturate-80': isGhost(),
   }"
+  [ngClass]="direction() === 'inbound' && themeColor() ? themeColor() : ''"
   data-testid="chat-bubble"
 >
   <div class="bubble-content mb-1">

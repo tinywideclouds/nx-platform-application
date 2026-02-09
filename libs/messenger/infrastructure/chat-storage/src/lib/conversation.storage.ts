@@ -28,7 +28,6 @@ export abstract class ConversationStorage {
   // --- RETRIEVAL ---
 
   /**
-   * Refactor: Renamed from getConversationIndex.
    * Returns the single unified Conversation object.
    */
   abstract getConversation(urn: URN): Promise<Conversation | undefined>;

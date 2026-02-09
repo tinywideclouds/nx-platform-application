@@ -213,6 +213,7 @@ export class ChatStorageService
 
   // --- STATUS & RECEIPTS ---
 
+  //AVOID CALLING THIS EXCEPT AS AN EXPLICIT UI CHOICE - prefer mark messages as read
   async markConversationAsRead(conversationUrn: URN): Promise<void> {
     await this.db.conversations.update(conversationUrn.toString(), {
       unreadCount: 0,
