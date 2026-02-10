@@ -52,6 +52,10 @@ export class Logger {
     }
   }
 
+  public log(message: string, ...optionalParams: unknown[]): void {
+    this.info(message, ...optionalParams);
+  }
+
   public info(message: string, ...optionalParams: unknown[]): void {
     if (this.shouldLog(LogLevel.INFO)) {
       console.info(this.format(message), ...optionalParams);
