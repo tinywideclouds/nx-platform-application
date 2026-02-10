@@ -95,17 +95,19 @@ export class ContactsDomainService {
 
   async createContact(
     alias: string,
-    linkedIdentity?: { urn: URN; scope: string },
-  ): Promise<URN> {
+    email: string,
+    name?: string,
+    surname?: string,
+  ): Promise<Contact> {
     const localId = URN.parse(`urn:contacts:user:${crypto.randomUUID()}`);
     const now = Temporal.Now.instant().toString() as ISODateTimeString;
 
     const newContact: Contact = {
       id: localId,
       alias,
-      firstName: alias,
-      surname: '',
-      email: '',
+      firstName: name || '',
+      surname: surname || '',
+      email: email || '',
       emailAddresses: [],
       phoneNumbers: [],
       serviceContacts: {},
@@ -115,16 +117,7 @@ export class ContactsDomainService {
     // 1. Save Contact
     await this.localStore.saveContact(newContact);
 
-    // 2. Link Identity (if provided)
-    if (linkedIdentity) {
-      await this.localStore.linkIdentityToContact(
-        localId,
-        linkedIdentity.urn,
-        linkedIdentity.scope,
-      );
-    }
-
-    return localId;
+    return newContact;
   }
 
   async saveContact(contact: Contact): Promise<void> {

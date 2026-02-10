@@ -9,6 +9,13 @@ export interface SharedIdentityLink {
 }
 
 export abstract class AddressBookManagementApi {
+  // 0. Minimal Creation
+  abstract createContact(
+    email: string,
+    alias: string,
+    name?: string,
+    surname?: string,
+  ): Promise<Contact>;
   // 1. Persistence
   abstract saveContact(contact: Contact): Promise<void>;
 

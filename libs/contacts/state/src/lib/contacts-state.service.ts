@@ -196,14 +196,13 @@ export class ContactsStateService
   // --- CONTACT ACTIONS ---
 
   async createContact(
+    email: string,
     alias: string,
-    networkId?: URN,
-    scope = 'address-book',
-  ): Promise<URN> {
-    return this.domain.createContact(
-      alias,
-      networkId ? { urn: networkId, scope } : undefined,
-    );
+    name?: string,
+    surname?: string,
+    scope: string = 'address-book',
+  ): Promise<Contact> {
+    return this.domain.createContact(alias, email);
   }
 
   async saveContact(contact: Contact): Promise<void> {
