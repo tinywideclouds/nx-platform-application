@@ -328,7 +328,7 @@ export class ChatStorageService
     return this.deletionStrategy.deleteMessage(id);
   }
 
-  async clearMessageHistory(): Promise<void> {
+  async clearHistory(): Promise<void> {
     await this.db.transaction(
       'rw',
       [this.db.messages, this.db.conversations, this.db.tombstones],

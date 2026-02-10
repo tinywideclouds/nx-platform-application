@@ -60,7 +60,7 @@ export abstract class ConversationStorage {
 
   abstract deleteMessage(id: string): Promise<void>;
 
-  abstract clearMessageHistory(): Promise<void>;
+  abstract clearHistory(): Promise<void>;
 
   /**
    * MAINTENANCE: Removes deletion records older than a specific date.
