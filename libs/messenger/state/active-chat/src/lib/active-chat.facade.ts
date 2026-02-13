@@ -15,10 +15,10 @@ import {
 
 // Services
 import {
-  ConversationService,
-  ConversationActionService,
-  ConversationResolution,
+  ConversationMessagingService,
+  ConversationQueryService,
   ConversationKind,
+  ConversationLifecycleService,
 } from '@nx-platform-application/messenger-domain-conversation';
 import { IngestionService } from '@nx-platform-application/messenger-domain-ingestion';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
@@ -35,8 +35,9 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class ActiveChatFacade {
-  private service = inject(ConversationService);
-  private actions = inject(ConversationActionService);
+  private messaging = inject(ConversationMessagingService);
+  private conversationQueryService = inject(ConversationQueryService);
+  private conversationLifecycleService = inject(ConversationLifecycleService);
   private ingestion = inject(IngestionService);
   private session = inject(SessionService);
   private groupProtocol = inject(GroupProtocolService);
@@ -169,7 +170,8 @@ export class ActiveChatFacade {
     const activeUrn = this.selectedConversation()?.id;
     if (!activeUrn) return;
 
-    const freshData = await this.service.fetchMessages(messageIds);
+    const freshData =
+      await this.conversationQueryService.fetchMessages(messageIds);
     // Only keep messages belonging to CURRENT conversation
     const relevant = freshData.filter((m) =>
       m.conversationUrn.equals(activeUrn),
@@ -194,11 +196,11 @@ export class ActiveChatFacade {
 
     try {
       // Phase 1: Resolution (Identify & Permissions)
-      const resolution = await this.service.resolveConversation(urn);
+      const resolution =
+        await this.conversationQueryService.resolveConversation(urn);
 
       this.selectedConversation.set(resolution.conversation);
       this.conversationKind.set(resolution.kind);
-      this.isRecipientKeyMissing.set(resolution.isRecipientKeyMissing);
 
       // Map membership status from Kind
       if (resolution.kind.type === 'consensus') {
@@ -208,7 +210,7 @@ export class ActiveChatFacade {
       }
 
       // Phase 2: Content Load (Filtered by Service based on Kind)
-      const result = await this.service.loadInitialMessages(
+      const result = await this.conversationQueryService.loadInitialMessages(
         urn,
         resolution.kind,
       );
@@ -233,7 +235,7 @@ export class ActiveChatFacade {
     this.isLoading.set(true);
     try {
       const oldestMsg = msgs[0];
-      const olderMsgs = await this.service.loadMoreMessages(
+      const olderMsgs = await this.conversationQueryService.loadMoreMessages(
         urn,
         oldestMsg.sentTimestamp,
       );
@@ -253,7 +255,7 @@ export class ActiveChatFacade {
     const target = raw.find((m) => m.id === id);
     if (!target) return undefined;
 
-    const text = await this.service.recoverFailedMessage(
+    const text = await this.conversationQueryService.recoverFailedMessage(
       id,
       target.payloadBytes,
       target.typeId,
@@ -267,12 +269,16 @@ export class ActiveChatFacade {
   }
 
   async performHistoryWipe(): Promise<void> {
-    await this.service.performHistoryWipe();
+    await this.conversationLifecycleService.clearHistory();
     this.reset();
   }
 
   async startNewConversation(urn: URN, name: string): Promise<void> {
-    await this.service.startNewConversation(urn, name);
+    await this.conversationLifecycleService.persistConversation(urn, name);
+  }
+
+  async stageTransientConversation(urn: URN, name: string): Promise<void> {
+    await this.conversationLifecycleService.stageTransient(urn, name);
   }
 
   // --- RESTORED GROUP ACTIONS ---
@@ -303,24 +309,24 @@ export class ActiveChatFacade {
 
   async sendMessage(recipient: URN, text: string): Promise<void> {
     // Optimistic UI: We assume it works. The ingestion cycle will confirm/patch it later.
-    const msg = await this.actions.sendMessage(recipient, text);
+    const msg = await this.messaging.sendMessage(recipient, text);
     this.upsertMessages([msg]);
   }
 
   async sendImage(recipient: URN, content: ImageContent): Promise<void> {
-    const msg = await this.actions.sendImage(recipient, content);
+    const msg = await this.messaging.sendImage(recipient, content);
     this.upsertMessages([msg]);
   }
 
   async sendTypingIndicator(recipient: URN): Promise<void> {
-    await this.actions.sendTypingIndicator(recipient);
+    await this.messaging.sendTypingIndicator(recipient);
   }
 
   async sendContactShare(
     recipient: URN,
     data: ContactShareData,
   ): Promise<void> {
-    const msg = await this.actions.sendContactShare(recipient, data);
+    const msg = await this.messaging.sendContactShare(recipient, data);
     this.upsertMessages([msg]);
   }
 
@@ -352,7 +358,7 @@ export class ActiveChatFacade {
       .map((m) => m.id);
 
     if (unreadIds.length > 0) {
-      this.actions.markMessagesAsRead(currentUrn, unreadIds);
+      this.messaging.markMessagesAsRead(currentUrn, unreadIds);
       this.readReceiptTrigger$.next(unreadIds);
     }
   }

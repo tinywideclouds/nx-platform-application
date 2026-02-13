@@ -14,7 +14,6 @@ import {
 } from '@nx-platform-application/messenger-domain-message-content';
 import { OutboundService } from '@nx-platform-application/messenger-domain-sending';
 import { IdentityResolver } from '@nx-platform-application/messenger-domain-identity-adapter';
-import { WebCryptoKeys } from '@nx-platform-application/messenger-infrastructure-private-keys';
 
 import { DirectoryMutationApi } from '@nx-platform-application/directory-api';
 
@@ -23,7 +22,7 @@ import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
 import { SessionService } from '@nx-platform-application/messenger-domain-session';
 
 // ✅ NEW DEPENDENCY
-import { ConversationService } from '@nx-platform-application/messenger-domain-conversation';
+import { ConversationLifecycleService } from '@nx-platform-application/messenger-domain-conversation';
 
 // ✅ DOMAIN TYPES & CONSTANTS
 import {
@@ -51,7 +50,7 @@ export class GroupProtocolService {
   private readonly sessionService = inject(SessionService);
 
   // ✅ Inject the Domain Service
-  private conversationService = inject(ConversationService);
+  private conversationService = inject(ConversationLifecycleService);
 
   // ✅ Architecture Swap
   private contactsQuery = inject(ContactsQueryApi);

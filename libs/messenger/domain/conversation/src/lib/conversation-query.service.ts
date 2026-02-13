@@ -1,36 +1,25 @@
-// libs/messenger/domain/conversation/src/lib/conversation.service.ts
-
 import { Injectable, inject } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { Temporal } from '@js-temporal/polyfill';
-import {
-  ISODateTimeString,
-  URN,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import {
   ChatMessage,
   Conversation,
 } from '@nx-platform-application/messenger-types';
-
 import {
   HistoryReader,
   ConversationStorage,
 } from '@nx-platform-application/messenger-infrastructure-chat-storage';
-
 import { DirectoryQueryApi } from '@nx-platform-application/directory-api';
-import { ChatKeyService } from '@nx-platform-application/messenger-domain-identity';
+import { SessionService } from '@nx-platform-application/messenger-domain-session';
 import {
   MessageContentParser,
   MessageGroupInvite,
   MessageGroupInviteResponse,
   MessageTypeSystem,
 } from '@nx-platform-application/messenger-domain-message-content';
-import { SessionService } from '@nx-platform-application/messenger-domain-session';
-import { ContactsQueryApi } from '@nx-platform-application/contacts-api';
-import { GroupMemberStatus } from '@nx-platform-application/directory-types';
-import { BehaviorSubject } from 'rxjs';
 
-// --- NEW TYPES ---
+import { GroupMemberStatus } from '@nx-platform-application/directory-types';
 
 export type ConversationKind =
   | { type: 'direct'; partnerId: URN }
@@ -44,7 +33,6 @@ export type ConversationKind =
 export interface ConversationResolution {
   conversation: Conversation;
   kind: ConversationKind;
-  isRecipientKeyMissing: boolean;
 }
 
 export interface InitialMessageLoad {
@@ -56,80 +44,114 @@ export interface InitialMessageLoad {
 const DEFAULT_PAGE_SIZE = 50;
 
 @Injectable({ providedIn: 'root' })
-export class ConversationService {
-  private logger = inject(Logger);
-  private historyReader = inject(HistoryReader);
-  private storage = inject(ConversationStorage);
-  private directory = inject(DirectoryQueryApi);
-  private keyService = inject(ChatKeyService);
-  private contentParser = inject(MessageContentParser);
-  private sessionService = inject(SessionService);
-  private contactsQuery = inject(ContactsQueryApi);
+export class ConversationQueryService {
+  private readonly logger = inject(Logger);
+  private readonly historyReader = inject(HistoryReader);
+  private readonly storage = inject(ConversationStorage);
+  private readonly directory = inject(DirectoryQueryApi);
+  private readonly sessionService = inject(SessionService);
+  private readonly contentParser = inject(MessageContentParser);
 
-  // State layers should subscribe here instead of managing their own arrays
+  // --- STATE CONTAINER (Hot Cache) ---
+  // Internal Map for O(1) lookups and managing insertion order.
+  private readonly _cache = new Map<string, Conversation>();
+
+  // External Stream for the UI (Derived from Map).
   private readonly _conversations = new BehaviorSubject<Conversation[]>([]);
   public readonly conversations$ = this._conversations.asObservable();
-  private transientConversations = new Map<string, Conversation>();
+
   /**
-   * PHASE 1: RESOLUTION
-   * Identifies the nature of the conversation and the user's status within it.
-   * Does NOT load heavy message history.
+   * INJECTION POINT:
+   * Efficiently updates or adds a conversation.
+   * Handles "Bump to Top" automatically via Map insertion order.
    */
+  public upsertToCache(conversation: Conversation): void {
+    const key = conversation.id.toString();
+
+    // 1. Delete first to reset insertion order (moves it to the "end" when set)
+    if (this._cache.has(key)) {
+      this._cache.delete(key);
+    }
+
+    // 2. Set the new value (Appends to the Map)
+    this._cache.set(key, conversation);
+
+    // 3. Refresh the View
+    this.refreshStream();
+  }
+
+  /**
+   * REMOVAL POINT:
+   * Efficient O(1) removal.
+   */
+  public removeFromCache(urn: URN): void {
+    const key = urn.toString();
+    if (this._cache.delete(key)) {
+      this.refreshStream();
+    }
+  }
+
+  public getConversation(urn: URN): Conversation | undefined {
+    return this._cache.get(urn.toString());
+  }
+
+  private refreshStream() {
+    // Map.values() iterates in insertion order (Oldest -> Newest).
+    // We reverse it so the UI sees [Newest, ..., Oldest].
+    const list = Array.from(this._cache.values()).reverse();
+    this._conversations.next(list);
+  }
+
+  // --- READ FACADE ---
+
   async resolveConversation(urn: URN): Promise<ConversationResolution> {
     // 1. Fetch Metadata (Local Storage & Directory)
     let conversation = await this.storage.getConversation(urn);
-    const kind = await this.determineKind(urn);
 
-    // 2. Fallback: Create ephemeral conversation object if not in DB
     if (!conversation) {
-      conversation = await this.createEphemeralConversation(urn);
+      conversation = this._cache.get(urn.toString());
     }
 
-    // 3. Check Keys (Security)
-    const hasKeys = await this.keyService.checkRecipientKeys(urn);
+    // At this stage we should have a conversation so throw if none
+    if (!conversation) {
+      throw Error('no convervation to resolve');
+    }
+
+    const kind = await this.determineKind(urn);
 
     return {
       conversation,
       kind,
-      isRecipientKeyMissing: !hasKeys,
     };
   }
 
-  /**
-   * ✅ STAGE TRANSIENT (Ephemeral)
-   * Creates a draft conversation in memory and pushes it to the stream.
-   */
-  public stageTransientConversation(urn: URN, name: string): Conversation {
-    const now = Temporal.Now.instant().toString() as ISODateTimeString;
+  // --- INTERNAL READ LOGIC ---
 
-    if (this.transientConversations.has(urn.toString())) {
-      return this.transientConversations.get(urn.toString())!;
+  public async determineKind(urn: URN): Promise<ConversationKind> {
+    if (urn.entityType === 'group') {
+      try {
+        const group = await this.directory.getGroup(urn);
+        if (group) {
+          const myUrn = this.sessionService.snapshot.networkUrn?.toString();
+          const status = myUrn
+            ? (group.memberState[myUrn] ?? 'unknown')
+            : 'unknown';
+          return {
+            type: 'consensus',
+            myStatus: status,
+            memberCount: Object.keys(group.memberState).length,
+          };
+        }
+      } catch (e) {
+        this.logger.warn(
+          '[ConversationQueryService] Directory lookup failed',
+          e,
+        );
+      }
     }
-
-    const conversation: Conversation = {
-      id: urn,
-      name: name,
-      lastActivityTimestamp: now,
-      snippet: '',
-      unreadCount: 0,
-      genesisTimestamp: null,
-      lastModified: now,
-    };
-
-    // 1. Store in Memory
-    this.transientConversations.set(urn.toString(), conversation);
-
-    const currentList = this._conversations.getValue();
-    // 2. Emit to Stream (Prepend to current list for immediate UI feedback)
-    this._conversations.next([conversation, ...currentList]);
-
-    return conversation;
+    return { type: 'direct', partnerId: urn };
   }
 
-  /**
-   * PHASE 2: LOADING
-   * Fetches messages, applying filters based on the resolution kind.
-   */
   async loadInitialMessages(
     urn: URN,
     kind: ConversationKind,
@@ -169,9 +191,7 @@ export class ConversationService {
     };
   }
 
-  async conversationExists(urn: URN): Promise<boolean> {
-    return this.storage.conversationExists(urn);
-  }
+  // --- ADDITIONAL READS ---
 
   async loadMoreMessages(
     urn: URN,
@@ -185,10 +205,6 @@ export class ConversationService {
     return result.messages;
   }
 
-  /**
-   * Recovers a failed message text for retry.
-   * Pure logic: Parses bytes, Deletes from DB, Returns text.
-   */
   async recoverFailedMessage(
     messageId: string,
     knownPayloadBytes?: Uint8Array,
@@ -197,7 +213,6 @@ export class ConversationService {
     let payload = knownPayloadBytes;
     let typeId = knownTypeId;
 
-    // If not provided, fetch from DB
     if (!payload || !typeId) {
       const msg = await this.storage.getMessage(messageId);
       if (!msg) return undefined;
@@ -221,14 +236,8 @@ export class ConversationService {
     return textToRestore;
   }
 
-  // --- ACTIONS ---
-
-  async startNewConversation(urn: URN, name: string): Promise<void> {
-    await this.storage.startConversation(urn, name);
-  }
-
-  async performHistoryWipe(): Promise<void> {
-    await this.storage.clearHistory();
+  async conversationExists(urn: URN): Promise<boolean> {
+    return this.storage.conversationExists(urn);
   }
 
   async getAllConversations(): Promise<Conversation[]> {
@@ -244,45 +253,6 @@ export class ConversationService {
   }
 
   // --- HELPERS ---
-
-  private async determineKind(urn: URN): Promise<ConversationKind> {
-    // 1. Consensus Group (Directory)
-    if (urn.entityType === 'group') {
-      try {
-        const group = await this.directory.getGroup(urn);
-        if (group) {
-          const myUrn = this.sessionService.snapshot.networkUrn?.toString();
-          const status = myUrn
-            ? (group.memberState[myUrn] ?? 'unknown')
-            : 'unknown';
-          return {
-            type: 'consensus',
-            myStatus: status,
-            memberCount: Object.keys(group.memberState).length,
-          };
-        }
-      } catch (e) {
-        this.logger.warn('[ConversationService] Directory lookup failed', e);
-      }
-    }
-
-    // 2. Default Direct (1:1)
-    return { type: 'direct', partnerId: urn };
-  }
-
-  private async createEphemeralConversation(urn: URN): Promise<Conversation> {
-    const contact = await this.contactsQuery.resolveIdentity(urn);
-    const now = Temporal.Now.instant().toString() as ISODateTimeString;
-    return {
-      id: urn,
-      name: contact?.alias || 'New Chat',
-      lastActivityTimestamp: now,
-      snippet: '',
-      unreadCount: 0,
-      genesisTimestamp: null,
-      lastModified: now,
-    };
-  }
 
   private isSignalMessage(msg: ChatMessage): boolean {
     return (

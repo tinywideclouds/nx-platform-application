@@ -32,7 +32,7 @@ export class ChatContactDetailWrapperComponent {
   private contactsService = inject(ContactsStorageService);
   private logger = inject(Logger);
 
-  isKeyMissing = this.appState.isRecipientKeyMissing;
+  isKeyMissing = false; // Placeholder for potential future logic
 
   // ✅ Polymorphic Check
   isGroup = computed(() => this.contactId().entityType === 'group');

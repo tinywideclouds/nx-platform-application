@@ -25,9 +25,11 @@ import {
 import { ChatMessage } from '@nx-platform-application/messenger-types';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import { Temporal } from '@js-temporal/polyfill';
+import { Logger } from 'libs/platform/tools/console-logger/src/lib/services/logger';
 
 @Injectable({ providedIn: 'root' })
-export class ConversationActionService {
+export class ConversationMessagingService {
+  private logger = inject(Logger);
   private outbound = inject(OutboundService);
   private storage = inject(ChatStorageService);
   private destroyRef = inject(DestroyRef);
@@ -151,6 +153,7 @@ export class ConversationActionService {
         this._readReceiptsSent.next(urn);
       } catch (err) {
         // Log error but don't crash the loop
+        this.logger.error('Failed to send read receipts for', urn, err);
       }
     }
   }

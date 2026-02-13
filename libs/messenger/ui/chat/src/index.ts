@@ -11,4 +11,5 @@ export * from './lib/chat-invite-message/chat-invite-message.component';
 export * from './lib/chat-text-renderer/chat-text-renderer.component';
 export * from './lib/chat-system-message/chat-system-message.component';
 export * from './lib/network-group-setup/network-group-setup.dialog';
+export * from './lib/new-contact-dialog/new-contact-dialog.component';
 export * from './lib/models';

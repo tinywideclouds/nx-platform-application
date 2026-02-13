@@ -8,7 +8,7 @@ import {
   AssetResult,
 } from '@nx-platform-application/platform-infrastructure-storage';
 import { AssetStorageService } from '@nx-platform-application/messenger-infrastructure-asset-storage';
-import { ConversationActionService } from '@nx-platform-application/messenger-domain-conversation';
+import { ConversationMessagingService } from '@nx-platform-application/messenger-domain-conversation';
 import { ChatStorageService } from '@nx-platform-application/messenger-infrastructure-chat-storage';
 import {
   MessageContentParser,
@@ -25,7 +25,7 @@ const driveImage = 'driveImage';
 export class ChatMediaFacade {
   private readonly logger = inject(Logger);
   private readonly assetStorage = inject(AssetStorageService);
-  private readonly conversationActions = inject(ConversationActionService);
+  private readonly conversationMessaging = inject(ConversationMessagingService);
   private readonly storageServiceDb = inject(ChatStorageService);
   private readonly parser = inject(MessageContentParser);
   private readonly activeChat = inject(ActiveChatFacade);
@@ -107,7 +107,7 @@ export class ChatMediaFacade {
       };
 
       // ✅ FIX: Destructure ID from the returned ChatMessage object
-      const message = await this.conversationActions.sendImage(
+      const message = await this.conversationMessaging.sendImage(
         recipient,
         payload,
       );
@@ -154,7 +154,7 @@ export class ChatMediaFacade {
         assets,
       };
 
-      await this.conversationActions.sendAssetReveal(recipient, signalData);
+      await this.conversationMessaging.sendAssetReveal(recipient, signalData);
       await this.patchLocalMessage(messageId, signalData);
 
       // Refresh UI via ActiveChatFacade

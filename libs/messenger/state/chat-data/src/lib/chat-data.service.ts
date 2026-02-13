@@ -5,8 +5,9 @@ import {
   computed,
   Signal,
   DestroyRef,
+  effect,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Temporal } from '@js-temporal/polyfill';
 import { switchMap, EMPTY, interval } from 'rxjs';
 import { Resource, URN } from '@nx-platform-application/platform-types';
@@ -19,8 +20,9 @@ import {
 
 import { ChatLiveDataService } from '@nx-platform-application/messenger-infrastructure-live-data';
 import {
-  ConversationActionService,
-  ConversationService,
+  ConversationQueryService,
+  ConversationMessagingService,
+  ConversationLifecycleService,
 } from '@nx-platform-application/messenger-domain-conversation';
 import {
   IngestionService,
@@ -49,28 +51,38 @@ export class ChatDataService {
 
   private readonly liveService = inject(ChatLiveDataService);
   private readonly ingestionService = inject(IngestionService);
-  private readonly conversationService = inject(ConversationService);
   private readonly contactsQuery = inject(ContactsQueryApi);
   private readonly moderation = inject(ChatModerationFacade);
-  private readonly conversationActions = inject(ConversationActionService);
+  private readonly conversationMessaging = inject(ConversationMessagingService);
+  private readonly conversationQueryService = inject(ConversationQueryService);
+  private readonly conversationLifecycleService = inject(
+    ConversationLifecycleService,
+  );
 
   // --- STATE ---
-  private readonly _activeConversations = signal<Conversation[]>([]);
-  public readonly activeConversations = this._activeConversations.asReadonly();
+
+  // ✅ 1. SUBSCRIBE: We simply reflect the Domain's Truth
+  private readonly domainConversations = toSignal(
+    this.conversationQueryService.conversations$,
+    { initialValue: [] },
+  );
+
   public readonly liveConnection = this.liveService.status$;
   private readonly identityCache = signal<Map<string, ContactSummary>>(
     new Map(),
   );
   public readonly typingActivity = signal<TypingMap>(new Map());
 
+  // ✅ 2. PROJECT: Enrich the domain objects with UI Metadata (Avatars/Names)
   public readonly uiConversations: Signal<UIConversation[]> = computed(() => {
-    const conversations = this.activeConversations();
+    const raw = this.domainConversations();
     const identities = this.identityCache();
 
-    return conversations.map((c) => {
+    return raw.map((c) => {
       const urnStr = c.id.toString();
       const cached = identities.get(urnStr);
       const displayName = cached?.alias || c.name || 'Unknown';
+
       return {
         ...c,
         name: displayName,
@@ -81,26 +93,38 @@ export class ChatDataService {
   });
 
   private isSyncing = false;
-  // ✅ LATCH: Stores overlapping triggers
   private rerunRequested = false;
 
   constructor() {
     this.initLiveSubscriptions();
-    this.initIngestionSubscription(); // Listen to the firehose
+    this.initIngestionSubscription();
+
+    // ✅ 3. REACT: Automatically fetch identities when the list changes
+    effect(() => {
+      const conversations = this.domainConversations();
+      if (conversations.length > 0) {
+        this.fetchMissingIdentities(conversations);
+      }
+    });
   }
 
   // --- ACTIONS ---
 
+  /**
+   * Refreshes the list by asking the Domain to reload.
+   * The update comes back via the `domainConversations` signal automatically.
+   */
   public async refreshActiveConversations(): Promise<void> {
-    const conversations = await this.conversationService.getAllConversations();
-    this._activeConversations.set(conversations);
-    this.fetchMissingIdentities(conversations);
+    await this.conversationQueryService.getAllConversations();
   }
+
+  // --- IDENTITY RESOLUTION ---
 
   private async fetchMissingIdentities(conversations: Conversation[]) {
     const currentCache = this.identityCache();
     const missingUrns: URN[] = [];
 
+    // Only fetch what we don't have
     for (const c of conversations) {
       if (!currentCache.has(c.id.toString())) {
         missingUrns.push(c.id);
@@ -111,9 +135,12 @@ export class ChatDataService {
 
     try {
       const batchResult = await this.contactsQuery.resolveBatch(missingUrns);
+
       this.identityCache.update((prev) => {
         const next = new Map(prev);
         batchResult.forEach((summary, key) => next.set(key, summary));
+
+        // Fill gaps to prevent infinite refetch loops
         missingUrns.forEach((urn) => {
           const key = urn.toString();
           if (!next.has(key)) {
@@ -131,22 +158,22 @@ export class ChatDataService {
 
   public async startSyncSequence(authToken: string): Promise<void> {
     this.liveService.connect(() => this.authService.getJwtToken() ?? authToken);
+    // Initial fetch to populate the stream
     await this.refreshActiveConversations();
     await this.runIngestionCycle();
   }
 
   public stopSyncSequence(): void {
     this.liveService.disconnect();
-    this._activeConversations.set([]);
+    // We can't clear the domain stream directly from here (that's domain logic),
+    // but we can clear our local derived state if needed.
+    // Usually, we just call a domain cleanup method:
+    this.conversationLifecycleService.clearHistory(); // Clears domain stream
+
     this.identityCache.set(new Map());
     this.typingActivity.set(new Map());
   }
 
-  /**
-   * Triggers the drain cycle.
-   * Uses a Latch Pattern to ensure that if a signal arrives mid-sync,
-   * we run exactly one more time to catch the tail events.
-   */
   private async runIngestionCycle(): Promise<void> {
     if (this.isSyncing) {
       this.rerunRequested = true;
@@ -157,13 +184,8 @@ export class ChatDataService {
 
     try {
       do {
-        this.rerunRequested = false; // Reset before working
-
-        // We wait for the stream to fully drain (Promise<void>)
+        this.rerunRequested = false;
         await this.ingestionService.process(this.moderation.blockedSet());
-
-        // Logic Loop: If rerunRequested became true while we were awaiting above,
-        // the loop condition handles it.
       } while (this.rerunRequested);
     } catch (e) {
       this.logger.error('[Ingestion] Failed', e);
@@ -176,27 +198,26 @@ export class ChatDataService {
   // --- HELPERS ---
 
   private initIngestionSubscription(): void {
-    // The "Firehose" Handler
     this.ingestionService.dataIngested$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(async (result: IngestionResult) => {
-        // 1. FAST LANE: Typing Indicators
         if (result.typingIndicators.length > 0 || result.messages.length > 0) {
           this.updateTypingActivity(result.typingIndicators, result.messages);
         }
 
-        // 2. SLOW LANE: Durable Changes
         const hasDurableChanges =
           result.messages.length > 0 ||
           result.patchedMessageIds.length > 0 ||
           result.readReceipts.length > 0;
 
         if (hasDurableChanges) {
+          // Trigger the domain reload
           await this.refreshActiveConversations();
         }
       });
   }
 
+  // ... (initLiveSubscriptions, updateTypingActivity, generateInitials preserved) ...
   private initLiveSubscriptions(): void {
     this.liveService.incomingMessage$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -217,7 +238,7 @@ export class ChatDataService {
       )
       .subscribe(() => void this.runIngestionCycle());
 
-    this.conversationActions.readReceiptsSent$
+    this.conversationMessaging.readReceiptsSent$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(async () => {
         await this.refreshActiveConversations();
@@ -228,19 +249,15 @@ export class ChatDataService {
     indicators: TypingIndicator[],
     realMessages: ChatMessage[],
   ): void {
-    // We update the Nested Map: Conversation -> User -> Time
     this.typingActivity.update((currentMap) => {
-      // Deep Clone (Map of Maps)
       const nextMap = new Map<string, Map<string, Temporal.Instant>>();
 
-      // 1. Copy existing state
       for (const [convId, userMap] of currentMap.entries()) {
         nextMap.set(convId, new Map(userMap));
       }
 
       const now = Temporal.Now.instant();
 
-      // 2. Add new indicators (Scoped to Conversation)
       indicators.forEach((ind) => {
         const convKey = ind.conversationId.toString();
         const userKey = ind.senderId.toString();
@@ -251,7 +268,6 @@ export class ChatDataService {
         nextMap.get(convKey)!.set(userKey, now);
       });
 
-      // 3. Clear typing status if a real message arrives
       realMessages.forEach((msg) => {
         const convKey = msg.conversationUrn.toString();
         const userKey = msg.senderId.toString();
@@ -260,7 +276,6 @@ export class ChatDataService {
           const userMap = nextMap.get(convKey)!;
           if (userMap.has(userKey)) {
             userMap.delete(userKey);
-            // Cleanup empty conversations
             if (userMap.size === 0) {
               nextMap.delete(convKey);
             }

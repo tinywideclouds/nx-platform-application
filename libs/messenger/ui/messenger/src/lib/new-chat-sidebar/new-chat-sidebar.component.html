@@ -1,0 +1,74 @@
+<div class="flex flex-col h-full bg-white">
+  <div
+    class="p-4 border-b border-gray-100 flex flex-col gap-2 shrink-0 bg-gray-50/50"
+  >
+    <mat-form-field
+      appearance="outline"
+      class="w-full no-subscript dense-form-field bg-white rounded-md shadow-sm"
+    >
+      <mat-icon matPrefix class="text-gray-400 mr-2">search</mat-icon>
+      <input
+        #searchInput
+        matInput
+        [value]="query()"
+        (input)="onInput($event)"
+        placeholder="Type email or name..."
+        autocomplete="off"
+      />
+      @if (query()) {
+        <button mat-icon-button matSuffix (click)="query.set('')">
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </mat-form-field>
+
+    @if (!query()) {
+      <p class="text-xs text-gray-400 px-1 animate-fade-in">
+        Enter an email (e.g. alice&#64;example.com) to start a chat.
+      </p>
+    }
+  </div>
+
+  <div class="flex-1 overflow-hidden relative flex flex-col">
+    @if (validEmail(); as email) {
+      <div class="p-4 z-10">
+        <div
+          class="bg-blue-50/50 border border-blue-100 rounded-xl p-6 flex flex-col items-center text-center animate-slide-down shadow-sm"
+        >
+          <div
+            class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-3"
+          >
+            <mat-icon class="scale-125">chat</mat-icon>
+          </div>
+
+          <h3 class="font-bold text-gray-900 mb-1">New Conversation</h3>
+          <p
+            class="text-sm text-gray-500 mb-6 max-w-[240px] break-words leading-relaxed"
+          >
+            Start chatting with <br />
+            <strong class="text-blue-700">{{ email }}</strong>
+          </p>
+
+          <button
+            mat-flat-button
+            color="primary"
+            class="w-full !h-12 !rounded-lg !text-base shadow-md transition-transform active:scale-[0.98]"
+            (click)="onSmartCreate(email)"
+          >
+            Start Chat
+          </button>
+        </div>
+      </div>
+    }
+
+    <contacts-sidebar
+      class="flex-1 min-h-0"
+      [selectionMode]="true"
+      [showAddActions]="false"
+      [showFilter]="false"
+      [filterQuery]="query()"
+      (contactSelected)="contactSelected.emit($event)"
+      (groupSelected)="groupSelected.emit($event)"
+    />
+  </div>
+</div>

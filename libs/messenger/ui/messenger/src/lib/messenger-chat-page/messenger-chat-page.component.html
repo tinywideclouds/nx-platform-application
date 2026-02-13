@@ -7,7 +7,7 @@
     >
       <div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
         <button
-          aria-label="chat"
+          aria-label="Toggle Sidebar"
           type="button"
           mat-icon-button
           [color]="sidebarMode() === 'new' ? 'warn' : 'primary'"
@@ -20,53 +20,16 @@
             sidebarMode() === 'list' ? 'edit_square' : 'close'
           }}</mat-icon>
         </button>
-
-        <h1 class="text-lg font-bold truncate select-none">
-          @if (sidebarMode() === 'new') {
-            New Chat
-          } @else {
-            Chats
-          }
-        </h1>
-      </div>
-
-      <div class="flex items-center">
-        <lib-list-filter
-          [(query)]="searchQuery"
-          [placeholder]="
-            sidebarMode() === 'new' ? 'Search contacts...' : 'Search chats...'
-          "
-          class="flex-shrink-0 ml-1"
-        />
-
-        @if (pendingRequests().length > 0) {
-          <button
-            type="button"
-            aria-label="review"
-            mat-icon-button
-            (click)="toggleRequestsPane()"
-            [color]="showRequestsPane() ? 'accent' : 'warn'"
-            matTooltip="Review Message Requests"
-            class="ml-1 relative"
-          >
-            <mat-icon>mark_email_unread</mat-icon>
-            <span
-              class="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"
-            ></span>
-          </button>
-        }
+        <div>New Chat</div>
       </div>
     </mat-toolbar>
 
-    <div class="flex-1 overflow-y-auto overflow-x-hidden relative">
+    <div class="flex-1 overflow-hidden relative flex flex-col">
       @if (sidebarMode() === 'new') {
-        <contacts-sidebar
-          [selectionMode]="true"
-          [showAddActions]="false"
-          [showFilter]="false"
-          [filterQuery]="searchQuery()"
+        <messenger-new-chat-sidebar
           (contactSelected)="onNewChatSelected($event)"
           (groupSelected)="onNewChatSelected($event)"
+          (contactCreated)="onFastContactCreated($event)"
         />
       } @else {
         @if (conversationsList().length > 0) {
@@ -78,26 +41,14 @@
           <div
             class="flex flex-col items-center justify-center h-48 text-gray-400 p-4 text-center"
           >
-            @if (searchQuery()) {
-              <mat-icon class="text-4xl mb-2 !w-8 !h-8 text-gray-300"
-                >search_off</mat-icon
-              >
-              <p class="text-sm">No results for "{{ searchQuery() }}"</p>
-            } @else {
-              <div class="flex flex-col items-center gap-2">
-                <mat-icon class="text-4xl text-gray-300"
-                  >chat_bubble_outline</mat-icon
-                >
-                <p class="text-sm">No active chats.</p>
-                <button
-                  mat-stroked-button
-                  color="primary"
-                  (click)="setSidebarMode('new')"
-                >
-                  Start a Conversation
-                </button>
-              </div>
-            }
+            <p>No active chats.</p>
+            <button
+              mat-stroked-button
+              color="primary"
+              (click)="setSidebarMode('new')"
+            >
+              Start a Conversation
+            </button>
           </div>
         }
       }
@@ -105,61 +56,58 @@
   </div>
 
   <div main class="h-full bg-gray-50">
-    @if (showRequestsPane()) {
+    <router-outlet />
+    @if (!showDetail()) {
+      @if (showWizard()) {
+        <div class="h-full w-full flex flex-col">
+          <lib-sticky-wizard
+            [displayMode]="'inline'"
+            (close)="onCloseWizard()"
+          />
+        </div>
+      } @else {
+        @if (hasConversations()) {
+          <lib-feature-placeholder
+            icon="forum"
+            title="Your Conversations"
+            message="Select a conversation from the list to view messages."
+          />
+        } @else {
+          <lib-feature-placeholder
+            icon="chat_bubble_outline"
+            title="No Chats Yet"
+            message="You haven't started any conversations yet."
+            actionLabel="Start New Chat"
+            (action)="setSidebarMode('new')"
+          />
+        }
+      }
+
+      @if (pendingRequests().length > 0) {
+        <div
+          class="absolute bottom-10 left-0 right-0 flex justify-center z-10 pointer-events-none"
+        >
+          <button
+            type="button"
+            mat-stroked-button
+            color="warn"
+            class="pointer-events-auto bg-white/90 shadow-sm backdrop-blur-sm"
+            (click)="toggleRequestsPane()"
+          >
+            You have {{ pendingRequests().length }} message request(s)
+          </button>
+        </div>
+      }
+    } @else if (showRequestsPane()) {
       <messenger-message-request-review
         [requests]="pendingRequests()"
-        [previewMessages]="previewMessages()"
         (peek)="onPeekRequests($event)"
         (accept)="onAcceptRequest($event)"
         (block)="onBlockRequest($event)"
         (dismiss)="onDismissRequest($event)"
         (blockAll)="onBlockAll()"
+        (close)="toggleRequestsPane()"
       />
-    } @else {
-      <router-outlet />
-
-      @if (!showDetail()) {
-        @if (showWizard()) {
-          <div class="h-full w-full flex flex-col">
-            <lib-sticky-wizard
-              [displayMode]="'inline'"
-              (close)="onCloseWizard()"
-            />
-          </div>
-        } @else {
-          @if (hasConversations()) {
-            <lib-feature-placeholder
-              icon="forum"
-              title="Your Conversations"
-              message="Select a conversation from the list to view messages."
-            />
-          } @else {
-            <lib-feature-placeholder
-              icon="chat_bubble_outline"
-              title="No Chats Yet"
-              message="You haven't started any conversations yet."
-              actionLabel="Start New Chat"
-              (action)="setSidebarMode('new')"
-            />
-          }
-        }
-
-        @if (pendingRequests().length > 0) {
-          <div
-            class="absolute bottom-10 left-0 right-0 flex justify-center z-10 pointer-events-none"
-          >
-            <button
-              type="button"
-              mat-stroked-button
-              color="warn"
-              class="pointer-events-auto bg-white/90 shadow-sm backdrop-blur-sm"
-              (click)="toggleRequestsPane()"
-            >
-              You have {{ pendingRequests().length }} message request(s)
-            </button>
-          </div>
-        }
-      }
     }
   </div>
 </platform-master-detail-layout>

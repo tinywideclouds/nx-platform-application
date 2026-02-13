@@ -117,16 +117,8 @@ export class AppState {
 
   // ✅ PROXY: Delegating to ActiveChatFacade
   public readonly selectedConversation = this.activeChat.selectedConversation;
-  public readonly messages = this.activeChat.messages;
-  public readonly isLoadingHistory = this.activeChat.isLoadingHistory;
-  public readonly firstUnreadId = this.activeChat.firstUnreadId;
-  public readonly readCursors = this.activeChat.readCursors;
-  public readonly isRecipientKeyMissing = this.activeChat.isRecipientKeyMissing;
-  public readonly readReceiptTrigger$ = this.activeChat.readReceiptTrigger$;
 
-  public readonly activeConversations = this.chatService.activeConversations;
-  public readonly typingActivity = this.chatService.typingActivity;
-  public readonly uiConversations = this.chatService.uiConversations;
+  // public readonly activeConversations = this.chatService.activeConversations;
 
   public readonly activeLocalGroup = signal<ContactGroup | null>(null);
   public readonly blockedSet = this.moderation.blockedSet;

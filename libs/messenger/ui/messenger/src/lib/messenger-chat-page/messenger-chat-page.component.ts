@@ -9,6 +9,8 @@ import { Router, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 
+import { NewChatSidebarComponent } from '../new-chat-sidebar/new-chat-sidebar.component';
+
 // UI Layouts & Toolkits
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 import {
@@ -57,6 +59,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     ChatConversationListComponent,
     FeaturePlaceholderComponent,
     ContactsSidebarComponent,
+    NewChatSidebarComponent,
     ListFilterComponent,
     MessageRequestReviewComponent,
     StickyWizardComponent,
@@ -282,5 +285,12 @@ export class MessengerChatPageComponent {
       duration: 3000,
       panelClass: isError ? 'bg-red-500' : '',
     });
+  }
+
+  onFastContactCreated(urn: URN) {
+    this.chatData.refreshActiveConversations();
+    this.setSidebarMode('list');
+    this.router.navigate(['/messenger', 'conversations', urn.toString()]);
+    this.showFeedback('Contact created');
   }
 }

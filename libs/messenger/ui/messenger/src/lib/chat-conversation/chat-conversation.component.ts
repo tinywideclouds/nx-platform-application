@@ -151,7 +151,7 @@ export class ChatConversationComponent {
     return false;
   });
 
-  // ✅ FIX: Strict Identity Check
+  // Strict Identity Check
   // No guess work. We match the computed Network URN against the message Sender.
   isMyMessage = (msg: ChatMessage): boolean => {
     const me = this.myIdentity();
