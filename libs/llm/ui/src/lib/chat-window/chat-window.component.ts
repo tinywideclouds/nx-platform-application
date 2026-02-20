@@ -1,4 +1,11 @@
-import { Component, inject, input, effect, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  input,
+  effect,
+  signal,
+  computed,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -31,6 +38,7 @@ import {
   GroupContextDialogComponent,
   GroupContextDialogResult,
 } from '../group-context-dialog/group-context-dialog.component';
+import { LlmMessage } from '@nx-platform-application/llm-types';
 
 @Component({
   selector: 'llm-chat-window',
@@ -58,12 +66,21 @@ export class LlmChatWindowComponent {
   private sessionSource = inject(LlmSessionSource);
   private sessionActions = inject(LlmSessionActions);
 
-  // ROUTER INPUT: 'urn:llm:session:...' or undefined
-  // Provided by withComponentInputBinding() in app.config
   readonly sessionId = input<string>();
 
   isSelectionMode = signal(false);
   selectedIds = signal<Set<string>>(new Set());
+  focusedGroupUrn = signal<string | null>(null);
+
+  activeContextGroups = computed<Record<string, string>>(() => {
+    const currentId = this.source.activeSessionId();
+    if (!currentId) return {};
+
+    const session = this.sessionSource
+      .sessions()
+      .find((s) => s.id.equals(currentId));
+    return session?.contextGroups || {};
+  });
 
   constructor() {
     // ✅ REACTIVE ROUTING LOGIC
@@ -118,7 +135,130 @@ export class LlmChatWindowComponent {
     this.selectedIds.set(new Set());
   }
 
+  // NEW: Calculate contiguous blocks of hidden messages
+  collapsedBlocks = computed(() => {
+    const focusUrn = this.focusedGroupUrn();
+    const items = this.source.items();
+    const blocks: Record<string, { count: number; isFirst: boolean }> = {};
+
+    if (!focusUrn) return blocks;
+
+    let currentBlockCount = 0;
+    let firstIdInBlock: string | null = null;
+
+    for (const item of items) {
+      const msg = item.data;
+      const isValidMsg = msg && typeof msg !== 'string';
+
+      // If it's a valid message and NOT part of the focused group
+      if (isValidMsg && !this.isMessageInFocus(msg)) {
+        if (currentBlockCount === 0) {
+          firstIdInBlock = msg.id.toString();
+        }
+        currentBlockCount++;
+        // Default to not-first; we overwrite the actual first one on commit
+        blocks[msg.id.toString()] = { count: 0, isFirst: false };
+      } else {
+        // We hit a focused message or a date header -> Commit the hidden block
+        if (currentBlockCount > 0 && firstIdInBlock) {
+          blocks[firstIdInBlock] = { count: currentBlockCount, isFirst: true };
+          currentBlockCount = 0;
+          firstIdInBlock = null;
+        }
+      }
+    }
+
+    // Tail commit (if the chat ends on a hidden block)
+    if (currentBlockCount > 0 && firstIdInBlock) {
+      blocks[firstIdInBlock] = { count: currentBlockCount, isFirst: true };
+    }
+
+    return blocks;
+  });
+
+  // NEW: The filtered array fed to the viewport
+  displayItems = computed(() => {
+    const focusUrn = this.focusedGroupUrn();
+    const items = this.source.items();
+    const blocks = this.collapsedBlocks();
+
+    if (!focusUrn) return items;
+
+    return items.filter((item) => {
+      const msg = item.data;
+      // Keep date headers and system spacers
+      if (!msg || typeof msg === 'string') return true;
+      // Keep focused messages
+      if (this.isMessageInFocus(msg)) return true;
+
+      // For hidden messages, ONLY keep the first one of the block to act as the pill
+      const blockMeta = blocks[msg.id.toString()];
+      return blockMeta && blockMeta.isFirst;
+    });
+  });
   // --- SELECTION & BULK ACTIONS ---
+
+  // --- FOCUS ACTIONS ---
+
+  focusGroup(urnString: string) {
+    if (this.focusedGroupUrn() === urnString) {
+      this.clearFocus();
+    } else {
+      this.focusedGroupUrn.set(urnString);
+      this.isSelectionMode.set(false);
+    }
+  }
+
+  clearFocus() {
+    this.focusedGroupUrn.set(null);
+  }
+
+  isMessageInFocus(message: any): boolean {
+    const focusUrn = this.focusedGroupUrn();
+    // Guard against null, strings (date headers), and messages without tags
+    if (!focusUrn || !message || typeof message === 'string' || !message.tags)
+      return false;
+
+    return message.tags.some((t: URN) => t.toString() === focusUrn);
+  }
+
+  async extractFocusedGroup() {
+    const focusUrn = this.focusedGroupUrn();
+    const currentId = this.source.activeSessionId();
+
+    if (!focusUrn || !currentId) return;
+
+    // Safely extract and filter, telling TypeScript that the resulting array
+    // only contains actual LlmMessage objects, not nulls or strings.
+    const ids = this.source
+      .items()
+      .map((item) => item.data)
+      .filter(
+        (msg): msg is LlmMessage =>
+          !!msg && typeof msg !== 'string' && this.isMessageInFocus(msg),
+      )
+      .map((m) => m.id.toString());
+
+    if (ids.length === 0) return;
+
+    try {
+      const newSessionId = await this.actions.extractToNewSession(
+        ids,
+        currentId,
+      );
+
+      this.clearFocus();
+      this.sessionActions.openSession(newSessionId);
+
+      this.snackBar.open('Group extracted to new session', 'Close', {
+        duration: 3000,
+        horizontalPosition: 'end',
+        verticalPosition: 'bottom',
+      });
+    } catch (e) {
+      console.error('Extraction failed', e);
+    }
+  }
 
   async groupSelected() {
     const ids = Array.from(this.selectedIds());
@@ -158,35 +298,6 @@ export class LlmChatWindowComponent {
         horizontalPosition: 'end',
         verticalPosition: 'bottom',
       });
-    }
-  }
-
-  async extractSelected() {
-    const ids = Array.from(this.selectedIds());
-    const currentId = this.source.activeSessionId();
-
-    if (ids.length === 0 || !currentId) return;
-
-    try {
-      // 1. Domain executes the data extraction (returns the new session URN)
-      const newSessionId = await this.actions.extractToNewSession(
-        ids,
-        currentId,
-      );
-
-      // 2. Reset local UI
-      this.toggleSelectionMode();
-
-      // 3. Delegate routing to your dedicated session router
-      this.sessionActions.openSession(newSessionId);
-
-      this.snackBar.open('Extracted to new session', 'Close', {
-        duration: 3000,
-        horizontalPosition: 'end',
-        verticalPosition: 'bottom',
-      });
-    } catch (e) {
-      console.error('Extraction failed', e);
     }
   }
 

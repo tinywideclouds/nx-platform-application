@@ -31,7 +31,6 @@ export class LlmChatHeaderComponent {
   // Action Outputs
   toggleSelection = output<void>();
   groupContext = output<void>();
-  extractContext = output<void>();
   excludeContext = output<void>();
   includeContext = output<void>();
   deleteContext = output<void>();

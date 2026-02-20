@@ -47,6 +47,8 @@ export class ScrollspaceViewportComponent<T> {
   // Pluggable Templates
   rowTemplate =
     input.required<TemplateRef<{ $implicit: T; meta: ScrollItem<T> }>>();
+
+  gutterTemplate = input<TemplateRef<any>>();
   dateTemplate = input<TemplateRef<{ $implicit: string }>>();
   markerTemplate = input<TemplateRef<void>>();
 

@@ -18,6 +18,7 @@
             [isSelectionMode]="isSelectionMode()"
             [isSelected]="selectedIds().has(item.id)"
             [selectionTemplate]="selectionTemplate()"
+            [gutterTemplate]="gutterTemplate()"
             (toggleSelection)="toggleSelection(item.id)"
             (visible)="onRowVisible($event)"
           >

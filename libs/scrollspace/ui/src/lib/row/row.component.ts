@@ -42,6 +42,7 @@ export class ScrollspaceRowComponent {
   isSelectionMode = input<boolean>(false);
   isSelected = input<boolean>(false);
   selectionTemplate = input<TemplateRef<any>>();
+  gutterTemplate = input<TemplateRef<any>>();
 
   toggleSelection = output<void>();
 

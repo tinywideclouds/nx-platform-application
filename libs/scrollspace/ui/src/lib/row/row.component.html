@@ -24,6 +24,17 @@
     </div>
   }
 
+  @if (gutterTemplate(); as gutterTpl) {
+    <div class="w-8 flex-shrink-0 relative z-0">
+      <ng-container
+        *ngTemplateOutlet="
+          gutterTpl;
+          context: { $implicit: item().data, meta: item() }
+        "
+      ></ng-container>
+    </div>
+  }
+
   <div
     class="flex flex-1 w-full"
     [class.justify-end]="layout().alignment === 'end'"
