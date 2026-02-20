@@ -1,0 +1,48 @@
+<h2 mat-dialog-title>Group Selected Context</h2>
+
+<mat-dialog-content class="pt-4 flex flex-col gap-4">
+  <mat-radio-group [(ngModel)]="mode" class="flex flex-col gap-4 mb-2">
+    <mat-radio-button value="new">Create New Group</mat-radio-button>
+    @if (mode() === 'new') {
+      <mat-form-field appearance="outline" class="w-full ml-8 pr-8 -mt-2">
+        <mat-label>Group Name</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newName"
+          placeholder="e.g., Auth Implementation Context"
+          autoFocus
+        />
+      </mat-form-field>
+    }
+
+    <mat-radio-button
+      value="existing"
+      [disabled]="data.existingGroups.length === 0"
+    >
+      Add to Existing Group
+    </mat-radio-button>
+    @if (mode() === 'existing') {
+      <mat-form-field appearance="outline" class="w-full ml-8 pr-8 -mt-2">
+        <mat-label>Select Group</mat-label>
+        <mat-select [(ngModel)]="selectedUrn">
+          @for (group of data.existingGroups; track group.urn) {
+            <mat-option [value]="group.urn">{{ group.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+  </mat-radio-group>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button type="button" mat-button mat-dialog-close>Cancel</button>
+  <button
+    type="button"
+    mat-flat-button
+    color="primary"
+    [disabled]="!isValid()"
+    (click)="onConfirm()"
+  >
+    Group Messages
+  </button>
+</mat-dialog-actions>

@@ -31,7 +31,6 @@ import {
   ConfirmationDialogComponent,
   ConfirmationData,
 } from '@nx-platform-application/platform-ui-toolkit';
-import { boolean } from 'valibot';
 
 @Component({
   selector: 'contacts-page',

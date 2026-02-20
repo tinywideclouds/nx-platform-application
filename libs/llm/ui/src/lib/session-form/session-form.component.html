@@ -1,0 +1,113 @@
+<form class="p-4 max-w-4xl mx-auto" (submit)="$event.preventDefault()">
+  <div class="flex flex-col gap-4">
+    <mat-form-field
+      [floatLabel]="'always'"
+      class="w-full"
+      [hideRequiredMarker]="!isEditing()"
+    >
+      <mat-label>Session Title</mat-label>
+      <input
+        aria-label="title"
+        matInput
+        [value]="title()"
+        (input)="title.set($any($event.target).value)"
+        (blur)="titleTouched.set(true)"
+        [readonly]="!isEditing()"
+      />
+      @if (titleModified()) {
+        <mat-hint class="text-blue-600 text-xs font-medium">Modified</mat-hint>
+      }
+      @if (titleTouched() && titleError()) {
+        <mat-error>{{ titleError() }}</mat-error>
+      }
+    </mat-form-field>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+      <mat-form-field [floatLabel]="'always'" class="w-full">
+        <mat-label>Go Microservice Cache ID</mat-label>
+        <input
+          matInput
+          placeholder="e.g., caches/my-repo-bundle"
+          [value]="cacheId()"
+          (input)="cacheId.set($any($event.target).value)"
+          [readonly]="!isEditing()"
+        />
+        @if (isEditing()) {
+          <mat-hint class="text-xs text-gray-500"
+            >Binds session to a cached repository state.</mat-hint
+          >
+        }
+        @if (cacheIdModified()) {
+          <mat-hint class="text-blue-600 text-xs font-medium"
+            >Modified</mat-hint
+          >
+        }
+      </mat-form-field>
+
+      <mat-form-field [floatLabel]="'always'" class="w-full">
+        <mat-label>System Prompts Collection ID</mat-label>
+        <input
+          matInput
+          placeholder="e.g., prompts/golang-expert"
+          [value]="systemPromptsId()"
+          (input)="systemPromptsId.set($any($event.target).value)"
+          [readonly]="!isEditing()"
+        />
+        @if (isEditing()) {
+          <mat-hint class="text-xs text-gray-500"
+            >Binds session to a specific instruction set.</mat-hint
+          >
+        }
+        @if (promptsModified()) {
+          <mat-hint class="text-blue-600 text-xs font-medium"
+            >Modified</mat-hint
+          >
+        }
+      </mat-form-field>
+    </div>
+  </div>
+
+  @if (contextGroupEntries().length > 0) {
+    <div class="mt-8 pt-6 border-t border-gray-100">
+      <h3
+        class="font-medium text-gray-700 text-sm mb-3 flex items-center gap-2"
+      >
+        <mat-icon class="text-gray-400 text-base h-4 w-4">bookmark</mat-icon>
+        Active Context Groups
+      </h3>
+      <div class="flex flex-wrap gap-2">
+        <mat-chip-set>
+          @for (group of contextGroupEntries(); track group.urn) {
+            <mat-chip
+              class="bg-indigo-50 text-indigo-700 border border-indigo-100"
+            >
+              {{ group.name }}
+            </mat-chip>
+          }
+        </mat-chip-set>
+      </div>
+    </div>
+  }
+
+  @if (isEditing()) {
+    <div class="mt-12 pt-6 border-t border-red-100 rounded-lg bg-red-50 p-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h4 class="text-red-700 font-medium">Danger Zone</h4>
+          <p class="text-red-500 text-sm">
+            Deleting this session will remove all associated chat history.
+          </p>
+        </div>
+        <button
+          mat-stroked-button
+          color="warn"
+          type="button"
+          (click)="onDelete()"
+          class="bg-white"
+        >
+          Delete Session
+        </button>
+      </div>
+    </div>
+  }
+</form>

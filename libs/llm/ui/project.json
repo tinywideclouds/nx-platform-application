@@ -1,0 +1,32 @@
+{
+  "name": "llm-ui",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/llm/ui/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:llm"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/llm/ui",
+        "configFile": "libs/llm/ui/vite.config.mts",
+        "main": "libs/llm/ui/src/index.ts",
+        "assets": ["libs/llm/ui/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/llm/ui"],
+      "options": {
+        "reportsDirectory": "coverage/libs/llm/ui",
+        "configFile": "libs/llm/ui/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

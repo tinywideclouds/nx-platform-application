@@ -1,0 +1,64 @@
+<div class="flex flex-col h-full bg-gray-50">
+  <llm-chat-header
+    [isGenerating]="source.isGenerating()"
+    [isSelectionMode]="isSelectionMode()"
+    [selectedCount]="selectedIds().size"
+    (toggleSelection)="toggleSelectionMode()"
+    (groupContext)="groupSelected()"
+    (excludeContext)="excludeSelected(true)"
+    (includeContext)="excludeSelected(false)"
+    (deleteContext)="deleteSelected()"
+    (openDetails)="onOpenDetails()"
+  />
+
+  <div class="flex-grow overflow-hidden relative z-10">
+    <scrollspace-viewport
+      [items]="$any(source.items())"
+      [rowTemplate]="renderer"
+      [isSelectionMode]="isSelectionMode()"
+      [(selectedIds)]="selectedIds"
+    />
+  </div>
+
+  <div class="p-4 bg-white border-t border-gray-200">
+    <scrollspace-input
+      [disabled]="source.isGenerating() || isSelectionMode()"
+      (send)="onSend($event)"
+    />
+  </div>
+</div>
+
+<ng-template #renderer let-message let-wrapper="meta">
+  <div
+    class="flex flex-col gap-1 w-full relative transition-all duration-300"
+    [class.opacity-40]="message.isExcluded"
+    [class.grayscale]="message.isExcluded"
+  >
+    @if (message.isExcluded) {
+      <span
+        class="text-[10px] text-gray-500 italic ml-2 mb-0.5 flex items-center font-medium"
+      >
+        <mat-icon class="scale-[0.5] -ml-2 -mr-1">visibility_off</mat-icon>
+        Excluded from context
+      </span>
+    }
+
+    @if (message.tags && message.tags.length > 0) {
+      <div class="flex flex-wrap gap-1 mb-0.5 ml-2">
+        @for (tag of message.tags; track tag) {
+          <span
+            class="text-[9px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shadow-sm border border-indigo-200"
+          >
+            Context Group
+          </span>
+        }
+      </div>
+    }
+
+    <scrollspace-markdown-bubble
+      [itemId]="wrapper.id"
+      [class.border-dashed]="message.isExcluded"
+      [tokens]="message | llmContent | markdownTokens"
+    />
+  </div>
+</ng-template>

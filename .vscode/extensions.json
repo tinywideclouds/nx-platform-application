@@ -5,7 +5,6 @@
     "dbaeumer.vscode-eslint",
     "ms-playwright.playwright",
     "angular.ng-template",
-    "vitest.explorer",
-    "esbenp.prettier-vscode"
+    "vitest.explorer"
   ]
 }

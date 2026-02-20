@@ -1,0 +1,63 @@
+<div
+  #rowElement
+  class="flex w-full relative group transition-all duration-200"
+  [class.cursor-pointer]="isSelectionMode() && isSelectable"
+  [class.opacity-80]="isSelectionMode() && !isSelected()"
+  (click)="isSelectionMode() && isSelectable && toggleSelection.emit()"
+  [class.mb-1]="layout().isContinuous"
+  [class.mb-6]="!layout().isContinuous && !hasCursors()"
+  [class.mb-10]="hasCursors()"
+>
+  @if (isSelectionMode() && isSelectable) {
+    <div class="w-10 flex-shrink-0 flex items-center justify-center -ml-2 mr-1">
+      @if (selectionTemplate(); as customTpl) {
+        <ng-container
+          *ngTemplateOutlet="customTpl; context: { $implicit: isSelected() }"
+        ></ng-container>
+      } @else {
+        <mat-checkbox
+          [checked]="isSelected()"
+          class="pointer-events-none scale-90"
+        >
+        </mat-checkbox>
+      }
+    </div>
+  }
+
+  <div
+    class="flex flex-1 w-full"
+    [class.justify-end]="layout().alignment === 'end'"
+    [class.justify-start]="layout().alignment === 'start'"
+    [class.justify-center]="layout().alignment === 'center'"
+  >
+    @if (layout().alignment === 'start') {
+      <div class="w-8 mr-2 flex-shrink-0 flex flex-col justify-end">
+        @if (!layout().isContinuous && item().actor; as actor) {
+          <div
+            class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden shadow-sm select-none border border-gray-100 bg-gray-100 text-gray-500"
+          >
+            @if (actor.avatarUrl) {
+              <img
+                alt="avatar"
+                [src]="actor.avatarUrl"
+                class="w-full h-full object-cover"
+              />
+            } @else {
+              {{ actor.displayName.slice(0, 1) }}
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <div
+      class="flex flex-col max-w-[85%] relative transition-transform duration-200"
+      [class.scale-[0.98]]="isSelectionMode() && !isSelected()"
+      [class.items-end]="layout().alignment === 'end'"
+      [class.items-start]="layout().alignment === 'start'"
+      [class.items-center]="layout().alignment === 'center'"
+    >
+      <ng-content></ng-content>
+    </div>
+  </div>
+</div>

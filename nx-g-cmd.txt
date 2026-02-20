@@ -287,3 +287,34 @@ nx g @nx/workspace:move --project=messenger-infrastructure-crypto-bridge --desti
 nx g @nx/angular:library --name=messenger-state-active-chat-facade --directory=libs/messenger/state/active-chat-facade --tags="scope:messenger" 
 
 nx g @nx/workspace:move --project=messenger-state-active-chat-facade --destination=libs/messenger/state/active-chat --importPath=@nx-platform-application/messenger-state-active-chat
+
+nx g @nx/angular:library --name=scrollspace-types --directory=libs/scrollspace/types --tags="scope:scrollspace" 
+
+nx g @nx/angular:library --name=scrollspace-ui --directory=libs/scrollspace/ui --tags="scope:scrollspace" 
+
+nx g @nx/angular:library --name=scrollspace-core --directory=libs/scrollspace/core --tags="scope:scrollspace" 
+
+nx g @nx/angular:library --name=llm-core --directory=libs/llm/core --tags="scope:llm" 
+
+nx g @nx/angular:library --name=llm-features-chat --directory=libs/llm/features/chat --tags="scope:llm" 
+
+nx g @nx/angular:library --name=llm-ui --directory=libs/llm/ui --tags="scope:llm" 
+
+nx g @nx/angular:library --name=llm-infrastructure-gemini-access --directory=libs/llm/infrastructure/gemini-access --tags="scope:llm"    
+
+nx g @nx/angular:application --name=llm-chat-app --directory=apps/llm/chat-app --tags="scope:llm"   
+
+
+nx g @nx/angular:library --name=llm-infrastructure-indexed-db --directory=libs/llm/infrastructure/indexed-db --tags="scope:llm"    
+
+nx g @nx/angular:library --name=llm-infrastructure-storage --directory=libs/llm/infrastructure/storage --tags="scope:llm"    
+
+nx g @nx/angular:library --name=llm-infrastructure-client-access --directory=libs/llm/infrastructure/client-access --tags="scope:llm"    
+
+nx g @nx/angular:library --name=llm-types --directory=libs/llm/types --tags="scope:llm"    
+
+
+nx g @nx/angular:library --name=llm-domain-conversation --directory=libs/llm/domain/conversation --tags="scope:llm"    
+
+
+nx g @nx/angular:library --name=lib-llm-app-mocking --directory=libs/llm/app-mocking --tags="scope:llm" 

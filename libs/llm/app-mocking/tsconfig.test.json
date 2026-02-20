@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.spec.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false
+  }
+}

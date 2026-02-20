@@ -1,0 +1,85 @@
+<div class="relative h-full w-full">
+  <div
+    #viewportContainer
+    class="h-full w-full overflow-y-auto overflow-x-hidden scroll-smooth px-4 scrolling"
+  >
+    @if (historySpacerHeight() > 0) {
+      <div
+        [style.height.px]="historySpacerHeight()"
+        class="w-full shrink-0"
+      ></div>
+    }
+
+    @for (item of items(); track item.id) {
+      @switch (item.type) {
+        @case ('content') {
+          <scrollspace-row
+            [item]="item"
+            [isSelectionMode]="isSelectionMode()"
+            [isSelected]="selectedIds().has(item.id)"
+            [selectionTemplate]="selectionTemplate()"
+            (toggleSelection)="toggleSelection(item.id)"
+            (visible)="onRowVisible($event)"
+          >
+            <ng-container
+              *ngTemplateOutlet="
+                rowTemplate();
+                context: { $implicit: item.data, meta: item }
+              "
+            ></ng-container>
+          </scrollspace-row>
+        }
+
+        @case ('date-header') {
+          <div
+            class="flex justify-center py-4 sticky top-0 z-10 opacity-90 pointer-events-none"
+          >
+            <ng-container
+              *ngTemplateOutlet="
+                dateTemplate() || defaultDate;
+                context: { $implicit: item.data }
+              "
+            ></ng-container>
+          </div>
+        }
+
+        @case ('new-items-marker') {
+          <ng-container
+            *ngTemplateOutlet="markerTemplate() || defaultMarker"
+          ></ng-container>
+        }
+      }
+    }
+  </div>
+
+  @if (showScrollButton()) {
+    <div class="absolute bottom-4 right-4 z-50 animate-bounce-in">
+      <button
+        mat-fab
+        color="primary"
+        class="!w-10 !h-10 flex items-center justify-center shadow-lg"
+        (click)="scrollToBottom()"
+      >
+        <mat-icon>arrow_downward</mat-icon>
+      </button>
+    </div>
+  }
+</div>
+
+<ng-template #defaultDate let-date>
+  <span
+    class="bg-gray-100 text-gray-500 text-[10px] px-3 py-1 rounded-full font-medium border border-gray-200 shadow-sm backdrop-blur-sm"
+  >
+    {{ date | date: 'mediumDate' }}
+  </span>
+</ng-template>
+
+<ng-template #defaultMarker>
+  <div class="w-full h-px bg-red-500/50 my-2 relative">
+    <span
+      class="absolute right-0 -top-2 text-[10px] text-red-500 bg-white px-1 font-bold"
+    >
+      {{ newItemsLabel() }}
+    </span>
+  </div>
+</ng-template>

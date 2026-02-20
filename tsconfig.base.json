@@ -65,9 +65,33 @@
       "@nx-platform-application/directory-types": [
         "libs/directory/types/src/index.ts"
       ],
+      "@nx-platform-application/llm-app-mocking": [
+        "libs/llm/app-mocking/src/index.ts"
+      ],
       "@nx-platform-application/lib-messenger-test-app-mocking": [
         "libs/messenger/test/app-mocking/src/index.ts"
       ],
+      "@nx-platform-application/llm-core": ["libs/llm/core/src/index.ts"],
+      "@nx-platform-application/llm-domain-conversation": [
+        "libs/llm/domain/conversation/src/index.ts"
+      ],
+      "@nx-platform-application/llm-features-chat": [
+        "libs/llm/features/chat/src/index.ts"
+      ],
+      "@nx-platform-application/llm-infrastructure-client-access": [
+        "libs/llm/infrastructure/client-access/src/index.ts"
+      ],
+      "@nx-platform-application/llm-infrastructure-gemini-access": [
+        "libs/llm/infrastructure/gemini-access/src/index.ts"
+      ],
+      "@nx-platform-application/llm-infrastructure-indexed-db": [
+        "libs/llm/infrastructure/indexed-db/src/index.ts"
+      ],
+      "@nx-platform-application/llm-infrastructure-storage": [
+        "libs/llm/infrastructure/storage/src/index.ts"
+      ],
+      "@nx-platform-application/llm-types": ["libs/llm/types/src/index.ts"],
+      "@nx-platform-application/llm-ui": ["libs/llm/ui/src/index.ts"],
       "@nx-platform-application/messenger-domain-chat-sync": [
         "libs/messenger/domain/chat-sync/src/index.ts"
       ],
@@ -259,6 +283,15 @@
       ],
       "@nx-platform-application/platform-ux-intention": [
         "libs/platform/ux/intention/src/index.ts"
+      ],
+      "@nx-platform-application/scrollspace-core": [
+        "libs/scrollspace/core/src/index.ts"
+      ],
+      "@nx-platform-application/scrollspace-types": [
+        "libs/scrollspace/types/src/index.ts"
+      ],
+      "@nx-platform-application/scrollspace-ui": [
+        "libs/scrollspace/ui/src/index.ts"
       ]
     }
   },

@@ -1,0 +1,43 @@
+<platform-master-detail-layout
+  [showDetail]="showDetail()"
+  (isNarrowChange)="isMobile.set($event)"
+>
+  <div sidebar class="h-full bg-white">
+    <llm-session-sidebar />
+  </div>
+
+  <div
+    mobile-header
+    class="p-2 bg-white border-b flex items-center gap-2 shadow-sm z-10"
+  >
+    <button type="button" (click)="clearSelection()">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <span class="font-medium text-gray-800">Back to Conversations</span>
+  </div>
+
+  <div
+    main
+    class="flex-1 min-h-0 bg-gray-50 relative flex flex-col overflow-hidden"
+  >
+    @if (sessionId(); as idStr) {
+      <div class="flex-1 w-full h-full overflow-hidden">
+        @if (viewMode() === 'details') {
+          <llm-session-page [sessionId]="idStr" (closed)="closeDetails()" />
+        } @else {
+          <llm-chat-window [sessionId]="idStr" />
+        }
+      </div>
+    } @else {
+      <div
+        class="flex flex-col items-center justify-center h-full text-gray-400 bg-white"
+      >
+        <mat-icon class="text-6xl mb-4 text-gray-300">forum</mat-icon>
+        <p class="text-lg font-medium text-gray-600">Gemini Assistant</p>
+        <p class="text-sm mt-1">
+          Select or start a conversation from the sidebar
+        </p>
+      </div>
+    }
+  </div>
+</platform-master-detail-layout>

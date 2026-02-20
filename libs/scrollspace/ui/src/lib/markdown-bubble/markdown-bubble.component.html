@@ -1,0 +1,56 @@
+<div
+  class="flex flex-col gap-2 w-fit max-w-full text-[15px] text-gray-800 break-words bg-white border border-gray-200 shadow-sm rounded-2xl px-4 py-3"
+>
+  @for (token of tokens(); track $index) {
+    @switch (token.type) {
+      @case ('code') {
+        <div
+          class="rounded-lg overflow-hidden border border-gray-200 bg-gray-50 my-1 group w-full min-w-[200px]"
+        >
+          <div
+            class="flex items-center justify-between px-3 py-1.5 bg-gray-100/50 border-b border-gray-200"
+          >
+            <span
+              class="text-[10px] font-mono text-gray-500 font-bold uppercase"
+            >
+              {{ $any(token).lang || 'TEXT' }}
+            </span>
+            <button
+              class="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 font-medium text-[10px] uppercase tracking-wider flex items-center gap-1"
+              [cdkCopyToClipboard]="$any(token).text"
+            >
+              COPY
+            </button>
+          </div>
+
+          <div class="overflow-x-auto p-3">
+            <pre
+              class="m-0 text-sm font-mono leading-snug"
+            ><code [class]="'language-' + ($any(token).lang || 'plaintext')">{{ $any(token).text }}</code></pre>
+          </div>
+        </div>
+      }
+
+      @case ('paragraph') {
+        <div
+          class="prose prose-sm max-w-none prose-p:my-0 prose-p:leading-snug prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold text-gray-800"
+          [innerHTML]="$any(token).text | markdownInline"
+        ></div>
+      }
+
+      @case ('list') {
+        <div
+          class="prose prose-sm max-w-none prose-li:my-0 prose-ul:my-1 prose-ol:my-1 pl-1"
+          [innerHTML]="$any(token).raw | markdownInline"
+        ></div>
+      }
+
+      @default {
+        <div
+          [innerHTML]="token.raw | markdownInline"
+          class="prose prose-sm prose-p:my-0"
+        ></div>
+      }
+    }
+  }
+</div>

@@ -1,0 +1,13 @@
+{
+  "name": "llm-infrastructure-gemini-access",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/llm/infrastructure/gemini-access/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:llm"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

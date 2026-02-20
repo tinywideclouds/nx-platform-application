@@ -1,0 +1,100 @@
+<div class="relative w-full">
+  <div
+    class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm relative z-30 w-full"
+  >
+    <div class="flex items-center gap-2">
+      <h2 class="font-bold text-gray-800 text-sm">Gemini Assistant</h2>
+      <span class="text-xs text-gray-500">{{
+        isGenerating() ? 'Thinking...' : 'Ready'
+      }}</span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      @if (isSelectionMode()) {
+        <span class="text-xs text-gray-500 font-medium mr-2 animate-fade-in">
+          {{ selectedCount() }} selected
+        </span>
+        <button
+          type="button"
+          (click)="toggleSelection.emit()"
+          class="text-xs font-semibold text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-full transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+      } @else {
+        <button
+          type="button"
+          (click)="toggleSelection.emit()"
+          class="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200 transition-colors cursor-pointer"
+        >
+          Select Context
+        </button>
+      }
+    </div>
+
+    <div>
+      <button
+        type="button"
+        mat-icon-button
+        (click)="openDetails.emit()"
+        matTooltip="Session Details"
+        class="text-gray-500 hover:text-gray-800 ml-1 scale-90"
+      >
+        <mat-icon>info</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <div
+    class="absolute top-full left-0 w-full bg-slate-50 border-b border-gray-200 shadow-md z-20 flex justify-end gap-2 px-4 py-2 transition-transform duration-300 ease-in-out"
+    [class.-translate-y-full]="!isSelectionMode()"
+    [class.translate-y-0]="isSelectionMode()"
+    [class.opacity-0]="!isSelectionMode()"
+    [class.opacity-100]="isSelectionMode()"
+  >
+    <button
+      type="button"
+      (click)="excludeContext.emit()"
+      [disabled]="selectedCount() === 0"
+      class="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 disabled:opacity-50 px-3 py-1.5 rounded-full transition-colors cursor-pointer shadow-sm"
+    >
+      <mat-icon class="scale-[0.6] -mx-1">visibility_off</mat-icon> Exclude
+    </button>
+
+    <button
+      type="button"
+      (click)="includeContext.emit()"
+      [disabled]="selectedCount() === 0"
+      class="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 disabled:opacity-50 px-3 py-1.5 rounded-full transition-colors cursor-pointer shadow-sm"
+    >
+      <mat-icon class="scale-[0.6] -mx-1">visibility</mat-icon> Include
+    </button>
+
+    <button
+      type="button"
+      (click)="groupContext.emit()"
+      [disabled]="selectedCount() === 0"
+      class="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 disabled:opacity-50 px-3 py-1.5 rounded-full transition-colors cursor-pointer shadow-sm"
+    >
+      <mat-icon class="scale-[0.6] -mx-1">bookmark_add</mat-icon> Group
+    </button>
+
+    <button
+      type="button"
+      (click)="extractContext.emit()"
+      [disabled]="selectedCount() === 0"
+      class="flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 disabled:opacity-50 px-3 py-1.5 rounded-full transition-colors cursor-pointer shadow-sm"
+    >
+      <mat-icon class="scale-[0.6] -mx-1">call_split</mat-icon> Extract
+    </button>
+
+    <button
+      type="button"
+      (click)="confirmDelete()"
+      [disabled]="selectedCount() === 0"
+      class="flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 disabled:opacity-50 px-3 py-1.5 rounded-full transition-colors cursor-pointer shadow-sm ml-4"
+    >
+      <mat-icon class="scale-[0.6] -mx-1">delete</mat-icon> Delete
+    </button>
+  </div>
+</div>
