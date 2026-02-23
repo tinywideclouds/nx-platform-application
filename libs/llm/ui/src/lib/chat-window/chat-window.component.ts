@@ -5,6 +5,7 @@ import {
   effect,
   signal,
   computed,
+  ChangeDetectorRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -38,6 +39,10 @@ import {
   GroupContextDialogComponent,
   GroupContextDialogResult,
 } from '../group-context-dialog/group-context-dialog.component';
+import {
+  BranchContextDialogComponent,
+  BranchContextDialogResult,
+} from '../branch-context-dialog/branch-context-dialog.component';
 import { LlmMessage } from '@nx-platform-application/llm-types';
 
 @Component({
@@ -54,6 +59,7 @@ import { LlmMessage } from '@nx-platform-application/llm-types';
     LlmContentPipe,
   ],
   templateUrl: './chat-window.component.html',
+  styleUrl: './chat-window.component.scss',
 })
 export class LlmChatWindowComponent {
   // Services
@@ -65,6 +71,8 @@ export class LlmChatWindowComponent {
   private dialog = inject(MatDialog);
   private sessionSource = inject(LlmSessionSource);
   private sessionActions = inject(LlmSessionActions);
+
+  private cdr = inject(ChangeDetectorRef); // <-- NEW: Inject ChangeDetectorRef
 
   readonly sessionId = input<string>();
 
@@ -201,16 +209,20 @@ export class LlmChatWindowComponent {
   // --- FOCUS ACTIONS ---
 
   focusGroup(urnString: string) {
-    if (this.focusedGroupUrn() === urnString) {
-      this.clearFocus();
-    } else {
-      this.focusedGroupUrn.set(urnString);
-      this.isSelectionMode.set(false);
-    }
+    this.executeWithTransition(() => {
+      if (this.focusedGroupUrn() === urnString) {
+        this.focusedGroupUrn.set(null); // Second click cancels focus
+      } else {
+        this.focusedGroupUrn.set(urnString);
+        this.isSelectionMode.set(false);
+      }
+    });
   }
 
   clearFocus() {
-    this.focusedGroupUrn.set(null);
+    this.executeWithTransition(() => {
+      this.focusedGroupUrn.set(null);
+    });
   }
 
   isMessageInFocus(message: any): boolean {
@@ -228,8 +240,7 @@ export class LlmChatWindowComponent {
 
     if (!focusUrn || !currentId) return;
 
-    // Safely extract and filter, telling TypeScript that the resulting array
-    // only contains actual LlmMessage objects, not nulls or strings.
+    // Safely extract the IDs for the focused group
     const ids = this.source
       .items()
       .map((item) => item.data)
@@ -241,22 +252,38 @@ export class LlmChatWindowComponent {
 
     if (ids.length === 0) return;
 
+    // 1. Ask the user for their preference (Copy vs Move)
+    const dialogRef = this.dialog.open<
+      BranchContextDialogComponent,
+      any,
+      BranchContextDialogResult
+    >(BranchContextDialogComponent, { width: '450px' });
+
+    const result = await dialogRef.afterClosed().toPromise();
+    if (!result) return; // User cancelled
+
     try {
+      // 2. Execute the action with the selected mode
       const newSessionId = await this.actions.extractToNewSession(
         ids,
         currentId,
+        result.mode,
       );
 
       this.clearFocus();
       this.sessionActions.openSession(newSessionId);
 
-      this.snackBar.open('Group extracted to new session', 'Close', {
+      const actionText = result.mode === 'copy' ? 'copied' : 'moved';
+      this.snackBar.open(`Group ${actionText} to new session`, 'Close', {
         duration: 3000,
         horizontalPosition: 'end',
         verticalPosition: 'bottom',
       });
     } catch (e) {
       console.error('Extraction failed', e);
+      this.snackBar.open('Failed to extract session', 'Close', {
+        duration: 3000,
+      });
     }
   }
 
@@ -349,6 +376,23 @@ export class LlmChatWindowComponent {
         // They ignored it / it timed out / clicked away -> Default to Delete
         this.actions.resolveCancellation('delete');
       }
+    });
+  }
+
+  // view logic
+  // --- View Transition Wrapper ---
+  private executeWithTransition(updateFn: () => void) {
+    // Check if the browser supports the modern View Transitions API
+    if (!document.startViewTransition) {
+      updateFn();
+      return;
+    }
+
+    document.startViewTransition(() => {
+      updateFn();
+      // Force Angular to update the DOM synchronously so the browser
+      // can capture the "After" state for the smooth morphing animation.
+      this.cdr.detectChanges();
     });
   }
 }

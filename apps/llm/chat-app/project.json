@@ -19,7 +19,7 @@
             "input": "apps/llm/chat-app/public"
           }
         ],
-        "styles": ["apps/llm/chat-app/src/styles.css"]
+        "styles": ["apps/llm/chat-app/src/styles.scss"]
       },
       "configurations": {
         "production": {

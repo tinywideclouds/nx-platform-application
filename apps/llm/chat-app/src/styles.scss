@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Scoped specifically to the Chat Window focus toggle */
+  ::view-transition-old(chat-workspace),
+  ::view-transition-new(chat-workspace) {
+    animation-duration: 0.8s;
+    animation-timing-function: cubic-bezier(
+      0.4,
+      0,
+      0.2,
+      1
+    ); /* Smooth material easing */
+  }
+
+  /* Optional: You can still have independent banner animations */
+  ::view-transition-new(focus-banner):only-child {
+    animation: slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  ::view-transition-old(focus-banner):only-child {
+    animation: slide-up 0.25s cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+}
+/* You can add global styles to this file, and also import other style files */
+
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+}

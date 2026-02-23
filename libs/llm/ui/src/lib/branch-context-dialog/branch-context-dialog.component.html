@@ -1,0 +1,36 @@
+<h2 mat-dialog-title>Extract to New Session</h2>
+
+<mat-dialog-content class="pt-4">
+  <mat-radio-group [(ngModel)]="mode" class="flex flex-col gap-6">
+    <mat-radio-button value="copy" class="items-start">
+      <div class="flex flex-col -mt-1">
+        <span class="font-medium text-gray-800 text-base"
+          >Copy Messages (Branch)</span
+        >
+        <span class="text-xs text-gray-500 whitespace-normal mt-0.5">
+          Clones the selected messages into a new session. The original messages
+          will remain here.
+        </span>
+      </div>
+    </mat-radio-button>
+
+    <mat-radio-button value="move" class="items-start">
+      <div class="flex flex-col -mt-1">
+        <span class="font-medium text-gray-800 text-base"
+          >Move Messages (Extract)</span
+        >
+        <span class="text-xs text-gray-500 whitespace-normal mt-0.5">
+          Moves the selected messages to a new session. They will be removed
+          from this conversation entirely.
+        </span>
+      </div>
+    </mat-radio-button>
+  </mat-radio-group>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end" class="mb-2 mr-2">
+  <button type="button" mat-button mat-dialog-close>Cancel</button>
+  <button type="button" mat-flat-button color="primary" (click)="onConfirm()">
+    Extract Context
+  </button>
+</mat-dialog-actions>

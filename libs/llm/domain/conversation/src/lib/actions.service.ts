@@ -248,6 +248,7 @@ export class LlmChatActions {
   async extractToNewSession(
     messageIds: string[],
     activeSessionId: URN,
+    mode: 'copy' | 'move',
   ): Promise<URN> {
     if (!messageIds || messageIds.length === 0)
       throw new Error('No messages selected');
@@ -258,26 +259,38 @@ export class LlmChatActions {
 
     const newSession: LlmSession = {
       id: newSessionId,
-      title: 'Extracted Session',
+      title: mode === 'copy' ? 'Branched Session' : 'Extracted Session',
       lastModified: now,
-      contextGroups: {},
+      contextGroups: {}, // Start with a clean dictionary
     };
 
     await this.storage.saveSession(newSession);
 
-    // 2. Move the messages
+    // 2. Process the messages
     for (const idStr of messageIds) {
       try {
         const urn = URN.parse(idStr);
         const msg = await this.storage.getMessage(urn);
 
         if (msg) {
-          const movedMsg: LlmMessage = { ...msg, sessionId: newSessionId };
-          await this.storage.saveMessage(movedMsg);
-          this.sink.removeMessage(urn); // Remove from current UI
+          if (mode === 'move') {
+            // MOVE: Update existing record, remove from current UI
+            const movedMsg: LlmMessage = { ...msg, sessionId: newSessionId };
+            await this.storage.saveMessage(movedMsg);
+            this.sink.removeMessage(urn);
+          } else {
+            // COPY: Generate new ID to avoid DB collision, keep in current UI
+            const newMsgId = URN.create('message', crypto.randomUUID(), 'llm');
+            const copiedMsg: LlmMessage = {
+              ...msg,
+              id: newMsgId,
+              sessionId: newSessionId,
+            };
+            await this.storage.saveMessage(copiedMsg);
+          }
         }
       } catch (e) {
-        this.logger.error(`Failed to extract message ${idStr}`, e);
+        this.logger.error(`Failed to ${mode} message ${idStr}`, e);
       }
     }
 
