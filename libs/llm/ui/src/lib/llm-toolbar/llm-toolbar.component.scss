@@ -1,0 +1,9 @@
+:host {
+  display: block;
+}
+
+/* Mirrors the tight messenger toolbar spacing */
+.short-toolbar {
+  min-height: 48px !important;
+  height: 48px !important;
+}

@@ -1,0 +1,45 @@
+<mat-toolbar
+  class="flex justify-between short-toolbar bg-indigo-900 text-white shadow-md z-50 relative"
+>
+  <div class="flex items-center gap-2 px-2">
+    <mat-icon class="text-indigo-300">auto_awesome</mat-icon>
+    <span class="text-lg font-bold tracking-tight">Gemini Workspace</span>
+  </div>
+
+  <div class="flex items-center gap-2 pr-2">
+    <button
+      type="button"
+      mat-icon-button
+      (click)="viewChat.emit()"
+      matTooltip="Conversations"
+      [color]="activeView() === 'chat' ? 'accent' : ''"
+      [class.bg-indigo-800]="activeView() === 'chat'"
+      class="transition-colors hover:bg-indigo-800"
+    >
+      <mat-icon>forum</mat-icon>
+    </button>
+
+    <button
+      type="button"
+      mat-icon-button
+      (click)="viewDataSources.emit()"
+      matTooltip="Data Sources"
+      [color]="activeView() === 'data-sources' ? 'accent' : ''"
+      [class.bg-indigo-800]="activeView() === 'data-sources'"
+      class="transition-colors hover:bg-indigo-800"
+    >
+      <mat-icon>source</mat-icon>
+    </button>
+
+    <div class="w-px h-6 bg-indigo-700 mx-2"></div>
+    <button
+      type="button"
+      mat-icon-button
+      (click)="viewSettings.emit()"
+      matTooltip="Settings"
+      class="transition-colors hover:bg-indigo-800 text-indigo-200 hover:text-white"
+    >
+      <mat-icon>settings</mat-icon>
+    </button>
+  </div>
+</mat-toolbar>

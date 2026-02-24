@@ -3,19 +3,6 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
-export interface LlmSession {
-  id: URN;
-  title: string;
-  lastModified: ISODateTimeString;
-
-  // Pointers to backend-managed resource bundles
-  cacheId?: string;
-  systemPromptsId?: string;
-
-  // Quicklook dictionary for UI tag filtering (URN string -> Human Name)
-  contextGroups?: Record<string, string>;
-}
-
 /**
  * Domain representation of a single chat message.
  * Now payload-agnostic to align with Messenger architecture.

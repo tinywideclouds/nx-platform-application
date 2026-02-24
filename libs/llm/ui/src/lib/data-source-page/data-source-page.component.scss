@@ -1,0 +1,17 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
+.animate-medium {
+  animation-delay: 100ms;
+}
+
+.animate-short {
+  animation-delay: 50ms;
+}
+
+.page-width {
+  width: 160px;
+}

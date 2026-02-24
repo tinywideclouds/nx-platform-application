@@ -1,0 +1,78 @@
+<div class="h-full flex flex-col bg-gray-50 border-r border-gray-200 w-80">
+  <div
+    class="p-4 flex items-center justify-between border-b border-gray-200 bg-white"
+  >
+    <h2 class="text-lg font-semibold text-gray-800 m-0">Data Sources</h2>
+
+    <a
+      mat-icon-button
+      color="primary"
+      routerLink="/data-sources/new"
+      aria-label="Sync new repository"
+    >
+      <mat-icon>add</mat-icon>
+    </a>
+  </div>
+
+  <div class="flex-grow overflow-y-auto p-2">
+    @if (state.isCachesLoading()) {
+      <div class="p-4 text-center text-gray-500 text-sm animate-pulse">
+        Loading repositories...
+      </div>
+    } @else if (state.caches().length === 0) {
+      <div class="p-4 text-center text-gray-500 text-sm">
+        No repositories added yet.
+      </div>
+    } @else {
+      <div class="flex flex-col gap-1">
+        @for (summary of repoSummaries(); track summary.repo) {
+          <a
+            [routerLink]="['/data-sources', summary.primaryCacheId]"
+            [class.bg-indigo-50]="state.activeCache()?.repo === summary.repo"
+            [class.border-indigo-200]="
+              state.activeCache()?.repo === summary.repo
+            "
+            [class.text-indigo-700]="state.activeCache()?.repo === summary.repo"
+            [class.border-transparent]="
+              state.activeCache()?.repo !== summary.repo
+            "
+            class="flex flex-col px-3 py-2 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer text-gray-700"
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-sm truncate pr-2">{{
+                summary.repo
+              }}</span>
+
+              @if (summary.branchCount > 1) {
+                <span
+                  class="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0 font-medium"
+                >
+                  {{ summary.branchCount }} branches
+                </span>
+              } @else {
+                <span
+                  class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded shrink-0"
+                >
+                  {{ summary.primaryBranch }}
+                </span>
+              }
+            </div>
+
+            <div
+              class="flex items-center justify-between mt-1 text-xs text-gray-500"
+            >
+              <span class="capitalize">{{ summary.status }}</span>
+              @if (summary.lastSyncedAt > 0) {
+                <span>{{
+                  summary.lastSyncedAt * 1000 | date: 'shortDate'
+                }}</span>
+              } @else {
+                <span>Awaiting Sync</span>
+              }
+            </div>
+          </a>
+        }
+      </div>
+    }
+  </div>
+</div>

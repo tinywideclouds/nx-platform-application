@@ -1,0 +1,12 @@
+<div class="h-full flex flex-col bg-white overflow-hidden relative">
+  <llm-toolbar
+    [activeView]="activeView()"
+    (viewChat)="onViewChat()"
+    (viewDataSources)="onViewDataSources()"
+    (viewSettings)="onViewSettings()"
+  />
+
+  <div class="flex-1 overflow-hidden relative flex flex-row">
+    <router-outlet />
+  </div>
+</div>
