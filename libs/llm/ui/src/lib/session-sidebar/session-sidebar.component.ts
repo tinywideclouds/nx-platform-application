@@ -49,9 +49,11 @@ export class LlmSessionSidebarComponent {
 
     if (!q) return all;
 
-    // Currently searching by ID, but future-proofed for when sessions have titles
-    return all.filter((session) =>
-      session.id.toString().toLowerCase().includes(q),
+    // Now searches by the friendly title FIRST, falling back to ID
+    return all.filter(
+      (session) =>
+        (session.title || '').toLowerCase().includes(q) ||
+        session.id.toString().toLowerCase().includes(q),
     );
   });
 

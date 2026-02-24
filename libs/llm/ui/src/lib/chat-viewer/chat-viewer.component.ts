@@ -41,7 +41,7 @@ export class LlmChatViewerComponent {
 
   readonly viewMode = input<string | undefined>(undefined, { alias: 'view' });
   // UI State
-  isMobile = signal(true);
+  isMobile = signal(false);
 
   // Layout Driver: Show detail pane if a session is actively selected
   showDetail = computed(() => !!this.sessionId());

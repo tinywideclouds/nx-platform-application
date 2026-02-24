@@ -4,10 +4,10 @@ import {
   input,
   output,
   signal,
-  ViewChild,
   effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -29,30 +29,24 @@ import { LlmSessionFormComponent } from '../session-form/session-form.component'
     MatIconModule,
   ],
   templateUrl: './session-page.component.html',
+  styleUrl: './session-page.component.scss',
 })
 export class LlmSessionPageComponent {
   private storage = inject(LlmStorageService);
   private sessionSource = inject(LlmSessionSource);
   private snackBar = inject(MatSnackBar);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
-  @ViewChild(LlmSessionFormComponent) formComponent!: LlmSessionFormComponent;
-
-  // The URN passed from the overarching layout component
-  sessionId = input.required<string>();
-
+  sessionId = input<string | undefined>();
   closed = output<void>();
-
-  isEditMode = signal(false);
-  formErrorCount = signal(0);
 
   session = signal<LlmSession | null>(null);
 
   constructor() {
-    // Reactively fetch session from storage when ID changes
     effect(async () => {
       const id = this.sessionId();
       if (!id) return;
-
       try {
         const urn = URN.parse(id);
         const sessions = await this.storage.getSessions();
@@ -64,46 +58,37 @@ export class LlmSessionPageComponent {
     });
   }
 
-  enableEditMode(): void {
-    this.isEditMode.set(true);
-  }
-
-  triggerFormSave(): void {
-    if (this.formComponent) {
-      this.formComponent.triggerSave();
-    }
-  }
-
-  onCancel(): void {
-    // If we wanted to route back to chat, we'd emit here.
-    // For now, just drop out of edit mode.
-    this.isEditMode.set(false);
+  onClose(): void {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { view: null },
+      queryParamsHandling: 'merge',
+    });
   }
 
   async onSave(updatedSession: LlmSession): Promise<void> {
+    // Because the form emitted this on blur or addition, we just save it instantly
     await this.storage.saveSession(updatedSession);
-    this.sessionSource.refresh(); // Tell the sidebar to update the title
+    this.sessionSource.refresh(); // Sidebar updates immediately!
 
     this.session.set(updatedSession);
-    this.isEditMode.set(false);
 
-    this.snackBar.open('Session settings saved', 'Close', {
-      duration: 3000,
+    this.snackBar.open('Session settings updated', 'Close', {
+      duration: 2000,
       horizontalPosition: 'end',
       verticalPosition: 'bottom',
     });
   }
 
   async onDelete(): Promise<void> {
-    // We would typically plug in the ConfirmationDialogComponent here
-    // exactly like contact-page.component.ts does before executing deletion.
-    console.log(
-      'Delete intent fired for session',
-      this.session()?.id.toString(),
-    );
-  }
-
-  onClose(): void {
-    this.closed.emit();
+    const id = this.sessionId();
+    if (!id) return;
+    try {
+      await this.storage.deleteSession(URN.parse(id));
+      this.sessionSource.refresh();
+      this.onClose();
+    } catch (e) {
+      console.error('Failed to delete session', e);
+    }
   }
 }

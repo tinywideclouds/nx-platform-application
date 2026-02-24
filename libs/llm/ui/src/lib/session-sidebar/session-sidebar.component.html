@@ -65,13 +65,13 @@
             (click)="onOpenSession(session.id)"
           >
             <span class="text-sm font-semibold text-gray-800 truncate">
-              Session {{ session.id.toString().substring(0, 8) }}...
+              {{ session.title || 'Untitled Session' }}
             </span>
             <div
               class="flex justify-between items-center text-xs text-gray-400 mt-1"
             >
               <span>{{ session.lastModified | date: 'shortDate' }}</span>
-              <span>{{ session.lastModified | date: 'shortTime' }}</span>
+              <span>{{ session.attachments.length || 0 }} Sources</span>
             </div>
           </li>
         }

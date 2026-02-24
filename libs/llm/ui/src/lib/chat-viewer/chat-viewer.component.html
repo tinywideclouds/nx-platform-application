@@ -8,6 +8,7 @@
 
   <div
     mobile-header
+    [class.hidden]="viewMode() === 'details'"
     class="p-2 bg-white border-b flex items-center gap-2 shadow-sm z-10"
   >
     <button type="button" (click)="clearSelection()">

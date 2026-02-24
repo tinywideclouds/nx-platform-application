@@ -1,4 +1,12 @@
 :host {
-  display: block;
+  /* Change from block to flex so it plays nicely with its parent */
+  display: flex;
+
+  /* Force it to grow and fill the entire screen width */
+  flex: 1;
+  width: 100%;
   height: 100%;
+
+  /* Crucial flexbox safety valve to prevent children from blowing out the width */
+  min-width: 0;
 }

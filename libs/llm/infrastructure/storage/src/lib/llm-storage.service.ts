@@ -117,6 +117,10 @@ export class LlmStorageService {
     });
   }
 
+  async deleteSession(id: URN): Promise<void> {
+    await this.db.sessions.delete(id.toString());
+  }
+
   // --- MAINTENANCE ---
 
   async clearDatabase(): Promise<void> {
