@@ -1,4 +1,5 @@
 import { Component, inject, signal, computed } from '@angular/core';
+import { Router } from '@angular/router';
 import { CommonModule, DatePipe } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,7 +8,10 @@ import { MatInputModule } from '@angular/material/input';
 import { URN } from '@nx-platform-application/platform-types';
 
 // Domain & Feature Layers
-import { LlmSessionSource, LlmScrollSource } from '@nx-platform-application/llm-features-chat';
+import {
+  LlmSessionSource,
+  LlmScrollSource,
+} from '@nx-platform-application/llm-features-chat';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
 
 @Component({
@@ -19,12 +23,13 @@ import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversat
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
-    DatePipe
+    DatePipe,
   ],
   templateUrl: './session-sidebar.component.html',
-  styleUrl: './session-sidebar.component.scss'
+  styleUrl: './session-sidebar.component.scss',
 })
 export class LlmSessionSidebarComponent {
+  private router = inject(Router);
   // --- Sources (Read-Only State) ---
   protected sessionSource = inject(LlmSessionSource);
   protected scrollSource = inject(LlmScrollSource);
@@ -41,12 +46,12 @@ export class LlmSessionSidebarComponent {
   readonly filteredSessions = computed(() => {
     const q = this.query().toLowerCase().trim();
     const all = this.sessionSource.sessions();
-    
+
     if (!q) return all;
-    
+
     // Currently searching by ID, but future-proofed for when sessions have titles
-    return all.filter(session => 
-      session.id.toString().toLowerCase().includes(q)
+    return all.filter((session) =>
+      session.id.toString().toLowerCase().includes(q),
     );
   });
 

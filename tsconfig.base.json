@@ -65,11 +65,11 @@
       "@nx-platform-application/directory-types": [
         "libs/directory/types/src/index.ts"
       ],
-      "@nx-platform-application/llm-app-mocking": [
-        "libs/llm/app-mocking/src/index.ts"
-      ],
       "@nx-platform-application/lib-messenger-test-app-mocking": [
         "libs/messenger/test/app-mocking/src/index.ts"
+      ],
+      "@nx-platform-application/llm-app-mocking": [
+        "libs/llm/app-mocking/src/index.ts"
       ],
       "@nx-platform-application/llm-core": ["libs/llm/core/src/index.ts"],
       "@nx-platform-application/llm-domain-conversation": [
@@ -78,11 +78,17 @@
       "@nx-platform-application/llm-features-chat": [
         "libs/llm/features/chat/src/index.ts"
       ],
+      "@nx-platform-application/llm-features-data-sources": [
+        "libs/llm/features/data-sources/src/index.ts"
+      ],
       "@nx-platform-application/llm-infrastructure-client-access": [
         "libs/llm/infrastructure/client-access/src/index.ts"
       ],
       "@nx-platform-application/llm-infrastructure-gemini-access": [
         "libs/llm/infrastructure/gemini-access/src/index.ts"
+      ],
+      "@nx-platform-application/llm-infrastructure-github-firestore-access": [
+        "libs/llm/infrastructure/github-firestore-access/src/index.ts"
       ],
       "@nx-platform-application/llm-infrastructure-indexed-db": [
         "libs/llm/infrastructure/indexed-db/src/index.ts"

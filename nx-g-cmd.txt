@@ -318,3 +318,8 @@ nx g @nx/angular:library --name=llm-domain-conversation --directory=libs/llm/dom
 
 
 nx g @nx/angular:library --name=lib-llm-app-mocking --directory=libs/llm/app-mocking --tags="scope:llm" 
+
+
+nx g @nx/angular:library --name=llm-infrastructure-github-firestore-access --directory=libs/llm/infrastructure/github-firestore-access --tags="scope:llm"    
+
+nx g @nx/angular:library --name=llm-features-data-sources --directory=libs/llm/features/data-sources --tags="scope:llm"    

@@ -32,6 +32,7 @@ export class LlmSessionSource {
       title: date.year + ':' + date.month + ':' + date.day + ':' + id.entityId,
       lastModified: now.toString() as ISODateTimeString,
       isOptimistic: true,
+      attachments: [], // Ensure attachments is defined to prevent UI errors, can be updated later when real session is saved and re-fetched from DB
     };
 
     this.sessions.update((list) => [fakeSession, ...list]);

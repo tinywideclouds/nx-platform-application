@@ -3,29 +3,72 @@ import { Route } from '@angular/router';
 export const appRoutes: Route[] = [
   {
     path: '',
-    pathMatch: 'full',
-    redirectTo: 'chat',
-  },
-  {
-    path: 'chat',
+    // LAYER 1: The App Shell (Contains the main toolbar)
+    // ✅ Updated import to use the UI library barrel
+    loadComponent: () =>
+      import('@nx-platform-application/llm-ui').then(
+        (m) => m.LlmHomePageComponent,
+      ),
     children: [
       {
-        // 1. Specific Session: /chat/urn:llm:session:123
-        path: ':sessionId',
-        loadComponent: () =>
-          import('@nx-platform-application/llm-ui').then(
-            (m) => m.LlmChatViewerComponent,
-          ),
-      },
-      {
-        // 2. Default/Root: /chat
-        // Loads the same component, but 'sessionId' input will be undefined.
-        // The component will handle the "Find Recent or Create New" logic.
         path: '',
+        pathMatch: 'full',
+        redirectTo: 'chat',
+      },
+
+      // --- LAYER 2: CHAT WORKSPACE ---
+      {
+        path: 'chat',
+        children: [
+          {
+            path: ':sessionId',
+            loadComponent: () =>
+              import('@nx-platform-application/llm-ui').then(
+                (m) => m.LlmChatViewerComponent,
+              ),
+          },
+          {
+            path: '',
+            loadComponent: () =>
+              import('@nx-platform-application/llm-ui').then(
+                (m) => m.LlmChatViewerComponent,
+              ),
+          },
+        ],
+      },
+
+      // --- LAYER 2: DATA SOURCES WORKSPACE ---
+      {
+        path: 'data-sources',
         loadComponent: () =>
           import('@nx-platform-application/llm-ui').then(
-            (m) => m.LlmChatViewerComponent,
+            (m) => m.LlmDataSourcesLayoutComponent,
           ),
+        children: [
+          // LAYER 3: The Detail Pages
+          {
+            path: 'new',
+            loadComponent: () =>
+              import('@nx-platform-application/llm-ui').then(
+                (m) => m.LlmDataSourcePageComponent,
+              ),
+          },
+          {
+            path: ':id',
+            loadComponent: () =>
+              import('@nx-platform-application/llm-ui').then(
+                (m) => m.LlmDataSourcePageComponent,
+              ),
+          },
+          {
+            path: '',
+            loadComponent: () =>
+              import('@nx-platform-application/llm-ui').then(
+                (m) => m.LlmDataSourcesPlaceholderComponent,
+              ),
+            pathMatch: 'full',
+          },
+        ],
       },
     ],
   },

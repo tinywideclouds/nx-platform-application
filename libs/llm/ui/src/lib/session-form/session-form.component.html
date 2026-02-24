@@ -1,4 +1,26 @@
 <form class="p-4 max-w-4xl mx-auto" (submit)="$event.preventDefault()">
+  @if (attachments().length === 0) {
+    <div
+      class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8 shadow-sm flex items-start gap-4"
+    >
+      <div class="bg-indigo-100 p-3 rounded-full text-indigo-600 shrink-0">
+        <mat-icon>school</mat-icon>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-indigo-900 m-0">
+          Welcome to your Context Engine
+        </h3>
+        <p class="text-indigo-800 text-sm mt-2 mb-0 leading-relaxed">
+          LLMs are incredibly smart, but they don't know your codebase until you
+          teach them. Use the settings below to attach synced GitHub
+          repositories to this session. Every message you send will be bundled
+          with this context, giving the AI the exact knowledge it needs to
+          answer accurately.
+        </p>
+      </div>
+    </div>
+  }
+
   <div class="flex flex-col gap-4">
     <mat-form-field
       [floatLabel]="'always'"
@@ -22,48 +44,52 @@
       }
     </mat-form-field>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-      <mat-form-field [floatLabel]="'always'" class="w-full">
-        <mat-label>Go Microservice Cache ID</mat-label>
-        <input
-          matInput
-          placeholder="e.g., caches/my-repo-bundle"
-          [value]="cacheId()"
-          (input)="cacheId.set($any($event.target).value)"
-          [readonly]="!isEditing()"
-        />
+    <div class="mt-4 pt-6 border-t border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <h3
+          class="font-medium text-gray-800 text-base m-0 flex items-center gap-2"
+        >
+          <mat-icon class="text-gray-400">dataset</mat-icon>
+          Data Sources & Context
+        </h3>
         @if (isEditing()) {
-          <mat-hint class="text-xs text-gray-500"
-            >Binds session to a cached repository state.</mat-hint
+          <button
+            mat-stroked-button
+            color="primary"
+            type="button"
+            class="bg-white"
           >
+            <mat-icon>add</mat-icon> Add Data Source
+          </button>
         }
-        @if (cacheIdModified()) {
-          <mat-hint class="text-blue-600 text-xs font-medium"
-            >Modified</mat-hint
-          >
-        }
-      </mat-form-field>
+      </div>
 
-      <mat-form-field [floatLabel]="'always'" class="w-full">
-        <mat-label>System Prompts Collection ID</mat-label>
-        <input
-          matInput
-          placeholder="e.g., prompts/golang-expert"
-          [value]="systemPromptsId()"
-          (input)="systemPromptsId.set($any($event.target).value)"
-          [readonly]="!isEditing()"
-        />
-        @if (isEditing()) {
-          <mat-hint class="text-xs text-gray-500"
-            >Binds session to a specific instruction set.</mat-hint
-          >
-        }
-        @if (promptsModified()) {
-          <mat-hint class="text-blue-600 text-xs font-medium"
-            >Modified</mat-hint
-          >
-        }
-      </mat-form-field>
+      @if (attachments().length === 0) {
+        <div
+          class="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center bg-gray-50/50"
+        >
+          <p class="text-gray-500 m-0 text-sm">
+            No data sources attached. The AI will only know what you type.
+          </p>
+        </div>
+      } @else {
+        <div class="flex flex-col gap-3">
+          @for (attachment of attachments(); track attachment.id) {
+            <div
+              class="border border-gray-200 rounded-lg p-4 bg-white shadow-sm flex justify-between items-center"
+            >
+              <div>
+                <p class="font-medium text-gray-800 m-0 text-sm">
+                  {{ attachment.cacheId.toString() }}
+                </p>
+                <p class="text-xs text-gray-500 m-0 mt-1">
+                  Target: {{ attachment.target }}
+                </p>
+              </div>
+            </div>
+          }
+        </div>
+      }
     </div>
   </div>
 
@@ -93,8 +119,8 @@
     <div class="mt-12 pt-6 border-t border-red-100 rounded-lg bg-red-50 p-4">
       <div class="flex items-center justify-between">
         <div>
-          <h4 class="text-red-700 font-medium">Danger Zone</h4>
-          <p class="text-red-500 text-sm">
+          <h4 class="text-red-700 font-medium m-0">Danger Zone</h4>
+          <p class="text-red-500 text-sm mt-1 m-0">
             Deleting this session will remove all associated chat history.
           </p>
         </div>

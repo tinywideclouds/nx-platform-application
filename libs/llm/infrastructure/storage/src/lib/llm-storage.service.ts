@@ -53,6 +53,7 @@ export class LlmStorageService {
             title: msgRecord.sessionId.toString(), // Default title is the session ID, can be updated later
             lastModified: msgRecord.timestamp,
             contextGroups: {}, // Initialize the empty dictionary
+            attachments: [], // Start with no attachments
           });
         }
       },

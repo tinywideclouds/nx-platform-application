@@ -20,13 +20,17 @@ export class LlmSessionActions {
     this.source.addOptimisticSession(newId);
 
     // 2. Navigate
-    this.router.navigate(['chat', newId.toString()]);
+    this.router.navigate(['/chat', newId.toString()], {
+      queryParams: { view: 'details' },
+    });
   }
 
   /**
    * Switches the active session.
    */
   openSession(sessionId: URN): void {
-    this.router.navigate(['chat', sessionId.toString()]);
+    this.router.navigate(['/chat', sessionId.toString()], {
+      queryParams: { view: null },
+    });
   }
 }

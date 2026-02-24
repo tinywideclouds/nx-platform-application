@@ -1,4 +1,7 @@
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 
 // Define the specific strategies we can use to pass context to the LLM
 export type ContextInjectionTarget =
@@ -16,8 +19,7 @@ export interface SessionAttachment {
 export interface LlmSession {
   id: URN;
   title: string;
-  createdAt: number;
-  updatedAt: number;
+  lastModified: ISODateTimeString;
 
   // --- NEW ---
   attachments: SessionAttachment[];

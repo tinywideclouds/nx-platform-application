@@ -262,6 +262,7 @@ export class LlmChatActions {
       title: mode === 'copy' ? 'Branched Session' : 'Extracted Session',
       lastModified: now,
       contextGroups: {}, // Start with a clean dictionary
+      attachments: [], // Start with no attachments
     };
 
     await this.storage.saveSession(newSession);

@@ -51,6 +51,7 @@ export const LLM_SCENARIOS: Record<string, LlmScenarioData> = {
         id: SESSION_1,
         title: 'Angular Architecture Review',
         lastModified: now.toString() as ISODateTimeString,
+        attachments: [],
       },
     ],
     messages: [
@@ -68,6 +69,7 @@ export const LLM_SCENARIOS: Record<string, LlmScenarioData> = {
         id: SESSION_1,
         title: 'Long Context Window Test',
         lastModified: now.toString() as ISODateTimeString,
+        attachments: [],
       },
     ],
     messages: Array.from({ length: 100 }, (_, i) =>
