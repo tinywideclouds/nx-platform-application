@@ -1,32 +1,35 @@
 import {
   Component,
   output,
+  inject,
   input,
   effect,
   signal,
   computed,
   ChangeDetectionStrategy,
-  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 
+// MATERIAL IMPORTS (Drastically reduced)
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatStepperModule } from '@angular/material/stepper';
-import { MatSelectModule } from '@angular/material/select';
-import { MatRadioModule } from '@angular/material/radio';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { URN } from '@nx-platform-application/platform-types';
+// NEW CHILD COMPONENTS
+import { LlmDataSourceStepperComponent } from '../data-source-stepper/data-source-stepper.component';
+import { LlmContextHierarchyComponent } from '../context-hierarchy/context-hierarchy.component';
+
+import { LlmDataSourcesStateService } from '@nx-platform-application/llm-features-data-sources';
 import {
   LlmSession,
   SessionAttachment,
-  ContextInjectionTarget,
 } from '@nx-platform-application/llm-types';
-import { LlmDataSourcesStateService } from '@nx-platform-application/llm-features-data-sources';
 
 @Component({
   selector: 'llm-session-form',
@@ -34,24 +37,33 @@ import { LlmDataSourcesStateService } from '@nx-platform-application/llm-feature
   imports: [
     CommonModule,
     FormsModule,
+    RouterModule,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
     MatIconModule,
     MatChipsModule,
-    MatStepperModule,
-    MatSelectModule,
-    MatRadioModule,
+    MatTooltipModule,
+    MatProgressSpinnerModule,
+    LlmDataSourceStepperComponent,
+    LlmContextHierarchyComponent,
   ],
   templateUrl: './session-form.component.html',
   styleUrl: './session-form.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmSessionFormComponent {
+  // NEW: Inject state to check for existing data sources
   dataSourcesState = inject(LlmDataSourcesStateService);
 
+  // NEW: Computed property to check if caches exist
+  hasDataSources = computed(() => this.dataSourcesState.caches().length > 0);
   // --- INPUTS & OUTPUTS ---
   session = input<LlmSession | null>(null);
+
+  // NEW: Pass-through for compilation
+  isCompiling = input<boolean>(false);
+  compileCache = output<void>();
 
   save = output<LlmSession>();
   delete = output<void>();
@@ -62,12 +74,7 @@ export class LlmSessionFormComponent {
 
   // --- ATTACHMENTS STATE ---
   attachments = signal<SessionAttachment[]>([]);
-
-  // --- STEPPER STATE ---
   isAddingSource = signal(false);
-  selectedCacheId = signal<string | null>(null);
-  selectedProfileId = signal<string | undefined>(undefined);
-  selectedTarget = signal<ContextInjectionTarget>('inline-context');
 
   // --- COMPUTED ---
   contextGroupEntries = computed(() => {
@@ -76,14 +83,10 @@ export class LlmSessionFormComponent {
   });
 
   constructor() {
-    this.dataSourcesState.loadAllCaches();
-
     effect(() => {
       const s = this.session();
       if (s) {
-        // Sync local attachments with the Single Source of Truth
         this.attachments.set(s.attachments ? [...s.attachments] : []);
-        // Reset the title input buffer if we aren't actively typing in it
         if (!this.isEditingTitle()) {
           this.editTitleValue.set(s.title || '');
         }
@@ -92,7 +95,6 @@ export class LlmSessionFormComponent {
   }
 
   // --- TITLE ACTIONS ---
-
   startTitleEdit(): void {
     this.editTitleValue.set(this.session()?.title || '');
     this.isEditingTitle.set(true);
@@ -110,42 +112,25 @@ export class LlmSessionFormComponent {
     this.isEditingTitle.set(false);
   }
 
-  // --- ATTACHMENT WIZARD ACTIONS ---
-
+  // --- ATTACHMENT ORCHESTRATION ---
   startAddingSource(): void {
     this.isAddingSource.set(true);
-    this.selectedCacheId.set(null);
-    this.selectedProfileId.set(undefined);
-    this.selectedTarget.set('inline-context');
   }
 
   cancelAddingSource(): void {
     this.isAddingSource.set(false);
   }
 
-  async onCacheSelected(cacheId: string): Promise<void> {
-    this.selectedCacheId.set(cacheId);
-    this.selectedProfileId.set(undefined);
-    await this.dataSourcesState.selectCache(cacheId);
-  }
+  confirmAddSource(newAtt: SessionAttachment): void {
+    if (!this.session()) return;
 
-  confirmAddSource(): void {
-    const cId = this.selectedCacheId();
-    if (!cId || !this.session()) return;
+    // CACHE DRIFT: If they target the Gemini cache, the compiled ID is now invalid
+    const hasCacheDrift = newAtt.target === 'gemini-cache';
 
-    const newAtt: SessionAttachment = {
-      id: crypto.randomUUID(),
-      cacheId: URN.parse(cId),
-      profileId: this.selectedProfileId()
-        ? URN.parse(this.selectedProfileId()!)
-        : undefined,
-      target: this.selectedTarget(),
-    };
-
-    // Emit save immediately!
     this.save.emit({
       ...this.session()!,
       attachments: [...this.attachments(), newAtt],
+      geminiCache: hasCacheDrift ? undefined : this.session()?.geminiCache,
     });
 
     this.isAddingSource.set(false);
@@ -154,10 +139,13 @@ export class LlmSessionFormComponent {
   removeAttachment(id: string): void {
     if (!this.session()) return;
 
-    // Emit save immediately!
+    const targetAtt = this.attachments().find((a) => a.id === id);
+    const hasCacheDrift = targetAtt?.target === 'gemini-cache';
+
     this.save.emit({
       ...this.session()!,
       attachments: this.attachments().filter((a) => a.id !== id),
+      geminiCache: hasCacheDrift ? undefined : this.session()?.geminiCache,
     });
   }
 

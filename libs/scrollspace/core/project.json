@@ -6,6 +6,23 @@
   "projectType": "library",
   "tags": ["scope:scrollspace"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/scrollspace/core",
+        "configFile": "libs/scrollspace/core/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../coverage/libs/scrollspace/core",
+        "configFile": "libs/scrollspace/core/vitest.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

@@ -1,7 +1,20 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { LlmNetworkClient } from '@nx-platform-application/llm-infrastructure-client-access';
-import { GenerateStreamRequest } from '@nx-platform-application/llm-types';
+import {
+  LlmNetworkClient,
+  LlmStreamEvent,
+} from '@nx-platform-application/llm-infrastructure-client-access';
+import {
+  GenerateStreamRequest,
+  BuildCacheRequest,
+  BuildCacheResponse,
+  ChangeProposal,
+  serializeBuildCacheRequest,
+  deserializeBuildCacheResponse,
+  serializeGenerateStreamRequest,
+  deserializeSSEProposalEvent,
+  deserializeChangeProposalMap,
+} from '@nx-platform-application/llm-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 @Injectable({
@@ -9,28 +22,26 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 })
 export class GeminiDataService implements LlmNetworkClient {
   private readonly logger = inject(Logger);
-
   readonly isGenerating = signal(false);
-
   private readonly baseUrl = '';
 
-  generateStream(request: GenerateStreamRequest): Observable<string> {
+  // --- STREAMING INTERCEPTION ---
+
+  generateStream(request: GenerateStreamRequest): Observable<LlmStreamEvent> {
     this.isGenerating.set(true);
-    this.logger.debug('[STREAM DEBUG] Starting generation request', {
-      session_id: request.session_id,
-    });
 
-    return new Observable<string>((subscriber) => {
+    return new Observable<LlmStreamEvent>((subscriber) => {
       const controller = new AbortController();
+      const bodyString = serializeGenerateStreamRequest(request);
 
-      fetch(`${this.baseUrl}/v1/generate-stream`, {
+      fetch(`${this.baseUrl}/v1/llm/generate-stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
         },
-        body: JSON.stringify(request),
+        body: bodyString,
         signal: controller.signal,
       })
         .then(async (response) => {
@@ -40,13 +51,13 @@ export class GeminiDataService implements LlmNetworkClient {
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
+
           let isErrorEvent = false;
+          let isProposalEvent = false;
 
           while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
+            if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
@@ -56,14 +67,16 @@ export class GeminiDataService implements LlmNetworkClient {
               const trimmedLine = line.trim();
               if (!trimmedLine) continue;
 
-              if (trimmedLine.startsWith('event: error')) {
-                isErrorEvent = true;
+              if (trimmedLine.startsWith('event: ')) {
+                const eventType = trimmedLine.slice(7).trim();
+                if (eventType === 'error') isErrorEvent = true;
+                else if (eventType === 'proposal_created')
+                  isProposalEvent = true;
+                else if (eventType === 'done') {
+                  subscriber.complete();
+                  return;
+                }
                 continue;
-              }
-
-              if (trimmedLine.startsWith('event: done')) {
-                subscriber.complete();
-                return;
               }
 
               if (trimmedLine.startsWith('data: ')) {
@@ -71,50 +84,48 @@ export class GeminiDataService implements LlmNetworkClient {
 
                 if (isErrorEvent) {
                   subscriber.error(new Error(dataStr));
+                  isErrorEvent = false;
                   return;
+                }
+
+                if (isProposalEvent) {
+                  try {
+                    const sseEvent = deserializeSSEProposalEvent(dataStr);
+                    subscriber.next({ type: 'proposal', event: sseEvent });
+                  } catch (e) {
+                    this.logger.error(
+                      '[STREAM DEBUG] Failed to parse proposal event',
+                      e,
+                    );
+                  }
+                  isProposalEvent = false;
+                  continue;
                 }
 
                 if (dataStr === '{}' || dataStr === '') continue;
 
                 try {
                   const chunkObj = JSON.parse(dataStr);
-
                   const candidates =
                     chunkObj?.Candidates || chunkObj?.candidates;
-                  const candidate = candidates?.[0];
                   const parts =
-                    candidate?.Content?.Parts || candidate?.content?.parts;
-
-                  let tokenEmitted = false;
+                    candidates?.[0]?.Content?.Parts ||
+                    candidates?.[0]?.content?.parts;
 
                   if (parts && Array.isArray(parts)) {
                     for (const part of parts) {
-                      // 1. Sometimes the SDK serializes the part directly as a string
-                      if (typeof part === 'string') {
-                        subscriber.next(part);
-                        tokenEmitted = true;
-                      }
-                      // 2. Standard object format: { text: "..." }
-                      else if (part) {
-                        const textToken = part.Text ?? part.text;
-                        if (typeof textToken === 'string' && textToken !== '') {
-                          subscriber.next(textToken);
-                          tokenEmitted = true;
-                        }
+                      const textToken =
+                        typeof part === 'string'
+                          ? part
+                          : (part.Text ?? part.text);
+                      if (typeof textToken === 'string' && textToken !== '') {
+                        subscriber.next({ type: 'text', content: textToken });
                       }
                     }
                   }
-
-                  // 3. Fallback tracking if the structure mutates or misses
-                  if (!tokenEmitted) {
-                    this.logger.warn(
-                      '[STREAM DEBUG] Structure mismatch! Unrecognized candidate JSON:',
-                      candidate,
-                    );
-                  }
                 } catch (e) {
                   this.logger.error(
-                    '[STREAM DEBUG] Failed to parse JSON chunk',
+                    '[STREAM DEBUG] Failed to parse text chunk',
                     e,
                     { rawData: dataStr },
                   );
@@ -125,13 +136,7 @@ export class GeminiDataService implements LlmNetworkClient {
           subscriber.complete();
         })
         .catch((err) => {
-          if (err.name !== 'AbortError') {
-            this.logger.error(
-              '[STREAM DEBUG] Fetch stream encountered an error',
-              err,
-            );
-            subscriber.error(err);
-          }
+          if (err.name !== 'AbortError') subscriber.error(err);
         })
         .finally(() => this.isGenerating.set(false));
 
@@ -140,5 +145,53 @@ export class GeminiDataService implements LlmNetworkClient {
         this.isGenerating.set(false);
       };
     });
+  }
+
+  // --- COMPILATION ---
+
+  async buildCache(request: BuildCacheRequest): Promise<BuildCacheResponse> {
+    const bodyString = serializeBuildCacheRequest(request);
+
+    // FIX: Updated to match api.go BuildCompiledCacheHandler
+    const response = await fetch(
+      `${this.baseUrl}/v1/llm/compiled_cache/build`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: bodyString,
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Compilation failed: HTTP ${response.status} - ${await response.text()}`,
+      );
+    }
+    return deserializeBuildCacheResponse(await response.text());
+  }
+
+  // --- EPHEMERAL QUEUE REST CALLS ---
+
+  async listProposals(
+    sessionId: string,
+  ): Promise<Record<string, ChangeProposal>> {
+    const response = await fetch(
+      `${this.baseUrl}/v1/llm/session/${sessionId}/proposals`,
+    );
+    if (!response.ok)
+      throw new Error(`Failed to list proposals: HTTP ${response.status}`);
+    return deserializeChangeProposalMap(await response.text());
+  }
+
+  async removeProposal(sessionId: string, proposalId: string): Promise<void> {
+    // FIX: Unified DELETE endpoint replaces accept/reject
+    const response = await fetch(
+      `${this.baseUrl}/v1/llm/session/${sessionId}/proposals/${proposalId}`,
+      {
+        method: 'DELETE',
+      },
+    );
+    if (!response.ok)
+      throw new Error(`Failed to remove proposal: HTTP ${response.status}`);
   }
 }

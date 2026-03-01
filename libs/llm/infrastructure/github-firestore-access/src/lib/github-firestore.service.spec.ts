@@ -19,10 +19,8 @@ import { LlmGithubFirestoreClient } from './github-firestore.service';
 import {
   CacheBundle,
   FileMetadata,
-  FilterProfile,
   FilterRules,
   SyncResponse,
-  ProfileRequest,
   SyncStreamEvent,
 } from '@nx-platform-application/llm-types';
 
@@ -36,19 +34,16 @@ describe('LlmGithubFirestoreClient', () => {
       providers: [
         LlmGithubFirestoreClient,
         provideHttpClient(),
-        provideHttpClientTesting(), // Zoneless modern testing setup
+        provideHttpClientTesting(),
       ],
     });
 
     service = TestBed.inject(LlmGithubFirestoreClient);
     httpMock = TestBed.inject(HttpTestingController);
-
-    // Prepare to mock native fetch for the SSE streaming endpoint
     fetchSpy = vi.spyOn(globalThis, 'fetch');
   });
 
   afterEach(() => {
-    // SOT Lock: Ensure no dangling HTTP requests or mocked fetches remain
     httpMock.verify();
     vi.restoreAllMocks();
   });
@@ -81,7 +76,6 @@ describe('LlmGithubFirestoreClient', () => {
 
       const promise = service.executeSync('cache-1', mockRules);
 
-      // Note the encoded URI component check
       const req = httpMock.expectOne('/v1/caches/cache-1/sync');
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({ ingestionRules: mockRules });
@@ -101,29 +95,29 @@ describe('LlmGithubFirestoreClient', () => {
           { stage: 'Firestore', details: { message: 'Sync complete' } },
         ];
 
-        // Simulate a ReadableStream that yields chunks of text
-        const stream = new ReadableStream({
-          start(controller) {
-            const encoder = new TextEncoder();
-            // Emit first event
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(mockEvents[0])}\n\n`),
-            );
-            // Emit second event
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(mockEvents[1])}\n\n`),
-            );
-            controller.close();
-          },
-        });
+        const encoder = new TextEncoder();
+        const streamPayload = `data: ${JSON.stringify(mockEvents[0])}\n\ndata: ${JSON.stringify(mockEvents[1])}\n\n`;
 
-        // Mock fetch to return an OK response containing our fake stream
-        fetchSpy.mockResolvedValue(
-          new Response(stream, {
-            status: 200,
-            headers: { 'Content-Type': 'text/event-stream' },
-          }),
-        );
+        // FIX: Mock the getReader interface directly
+        const mockBody = {
+          getReader: () => {
+            let hasRead = false;
+            return {
+              read: async () => {
+                if (!hasRead) {
+                  hasRead = true;
+                  return { done: false, value: encoder.encode(streamPayload) };
+                }
+                return { done: true, value: undefined };
+              },
+            };
+          },
+        };
+
+        fetchSpy.mockResolvedValue({
+          ok: true,
+          body: mockBody,
+        } as any);
 
         const eventsReceived: SyncStreamEvent[] = [];
 
@@ -132,7 +126,6 @@ describe('LlmGithubFirestoreClient', () => {
           error: (err) => reject(err),
           complete: () => {
             try {
-              // Verify fetch was called with correct encoded URL and payload
               expect(fetchSpy).toHaveBeenCalledWith(
                 '/v1/caches/cache%3A123/sync',
                 expect.objectContaining({
@@ -141,7 +134,6 @@ describe('LlmGithubFirestoreClient', () => {
                 }),
               );
 
-              // Verify the stream was parsed into distinct objects correctly
               expect(eventsReceived).toEqual(mockEvents);
               resolve();
             } catch (e) {
@@ -154,10 +146,11 @@ describe('LlmGithubFirestoreClient', () => {
 
     it('should throw an error if the fetch response is not OK (e.g. 404/500)', () => {
       return new Promise<void>((resolve, reject) => {
-        // Mock a 404 response
-        fetchSpy.mockResolvedValue(
-          new Response(null, { status: 404, statusText: 'Not Found' }),
-        );
+        fetchSpy.mockResolvedValue({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as any);
 
         service
           .executeSyncStream('cache:123', { include: [], exclude: [] })
@@ -178,19 +171,29 @@ describe('LlmGithubFirestoreClient', () => {
 
     it('should emit an error if the Go backend sends an explicit error stage', () => {
       return new Promise<void>((resolve, reject) => {
-        const stream = new ReadableStream({
-          start(controller) {
-            const encoder = new TextEncoder();
-            controller.enqueue(
-              encoder.encode(
-                `data: {"stage":"error", "details":{"message":"GitHub rate limit exceeded"}}\n\n`,
-              ),
-            );
-            controller.close();
-          },
-        });
+        const encoder = new TextEncoder();
+        const streamPayload = `data: {"stage":"error", "details":{"message":"GitHub rate limit exceeded"}}\n\n`;
 
-        fetchSpy.mockResolvedValue(new Response(stream, { status: 200 }));
+        // FIX: Mock the getReader interface directly
+        const mockBody = {
+          getReader: () => {
+            let hasRead = false;
+            return {
+              read: async () => {
+                if (!hasRead) {
+                  hasRead = true;
+                  return { done: false, value: encoder.encode(streamPayload) };
+                }
+                return { done: true, value: undefined };
+              },
+            };
+          },
+        };
+
+        fetchSpy.mockResolvedValue({
+          ok: true,
+          body: mockBody,
+        } as any);
 
         service
           .executeSyncStream('cache:123', { include: [], exclude: [] })
@@ -216,8 +219,6 @@ describe('LlmGithubFirestoreClient', () => {
   });
 
   describe('Other Endpoints', () => {
-    // ... Existing tests for listCaches, getFiles, listProfiles, etc.
-    // Kept brief to focus on the new streaming logic, but they remain unchanged.
     it('should get file metadata via GET /v1/caches/{id}/files', async () => {
       const mockResponse = {
         files: [

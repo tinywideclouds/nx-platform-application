@@ -1,0 +1,112 @@
+<div
+  class="border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm my-2 w-full transition-all duration-300 font-sans"
+  [class.max-w-[85%]]="!isExpanded()"
+>
+  <div
+    class="bg-indigo-50/80 px-4 py-3 border-b border-indigo-100 flex justify-between items-start"
+  >
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2">
+        <mat-icon class="text-indigo-600 scale-75 m-0">code</mat-icon>
+        <span class="font-bold text-indigo-900 text-sm font-mono">{{
+          proposal().filePath
+        }}</span>
+
+        @if (status() === 'pending') {
+          <span
+            class="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-200"
+            >Pending Review</span
+          >
+        } @else if (status() === 'accepted') {
+          <span
+            class="text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800 px-2 py-0.5 rounded border border-green-200"
+            >Merged</span
+          >
+        } @else {
+          <span
+            class="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 px-2 py-0.5 rounded border border-red-200"
+            >Rejected</span
+          >
+        }
+      </div>
+      <p class="text-xs text-indigo-700/80 m-0">{{ proposal().reasoning }}</p>
+    </div>
+
+    <button
+      mat-icon-button
+      (click)="toggleExpand()"
+      class="scale-75 -my-2 -mr-2 text-indigo-600"
+    >
+      <mat-icon>{{
+        isExpanded() ? 'close_fullscreen' : 'fullscreen'
+      }}</mat-icon>
+    </button>
+  </div>
+
+  <div class="p-0 bg-slate-900 relative">
+    <div
+      class="absolute top-2 right-6 flex bg-slate-800 rounded-md p-0.5 border border-slate-700 z-10"
+    >
+      <button
+        (click)="viewMode.set('preview')"
+        [class.bg-slate-600]="viewMode() === 'preview'"
+        [class.text-white]="viewMode() === 'preview'"
+        [class.text-slate-400]="viewMode() !== 'preview'"
+        class="text-[10px] font-medium px-2 py-1 rounded-sm transition-colors hover:text-white"
+      >
+        Preview
+      </button>
+      <button
+        (click)="viewMode.set('diff')"
+        [class.bg-slate-600]="viewMode() === 'diff'"
+        [class.text-white]="viewMode() === 'diff'"
+        [class.text-slate-400]="viewMode() !== 'diff'"
+        class="text-[10px] font-medium px-2 py-1 rounded-sm transition-colors hover:text-white"
+      >
+        Raw Diff
+      </button>
+    </div>
+
+    <pre
+      class="m-0 p-4 pt-10 text-xs text-slate-300 font-mono overflow-x-auto"
+      [class.overflow-y-hidden]="!isExpanded()"
+      [class.overflow-y-auto]="isExpanded()"
+      [class.max-h-[70vh]]="isExpanded()"
+    ><code>{{ displayCode() }}</code></pre>
+  </div>
+
+  <div
+    class="px-4 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between"
+  >
+    <button
+      type="button"
+      mat-button
+      color="primary"
+      class="text-xs"
+      (click)="openWorkspace.emit(proposal().id)"
+    >
+      <mat-icon class="scale-75">open_in_new</mat-icon>
+      Open in Workspace
+    </button>
+
+    <div class="flex gap-2">
+      <button
+        mat-button
+        color="warn"
+        [disabled]="status() !== 'pending'"
+        (click)="onReject()"
+      >
+        Reject
+      </button>
+      <button
+        mat-flat-button
+        color="primary"
+        class="bg-green-600 hover:bg-green-700 text-white"
+        [disabled]="status() !== 'pending'"
+        (click)="onAccept()"
+      >
+        Accept Changes
+      </button>
+    </div>
+  </div>
+</div>

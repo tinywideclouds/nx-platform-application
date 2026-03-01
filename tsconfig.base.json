@@ -71,7 +71,6 @@
       "@nx-platform-application/llm-app-mocking": [
         "libs/llm/app-mocking/src/index.ts"
       ],
-      "@nx-platform-application/llm-core": ["libs/llm/core/src/index.ts"],
       "@nx-platform-application/llm-domain-conversation": [
         "libs/llm/domain/conversation/src/index.ts"
       ],
@@ -95,6 +94,10 @@
       ],
       "@nx-platform-application/llm-infrastructure-storage": [
         "libs/llm/infrastructure/storage/src/index.ts"
+      ],
+      "@nx-platform-application/llm-protos": ["libs/llm/protos/src/index.ts"],
+      "@nx-platform-application/llm-protos/*": [
+        "libs/llm/protos/dist/ts/src/types/*"
       ],
       "@nx-platform-application/llm-types": ["libs/llm/types/src/index.ts"],
       "@nx-platform-application/llm-ui": ["libs/llm/ui/src/index.ts"],

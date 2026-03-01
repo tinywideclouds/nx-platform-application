@@ -1,0 +1,24 @@
+{
+  "name": "llm-protos",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/llm/protos/src",
+  "projectType": "library",
+  "tags": ["scope:protos-llm"],
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["rimraf dist", "buf generate --template buf.gen.ts.yaml"],
+        "cwd": "libs/llm/protos"
+      },
+      "lint": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "buf lint",
+          "cwd": "libs/llm/protos"
+        }
+      },
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}

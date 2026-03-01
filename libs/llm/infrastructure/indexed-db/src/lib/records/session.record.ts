@@ -12,10 +12,11 @@ export interface LlmSessionRecord {
   title: string;
   lastModified: ISODateTimeString;
 
+  geminiCache?: string;
+  llmModel?: string;
   // --- NEW ---
   attachments: SessionAttachmentRecord[];
 
-  // --- LEGACY (Kept optional so old DB records don't break JSON parsing) ---
   cacheId?: string;
   systemPromptsId?: string;
 

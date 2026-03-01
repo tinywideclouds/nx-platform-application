@@ -4,6 +4,8 @@ import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-s
 import {
   GenerateStreamRequest,
   NetworkMessage,
+  LlmSession,
+  NetworkAttachment,
 } from '@nx-platform-application/llm-types';
 
 export interface ContextAssembly {
@@ -23,13 +25,11 @@ export class LlmContextBuilderService {
   private readonly MAX_SHORT_TERM_MEMORY = 50;
   private readonly FLUSH_THRESHOLD = 25;
 
-  async buildStreamRequest(sessionId: URN): Promise<ContextAssembly> {
-    const fullHistory = await this.storage.getSessionMessages(sessionId);
-
-    // 1. Strip out user-excluded messages
+  // FIX: Accept the full session object
+  async buildStreamRequest(session: LlmSession): Promise<ContextAssembly> {
+    const fullHistory = await this.storage.getSessionMessages(session.id);
     const activeMessages = fullHistory.filter((m) => !m.isExcluded);
 
-    // 2. Map to Network format AND concatenate adjacent roles simultaneously
     const collapsedHistory: NetworkMessage[] = [];
     const decoder = new TextDecoder();
 
@@ -38,10 +38,8 @@ export class LlmContextBuilderService {
       const currentContent = decoder.decode(msg.payloadBytes);
 
       if (lastMsg && lastMsg.role === msg.role) {
-        // ROLES COLLIDED: Concatenate their text payloads cleanly
         lastMsg.content = `${lastMsg.content}\n\n${currentContent}`;
       } else {
-        // SAFE: Roles alternate normally
         collapsedHistory.push({
           id: msg.id.toString(),
           role: msg.role,
@@ -51,13 +49,10 @@ export class LlmContextBuilderService {
       }
     }
 
-    // 3. Calculate ideal starting point on the collapsed history
     let startIndex = Math.max(
       0,
       collapsedHistory.length - this.MAX_SHORT_TERM_MEMORY,
     );
-
-    // 4. Enforce Gemini rule: Conversation must start with 'user'
     while (
       startIndex < collapsedHistory.length &&
       collapsedHistory[startIndex].role !== 'user'
@@ -67,16 +62,27 @@ export class LlmContextBuilderService {
 
     const networkHistory = collapsedHistory.slice(startIndex);
 
+    // NEW: Map inline-context attachments securely to the protobuf facade
+    const inlineAttachments: NetworkAttachment[] = (session.attachments || [])
+      .filter((a) => a.target === 'inline-context')
+      .map((a) => ({
+        id: a.id,
+        cacheId: a.cacheId.toString(),
+        profileId: a.profileId?.toString(),
+      }));
+
     return {
       request: {
-        session_id: sessionId.toString(),
+        sessionId: session.id.toString(),
+        model: session.llmModel || 'gemini-2.5-pro',
         history: networkHistory,
-        cache_id: '',
+        cacheId: session.geminiCache, // <-- Inject Compiled Cache ID
+        inlineAttachments: inlineAttachments, // <-- Inject JIT Context
       },
       memoryMetrics: {
-        totalHistoryCount: fullHistory.length, // Total DB weight
+        totalHistoryCount: fullHistory.length,
         activeWindowCount: networkHistory.length,
-        archivableCount: startIndex, // Number of collapsed items left behind
+        archivableCount: startIndex,
         isFlushRecommended: startIndex >= this.FLUSH_THRESHOLD,
       },
     };

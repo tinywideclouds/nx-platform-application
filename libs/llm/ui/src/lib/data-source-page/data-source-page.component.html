@@ -2,55 +2,18 @@
   <div
     class="z-10 relative bg-white shadow-sm px-6 py-4 flex items-center justify-between border-b border-gray-200 shrink-0 min-h-[72px]"
   >
-    <div class="flex flex-col">
-      <h1 class="text-xl font-bold text-gray-900 leading-tight m-0">
-        {{ isNew() ? 'New Repository Cache' : state.activeCache()?.repo }}
-      </h1>
-
-      @if (!isNew() && state.activeCache()) {
-        <div class="flex items-center gap-2 mt-1">
-          <span class="text-sm text-gray-500">Branch:</span>
-
-          <mat-form-field
-            appearance="outline"
-            class="text-sm m-0 p-0 page-width"
-            subscriptSizing="dynamic"
-          >
-            <mat-select
-              [value]="state.activeCache()?.id"
-              (selectionChange)="onBranchChange($event.value)"
-            >
-              @for (branchCache of availableBranches(); track branchCache.id) {
-                <mat-option [value]="branchCache.id">{{
-                  branchCache.branch
-                }}</mat-option>
-              }
-              <mat-divider></mat-divider>
-              <mat-option
-                value="NEW"
-                class="text-indigo-600 font-medium bg-indigo-50/50"
-              >
-                <mat-icon color="primary">add</mat-icon> Track New Branch
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
-
-          @if (state.activeCache()?.status === 'ready') {
-            <span
-              class="text-xs text-gray-400 ml-2 border-l border-gray-300 pl-2"
-            >
-              Synced
-              {{ state.activeCache()?.lastSyncedAt! * 1000 | date: 'short' }}
-            </span>
-          }
-        </div>
-      }
-    </div>
+    <llm-data-source-header
+      [isNew]="isNew()"
+      [cache]="state.activeCache()"
+      [availableBranches]="availableBranches()"
+      (branchChange)="onBranchChange($event)"
+    />
 
     <div class="flex items-center gap-2">
       @if (isNew()) {
-        <button mat-button (click)="onCancel()">Cancel</button>
+        <button type="button" mat-button (click)="onCancel()">Cancel</button>
         <button
+          type="button"
           mat-flat-button
           [color]="formErrorCount() > 0 ? 'warn' : 'primary'"
           (click)="triggerFormSave()"
@@ -61,28 +24,28 @@
     </div>
   </div>
 
-  <div class="flex-grow overflow-y-auto bg-gray-50 flex justify-center">
+  <div
+    class="flex-grow overflow-y-auto bg-gray-50 relative flex justify-center"
+  >
     @if (state.isActiveCacheLoading()) {
       <div
-        class="flex flex-col items-center justify-center h-64 text-gray-400 gap-4 w-full"
+        class="w-full flex flex-col items-center justify-center pt-32 gap-4 text-gray-400"
       >
         <mat-spinner diameter="40"></mat-spinner>
-        <span>Loading repository details...</span>
+        <span>Loading repository...</span>
       </div>
     } @else {
       <div class="w-full max-w-5xl px-4 md:px-8 py-8 pb-24 flex flex-col gap-8">
         @if (isNew()) {
           <section class="w-full animate-fade-in">
             <llm-data-source-form
-              [cache]="state.activeCache()"
-              [isNew]="isNew()"
+              [cache]="null"
+              [isNew]="true"
               (errorsChange)="formErrorCount.set($event)"
               (saveRepo)="onSaveRepo($event)"
             />
           </section>
-        }
-
-        @if (!isNew() && state.activeCache(); as cache) {
+        } @else if (state.activeCache(); as cache) {
           @if (cache.analysis) {
             <div
               class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 shadow-sm flex flex-col gap-6 animate-fade-in"
@@ -135,8 +98,8 @@
                       Up to date
                     </span>
                   }
-
                   <button
+                    type="button"
                     mat-flat-button
                     color="primary"
                     class="px-8 py-6 text-lg"
@@ -174,7 +137,6 @@
                   >autorenew</mat-icon
                 >
               </div>
-
               <div
                 class="p-4 h-64 overflow-y-auto font-mono text-sm text-gray-300 flex flex-col gap-2"
               >
@@ -188,39 +150,7 @@
                         log.details['msg'] ||
                         'Processing...'
                     }}</span>
-
-                    @if (log.details['incoming_files'] !== undefined) {
-                      <span
-                        class="text-yellow-400 text-xs mt-0.5 border border-yellow-400/30 px-1 rounded bg-yellow-400/10"
-                        >Incoming: {{ log.details['incoming_files'] }}</span
-                      >
-                    }
-                    @if (log.details['to_write'] !== undefined) {
-                      <span
-                        class="text-purple-400 text-xs mt-0.5 border border-purple-400/30 px-1 rounded bg-purple-400/10"
-                        >Writes: {{ log.details['to_write'] }}</span
-                      >
-                    }
-                    @if (log.details['to_delete'] !== undefined) {
-                      <span
-                        class="text-red-400 text-xs mt-0.5 border border-red-400/30 px-1 rounded bg-red-400/10"
-                        >Deletes: {{ log.details['to_delete'] }}</span
-                      >
-                    }
-                    @if (log.details['filesProcessed'] !== undefined) {
-                      <span
-                        class="text-green-300 text-xs mt-0.5 border border-green-300/30 px-1 rounded bg-green-300/10"
-                        >Total Processed:
-                        {{ log.details['filesProcessed'] }}</span
-                      >
-                    }
                   </div>
-                }
-
-                @if (state.syncLogs().length === 0) {
-                  <span class="text-gray-500 animate-pulse"
-                    >> Establishing connection to ingestion server...</span
-                  >
                 }
               </div>
             </div>

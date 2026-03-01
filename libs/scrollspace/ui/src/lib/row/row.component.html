@@ -62,7 +62,9 @@
     }
 
     <div
-      class="flex flex-col max-w-[85%] relative transition-transform duration-200"
+      class="flex flex-col relative transition-transform duration-200"
+      [class.w-full]="layout().fullWidth"
+      [class.max-w-[85%]]="!layout().fullWidth"
       [class.scale-[0.98]]="isSelectionMode() && !isSelected()"
       [class.items-end]="layout().alignment === 'end'"
       [class.items-start]="layout().alignment === 'start'"

@@ -57,8 +57,40 @@
   </div>
 
   <div class="p-4 bg-white border-t border-gray-200">
+    @if (chatLockState().locked) {
+      <div
+        class="flex items-center justify-between bg-amber-50 border border-amber-200 p-3 rounded-md mb-3 animate-fade-in shadow-sm"
+      >
+        <span
+          class="text-sm text-amber-800 font-medium flex items-center gap-2"
+        >
+          @if (chatLockState().reason.includes('Compiling')) {
+            <mat-icon class="animate-spin scale-75 m-0 text-amber-600"
+              >autorenew</mat-icon
+            >
+          } @else {
+            <mat-icon class="scale-75 m-0 text-amber-600">warning</mat-icon>
+          }
+          {{ chatLockState().reason }}
+        </span>
+
+        @if (chatLockState().reason.includes('Settings')) {
+          <button
+            type="button"
+            mat-flat-button
+            color="primary"
+            (click)="onOpenDetails()"
+          >
+            Go to Settings
+          </button>
+        }
+      </div>
+    }
+
     <scrollspace-input
-      [disabled]="source.isGenerating() || isSelectionMode()"
+      [disabled]="
+        source.isGenerating() || isSelectionMode() || chatLockState().locked
+      "
       (send)="onSend($event)"
     />
   </div>
@@ -131,11 +163,22 @@
           </div>
         }
 
-        <scrollspace-markdown-bubble
-          [itemId]="wrapper.id"
-          [class.border-dashed]="message.isExcluded"
-          [tokens]="message | llmContent | markdownTokens"
-        />
+        @let payload = message | llmContent;
+
+        @if (payload.type === 'proposal') {
+          <llm-proposal-bubble
+            [event]="payload.event"
+            (accept)="onAcceptProposal($event)"
+            (reject)="onRejectProposal($event, message.id.toString())"
+            (openWorkspace)="onOpenWorkspace($event)"
+          />
+        } @else {
+          <scrollspace-markdown-bubble
+            [itemId]="wrapper.id"
+            [class.border-dashed]="message.isExcluded"
+            [tokens]="payload.content | markdownTokens"
+          />
+        }
       </div>
     }
   </div>

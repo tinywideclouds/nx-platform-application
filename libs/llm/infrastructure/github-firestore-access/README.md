@@ -1,23 +1,21 @@
-# LLM Infrastructure: GitHub & Firestore Access
+# llm-infrastructure-github-firestore-access
 
-This library (`@nx-platform-application/llm-infrastructure-github-firestore-access`) acts as the strict HTTP infrastructure client connecting the Angular application to the Go-based `go-github-store` sync microservice.
+This library provides the Angular HTTP client for integrating with the LLM Microservice's GitHub caching and Firestore synchronization layer.
 
-## Architectural Role
+## Architecture & Responsibilities
 
-This library is strictly "dumb" infrastructure. It holds no application state, signals, or UI logic. Its sole responsibility is to accurately map TypeScript payloads to the `GET`, `POST`, `PUT`, and `DELETE` requests defined by the backend API.
+This service bridges the frontend application to the Go backend's workspace ingestion pipeline. It allows users to clone GitHub repositories, apply path-based filter rules, and synchronize the results into a fast, searchable Firestore cache for LLM context injection.
 
-The service routes traffic to the `/v1/caches` proxy endpoint, which the local development server (via `proxy.conf.json`) maps to the Go service on `:8080`.
+### Core Capabilities
 
-## API Coverage
+- **Cache Management**: Connects to `/v1/caches` to provision new repository clones and fetch file trees.
+- **Filter Profiles**: Provides CRUD operations for saving and managing user-defined ingestion rules (include/exclude glob patterns).
+- **Streaming Synchronization (`executeSyncStream`)**: Triggers the GitHub-to-Firestore syncing engine. Crucially, this method bypasses Angular's standard `HttpClient` (which buffers responses) and uses the native browser `fetch` API to process Server-Sent Events (SSE). This allows the UI to render real-time progression updates (e.g., "Fetching tree", "Syncing to Firestore") as the Go backend processes large repositories.
 
-The `LlmGithubFirestoreClient` covers the following domain boundaries:
+## Testing Notes
 
-- **Ingestion:** Triggering GitHub repository syncing (`POST /v1/caches/sync`).
-- **Metadata Reading:** Fetching available caches and lightweight file structures (excluding massive file content bodies to save bandwidth).
-- **Profile Management:** Full CRUD operations for YAML-based Filter Profiles.
+Testing the `executeSyncStream` SSE parser requires a specialized mock of the native `fetch` API's `Response.body.getReader()` interface. The test suite avoids relying on the global `ReadableStream` object to ensure compatibility with standard Node/Vitest environments.
 
 ## Running unit tests
 
-Run `nx test llm-infrastructure-github-firestore-access` to execute the unit tests via Vitest.
-
-The test suite uses `HttpTestingController` to ensure exact URL and HTTP verb mappings against the Go `ServeMux` specifications.
+Run `nx test llm-infrastructure-github-firestore-access` to execute the unit tests.

@@ -1,13 +1,29 @@
 import { InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';
-import { GenerateStreamRequest } from '@nx-platform-application/llm-types';
+import {
+  GenerateStreamRequest,
+  BuildCacheRequest,
+  BuildCacheResponse,
+  ChangeProposal,
+  SSEProposalEvent,
+} from '@nx-platform-application/llm-types';
 
-/**
- * CONTRACT: The "Gemini Access Lib" must provide this.
- * Decouples the Domain from the specific HTTP/WebSocket implementation.
- */
+export type LlmStreamEvent =
+  | { type: 'text'; content: string }
+  | { type: 'proposal'; event: SSEProposalEvent };
+
 export interface LlmNetworkClient {
-  generateStream(request: GenerateStreamRequest): Observable<string>;
+  // Streaming
+  generateStream(request: GenerateStreamRequest): Observable<LlmStreamEvent>;
+
+  // Compilation
+  buildCache(request: BuildCacheRequest): Promise<BuildCacheResponse>;
+
+  // Ephemeral Queue (Proposals)
+  listProposals(sessionId: string): Promise<Record<string, ChangeProposal>>;
+
+  // Unified deletion for both Accept & Reject actions
+  removeProposal(sessionId: string, proposalId: string): Promise<void>;
 }
 
 export const LLM_NETWORK_CLIENT = new InjectionToken<LlmNetworkClient>(

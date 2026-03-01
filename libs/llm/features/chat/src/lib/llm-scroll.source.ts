@@ -31,13 +31,29 @@ export class LlmScrollSource {
   }
 
   // 3. OUTPUT (Visual Transformation)
-  // ✅ This is the missing link that wraps LlmMessage -> ScrollItem<LlmMessage>
+  // LlmMessage -> ScrollItem<LlmMessage>
   readonly items = computed(() => {
-    return TimeSeries.transform(this._messages(), {
+    const rawItems = TimeSeries.transform(this._messages(), {
       getTimestamp: (m) => Temporal.Instant.from(m.timestamp),
       getActorId: (m) => m.role,
       getAlignment: (m) => (m.role === 'user' ? 'end' : 'start'),
       timeZone: 'UTC',
+    });
+
+    const decoder = new TextDecoder();
+
+    // Intercept and flag Workspace Proposals to span full width
+    return rawItems.map((item) => {
+      if (item.type === 'content') {
+        const data = item.data as LlmMessage;
+        if (data.payloadBytes) {
+          const text = decoder.decode(data.payloadBytes);
+          if (text.startsWith('{"__type":"workspace_proposal"')) {
+            item.layout.fullWidth = true;
+          }
+        }
+      }
+      return item;
     });
   });
 

@@ -20,6 +20,8 @@
       <div class="w-full max-w-5xl px-6 py-8 pb-20">
         <llm-session-form
           [session]="data"
+          [isCompiling]="isCompiling()"
+          (compileCache)="onCompileCache()"
           (save)="onSave($event)"
           (delete)="onDelete()"
         />

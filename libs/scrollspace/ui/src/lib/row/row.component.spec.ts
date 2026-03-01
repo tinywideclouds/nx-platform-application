@@ -8,6 +8,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import { Temporal } from '@js-temporal/polyfill';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { By } from '@angular/platform-browser';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // --- Mock Data ---
 const mockActor: ScrollActor = {
@@ -34,6 +35,13 @@ describe('ScrollspaceRowComponent', () => {
   let fixture: ComponentFixture<ScrollspaceRowComponent>;
 
   beforeEach(async () => {
+    // FIX: Mock IntersectionObserver for JSDOM
+    globalThis.IntersectionObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+
     await TestBed.configureTestingModule({
       imports: [ScrollspaceRowComponent],
       providers: [provideZonelessChangeDetection()],
@@ -74,21 +82,15 @@ describe('ScrollspaceRowComponent', () => {
       fixture.componentRef.setInput('item', continuousItem);
       fixture.detectChanges();
 
-      // The avatar div is guarded by @if (!layout.isContinuous)
       const avatarColumn = fixture.debugElement.query(By.css('.w-8.mr-2'));
-      // The column exists, but should be empty or contain a spacer?
-      // Template: @if (!continuous) { avatar }
-      // Else: <div class="w-8 mr-2 flex-shrink-0"></div> (Spacer) implied by else-if logic in plan?
-      // Checking my HTML: I didn't add the explicit spacer div in the HTML above,
-      // but the layout might shift if the column disappears.
-      // Let's verify the `img` or `rounded-full` div is absent.
       const avatarCircle = avatarColumn.query(By.css('.rounded-full'));
       expect(avatarCircle).toBeNull();
     });
   });
 
   describe('Adornments (Read Cursors)', () => {
-    it('should render read cursors when present', () => {
+    // FIX: Make the test async
+    it('should render read cursors when present', async () => {
       const itemWithCursors: ScrollItem<string> = {
         ...mockItem,
         adornments: {
@@ -108,6 +110,9 @@ describe('ScrollspaceRowComponent', () => {
       };
 
       fixture.componentRef.setInput('item', itemWithCursors);
+
+      // FIX: Await stability to let Zoneless CD run its microtasks
+      await fixture.whenStable();
       fixture.detectChanges();
 
       const cursorContainer = fixture.debugElement.query(

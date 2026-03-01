@@ -3,6 +3,7 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
+export const TextType: URN = URN.parse('urn:llm:message-type:text');
 /**
  * Domain representation of a single chat message.
  * Now payload-agnostic to align with Messenger architecture.
@@ -11,7 +12,7 @@ export interface LlmMessage {
   id: URN;
   sessionId: URN;
 
-  // ✅ The Messenger Pattern
+  // The Messenger Pattern
   typeId: URN; // e.g., urn:llm:message-type:text
   tags?: URN[];
 

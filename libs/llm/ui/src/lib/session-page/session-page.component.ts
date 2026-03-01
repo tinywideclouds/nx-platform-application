@@ -1,5 +1,6 @@
 import {
   Component,
+  computed,
   inject,
   input,
   output,
@@ -18,6 +19,7 @@ import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-s
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 
 import { LlmSessionFormComponent } from '../session-form/session-form.component';
+import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
 
 @Component({
   selector: 'llm-session-page',
@@ -34,13 +36,20 @@ import { LlmSessionFormComponent } from '../session-form/session-form.component'
 export class LlmSessionPageComponent {
   private storage = inject(LlmStorageService);
   private sessionSource = inject(LlmSessionSource);
+  private sessionActions = inject(LlmSessionActions);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
   sessionId = input<string | undefined>();
+
   closed = output<void>();
 
+  // Create a computed signal bound to the global tracker
+  isCompiling = computed(() => {
+    const s = this.session();
+    return s ? this.sessionActions.isCompiling(s.id.toString())() : false;
+  });
   session = signal<LlmSession | null>(null);
 
   constructor() {
@@ -89,6 +98,15 @@ export class LlmSessionPageComponent {
       this.onClose();
     } catch (e) {
       console.error('Failed to delete session', e);
+    }
+  }
+
+  // The button click is now strictly "fire and forget"
+  onCompileCache(): void {
+    const currentSession = this.session();
+    if (currentSession) {
+      // Don't await it! Let it run in the background.
+      this.sessionActions.compileSessionCache(currentSession);
     }
   }
 }

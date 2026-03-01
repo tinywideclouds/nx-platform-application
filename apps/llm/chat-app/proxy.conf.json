@@ -5,7 +5,7 @@
     "changeOrigin": true,
     "logLevel": "debug"
   },
-  "/v1": {
+  "/v1/llm": {
     "target": "http://localhost:8095",
     "secure": false,
     "changeOrigin": true,

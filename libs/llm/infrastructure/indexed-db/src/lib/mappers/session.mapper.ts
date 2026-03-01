@@ -37,6 +37,8 @@ export class LlmSessionMapper {
       id: URN.parse(record.id),
       title: record.title,
       lastModified: record.lastModified,
+      geminiCache: record.geminiCache,
+      llmModel: record.llmModel,
       attachments,
       contextGroups: record.contextGroups || {},
     };
@@ -56,6 +58,8 @@ export class LlmSessionMapper {
       id: domain.id.toString(),
       title: domain.title,
       lastModified: domain.lastModified,
+      geminiCache: domain.geminiCache,
+      llmModel: domain.llmModel,
       attachments: attachmentsRecord,
       contextGroups: domain.contextGroups || {},
     };

@@ -1,5 +1,5 @@
 <div class="p-4 w-full max-w-4xl mx-auto block">
-  @if (attachments().length === 0) {
+  @if (attachments().length === 0 && !isAddingSource()) {
     <div
       class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8 shadow-sm flex items-start gap-4"
     >
@@ -91,193 +91,44 @@
       </div>
 
       @if (isAddingSource()) {
-        <mat-stepper
-          linear="true"
-          #stepper
-          class="w-full block bg-gray-50 border border-gray-200 rounded-xl mb-6 shadow-inner"
-        >
-          <mat-step [completed]="!!selectedCacheId()">
-            <ng-template matStepLabel>Select Repository</ng-template>
-            <div class="py-4">
-              <mat-form-field appearance="outline" class="w-full">
-                <mat-label>Synced Data Sources</mat-label>
-                <mat-select
-                  [value]="selectedCacheId()"
-                  (selectionChange)="onCacheSelected($event.value)"
-                >
-                  @for (
-                    group of dataSourcesState.groupedCaches() | keyvalue;
-                    track group.key
-                  ) {
-                    <mat-optgroup [label]="group.key">
-                      @for (cache of group.value; track cache.id) {
-                        <mat-option [value]="cache.id">
-                          {{ cache.branch }}
-                          <span class="text-gray-400 text-xs ml-2"
-                            >({{ cache.status }})</span
-                          >
-                        </mat-option>
-                      }
-                    </mat-optgroup>
-                  }
-                </mat-select>
-              </mat-form-field>
+        @if (hasDataSources()) {
+          <llm-data-source-stepper
+            class="animate-fade-in"
+            (cancel)="cancelAddingSource()"
+            (addSource)="confirmAddSource($event)"
+          />
+        } @else {
+          <div
+            class="border border-gray-200 rounded-xl p-8 text-center bg-white shadow-sm w-full animate-fade-in flex flex-col items-center gap-3"
+          >
+            <div class="bg-gray-100 p-4 rounded-full text-gray-500 mb-2">
+              <mat-icon class="text-4xl m-0">inventory_2</mat-icon>
             </div>
-            <div class="flex gap-2">
-              <button mat-button type="button" (click)="cancelAddingSource()">
-                Cancel
-              </button>
-              <button
-                mat-flat-button
-                color="primary"
-                type="button"
-                matStepperNext
-                [disabled]="!selectedCacheId()"
+            <div>
+              <h4 class="font-bold text-gray-800 m-0 text-lg">
+                No Data Sources Configured
+              </h4>
+              <p class="text-gray-500 m-0 mt-1 text-sm max-w-md">
+                You need to sync a repository before you can attach it to a
+                session.
+              </p>
+            </div>
+            <div class="flex gap-3 mt-4">
+              <button mat-button (click)="cancelAddingSource()">Cancel</button>
+              <a mat-flat-button color="primary" routerLink="/data-sources/new"
+                >Create One Now</a
               >
-                Next
-              </button>
             </div>
-          </mat-step>
-
-          <mat-step [completed]="true">
-            <ng-template matStepLabel>Apply Filter</ng-template>
-            <div class="py-4">
-              <mat-form-field appearance="outline" class="w-full">
-                <mat-label>Filter Profile</mat-label>
-                <mat-select
-                  [value]="selectedProfileId()"
-                  (selectionChange)="selectedProfileId.set($event.value)"
-                >
-                  <mat-option [value]="undefined" class="italic text-gray-500"
-                    >Entire Repository (No Filter)</mat-option
-                  >
-                  @for (
-                    profile of dataSourcesState.activeProfiles();
-                    track profile.id
-                  ) {
-                    <mat-option [value]="profile.id">{{
-                      profile.name
-                    }}</mat-option>
-                  }
-                </mat-select>
-                <mat-hint
-                  >Filters dictate which files are sent to the AI.</mat-hint
-                >
-              </mat-form-field>
-            </div>
-            <div class="flex gap-2">
-              <button mat-button type="button" matStepperPrevious>Back</button>
-              <button
-                mat-flat-button
-                color="primary"
-                type="button"
-                matStepperNext
-              >
-                Next
-              </button>
-            </div>
-          </mat-step>
-
-          <mat-step [completed]="true">
-            <ng-template matStepLabel>Injection Target</ng-template>
-            <div class="py-4">
-              <mat-radio-group
-                class="flex flex-col gap-4"
-                [value]="selectedTarget()"
-                (change)="selectedTarget.set($event.value)"
-              >
-                <mat-radio-button value="inline-context" color="primary">
-                  <div class="flex flex-col">
-                    <span class="font-medium"
-                      >Inline Context (Recommended)</span
-                    >
-                    <span
-                      class="text-xs text-gray-500 whitespace-normal mt-0.5 leading-tight"
-                      >Passes the files directly into the chat history. Best for
-                      standard Q&A.</span
-                    >
-                  </div>
-                </mat-radio-button>
-
-                <mat-radio-button value="system-instruction" color="primary">
-                  <div class="flex flex-col">
-                    <span class="font-medium">System Instructions</span>
-                    <span
-                      class="text-xs text-gray-500 whitespace-normal mt-0.5 leading-tight"
-                      >Treats the files as rules/instructions. Best for style
-                      guides or strict architectural rules.</span
-                    >
-                  </div>
-                </mat-radio-button>
-              </mat-radio-group>
-            </div>
-            <div class="flex gap-2 mt-4">
-              <button mat-button type="button" matStepperPrevious>Back</button>
-              <button
-                mat-flat-button
-                color="primary"
-                type="button"
-                (click)="confirmAddSource()"
-              >
-                Attach Source
-              </button>
-            </div>
-          </mat-step>
-        </mat-stepper>
-      }
-
-      @if (attachments().length === 0 && !isAddingSource()) {
-        <div
-          class="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center bg-gray-50/50 w-full"
-        >
-          <p class="text-gray-500 m-0 text-sm">
-            No data sources attached. The AI will only know what you type.
-          </p>
-        </div>
+          </div>
+        }
       } @else {
-        <div class="flex flex-col gap-3 w-full">
-          @for (attachment of attachments(); track attachment.id) {
-            <div
-              class="border border-gray-200 rounded-lg p-4 bg-white shadow-sm flex justify-between items-center group"
-            >
-              <div class="flex flex-col gap-1">
-                <p
-                  class="font-medium text-gray-800 m-0 text-sm flex items-center gap-2"
-                >
-                  <mat-icon class="text-indigo-500 scale-75 m-0 h-5 w-5"
-                    >source</mat-icon
-                  >
-                  {{ attachment.cacheId.entityId }}
-                </p>
-                <div class="flex items-center gap-2 mt-1">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200"
-                  >
-                    Target: {{ attachment.target }}
-                  </span>
-                  @if (attachment.profileId) {
-                    <span
-                      class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200"
-                    >
-                      Profile: {{ attachment.profileId.entityId }}
-                    </span>
-                  }
-                </div>
-              </div>
-
-              <button
-                mat-icon-button
-                color="warn"
-                type="button"
-                class="opacity-0 group-hover:opacity-100 transition-opacity"
-                (click)="removeAttachment(attachment.id)"
-                matTooltip="Remove Source"
-              >
-                <mat-icon>delete</mat-icon>
-              </button>
-            </div>
-          }
-        </div>
+        <llm-context-hierarchy
+          [session]="session()"
+          [attachments]="attachments()"
+          [isCompiling]="isCompiling()"
+          (removeAttachment)="removeAttachment($event)"
+          (compileCache)="compileCache.emit()"
+        />
       }
     </div>
   </div>

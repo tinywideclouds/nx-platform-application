@@ -21,6 +21,13 @@ describe('ScrollspaceViewportComponent', () => {
   };
 
   beforeEach(async () => {
+    // FIX: Mock ResizeObserver for JSDOM
+    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+
     await TestBed.configureTestingModule({
       imports: [ScrollspaceViewportComponent],
       providers: [provideZonelessChangeDetection()],
@@ -43,8 +50,6 @@ describe('ScrollspaceViewportComponent', () => {
 
   describe('Scroll Logic (Sticky Tail)', () => {
     it('should scroll to bottom when sticky is active', async () => {
-      // Mock Viewport State: At Bottom (Sticky)
-      // clientHeight=100, scrollHeight=1000, scrollTop=900 (1000-100)
       Object.defineProperty(viewportEl, 'scrollHeight', {
         value: 1000,
         configurable: true,
@@ -58,11 +63,10 @@ describe('ScrollspaceViewportComponent', () => {
         configurable: true,
       });
 
+      // FIX: Polyfill the missing JSDOM method before spying
+      viewportEl.scrollTo = vi.fn();
       const scrollSpy = vi.spyOn(viewportEl, 'scrollTo');
 
-      // Trigger logic via Public Method (mimicking the Effect's action)
-      // Note: In unit tests, `afterNextRender` is hard to trigger automatically,
-      // so we test the logic method directly if visible, or verify the 'scrollToBottom' method.
       component.scrollToBottom();
 
       expect(scrollSpy).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
@@ -70,7 +74,6 @@ describe('ScrollspaceViewportComponent', () => {
     });
 
     it('should show button when user is scrolled up (History Reading)', () => {
-      // 1. Simulate User Scrolled Up
       Object.defineProperty(viewportEl, 'scrollHeight', {
         value: 1000,
         configurable: true,
@@ -78,17 +81,15 @@ describe('ScrollspaceViewportComponent', () => {
       Object.defineProperty(viewportEl, 'scrollTop', {
         value: 500,
         configurable: true,
-      }); // Far from bottom
+      });
       Object.defineProperty(viewportEl, 'clientHeight', {
         value: 100,
         configurable: true,
       });
 
-      // Trigger Scroll Event
       viewportEl.dispatchEvent(new Event('scroll'));
       fixture.detectChanges();
 
-      // 2. Verify State
       expect(component.showScrollButton()).toBe(true);
     });
   });
@@ -113,19 +114,18 @@ describe('ScrollspaceViewportComponent', () => {
       fixture.componentRef.setInput('historySpacerHeight', 500);
       fixture.detectChanges();
 
-      const spacer = fixture.debugElement.query(
-        By.css('[style.height.px="500"]'),
-      );
+      // FIX: Query by class, then check the inline style property
+      const spacer = fixture.debugElement.query(By.css('.shrink-0'));
       expect(spacer).toBeTruthy();
+      expect(spacer.nativeElement.style.height).toBe('500px');
     });
 
     it('should NOT render spacer div when height is 0', () => {
       fixture.componentRef.setInput('historySpacerHeight', 0);
       fixture.detectChanges();
 
-      const spacer = fixture.debugElement.query(
-        By.css('[style.height.px="0"]'),
-      );
+      // FIX: Query by class
+      const spacer = fixture.debugElement.query(By.css('.shrink-0'));
       expect(spacer).toBeNull();
     });
   });

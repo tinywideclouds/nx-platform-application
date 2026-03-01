@@ -1,0 +1,11 @@
+// Defines the message contract for the LLM service.
+syntax = "proto3";
+
+package src.types.cache.v1;
+option go_package = "github.com/tinywideclouds/gen-llm/go/types/cache/v1;cache_v1";
+
+message StoreCollectionsPb {
+  string bundle_collection = 1;
+  string files_collection = 2;
+  string profiles_collection = 3;
+}

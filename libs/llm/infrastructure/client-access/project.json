@@ -6,6 +6,15 @@
   "projectType": "library",
   "tags": ["scope:llm"],
   "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/llm/infrastructure/client-access",
+        "configFile": "libs/llm/infrastructure/client-access/vite.config.mts"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }

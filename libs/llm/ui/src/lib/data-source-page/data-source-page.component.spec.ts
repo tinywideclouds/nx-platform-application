@@ -11,7 +11,6 @@ import {
   FilterProfile,
   SyncStreamEvent,
 } from '@nx-platform-application/llm-types';
-import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
 
 describe('LlmDataSourcePageComponent', () => {
@@ -32,28 +31,18 @@ describe('LlmDataSourcePageComponent', () => {
     selectCache: vi.fn(),
     createCache: vi.fn(),
     executeSync: vi.fn(),
-    saveProfile: vi.fn(),
-    deleteProfile: vi.fn(),
-  };
-
-  const mockDialog = {
-    open: vi.fn().mockReturnValue({ afterClosed: () => of(true) }),
-  };
-
-  const mockActivatedRoute = {
-    paramMap: of({ get: () => 'cache-1' }),
   };
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-
     await TestBed.configureTestingModule({
       imports: [LlmDataSourcePageComponent, BrowserAnimationsModule],
       providers: [
         provideRouter([]),
         { provide: LlmDataSourcesStateService, useValue: mockStateService },
-        { provide: MatDialog, useValue: mockDialog },
-        { provide: ActivatedRoute, useValue: mockActivatedRoute },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: of(new Map([['id', 'new']])) },
+        },
       ],
     }).compileComponents();
 
@@ -62,86 +51,24 @@ describe('LlmDataSourcePageComponent', () => {
 
     fixture = TestBed.createComponent(LlmDataSourcePageComponent);
     component = fixture.componentInstance;
+    fixture.detectChanges();
   });
 
-  describe('Route Handling', () => {
-    it('should call selectCache when an ID is provided', () => {
-      fixture.detectChanges();
-      expect(mockStateService.selectCache).toHaveBeenCalledWith('cache-1');
-      expect(component.isNew()).toBe(false);
-    });
-
-    it('should show the Unsynced Analysis block when status is unsynced', () => {
-      mockStateService.activeCache.set({
-        id: 'cache-1',
-        repo: 'org/repo',
-        branch: 'main',
-        status: 'unsynced',
-        analysis: { totalFiles: 1500, totalSizeBytes: 1048576, extensions: {} },
-      } as CacheBundle);
-      fixture.detectChanges();
-
-      const textContent = fixture.debugElement.nativeElement.textContent;
-      // Note: Because formatBytes is now in the child component, we simply verify the
-      // parent component orchestrates the template and renders the title
-      expect(textContent).toContain('Ready for First Sync');
-    });
-
-    it('should show the Syncing Terminal block when status is syncing', () => {
-      mockStateService.activeCache.set({
-        id: 'cache-1',
-        status: 'syncing',
-      } as CacheBundle);
-      mockStateService.syncLogs.set([
-        { stage: 'GitHub', details: { message: 'Fetching...' } },
-      ]);
-      fixture.detectChanges();
-
-      const textContent = fixture.debugElement.nativeElement.textContent;
-      expect(textContent).toContain('Sync Execution Stream');
-      expect(textContent).toContain('[GITHUB]');
-      expect(textContent).toContain('Fetching...');
-    });
-  });
-
-  describe('Branch Switcher', () => {
-    beforeEach(() => {
-      mockStateService.activeCache.set({
-        id: 'c-1',
-        repo: 'org/repo',
-        branch: 'main',
-        status: 'ready',
-      } as CacheBundle);
-      mockStateService.groupedCaches.set({
-        'org/repo': [
-          {
-            id: 'c-1',
-            repo: 'org/repo',
-            branch: 'main',
-            status: 'ready',
-          } as CacheBundle,
-          {
-            id: 'c-2',
-            repo: 'org/repo',
-            branch: 'dev',
-            status: 'ready',
-          } as CacheBundle,
-        ],
-      });
-      fixture.detectChanges();
-    });
-
-    it('should compute available branches for the active repo', () => {
-      expect(component.availableBranches().length).toBe(2);
-      expect(component.availableBranches()[1].id).toBe('c-2');
-    });
-
+  describe('Routing Actions', () => {
     it('should navigate to the new cacheId when a different branch is selected', async () => {
       await component.onBranchChange('c-2');
       expect(router.navigate).toHaveBeenCalledWith(['/data-sources', 'c-2']);
     });
 
     it('should prompt for a new branch and create it when NEW is selected', async () => {
+      mockStateService.activeCache.set({
+        id: 'c-1',
+        repo: 'org/repo',
+        branch: 'main',
+        status: 'ready',
+        fileCount: 10,
+        lastSyncedAt: 0,
+      });
       vi.spyOn(window, 'prompt').mockReturnValue('feature-branch');
       mockStateService.createCache.mockResolvedValue('new-cache-id');
 

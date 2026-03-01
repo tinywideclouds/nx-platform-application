@@ -43,6 +43,8 @@ import {
   BranchContextDialogComponent,
   BranchContextDialogResult,
 } from '../branch-context-dialog/branch-context-dialog.component';
+
+import { LlmProposalBubbleComponent } from '../proposal-bubble/proposal-bubble.component';
 import { LlmMessage } from '@nx-platform-application/llm-types';
 
 @Component({
@@ -57,6 +59,7 @@ import { LlmMessage } from '@nx-platform-application/llm-types';
     MarkdownTokensPipe,
     LlmChatHeaderComponent,
     LlmContentPipe,
+    LlmProposalBubbleComponent,
   ],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
@@ -72,13 +75,22 @@ export class LlmChatWindowComponent {
   private sessionSource = inject(LlmSessionSource);
   private sessionActions = inject(LlmSessionActions);
 
-  private cdr = inject(ChangeDetectorRef); // <-- NEW: Inject ChangeDetectorRef
+  private cdr = inject(ChangeDetectorRef);
 
   readonly sessionId = input<string>();
 
   isSelectionMode = signal(false);
   selectedIds = signal<Set<string>>(new Set());
   focusedGroupUrn = signal<string | null>(null);
+
+  activeSession = computed(() => {
+    const idStr = this.sessionId();
+    if (!idStr) return null;
+    return (
+      this.sessionSource.sessions().find((s) => s.id.toString() === idStr) ||
+      null
+    );
+  });
 
   activeContextGroups = computed<Record<string, string>>(() => {
     const currentId = this.source.activeSessionId();
@@ -90,8 +102,38 @@ export class LlmChatWindowComponent {
     return session?.contextGroups || {};
   });
 
+  chatLockState = computed(() => {
+    const session = this.activeSession();
+    if (!session) return { locked: false, reason: '' };
+
+    const isCompiling = this.sessionActions.isCompiling(
+      session.id.toString(),
+    )();
+    if (isCompiling) {
+      return {
+        locked: true,
+        reason: '⚙️ Compiling context cache... please wait.',
+      };
+    }
+
+    // Check for "Cache Drift" (attachments exist, but no cache ID generated)
+    // Note: Safe navigation `?` added in case legacy sessions have no attachments array
+    const needsCompile =
+      session.attachments?.some((a) => a.target === 'gemini-cache') &&
+      !session.geminiCache;
+
+    if (needsCompile) {
+      return {
+        locked: true,
+        reason: '⚠️ Context changed. Please compile the cache in Settings.',
+      };
+    }
+
+    return { locked: false, reason: '' };
+  });
+
   constructor() {
-    // ✅ REACTIVE ROUTING LOGIC
+    // REACTIVE ROUTING LOGIC
     effect(() => {
       const idStr = this.sessionId();
 
@@ -394,5 +436,37 @@ export class LlmChatWindowComponent {
       // can capture the "After" state for the smooth morphing animation.
       this.cdr.detectChanges();
     });
+  }
+
+  async onAcceptProposal(proposalId: string) {
+    const session = this.activeSession();
+    if (!session) return;
+
+    // Delegate to the global diff registry action
+    await this.sessionActions.acceptProposal(session, proposalId);
+  }
+
+  async onRejectProposal(proposalId: string, messageId: string) {
+    const session = this.activeSession();
+    if (!session) return;
+
+    // 1. Clear the backend ephemeral queue
+    await this.sessionActions.rejectProposal(session, proposalId);
+    // 2. Exclude from local context so it doesn't waste tokens on the next prompt
+    await this.actions.toggleExcludeSelected([messageId], true);
+  }
+
+  onOpenWorkspace(proposalId: string) {
+    const session = this.activeSession();
+    if (!session) return;
+
+    // Navigate to the future Virtual Workspace section!
+    // We pass the session ID and the proposal ID so the workspace knows exactly what to load
+    this.router.navigate([
+      '/workspace',
+      session.id.toString(),
+      'proposals',
+      proposalId,
+    ]);
   }
 }

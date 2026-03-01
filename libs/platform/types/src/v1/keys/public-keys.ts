@@ -51,7 +51,7 @@ export function deserializeJsonToPublicKeys(json: unknown): PublicKeys {
  * Serializes a "smart" PublicKeys object into a JSON-safe object
  */
 export function serializePublicKeysToJson(
-  keys: PublicKeys
+  keys: PublicKeys,
 ): Record<string, string> {
   // 1. Map Smart interface to Proto object
   const protoPb = publicKeysToProto(keys);

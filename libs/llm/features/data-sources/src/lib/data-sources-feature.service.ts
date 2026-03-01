@@ -18,11 +18,9 @@ export class LlmDataSourcesStateService {
 
   // --- STATE SIGNALS ---
 
-  // Global Collection
   caches = signal<CacheBundle[]>([]);
   isCachesLoading = signal<boolean>(false);
 
-  // Active Selection State
   activeCacheId = signal<string | null>(null);
   activeFiles = signal<FileMetadata[]>([]);
   activeProfiles = signal<FilterProfile[]>([]);
@@ -38,7 +36,6 @@ export class LlmDataSourcesStateService {
     return this.caches().find((c) => c.id === id) || null;
   });
 
-  // Transforms flat cache array into { 'owner/repo': [CacheBundle, CacheBundle] }
   groupedCaches = computed(() => {
     const list = this.caches();
     const groups: Record<string, CacheBundle[]> = {};
@@ -88,12 +85,15 @@ export class LlmDataSourcesStateService {
     } catch (e) {
       console.error(`Failed to load files for cache ${cacheId}`, e);
       this.activeFiles.set([]);
+      // FIX 1: Rethrow so Promise.all in selectCache knows this failed!
+      throw e;
     }
   }
 
   async selectCache(cacheId: string): Promise<void> {
     this.activeCacheId.set(cacheId);
     this.isActiveCacheLoading.set(true);
+    this.syncLogs.set([]); // FIX 2: Clear terminal logs on new selection
 
     try {
       await Promise.all([
@@ -127,7 +127,6 @@ export class LlmDataSourcesStateService {
         payload.branch,
       );
 
-      // Optimistically push the skeleton into the state
       this.caches.update((c) => [...c, newCache]);
       return newCache.id;
     } catch (error) {
@@ -138,18 +137,15 @@ export class LlmDataSourcesStateService {
   }
 
   executeSync(cacheId: string, ingestionRules: FilterRules): Promise<void> {
-    this.syncLogs.set([]); // Reset the terminal
+    this.syncLogs.set([]);
 
-    // Optimistically set status
     this.caches.update((caches) =>
       caches.map((c) => (c.id === cacheId ? { ...c, status: 'syncing' } : c)),
     );
 
-    // Wrap the Observable in a Promise so the UI Component can safely await it
     return new Promise<void>((resolve, reject) => {
       this.client.executeSyncStream(cacheId, ingestionRules).subscribe({
         next: (event: SyncStreamEvent) => {
-          // Push new events to the UI signal instantly
           this.syncLogs.update((logs) => [...logs, event]);
         },
         error: (error) => {
@@ -168,7 +164,6 @@ export class LlmDataSourcesStateService {
               duration: 3000,
             });
 
-            // Reload fresh data to update UI stats
             await this.loadAllCaches();
             if (this.activeCacheId() === cacheId) {
               await this.loadFilesForCache(cacheId);
@@ -187,7 +182,6 @@ export class LlmDataSourcesStateService {
   async saveProfile(req: ProfileRequest, profileId?: string): Promise<void> {
     const cacheId = this.activeCacheId();
     if (!cacheId) {
-      // Throw explicitly so the UI ConfirmationDialog catches it and allows retry/cancel
       throw new Error('Cannot save a profile without an active cache ID.');
     }
 
@@ -204,7 +198,6 @@ export class LlmDataSourcesStateService {
         );
       }
 
-      // Update local state to avoid refetching everything
       this.activeProfiles.update((profiles) => {
         const idx = profiles.findIndex((p) => p.id === savedProfile.id);
         if (idx >= 0) {
@@ -218,8 +211,6 @@ export class LlmDataSourcesStateService {
       this.snackBar.open('Filter profile saved', 'Close', { duration: 3000 });
     } catch (e) {
       console.error('Failed to save profile', e);
-      // We do NOT show a generic error banner here anymore, because the Smart Page
-      // will intercept this throw and show the 'Retry/Cancel' ConfirmationDialog instead.
       throw e;
     }
   }
@@ -231,7 +222,6 @@ export class LlmDataSourcesStateService {
     try {
       await firstValueFrom(this.client.deleteProfile(cacheId, profileId));
 
-      // Remove from local state
       this.activeProfiles.update((profiles) =>
         profiles.filter((p) => p.id !== profileId),
       );

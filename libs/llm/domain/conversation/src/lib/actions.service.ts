@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { Temporal } from '@js-temporal/polyfill';
 import {
@@ -8,13 +8,20 @@ import {
 
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
-import { LlmMessage, LlmSession } from '@nx-platform-application/llm-types';
+import {
+  LlmMessage,
+  LlmSession,
+  SSEProposalEvent,
+  TextType,
+} from '@nx-platform-application/llm-types';
 import {
   LlmScrollSource,
   LlmSessionSource,
 } from '@nx-platform-application/llm-features-chat';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { LlmContextBuilderService } from './context-builder.service';
+
+const encoder = new TextEncoder();
 
 @Injectable({ providedIn: 'root' })
 export class LlmChatActions {
@@ -31,95 +38,107 @@ export class LlmChatActions {
   private accumulatedText = '';
   private activeBotMsg: LlmMessage | null = null;
 
+  // State for the UI to bind the Diff Viewer to
+  readonly activeProposal = signal<SSEProposalEvent | null>(null);
+
   /**
    * The Full "Chat Loop":
-   * 1. Optimistic User Message (Sink + DB)
-   * 2. Bot Placeholder (Sink)
-   * 3. Network Stream -> Update Placeholder (Sink)
-   * 4. Stream Complete -> Save Bot Message (DB)
+   * 1. User Message (Sink + DB) -> AWAITED!
+   * 2. Bot Placeholder (Sink + DB) -> AWAITED!
+   * 3. Assemble Context (Reads synced DB)
+   * 4. Network Stream -> Updates Placeholder (Sink)
+   * 5. Stream Complete -> Save final payload (DB)
    */
   async sendMessage(text: string, sessionId: URN): Promise<void> {
-    const now = Temporal.Now.instant();
-    const encoder = new TextEncoder();
+    const idStr = sessionId.toString();
+    const session = this.sessionSource
+      .sessions()
+      .find((s) => s.id.toString() === idStr);
 
-    // --- STEP 1: USER MESSAGE ---
-    const userMsg: LlmMessage = {
-      id: URN.create('message', crypto.randomUUID(), 'llm'),
-      sessionId,
-      role: 'user',
-      typeId: URN.parse('urn:llm:message-type:text'),
-      payloadBytes: encoder.encode(text),
-      timestamp: now.toString() as ISODateTimeString,
-    };
-
-    this.logger.debug('message -> sink', userMsg);
-    this.sink.addMessage(userMsg);
-
-    // Await save to ensure the DB is perfectly up-to-date before context building
-    await this.storage.saveMessage(userMsg);
-    this.logger.debug('message -> saved', userMsg);
-
-    // NEW: Refresh the sidebar so a brand new session appears immediately,
-    // or an existing session is bumped to the top of the list.
-    this.sessionSource.refresh();
+    if (!session) {
+      this.logger.error(`Session ${idStr} not found`);
+      return;
+    }
 
     this.sink.setLoading(true);
+    const now = Temporal.Now.instant();
 
-    // --- STEP 2: BOT PLACEHOLDER ---
-    this.activeBotId = URN.create('message', crypto.randomUUID(), 'llm');
-    const botNow = now.add({ milliseconds: 100 }); // Ensure bot message is always after user message
-    this.activeBotMsg = {
-      id: this.activeBotId,
-      sessionId,
-      role: 'model',
-      typeId: URN.parse('urn:llm:message-type:text'),
-      payloadBytes: new Uint8Array(), // Empty
-      timestamp: botNow.toString() as ISODateTimeString,
+    // --- STEP 1: USER MESSAGE ---
+    const userMsgId = URN.create('message', crypto.randomUUID(), 'llm');
+    const userMsg: LlmMessage = {
+      id: userMsgId,
+      typeId: TextType,
+      sessionId: sessionId,
+      role: 'user',
+      timestamp: now.toString() as ISODateTimeString,
+      payloadBytes: encoder.encode(text),
+      isExcluded: false,
     };
 
-    this.logger.debug('llm message -> sink', this.activeBotMsg);
-    this.sink.addMessage(this.activeBotMsg);
+    await this.storage.saveMessage(userMsg);
+    this.sink.addMessage(userMsg);
 
-    // --- STEP 3: ASSEMBLE CONTEXT & CHECK MEMORY ---
-    // Unwrapping the newly typed ContextAssembly
-    const assembly = await this.contextBuilder.buildStreamRequest(sessionId);
+    // --- STEP 2: ASSEMBLE CONTEXT (PRISTINE DB STATE) ---
+    // We build the network request NOW, before the bot placeholder exists in the DB!
+    const assembly = await this.contextBuilder.buildStreamRequest(session);
     const request = assembly.request;
 
-    this.logger.debug('llm assembled session', assembly.request.session_id);
+    // DO NOT REMOVE the bot message MUST be later than the user message
+    const botTime = now.add({ milliseconds: 1 });
+    // --- STEP 3: BOT PLACEHOLDER (UI STATE) ---
+    const botMsgId = URN.create('message', crypto.randomUUID(), 'llm');
+    const botMsg: LlmMessage = {
+      id: botMsgId,
+      typeId: TextType,
+      sessionId: sessionId,
+      role: 'model',
+      timestamp: botTime.toString() as ISODateTimeString,
+      payloadBytes: new Uint8Array(),
+      isExcluded: false,
+    };
 
-    // Future-Proofing: Alert the system if long-term memory needs a flush
-    if (assembly.memoryMetrics.isFlushRecommended) {
-      console.log(
-        `[Memory Alert] Session ${sessionId} has ${assembly.memoryMetrics.archivableCount} archivable messages. Ready for long-term flush.`,
-      );
-    }
+    this.activeBotId = botMsgId;
+    this.activeBotMsg = botMsg;
+
+    await this.storage.saveMessage(botMsg);
+    this.sink.addMessage(botMsg);
 
     // --- STEP 4: EXECUTE NETWORK STREAM ---
     this.accumulatedText = '';
+    this.activeProposal.set(null); // Clear previous proposal
 
-    // Assign to activeSubscription so we can cancel it via the UI
-
-    this.logger.debug(
-      'llm assembled session -> microservice',
-      request.session_id,
-    );
-    console.log('LLM Stream Request', request);
+    // Ephemeral Architecture: We only pass the serialized request body to the stream
     this.activeSubscription = this.network.generateStream(request).subscribe({
-      next: (chunk) => {
-        this.accumulatedText += chunk;
-        console.log('Received chunk', {
-          chunk,
-          accumulated: this.accumulatedText,
-        });
-        if (this.activeBotId) {
-          this.sink.updateMessagePayload(
-            this.activeBotId,
-            encoder.encode(this.accumulatedText),
-          );
+      next: (event) => {
+        if (event.type === 'text') {
+          this.accumulatedText += event.content;
+          if (this.activeBotId) {
+            this.sink.updateMessagePayload(
+              this.activeBotId,
+              encoder.encode(this.accumulatedText),
+            );
+          }
+        } else if (event.type === 'proposal') {
+          this.logger.debug('Received Tool Interception Proposal', event.event);
+          this.activeProposal.set(event.event);
+
+          const storagePayload = JSON.stringify({
+            __type: 'workspace_proposal',
+            data: event.event,
+          });
+
+          this.accumulatedText = storagePayload;
+
+          if (this.activeBotId) {
+            this.sink.updateMessagePayload(
+              this.activeBotId,
+              encoder.encode(this.accumulatedText),
+            );
+          }
         }
       },
       error: (err) => {
-        console.error('LLM Generation Failed', err);
+        this.logger.error('LLM Generation Failed', err);
         this.finalizeGeneration();
       },
       complete: () => {
@@ -128,11 +147,6 @@ export class LlmChatActions {
     });
   }
 
-  /**
-   * Called by the UI (chat-window.component.ts) to stop generation.
-   * This unsubscribes from the observable, triggering the AbortController
-   * in the network client, which drops the connection to the Go server.
-   */
   cancelGeneration(): void {
     if (this.activeSubscription) {
       this.activeSubscription.unsubscribe();
@@ -140,43 +154,33 @@ export class LlmChatActions {
     }
   }
 
-  /**
-   * Called by the UI after the Snackbar resolves.
-   */
   resolveCancellation(action: 'save' | 'delete'): void {
     if (
       action === 'save' &&
       this.activeBotMsg &&
       this.accumulatedText.length > 0
     ) {
-      // User wants to keep it: Commit to DB
-      const encoder = new TextEncoder();
       const finalMsg: LlmMessage = {
         ...this.activeBotMsg,
         payloadBytes: encoder.encode(this.accumulatedText),
       };
       this.storage.saveMessage(finalMsg);
     } else if (action === 'delete' && this.activeBotId) {
-      // User wants it gone: Scrub from the UI (it was never in the DB)
       this.sink.removeMessage(this.activeBotId);
+      this.storage.deleteMessages([this.activeBotId]);
     }
 
-    // Reset state securely
     this.activeSubscription = null;
     this.activeBotId = null;
     this.activeBotMsg = null;
     this.accumulatedText = '';
+    this.activeProposal.set(null);
   }
 
-  /**
-   * Ensures the loading state is cleared, the final/partial message
-   * is saved to the database, and state is reset.
-   */
   private finalizeGeneration(): void {
     this.sink.setLoading(false);
 
     if (this.activeBotMsg && this.accumulatedText.length > 0) {
-      const encoder = new TextEncoder();
       const finalMsg: LlmMessage = {
         ...this.activeBotMsg,
         payloadBytes: encoder.encode(this.accumulatedText),
@@ -184,7 +188,6 @@ export class LlmChatActions {
       this.storage.saveMessage(finalMsg);
     }
 
-    // Cleanup to prevent memory leaks or rogue state
     this.activeSubscription = null;
     this.activeBotId = null;
     this.activeBotMsg = null;
@@ -200,7 +203,6 @@ export class LlmChatActions {
 
     let targetUrnStr = payload.urn;
 
-    // 1. Handle New Group Creation
     if (payload.newName) {
       const newUrn = URN.create('tag', crypto.randomUUID(), 'llm');
       targetUrnStr = newUrn.toString();
@@ -219,7 +221,6 @@ export class LlmChatActions {
     if (!targetUrnStr) return;
     const groupUrn = URN.parse(targetUrnStr);
 
-    // 2. Tag the Messages
     for (const idStr of messageIds) {
       try {
         const urn = URN.parse(idStr);
@@ -241,10 +242,6 @@ export class LlmChatActions {
     }
   }
 
-  /**
-   * Branches a conversation by moving selected messages to a brand new session.
-   * Returns the new Session URN so the caller can navigate.
-   */
   async extractToNewSession(
     messageIds: string[],
     activeSessionId: URN,
@@ -253,7 +250,6 @@ export class LlmChatActions {
     if (!messageIds || messageIds.length === 0)
       throw new Error('No messages selected');
 
-    // 1. Create the new Session
     const newSessionId = URN.create('session', crypto.randomUUID(), 'llm');
     const now = Temporal.Now.instant().toString() as ISODateTimeString;
 
@@ -261,13 +257,12 @@ export class LlmChatActions {
       id: newSessionId,
       title: mode === 'copy' ? 'Branched Session' : 'Extracted Session',
       lastModified: now,
-      contextGroups: {}, // Start with a clean dictionary
-      attachments: [], // Start with no attachments
+      contextGroups: {},
+      attachments: [],
     };
 
     await this.storage.saveSession(newSession);
 
-    // 2. Process the messages
     for (const idStr of messageIds) {
       try {
         const urn = URN.parse(idStr);
@@ -275,12 +270,10 @@ export class LlmChatActions {
 
         if (msg) {
           if (mode === 'move') {
-            // MOVE: Update existing record, remove from current UI
             const movedMsg: LlmMessage = { ...msg, sessionId: newSessionId };
             await this.storage.saveMessage(movedMsg);
             this.sink.removeMessage(urn);
           } else {
-            // COPY: Generate new ID to avoid DB collision, keep in current UI
             const newMsgId = URN.create('message', crypto.randomUUID(), 'llm');
             const copiedMsg: LlmMessage = {
               ...msg,
@@ -295,29 +288,18 @@ export class LlmChatActions {
       }
     }
 
-    // 3. Refresh sidebar and return the new ID
     this.sessionSource.refresh();
     return newSessionId;
   }
-  /**
-   * Permanently deletes selected messages from the database and UI.
-   */
+
   async deleteSelected(messageIds: string[]): Promise<void> {
     if (!messageIds || messageIds.length === 0) return;
 
     const urns = messageIds.map((id) => URN.parse(id));
-
-    // 1. Delete from DB
     await this.storage.deleteMessages(urns);
-
-    // 2. Sync UI
     this.sink.removeMessages(urns);
   }
 
-  /**
-   * Toggles the 'Exclude' flag on selected messages.
-   * Excluded messages remain visible but are ignored by the context builder.
-   */
   async toggleExcludeSelected(
     messageIds: string[],
     exclude: boolean,
@@ -325,11 +307,7 @@ export class LlmChatActions {
     if (!messageIds || messageIds.length === 0) return;
 
     const urns = messageIds.map((id) => URN.parse(id));
-
-    // 1. Update DB
     await this.storage.updateMessageExclusions(urns, exclude);
-
-    // 2. Sync UI
     this.sink.updateMessageExclusions(urns, exclude);
   }
 }

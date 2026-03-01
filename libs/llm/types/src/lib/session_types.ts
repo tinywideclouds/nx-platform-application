@@ -21,6 +21,10 @@ export interface LlmSession {
   title: string;
   lastModified: ISODateTimeString;
 
+  //explicit reference to an optional Gemini cache for sessions that are tied to a specific codebase snapshot. This allows the UI to display relevant info and also enables future features like automatic cache refreshing or invalidation when the underlying code changes.
+  geminiCache?: string;
+  llmModel?: string;
+
   // --- NEW ---
   attachments: SessionAttachment[];
 
