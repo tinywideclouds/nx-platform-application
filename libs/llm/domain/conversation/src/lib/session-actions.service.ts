@@ -6,7 +6,11 @@ import {
 } from '@nx-platform-application/platform-types';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
-import { LlmSession } from '@nx-platform-application/llm-types';
+import {
+  FileProposalType,
+  LlmSession,
+  SSEProposalEvent,
+} from '@nx-platform-application/llm-types';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
@@ -113,10 +117,7 @@ export class LlmSessionActions {
 
   async acceptProposal(session: LlmSession, proposalId: string): Promise<void> {
     try {
-      // TODO (Virtual Workspace): Apply the patch to the local file state
-      // and save the updated file to the primary database BEFORE clearing the queue!
-
-      // Clear the LLM's ephemeral memory by completely removing the proposal
+      await this.updateLocalProposalStatus(session.id, proposalId, 'accepted');
       await this.network.removeProposal(session.id.toString(), proposalId);
 
       this.snackBar.open(
@@ -135,15 +136,53 @@ export class LlmSessionActions {
 
   async rejectProposal(session: LlmSession, proposalId: string): Promise<void> {
     try {
-      // Clear the LLM's ephemeral memory
+      await this.updateLocalProposalStatus(session.id, proposalId, 'rejected');
       await this.network.removeProposal(session.id.toString(), proposalId);
 
-      this.snackBar.open('Proposal rejected and cleared.', 'Close', {
-        duration: 3000,
-      });
+      this.snackBar.open('Proposal rejected.', 'Close', { duration: 3000 });
     } catch (e) {
       this.logger.error('Failed to reject proposal', e);
+      this.snackBar.open('Failed to reject proposal.', 'Close', {
+        duration: 4000,
+      });
       throw e;
+    }
+  }
+
+  private async updateLocalProposalStatus(
+    sessionId: URN,
+    proposalId: string,
+    newStatus: 'accepted' | 'rejected',
+  ): Promise<void> {
+    const messages = await this.storage.getSessionMessages(sessionId);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+
+    for (const msg of messages) {
+      if (!msg.payloadBytes || !msg.typeId.equals(FileProposalType)) {
+        continue;
+      }
+
+      const text = decoder.decode(msg.payloadBytes);
+      try {
+        const parsed = JSON.parse(text);
+
+        // Backwards compatibility for old records that had the __type wrapper
+        const payload =
+          parsed.__type === 'workspace_proposal' ? parsed.data : parsed;
+        const event = payload as SSEProposalEvent;
+
+        if (event.proposal.id === proposalId) {
+          event.proposal.status = newStatus;
+
+          const newBytes = encoder.encode(JSON.stringify(event));
+          await this.storage.saveMessage({ ...msg, payloadBytes: newBytes });
+
+          break;
+        }
+      } catch (e) {
+        this.logger.error('Failed to parse proposal for status update', e);
+      }
     }
   }
 }

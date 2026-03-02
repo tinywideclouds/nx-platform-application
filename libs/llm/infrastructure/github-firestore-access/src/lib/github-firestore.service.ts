@@ -138,6 +138,14 @@ export class LlmGithubFirestoreClient {
       .pipe(map((res) => res.files || []));
   }
 
+  getFileContent(
+    cacheId: string,
+    base64Path: string,
+  ): Observable<{ content: string }> {
+    return this.http.get<{ content: string }>(
+      `${this.baseUrl}/v1/caches/${cacheId}/files/${base64Path}/content`,
+    );
+  }
   // --- FILTER PROFILES ---
 
   listProfiles(cacheId: string): Observable<FilterProfile[]> {

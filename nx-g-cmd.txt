@@ -313,16 +313,14 @@ nx g @nx/angular:library --name=llm-infrastructure-client-access --directory=lib
 
 nx g @nx/angular:library --name=llm-types --directory=libs/llm/types --tags="scope:llm"    
 
-
 nx g @nx/angular:library --name=llm-domain-conversation --directory=libs/llm/domain/conversation --tags="scope:llm"    
 
-
 nx g @nx/angular:library --name=lib-llm-app-mocking --directory=libs/llm/app-mocking --tags="scope:llm" 
-
 
 nx g @nx/angular:library --name=llm-infrastructure-github-firestore-access --directory=libs/llm/infrastructure/github-firestore-access --tags="scope:llm"    
 
 nx g @nx/angular:library --name=llm-features-data-sources --directory=libs/llm/features/data-sources --tags="scope:llm"  
 
-
 nx g @nx/angular:library --name=llm-protos --directory=libs/llm/protos --tags="scope:llm"
+
+nx g @nx/angular:library --name=llm-features-workspace --directory=libs/llm/features/workspace --tags="scope:llm"  

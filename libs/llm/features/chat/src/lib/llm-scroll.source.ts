@@ -3,7 +3,10 @@ import { toObservable } from '@angular/core/rxjs-interop';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
-import { LlmMessage } from '@nx-platform-application/llm-types';
+import {
+  FileProposalType,
+  LlmMessage,
+} from '@nx-platform-application/llm-types';
 import { TimeSeries } from '@nx-platform-application/scrollspace-core';
 
 @Injectable({ providedIn: 'root' })
@@ -40,22 +43,12 @@ export class LlmScrollSource {
       timeZone: 'UTC',
     });
 
-    const decoder = new TextDecoder();
-
     // Map through to determine Proposals and calculate Grouping
     return rawItems.map((item, index, array) => {
       if (item.type !== 'content') return item;
 
       const data = item.data as LlmMessage;
-      let isProposal = false;
-
-      // 1. Check for workspace proposals
-      if (data.payloadBytes) {
-        const text = decoder.decode(data.payloadBytes);
-        if (text.startsWith('{"__type":"workspace_proposal"')) {
-          isProposal = true;
-        }
-      }
+      const isProposal = data.typeId.equals(FileProposalType);
 
       // 2. Grouping Algorithm
       let prevRole: string | null = null;

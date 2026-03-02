@@ -80,6 +80,9 @@
       "@nx-platform-application/llm-features-data-sources": [
         "libs/llm/features/data-sources/src/index.ts"
       ],
+      "@nx-platform-application/llm-features-workspace": [
+        "libs/llm/features/workspace/src/index.ts"
+      ],
       "@nx-platform-application/llm-infrastructure-client-access": [
         "libs/llm/infrastructure/client-access/src/index.ts"
       ],

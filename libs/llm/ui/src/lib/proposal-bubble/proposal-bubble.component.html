@@ -96,19 +96,21 @@
     <div>Manage</div>
     <div class="flex gap-2">
       <button
+        type="button"
         mat-button
         color="warn"
         [disabled]="status() !== 'pending'"
-        (click)="onReject()"
+        (click)="reject.emit(proposal().id); actionTaken.set('rejected')"
       >
         Reject
       </button>
       <button
+        type="button"
         mat-flat-button
         color="primary"
         class="bg-green-600 hover:bg-green-700 text-white"
         [disabled]="status() !== 'pending'"
-        (click)="onAccept()"
+        (click)="accept.emit(proposal().id); actionTaken.set('accepted')"
       >
         Accept Changes
       </button>

@@ -5,28 +5,35 @@ import {
   output,
   signal,
   computed,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { firstValueFrom } from 'rxjs';
 import { SSEProposalEvent } from '@nx-platform-application/llm-types';
+import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 
 type ViewMode = 'preview' | 'diff';
 
 @Component({
   selector: 'llm-proposal-bubble',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, MatIconModule, MatButtonModule, MatDialogModule],
   templateUrl: './proposal-bubble.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmProposalBubbleComponent {
+  private dialog = inject(MatDialog);
+
   // --- INPUTS & OUTPUTS ---
   event = input.required<SSEProposalEvent>();
   isExcluded = input<boolean>(false);
-
-  // Clean, binary grouping awareness
   isGrouped = input<boolean>(false);
+
+  // Conflict awareness from the VFS
+  hasConflicts = input<boolean>(false);
 
   accept = output<string>();
   reject = output<string>();
@@ -53,9 +60,31 @@ export class LlmProposalBubbleComponent {
     return 'pending';
   });
 
-  onAccept() {
-    this.actionTaken.set('accepted');
-    this.accept.emit(this.proposal().id);
+  // --- ACTIONS ---
+
+  async onAcceptClicked() {
+    if (this.hasConflicts()) {
+      const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
+        width: '400px',
+        data: {
+          title: 'Review Required',
+          message:
+            'Competing proposals exist for this file. Would you like to resolve them in the Workspace before committing?',
+          confirmText: 'Open Workspace',
+          confirmColor: 'primary',
+          icon: 'warning',
+        },
+      });
+
+      const wantsToResolve = await firstValueFrom(dialogRef.afterClosed());
+
+      if (wantsToResolve) {
+        this.openWorkspace.emit(this.proposal().id);
+      }
+    } else {
+      this.actionTaken.set('accepted');
+      this.accept.emit(this.proposal().id);
+    }
   }
 
   onReject() {
@@ -68,24 +97,27 @@ export class LlmProposalBubbleComponent {
   }
 
   displayCode = computed(() => {
-    const mode = this.viewMode();
-    const patch = this.proposal().patch;
-    const newContent = this.proposal().newContent;
+    const p = this.proposal();
     const expanded = this.isExpanded();
 
-    let contentToShow = '';
-
-    if (mode === 'diff' && patch) {
-      contentToShow = patch;
-    } else if (newContent) {
-      contentToShow = newContent;
-    } else if (patch) {
-      contentToShow = this.extractCleanSnippet(patch);
-    } else {
-      contentToShow = '// No content available';
+    // DIFF MODE
+    if (this.viewMode() === 'diff') {
+      if (p.patch) return p.patch;
+      return '// Brand new file creation.\n// Switch to Preview to see the content.';
     }
 
-    // Truncate logic if not expanded and it's too long
+    // PREVIEW MODE
+    let contentToShow = '';
+
+    if (p.patch) {
+      contentToShow = this.extractCleanSnippet(p.patch);
+    } else if (p.newContent) {
+      contentToShow = p.newContent;
+    } else {
+      return '// No content provided';
+    }
+
+    // Truncate to 15 lines if we are collapsed to naturally limit height
     if (!expanded) {
       const lines = contentToShow.split('\n');
       if (lines.length > 15) {

@@ -6,6 +6,8 @@ import {
   NetworkMessage,
   LlmSession,
   NetworkAttachment,
+  SSEProposalEvent,
+  FileProposalType,
 } from '@nx-platform-application/llm-types';
 
 export interface ContextAssembly {
@@ -34,9 +36,29 @@ export class LlmContextBuilderService {
     const decoder = new TextDecoder();
 
     for (const msg of activeMessages) {
-      const lastMsg = collapsedHistory[collapsedHistory.length - 1];
-      const currentContent = decoder.decode(msg.payloadBytes);
+      let currentContent = decoder.decode(msg.payloadBytes);
+      if (msg.typeId.equals(FileProposalType)) {
+        try {
+          const parsed = JSON.parse(currentContent);
+          // Backwards compatibility for old local DB records that had the wrapper
+          const payload =
+            parsed.__type === 'workspace_proposal' ? parsed.data : parsed;
+          const p = (payload as SSEProposalEvent).proposal;
 
+          if (p.status === 'pending') {
+            currentContent = `[System Note: Proposal generated for ${p.filePath}. See pending overlay for patch details.]`;
+          } else if (p.status === 'accepted') {
+            currentContent = `[System Note: User accepted the proposal for ${p.filePath}.]`;
+          } else if (p.status === 'rejected') {
+            currentContent = `[System Note: User rejected the proposal for ${p.filePath}.]`;
+          }
+        } catch (e) {
+          // Fallback if parsing fails
+          currentContent = `[System Note: Proposal generated.]`;
+        }
+      }
+
+      const lastMsg = collapsedHistory[collapsedHistory.length - 1];
       if (lastMsg && lastMsg.role === msg.role) {
         lastMsg.content = `${lastMsg.content}\n\n${currentContent}`;
       } else {

@@ -463,20 +463,6 @@ export class LlmChatWindowComponent {
     await this.actions.toggleExcludeSelected([messageId], true);
   }
 
-  onOpenWorkspace(proposalId: string) {
-    const session = this.activeSession();
-    if (!session) return;
-
-    // Navigate to the future Virtual Workspace section!
-    // We pass the session ID and the proposal ID so the workspace knows exactly what to load
-    this.router.navigate([
-      '/workspace',
-      session.id.toString(),
-      'proposals',
-      proposalId,
-    ]);
-  }
-
   async onEditSelected() {
     const selectedSet = this.selectedIds();
     if (selectedSet.size !== 1) return;
@@ -537,5 +523,12 @@ export class LlmChatWindowComponent {
     } catch (err) {
       console.error('Failed to copy message', err);
     }
+  }
+
+  onOpenWorkspace(proposalId: string) {
+    this.router.navigate([], {
+      queryParams: { view: 'workspace', proposal: proposalId },
+      queryParamsHandling: 'merge',
+    });
   }
 }

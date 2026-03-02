@@ -9,6 +9,7 @@ import {
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import {
+  FileProposalType,
   LlmMessage,
   LlmSession,
   SSEProposalEvent,
@@ -166,7 +167,7 @@ export class LlmChatActions {
           );
           const proposalMsg: LlmMessage = {
             id: proposalMsgId,
-            typeId: TextType,
+            typeId: FileProposalType,
             sessionId: sessionId,
             role: 'model',
             timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
