@@ -13,6 +13,11 @@ import {
   LlmScrollSource,
 } from '@nx-platform-application/llm-features-chat';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
+import {
+  LlmCreateSessionDialogComponent,
+  CreateSessionResult,
+} from '../session-create-dialog/session-create.dialog';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 @Component({
   selector: 'llm-session-sidebar',
@@ -23,6 +28,7 @@ import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversat
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    MatDialogModule,
     DatePipe,
   ],
   templateUrl: './session-sidebar.component.html',
@@ -30,6 +36,7 @@ import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversat
 })
 export class LlmSessionSidebarComponent {
   private router = inject(Router);
+  private dialog = inject(MatDialog);
   // --- Sources (Read-Only State) ---
   protected sessionSource = inject(LlmSessionSource);
   protected scrollSource = inject(LlmScrollSource);
@@ -64,7 +71,18 @@ export class LlmSessionSidebarComponent {
   }
 
   onCreateNew(): void {
-    this.actions.createNewSession();
+    const dialogRef = this.dialog.open(LlmCreateSessionDialogComponent, {
+      width: '450px',
+    });
+
+    dialogRef
+      .afterClosed()
+      .subscribe((result: CreateSessionResult | undefined) => {
+        if (result) {
+          // Pass the title and the user's chosen destination route
+          this.actions.createNewSession(result.title, result.action);
+        }
+      });
   }
 
   onOpenSession(id: URN): void {

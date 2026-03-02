@@ -1,12 +1,16 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { LlmSession } from '@nx-platform-application/llm-types';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { Temporal } from '@js-temporal/polyfill';
 
 @Injectable({ providedIn: 'root' })
 export class LlmSessionActions {
@@ -23,10 +27,32 @@ export class LlmSessionActions {
     return computed(() => this.compilingSet().has(sessionId));
   }
 
-  async createNewSession(): Promise<void> {
+  async createNewSession(
+    title: string,
+    target: 'chat' | 'options',
+  ): Promise<void> {
     const newId = URN.create('session', crypto.randomUUID(), 'llm');
-    this.source.addOptimisticSession(newId);
-    await this.router.navigate(['/chat', newId.toString()]);
+    const now = Temporal.Now.instant().toString() as ISODateTimeString;
+
+    const newSession: LlmSession = {
+      id: newId,
+      title: title.trim() || 'Untitled Session',
+      lastModified: now,
+      attachments: [],
+    };
+
+    // Save directly to DB and refresh so the title is accurate immediately
+    await this.storage.saveSession(newSession);
+    await this.source.refresh();
+
+    // Branch the routing based on the user's choice
+    if (target === 'options') {
+      await this.router.navigate(['/chat', newId.toString()], {
+        queryParams: { view: 'details' },
+      });
+    } else {
+      await this.router.navigate(['/chat', newId.toString()]);
+    }
   }
 
   async openSession(id: URN): Promise<void> {

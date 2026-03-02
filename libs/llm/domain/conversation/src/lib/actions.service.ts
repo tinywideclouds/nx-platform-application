@@ -111,30 +111,76 @@ export class LlmChatActions {
     this.activeSubscription = this.network.generateStream(request).subscribe({
       next: (event) => {
         if (event.type === 'text') {
-          this.accumulatedText += event.content;
-          if (this.activeBotId) {
-            this.sink.updateMessagePayload(
-              this.activeBotId,
-              encoder.encode(this.accumulatedText),
+          if (!this.activeBotId) {
+            this.activeBotId = URN.create(
+              'message',
+              crypto.randomUUID(),
+              'llm',
             );
+            this.accumulatedText = '';
+
+            const newTextMsg: LlmMessage = {
+              id: this.activeBotId,
+              typeId: TextType,
+              sessionId: sessionId,
+              role: 'model',
+              timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+              payloadBytes: new Uint8Array(),
+              isExcluded: false,
+            };
+
+            // CRITICAL FIX: Track the new message reference so we save to the correct ID later!
+            this.activeBotMsg = newTextMsg;
+
+            this.storage.saveMessage(newTextMsg);
+            this.sink.addMessage(newTextMsg);
           }
+
+          this.accumulatedText += event.content;
+          this.sink.updateMessagePayload(
+            this.activeBotId,
+            encoder.encode(this.accumulatedText),
+          );
         } else if (event.type === 'proposal') {
           this.logger.debug('Received Tool Interception Proposal', event.event);
           this.activeProposal.set(event.event);
+
+          // CRITICAL FIX: Commit the active text bubble to the database BEFORE spawning the proposal
+          if (this.activeBotId && this.activeBotMsg) {
+            const finalMsg: LlmMessage = {
+              ...this.activeBotMsg,
+              payloadBytes: encoder.encode(this.accumulatedText),
+            };
+            this.storage.saveMessage(finalMsg);
+          }
 
           const storagePayload = JSON.stringify({
             __type: 'workspace_proposal',
             data: event.event,
           });
 
-          this.accumulatedText = storagePayload;
+          const proposalMsgId = URN.create(
+            'message',
+            crypto.randomUUID(),
+            'llm',
+          );
+          const proposalMsg: LlmMessage = {
+            id: proposalMsgId,
+            typeId: TextType,
+            sessionId: sessionId,
+            role: 'model',
+            timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
+            payloadBytes: encoder.encode(storagePayload),
+            isExcluded: false,
+          };
 
-          if (this.activeBotId) {
-            this.sink.updateMessagePayload(
-              this.activeBotId,
-              encoder.encode(this.accumulatedText),
-            );
-          }
+          this.storage.saveMessage(proposalMsg);
+          this.sink.addMessage(proposalMsg);
+
+          // Close the text bubble so the next text chunk starts fresh
+          this.activeBotId = null;
+          this.activeBotMsg = null;
+          this.accumulatedText = '';
         }
       },
       error: (err) => {
@@ -180,7 +226,11 @@ export class LlmChatActions {
   private finalizeGeneration(): void {
     this.sink.setLoading(false);
 
-    if (this.activeBotMsg && this.accumulatedText.length > 0) {
+    if (
+      this.activeBotId &&
+      this.activeBotMsg &&
+      this.accumulatedText.length > 0
+    ) {
       const finalMsg: LlmMessage = {
         ...this.activeBotMsg,
         payloadBytes: encoder.encode(this.accumulatedText),
@@ -290,6 +340,30 @@ export class LlmChatActions {
 
     this.sessionSource.refresh();
     return newSessionId;
+  }
+
+  async updateMessageText(
+    messageIdStr: string,
+    newText: string,
+  ): Promise<void> {
+    try {
+      const msgId = URN.parse(messageIdStr);
+      const msg = await this.storage.getMessage(msgId);
+
+      if (msg) {
+        const encoder = new TextEncoder();
+        const payloadBytes = encoder.encode(newText);
+        const updatedMsg: LlmMessage = { ...msg, payloadBytes };
+
+        // 1. Persist to IndexedDB
+        await this.storage.saveMessage(updatedMsg);
+
+        // 2. Optimistically update the UI View Model
+        this.sink.updateMessagePayload(msgId, payloadBytes);
+      }
+    } catch (e) {
+      this.logger.error(`Failed to update message text for ${messageIdStr}`, e);
+    }
   }
 
   async deleteSelected(messageIds: string[]): Promise<void> {

@@ -7,3 +7,26 @@
 .cursor-container {
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+/* --- SIMPLE GROUPING CSS --- */
+.bubble-wrapper {
+  transition: border-radius 0.2s ease-in-out;
+  border-radius: 1rem; /* Base rounding for standalone items */
+  overflow: hidden; /* Natively clips borderless child components! */
+}
+
+.bubble-wrapper {
+  &.group {
+    /* thin, dotted, light blue */
+    border-left: 3px dotted lightblue;
+    /* 0 radius on the left side */
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  &.group-first {
+    border-top-left-radius: 1rem;
+  }
+  &.group-last {
+    border-bottom-left-radius: 1rem;
+  }
+}

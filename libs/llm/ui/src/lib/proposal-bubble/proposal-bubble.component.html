@@ -1,5 +1,6 @@
 <div
-  class="border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm my-2 w-full transition-all duration-300 font-sans"
+  class="border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm w-full transition-all duration-300 font-sans"
+  [class.my-2]="!isGrouped()"
   [class.max-w-[85%]]="!isExpanded()"
 >
   <div
@@ -56,14 +57,28 @@
       >
         Preview
       </button>
+      @if (hasDiff()) {
+        <button
+          (click)="viewMode.set('diff')"
+          [class.bg-slate-600]="viewMode() === 'diff'"
+          [class.text-white]="viewMode() === 'diff'"
+          [class.text-slate-400]="viewMode() !== 'diff'"
+          class="text-[10px] font-medium px-2 py-1 rounded-sm transition-colors hover:text-white"
+        >
+          Raw Diff
+        </button>
+      }
+
+      <div class="w-px h-3 bg-slate-600 mx-1"></div>
+
       <button
-        (click)="viewMode.set('diff')"
-        [class.bg-slate-600]="viewMode() === 'diff'"
-        [class.text-white]="viewMode() === 'diff'"
-        [class.text-slate-400]="viewMode() !== 'diff'"
-        class="text-[10px] font-medium px-2 py-1 rounded-sm transition-colors hover:text-white"
+        (click)="copyToClipboard()"
+        matTooltip="Copy Code"
+        class="text-slate-400 hover:text-white flex items-center justify-center p-1 rounded-sm transition-colors hover:bg-slate-600"
       >
-        Raw Diff
+        <mat-icon class="scale-[0.6] m-0 h-4 w-4">{{
+          isCopied() ? 'check' : 'content_copy'
+        }}</mat-icon>
       </button>
     </div>
 

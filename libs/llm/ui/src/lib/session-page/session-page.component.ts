@@ -20,6 +20,11 @@ import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 
 import { LlmSessionFormComponent } from '../session-form/session-form.component';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import {
+  LlmDeleteSessionDialogComponent,
+  DeleteSessionResult,
+} from '../delete-session-dialog/delete-session-dialog.component';
 
 @Component({
   selector: 'llm-session-page',
@@ -29,6 +34,7 @@ import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversat
     LlmSessionFormComponent,
     MatButtonModule,
     MatIconModule,
+    MatDialogModule,
   ],
   templateUrl: './session-page.component.html',
   styleUrl: './session-page.component.scss',
@@ -40,7 +46,7 @@ export class LlmSessionPageComponent {
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
-
+  private dialog = inject(MatDialog);
   sessionId = input<string | undefined>();
 
   closed = output<void>();
@@ -90,15 +96,35 @@ export class LlmSessionPageComponent {
   }
 
   async onDelete(): Promise<void> {
-    const id = this.sessionId();
-    if (!id) return;
-    try {
-      await this.storage.deleteSession(URN.parse(id));
-      this.sessionSource.refresh();
-      this.onClose();
-    } catch (e) {
-      console.error('Failed to delete session', e);
-    }
+    const currentSession = this.session();
+    if (!currentSession) return;
+
+    const dialogRef = this.dialog.open(LlmDeleteSessionDialogComponent, {
+      width: '500px',
+      data: { session: currentSession },
+    });
+
+    dialogRef
+      .afterClosed()
+      .subscribe(async (result: DeleteSessionResult | undefined) => {
+        if (result?.confirmed) {
+          try {
+            // TODO: In the future, pass result.clearProposals and result.clearCache
+            // to a dedicated sessionActions.deleteSession() method to handle the heavy lifting.
+
+            await this.storage.deleteSession(currentSession.id);
+            this.sessionSource.refresh();
+
+            this.snackBar.open('Session deleted', 'Close', { duration: 2000 });
+            this.onClose();
+          } catch (e) {
+            console.error('Failed to delete session', e);
+            this.snackBar.open('Failed to delete session', 'Close', {
+              duration: 3000,
+            });
+          }
+        }
+      });
   }
 
   // The button click is now strictly "fire and forget"

@@ -67,8 +67,7 @@ export class ScrollspaceRowComponent {
     () => (this.adornments()?.cursors?.length || 0) > 0,
   );
 
-  // ✅ Type-Safe Palette Resolution
-  // Uses the hoisted 'actor' (ScrollActor) which guarantees an ID (URN).
+  // Type-Safe Palette Resolution
   paletteStyle = computed(() => {
     const actor = this.item().actor;
     // System messages (center) don't get colored bubbles

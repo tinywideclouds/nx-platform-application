@@ -76,7 +76,7 @@ describe('LlmChatActions', () => {
   });
 
   it('should route stream events perfectly between text chunks and proposals', async () => {
-    const sessionId = URN.parse('urn:llm:session:123');
+    const sessionId = URN.parse('urn:llm:session:123'); // FIX: 4-part URN
 
     // 1. Start generation
     await service.sendMessage('Fix the bug', sessionId);
@@ -86,6 +86,8 @@ describe('LlmChatActions', () => {
 
     // 2. Emit a Standard Text Chunk
     streamSubject.next({ type: 'text', content: 'I will propose a fix.' });
+
+    // Verifies the placeholder text was updated
     expect(mockSink.updateMessagePayload).toHaveBeenCalled();
     expect(service.activeProposal()).toBeNull();
 
@@ -108,6 +110,17 @@ describe('LlmChatActions', () => {
 
     expect(service.activeProposal()?.originalContent).toBe('old');
     expect(service.activeProposal()?.proposal.id).toBe('p1');
+
+    // NEW: Verify a brand new message was pushed to the sink for the proposal
+    expect(mockSink.addMessage).toHaveBeenCalledTimes(3); // 1 User, 1 Text Placeholder, 1 New Proposal
+    const lastAddedMessage = mockSink.addMessage.mock.calls[2][0];
+    expect(lastAddedMessage.role).toBe('model');
+
+    // Verify the proposal JSON was encoded into this new message's payload
+    const decoder = new TextDecoder();
+    const payloadStr = decoder.decode(lastAddedMessage.payloadBytes);
+    expect(payloadStr).toContain('workspace_proposal');
+    expect(payloadStr).toContain('main.ts');
   });
 
   it('should ensure the assistant placeholder timestamp is strictly 1ms after the user message', async () => {

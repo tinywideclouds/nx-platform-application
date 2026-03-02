@@ -21,6 +21,8 @@ import {
   ScrollspaceMarkdownBubbleComponent,
   MarkdownTokensPipe,
 } from '@nx-platform-application/scrollspace-ui';
+
+import { LlmMessage } from '@nx-platform-application/llm-types';
 import { ScrollspaceInputDraft } from '@nx-platform-application/scrollspace-types';
 
 // Domain
@@ -44,8 +46,10 @@ import {
   BranchContextDialogResult,
 } from '../branch-context-dialog/branch-context-dialog.component';
 
+import { LlmEditMessageDialogComponent } from '../edit-message-dialog/edit-message-dialog.component';
+
 import { LlmProposalBubbleComponent } from '../proposal-bubble/proposal-bubble.component';
-import { LlmMessage } from '@nx-platform-application/llm-types';
+import { LlmTypingIndicatorComponent } from '../typing-indicator/typing-indicator.component';
 
 @Component({
   selector: 'llm-chat-window',
@@ -60,6 +64,7 @@ import { LlmMessage } from '@nx-platform-application/llm-types';
     LlmChatHeaderComponent,
     LlmContentPipe,
     LlmProposalBubbleComponent,
+    LlmTypingIndicatorComponent,
   ],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
@@ -78,6 +83,8 @@ export class LlmChatWindowComponent {
   private cdr = inject(ChangeDetectorRef);
 
   readonly sessionId = input<string>();
+
+  copiedMessageId = signal<string | null>(null);
 
   isSelectionMode = signal(false);
   selectedIds = signal<Set<string>>(new Set());
@@ -468,5 +475,67 @@ export class LlmChatWindowComponent {
       'proposals',
       proposalId,
     ]);
+  }
+
+  async onEditSelected() {
+    const selectedSet = this.selectedIds();
+    if (selectedSet.size !== 1) return;
+
+    const messageIdStr = Array.from(selectedSet)[0];
+    const messageId = URN.parse(messageIdStr);
+
+    // Find the actual message in our current view model
+    const item = this.source
+      .items()
+      .find(
+        (i) =>
+          i.type === 'content' && (i.data as LlmMessage).id.equals(messageId),
+      );
+
+    if (!item || item.type !== 'content') return;
+
+    const msgData = item.data as LlmMessage;
+    const decoder = new TextDecoder();
+    const currentText = msgData.payloadBytes
+      ? decoder.decode(msgData.payloadBytes)
+      : '';
+
+    // Prevent editing of complex JSON proposals via the raw text editor
+    if (currentText.startsWith('{"__type":"workspace_proposal"')) {
+      this.snackBar.open('Cannot directly edit workspace proposals.', 'Close', {
+        duration: 3000,
+      });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(LlmEditMessageDialogComponent, {
+      width: '600px',
+      data: {
+        content: currentText,
+        role: msgData.role,
+      },
+    });
+
+    dialogRef.afterClosed().subscribe(async (newText: string | undefined) => {
+      if (newText !== undefined && newText !== currentText) {
+        await this.actions.updateMessageText(messageIdStr, newText);
+        // Clear selection to return to normal chat view
+        this.toggleSelectionMode();
+      }
+    });
+  }
+
+  async copyMessage(text: string, messageId: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.copiedMessageId.set(messageId);
+      setTimeout(() => {
+        if (this.copiedMessageId() === messageId) {
+          this.copiedMessageId.set(null);
+        }
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy message', err);
+    }
   }
 }

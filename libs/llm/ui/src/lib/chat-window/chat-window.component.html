@@ -7,6 +7,7 @@
     (groupContext)="groupSelected()"
     (excludeContext)="excludeSelected(true)"
     (includeContext)="excludeSelected(false)"
+    (editContext)="onEditSelected()"
     (deleteContext)="deleteSelected()"
     (openDetails)="onOpenDetails()"
   />
@@ -170,14 +171,31 @@
             [event]="payload.event"
             (accept)="onAcceptProposal($event)"
             (reject)="onRejectProposal($event, message.id.toString())"
+            [isGrouped]="wrapper.layout.positionInGroup"
             (openWorkspace)="onOpenWorkspace($event)"
           />
         } @else {
-          <scrollspace-markdown-bubble
-            [itemId]="wrapper.id"
-            [class.border-dashed]="message.isExcluded"
-            [tokens]="payload.content | markdownTokens"
-          />
+          @if (message.role === 'model' && payload.content.length === 0) {
+            <llm-typing-indicator />
+          } @else {
+            <scrollspace-markdown-bubble
+              [itemId]="wrapper.id"
+              [class.border-dashed]="message.isExcluded"
+              [tokens]="payload.content | markdownTokens"
+            />
+
+            <button
+              type="button"
+              (click)="copyMessage(payload.content, message.id.toString())"
+              class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur border border-gray-200 text-gray-500 hover:text-gray-800 p-1 rounded-md shadow-sm flex items-center justify-center cursor-pointer"
+            >
+              <mat-icon class="scale-75 m-0">{{
+                copiedMessageId() === message.id.toString()
+                  ? 'check'
+                  : 'content_copy'
+              }}</mat-icon>
+            </button>
+          }
         }
       </div>
     }

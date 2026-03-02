@@ -42,18 +42,67 @@ export class LlmScrollSource {
 
     const decoder = new TextDecoder();
 
-    // Intercept and flag Workspace Proposals to span full width
-    return rawItems.map((item) => {
-      if (item.type === 'content') {
-        const data = item.data as LlmMessage;
-        if (data.payloadBytes) {
-          const text = decoder.decode(data.payloadBytes);
-          if (text.startsWith('{"__type":"workspace_proposal"')) {
-            item.layout.fullWidth = true;
-          }
+    // Map through to determine Proposals and calculate Grouping
+    return rawItems.map((item, index, array) => {
+      if (item.type !== 'content') return item;
+
+      const data = item.data as LlmMessage;
+      let isProposal = false;
+
+      // 1. Check for workspace proposals
+      if (data.payloadBytes) {
+        const text = decoder.decode(data.payloadBytes);
+        if (text.startsWith('{"__type":"workspace_proposal"')) {
+          isProposal = true;
         }
       }
-      return item;
+
+      // 2. Grouping Algorithm
+      let prevRole: string | null = null;
+      let nextRole: string | null = null;
+
+      // Look back for the nearest content item (ignoring date headers)
+      for (let i = index - 1; i >= 0; i--) {
+        if (array[i].type === 'content') {
+          prevRole = (array[i].data as LlmMessage).role;
+          break;
+        }
+      }
+
+      // Look forward for the nearest content item
+      for (let i = index + 1; i < array.length; i++) {
+        if (array[i].type === 'content') {
+          nextRole = (array[i].data as LlmMessage).role;
+          break;
+        }
+      }
+
+      const currentRole = data.role;
+      const matchesPrev = prevRole === currentRole;
+      const matchesNext = nextRole === currentRole;
+
+      let isContinuous = true;
+      let positionInGroup: 'first' | 'middle' | 'last' | undefined;
+      if (matchesPrev && matchesNext) {
+        positionInGroup = 'middle';
+      } else if (!matchesPrev && matchesNext) {
+        positionInGroup = 'first';
+      } else if (matchesPrev && !matchesNext) {
+        positionInGroup = 'last';
+      } else {
+        isContinuous = false;
+      }
+
+      // 3. Return a safe, immutable clone
+      return {
+        ...item,
+        layout: {
+          ...item.layout,
+          fullWidth: isProposal,
+          isContinuous,
+          positionInGroup,
+        },
+      };
     });
   });
 
@@ -82,7 +131,6 @@ export class LlmScrollSource {
     );
   }
 
-  // NEW: Syncs tags into the active UI state
   updateMessageTags(id: URN, tags: URN[]) {
     this._messages.update((prev) =>
       prev.map((m) => (m.id.equals(id) ? { ...m, tags } : m)),

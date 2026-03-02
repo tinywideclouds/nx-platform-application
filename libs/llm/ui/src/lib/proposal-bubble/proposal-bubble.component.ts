@@ -25,6 +25,9 @@ export class LlmProposalBubbleComponent {
   event = input.required<SSEProposalEvent>();
   isExcluded = input<boolean>(false);
 
+  // Clean, binary grouping awareness
+  isGrouped = input<boolean>(false);
+
   accept = output<string>();
   reject = output<string>();
   openWorkspace = output<string>();
@@ -33,9 +36,13 @@ export class LlmProposalBubbleComponent {
   viewMode = signal<ViewMode>('preview');
   isExpanded = signal<boolean>(false);
   actionTaken = signal<'accepted' | 'rejected' | null>(null);
+  isCopied = signal<boolean>(false);
 
   // --- COMPUTED VIEW LOGIC ---
   proposal = computed(() => this.event().proposal);
+
+  // Check if we actually have a diff to show
+  hasDiff = computed(() => !!this.proposal().patch);
 
   status = computed(() => {
     // 1. Local transient action taken during this session
@@ -61,27 +68,24 @@ export class LlmProposalBubbleComponent {
   }
 
   displayCode = computed(() => {
-    const p = this.proposal();
+    const mode = this.viewMode();
+    const patch = this.proposal().patch;
+    const newContent = this.proposal().newContent;
     const expanded = this.isExpanded();
 
-    // DIFF MODE
-    if (this.viewMode() === 'diff') {
-      if (p.patch) return p.patch;
-      return '// Brand new file creation.\n// Switch to Preview to see the content.';
-    }
-
-    // PREVIEW MODE
     let contentToShow = '';
 
-    if (p.patch) {
-      contentToShow = this.extractCleanSnippet(p.patch);
-    } else if (p.newContent) {
-      contentToShow = p.newContent;
+    if (mode === 'diff' && patch) {
+      contentToShow = patch;
+    } else if (newContent) {
+      contentToShow = newContent;
+    } else if (patch) {
+      contentToShow = this.extractCleanSnippet(patch);
     } else {
-      return '// No content provided';
+      contentToShow = '// No content available';
     }
 
-    // Truncate to 15 lines if we are collapsed to naturally limit height
+    // Truncate logic if not expanded and it's too long
     if (!expanded) {
       const lines = contentToShow.split('\n');
       if (lines.length > 15) {
@@ -123,5 +127,24 @@ export class LlmProposalBubbleComponent {
     }
 
     return cleanLines.join('\n').trim();
+  }
+
+  async copyToClipboard() {
+    try {
+      let textToCopy = '';
+
+      if (this.viewMode() === 'diff') {
+        textToCopy = this.proposal().patch || '';
+      } else {
+        textToCopy = this.proposal().newContent || this.displayCode();
+      }
+
+      await navigator.clipboard.writeText(textToCopy);
+
+      this.isCopied.set(true);
+      setTimeout(() => this.isCopied.set(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy code: ', err);
+    }
   }
 }

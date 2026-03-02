@@ -4,7 +4,7 @@
   [class.cursor-pointer]="isSelectionMode() && isSelectable"
   [class.opacity-80]="isSelectionMode() && !isSelected()"
   (click)="isSelectionMode() && isSelectable && toggleSelection.emit()"
-  [class.mb-1]="layout().isContinuous"
+  [class.mp-1]="layout().isContinuous"
   [class.mb-6]="!layout().isContinuous && !hasCursors()"
   [class.mb-10]="hasCursors()"
 >
@@ -62,13 +62,19 @@
     }
 
     <div
-      class="flex flex-col relative transition-transform duration-200"
+      class="bubble-wrapper flex flex-col relative transition-transform duration-200"
       [class.w-full]="layout().fullWidth"
       [class.max-w-[85%]]="!layout().fullWidth"
       [class.scale-[0.98]]="isSelectionMode() && !isSelected()"
       [class.items-end]="layout().alignment === 'end'"
       [class.items-start]="layout().alignment === 'start'"
       [class.items-center]="layout().alignment === 'center'"
+      [ngClass]="[
+        'align-' + (layout().alignment || 'start'),
+        layout().positionInGroup ? 'group' : '',
+        layout().positionInGroup == 'first' ? 'group-first' : '',
+        layout().positionInGroup == 'last' ? 'group-last' : '',
+      ]"
     >
       <ng-content></ng-content>
     </div>

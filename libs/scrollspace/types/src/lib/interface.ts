@@ -40,6 +40,9 @@ export interface ScrollLayout {
   fullWidth?: boolean;
 
   selectable?: boolean;
+
+  // Tells the row how to stitch its border-radius for grouped messages
+  positionInGroup?: 'first' | 'middle' | 'last';
 }
 
 /**
