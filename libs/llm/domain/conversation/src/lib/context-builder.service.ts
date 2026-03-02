@@ -62,7 +62,7 @@ export class LlmContextBuilderService {
 
     const networkHistory = collapsedHistory.slice(startIndex);
 
-    // NEW: Map inline-context attachments securely to the protobuf facade
+    // Map inline-context attachments securely to the protobuf facade
     const inlineAttachments: NetworkAttachment[] = (session.attachments || [])
       .filter((a) => a.target === 'inline-context')
       .map((a) => ({
@@ -76,8 +76,8 @@ export class LlmContextBuilderService {
         sessionId: session.id.toString(),
         model: session.llmModel || 'gemini-2.5-pro',
         history: networkHistory,
-        cacheId: session.geminiCache, // <-- Inject Compiled Cache ID
-        inlineAttachments: inlineAttachments, // <-- Inject JIT Context
+        cacheId: session.geminiCache,
+        inlineAttachments: inlineAttachments,
       },
       memoryMetrics: {
         totalHistoryCount: fullHistory.length,

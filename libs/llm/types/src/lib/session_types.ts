@@ -11,7 +11,7 @@ export type ContextInjectionTarget =
 
 export interface SessionAttachment {
   id: string; // A unique ID for the UI to track this specific attachment (e.g., UUID)
-  cacheId: URN; // The URN of the synced GitHub repository
+  cacheId: URN; // The URN of the synced datasource
   profileId?: URN; // Optional: The URN of the filter profile (if undefined, include all files)
   target: ContextInjectionTarget;
 }
