@@ -1,0 +1,13 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+pre {
+  white-space: pre;
+  tab-size: 2;
+  /* Ensure proper font rendering for code */
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}

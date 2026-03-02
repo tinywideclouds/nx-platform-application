@@ -1,1 +1,1 @@
-export * from './lib/llm-features-workspace/llm-features-workspace';
+export * from './lib/workspace.service';

@@ -1,0 +1,44 @@
+<div class="h-full flex flex-col bg-white">
+  <div
+    class="z-10 relative bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between"
+  >
+    <div class="flex items-center">
+      <button
+        type="button"
+        (click)="onClose()"
+        class="text-gray-600 mr-2 hover:bg-gray-100 rounded-full p-1 transition-colors"
+      >
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <h2 class="font-bold text-gray-800 text-base flex items-center gap-2 m-0">
+        <mat-icon class="text-indigo-600">code</mat-icon>
+        Workspace Review
+      </h2>
+    </div>
+
+    <button mat-flat-button color="primary" [disabled]="!canCommit()">
+      Commit Changes to GitHub
+    </button>
+  </div>
+
+  <div class="flex-grow overflow-hidden flex flex-row">
+    <llm-workspace-sidebar
+      class="h-full shrink-0"
+      [files]="sidebarFiles()"
+      [selectedFilePath]="selectedFilePath()"
+      (fileSelected)="onSelectFile($event)"
+    />
+
+    <llm-workspace-file-viewer
+      class="flex-1 h-full min-w-0"
+      [filePath]="selectedFilePath()"
+      [isLoading]="activeRecord()?.isContentLoading ?? false"
+      [displayContent]="displayContent()"
+      [activeProposals]="activeRecord()?.activeProposals ?? []"
+      [selectedProposalId]="selectedProposalId()"
+      (previewSelected)="onPreviewSelected($event)"
+      (acceptProposal)="onAcceptProposal($event)"
+      (rejectProposal)="onRejectProposal($event)"
+    />
+  </div>
+</div>
