@@ -12,13 +12,10 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { applyPatch } from 'diff';
-import { URN } from '@nx-platform-application/platform-types';
 
 // Domain / State
 import { WorkspaceStateService } from '@nx-platform-application/llm-features-workspace';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
-import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 
 // Child Components
 import {
@@ -27,6 +24,7 @@ import {
 } from '../workspace-sidebar/workspace-sidebar.component';
 import { LlmWorkspaceFileViewerComponent } from '../workspace-file-viewer/workspace-file-viewer.component';
 import { LlmSession } from '@nx-platform-application/llm-types';
+import { LlmSessionSubpageHeaderComponent } from '../session-subpage-header/session-subpage-header.component';
 
 @Component({
   selector: 'llm-session-workspace',
@@ -37,6 +35,7 @@ import { LlmSession } from '@nx-platform-application/llm-types';
     MatIconModule,
     LlmWorkspaceSidebarComponent,
     LlmWorkspaceFileViewerComponent,
+    LlmSessionSubpageHeaderComponent,
   ],
   templateUrl: './session-workspace.component.html',
   styleUrl: './session-workspace.component.scss',
@@ -57,18 +56,20 @@ export class LlmSessionWorkspaceComponent {
   selectedProposalId = signal<string | null>(null); // For the preview toggle
 
   constructor() {
-    // If a specific proposal was clicked in the chat bubble, auto-select it here
+    // 1. URL Initialization: Auto-select proposal from query params
     effect(() => {
       const proposalId = this.route.snapshot.queryParamMap.get('proposal');
       if (proposalId) {
         for (const [path, record] of this.workspaceState
           .overlayMap()
           .entries()) {
-          const hasProposal = record.activeProposals.some(
+          // FIX: Use proposalChain instead of activeProposals
+          const hasProposal = record.proposalChain.some(
             (p) => p.id === proposalId,
           );
+
           if (hasProposal) {
-            // Untracked to avoid cyclic updates during initial render
+            // setTimeout to avoid cyclic updates during initial render
             setTimeout(() => {
               this.onSelectFile(path);
               this.selectedProposalId.set(proposalId);
@@ -78,24 +79,43 @@ export class LlmSessionWorkspaceComponent {
         }
       }
     });
+
+    // 2. Smart Defaults: The "Ghost" Base State Logic
+    effect(() => {
+      const record = this.activeRecord();
+
+      // If the file doesn't exist in base, immediately jump to the first proposal in the chain
+      // so the user sees the "New File" code instead of a blank screen.
+      if (
+        record &&
+        record.baseContent === null &&
+        record.proposalChain.length > 0 &&
+        !this.selectedProposalId()
+      ) {
+        setTimeout(() => {
+          this.selectedProposalId.set(record.proposalChain[0].id);
+        }, 0);
+      }
+    });
   }
 
   // --- COMPUTED: SIDEBAR DATA ---
+  // --- STRICTLY TYPED COMPUTED STATE ---
+
   sidebarFiles = computed<WorkspaceSidebarFile[]>(() => {
     const files: WorkspaceSidebarFile[] = [];
     const conflicts = this.workspaceState.conflictsMap();
 
     this.workspaceState.overlayMap().forEach((record, path) => {
-      // Only show files that have active proposals or accepted edits in this session
-      if (
-        record.activeProposals.length > 0 ||
-        record.acceptedProposals.length > 0
-      ) {
+      // FIX: Use proposalChain instead of activeProposals/acceptedProposals
+      if (record.proposalChain.length > 0) {
         files.push({
           path,
           name: path.split('/').pop() || path,
           hasConflicts: conflicts.get(path) ?? false,
-          hasPendingProposals: record.activeProposals.length > 0,
+          hasPendingProposals: record.proposalChain.some(
+            (p) => p.status === 'pending',
+          ),
         });
       }
     });
@@ -103,45 +123,33 @@ export class LlmSessionWorkspaceComponent {
     return files;
   });
 
-  // --- COMPUTED: VIEWER DATA ---
-
   activeRecord = computed(() => {
     const path = this.selectedFilePath();
     if (!path) return null;
     return this.workspaceState.overlayMap().get(path) || null;
   });
 
-  // The Preview Engine: Safely applies the patch for visual inspection
+  // Expose the chain for the HTML template
+  activeChain = computed(() => this.activeRecord()?.proposalChain ?? []);
+
+  // FIX: Completely rely on the Service Engine. No latestContent. No manual patching here.
   displayContent = computed(() => {
     const record = this.activeRecord();
     if (!record) return null;
+    return this.workspaceState.resolveChainState(
+      record,
+      this.selectedProposalId(),
+    ).content;
+  });
 
-    const baseText = record.latestContent;
-    const previewId = this.selectedProposalId();
-
-    // 1. Base State (No preview selected)
-    if (!previewId) return baseText;
-
-    // 2. Proposal Preview State
-    const proposal = record.activeProposals.find((p) => p.id === previewId);
-    if (!proposal) return baseText;
-
-    if (proposal.newContent) {
-      return proposal.newContent;
-    }
-
-    if (proposal.patch && baseText !== null) {
-      const patched = applyPatch(baseText, proposal.patch);
-      if (patched === false) {
-        return (
-          '// ERROR: This patch conflicts with the current file state and cannot be applied cleanly.\n// Please reject this proposal or review the base file.\n\n' +
-          proposal.patch
-        );
-      }
-      return patched;
-    }
-
-    return null;
+  // Safely expose any sequential conflicts caught by the engine
+  displayError = computed(() => {
+    const record = this.activeRecord();
+    if (!record) return null;
+    return this.workspaceState.resolveChainState(
+      record,
+      this.selectedProposalId(),
+    ).error;
   });
 
   canCommit = computed(() => {

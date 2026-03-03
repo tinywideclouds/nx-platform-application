@@ -3,13 +3,15 @@ import {
   Component,
   input,
   output,
+  computed,
+  signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { SSEProposalEvent } from '@nx-platform-application/llm-types';
+import { ChangeProposal } from '@nx-platform-application/llm-types';
 
 @Component({
   selector: 'llm-workspace-file-viewer',
@@ -26,34 +28,65 @@ import { SSEProposalEvent } from '@nx-platform-application/llm-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmWorkspaceFileViewerComponent {
-  // --- INPUTS ---
   filePath = input<string | null>(null);
   isLoading = input<boolean>(false);
+  hasBaseContent = input<boolean>(true); // To hide base tab if it's a new file
 
-  // The actual text to render in the <pre> block (computed by the parent using the diff service)
   displayContent = input<string | null>(null);
+  displayError = input<string | null | undefined>(null); // To show conflict errors cleanly
 
-  // Conflict / Proposal Management
-  activeProposals = input<SSEProposalEvent['proposal'][]>([]);
-  selectedProposalId = input<string | null>(null); // null = showing 'Base/Latest'
+  proposalChain = input<ChangeProposal[]>([]);
+  selectedProposalId = input<string | null>(null);
 
-  // --- OUTPUTS ---
-  // Emits the ID of the proposal to preview, or null to view the base/latest state
   previewSelected = output<string | null>();
-
   acceptProposal = output<string>();
   rejectProposal = output<string>();
 
-  // --- ACTIONS ---
-  onPreviewChange(value: string | null) {
-    this.previewSelected.emit(value);
+  // NEW: Toggle state for Applied vs Raw Diff
+  viewMode = signal<'applied' | 'raw'>('applied');
+
+  // Compute the current raw patch if in raw mode
+  rawContent = computed(() => {
+    if (this.viewMode() !== 'raw') return null;
+    const targetId = this.selectedProposalId();
+    if (!targetId) return null;
+    const proposal = this.proposalChain().find((p) => p.id === targetId);
+    return proposal?.patch || proposal?.newContent || null;
+  });
+
+  getTaxonomy(proposal: ChangeProposal): {
+    icon: string;
+    color: string;
+    tooltip: string;
+  } {
+    if (proposal.newContent) {
+      // If it's the first item and the file didn't exist, it's a creation
+      if (
+        this.proposalChain()[0].id === proposal.id &&
+        !this.hasBaseContent()
+      ) {
+        return {
+          icon: 'add_circle',
+          color: 'text-green-600',
+          tooltip: 'New File',
+        };
+      }
+      return {
+        icon: 'edit_document',
+        color: 'text-purple-600',
+        tooltip: 'Full Rewrite',
+      };
+    }
+    return {
+      icon: 'difference',
+      color: 'text-blue-600',
+      tooltip: 'Patch / Diff',
+    };
   }
 
-  onAccept(id: string) {
-    this.acceptProposal.emit(id);
-  }
-
-  onReject(id: string) {
-    this.rejectProposal.emit(id);
+  getSelectedIndex(): number {
+    const id = this.selectedProposalId();
+    if (!id) return -1;
+    return this.proposalChain().findIndex((p) => p.id === id);
   }
 }

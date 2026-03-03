@@ -16,69 +16,99 @@
       }
     </div>
 
-    @if (activeProposals().length > 0) {
+    @if (proposalChain().length > 0) {
       <div
         class="bg-blue-50/50 border border-blue-100 p-3 rounded-t-md border-b-0 flex items-center justify-between shrink-0"
       >
         <mat-button-toggle-group
           [value]="selectedProposalId()"
-          (change)="onPreviewChange($event.value)"
-          class="h-9"
+          (change)="previewSelected.emit($event.value)"
+          class="h-9 bg-white"
         >
-          <mat-button-toggle [value]="null" class="text-sm font-medium">
-            Base State
-          </mat-button-toggle>
+          @if (hasBaseContent()) {
+            <mat-button-toggle [value]="null" class="text-sm font-medium">
+              Base State
+            </mat-button-toggle>
+          }
 
           @for (
-            proposal of activeProposals();
+            proposal of proposalChain();
             track proposal.id;
             let i = $index
           ) {
             <mat-button-toggle
               [value]="proposal.id"
               class="text-sm font-medium"
+              [matTooltip]="getTaxonomy(proposal).tooltip"
             >
-              Proposal {{ i + 1 }}
-              @if (activeProposals().length > 1) {
-                <mat-icon class="text-warn-500 scale-[0.6] ml-1 mb-0.5"
-                  >warning</mat-icon
+              <div class="flex items-center gap-1">
+                <mat-icon
+                  class="scale-[0.7] m-0 {{ getTaxonomy(proposal).color }}"
+                  >{{ getTaxonomy(proposal).icon }}</mat-icon
                 >
-              }
+                Prop {{ i + 1 }}
+              </div>
             </mat-button-toggle>
           }
         </mat-button-toggle-group>
 
         @if (selectedProposalId(); as activeId) {
-          <div class="flex items-center gap-2 animate-fade-in">
-            <button mat-button color="warn" (click)="onReject(activeId)">
+          <div class="flex items-center gap-3 animate-fade-in">
+            <button
+              mat-button
+              color="warn"
+              (click)="rejectProposal.emit(activeId)"
+            >
               Reject
             </button>
             <button
               mat-flat-button
               color="primary"
-              (click)="onAccept(activeId)"
+              (click)="acceptProposal.emit(activeId)"
             >
-              Accept This Proposal
+              {{
+                getSelectedIndex() > 0 ? 'Accept Up To Here' : 'Accept Proposal'
+              }}
             </button>
           </div>
-        } @else if (activeProposals().length > 1) {
-          <span
-            class="text-sm text-warn-600 font-medium flex items-center gap-1"
-          >
-            <mat-icon class="scale-75">priority_high</mat-icon>
-            Select a proposal to review
-          </span>
         }
       </div>
     }
 
     <div
       class="flex-1 border border-gray-200 bg-gray-50 flex flex-col overflow-hidden relative shadow-inner"
-      [class.rounded-b-md]="activeProposals().length > 0"
-      [class.rounded-md]="activeProposals().length === 0"
+      [class.rounded-b-md]="proposalChain().length > 0"
+      [class.rounded-md]="proposalChain().length === 0"
     >
+      @if (selectedProposalId()) {
+        <div
+          class="bg-white/80 backdrop-blur-sm border-b border-gray-200 px-4 py-2 flex justify-end shrink-0 z-10"
+        >
+          <mat-button-toggle-group
+            [value]="viewMode()"
+            (change)="viewMode.set($event.value)"
+            class="h-8"
+          >
+            <mat-button-toggle value="applied" class="text-xs"
+              >Applied State</mat-button-toggle
+            >
+            <mat-button-toggle value="raw" class="text-xs"
+              >Raw Diff</mat-button-toggle
+            >
+          </mat-button-toggle-group>
+        </div>
+      }
+
       <div class="flex-1 overflow-auto p-4">
-        @if (displayContent() !== null) {
+        @if (displayError()) {
+          <pre class="font-mono text-sm m-0 text-red-600 leading-relaxed">{{
+            displayError()
+          }}</pre>
+        } @else if (viewMode() === 'raw' && rawContent()) {
+          <pre class="font-mono text-sm m-0 text-gray-800 leading-relaxed">{{
+            rawContent()
+          }}</pre>
+        } @else if (displayContent() !== null) {
           <pre class="font-mono text-sm m-0 text-gray-800 leading-relaxed">{{
             displayContent() || '// File is empty'
           }}</pre>
@@ -90,18 +120,6 @@
           </div>
         }
       </div>
-    </div>
-  } @else {
-    <div class="h-full flex flex-col items-center justify-center text-gray-400">
-      <div
-        class="w-16 h-16 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mb-4"
-      >
-        <mat-icon class="scale-[1.5] text-gray-300">code</mat-icon>
-      </div>
-      <p class="text-base font-medium text-gray-500">Select a file to review</p>
-      <p class="text-sm mt-1">
-        Choose a file from the sidebar to view its changes.
-      </p>
     </div>
   }
 </div>

@@ -8,6 +8,7 @@ import {
   FileProposalType,
   FileMetadata,
 } from '@nx-platform-application/llm-types';
+import { ChangeProposal } from '@nx-platform-application/llm-types';
 import {
   LlmScrollSource,
   LlmSessionSource,
@@ -20,10 +21,13 @@ export interface ModifiedFile {
   metadata?: FileMetadata;
   isContentLoading: boolean;
   baseContent: string | null;
-  latestContent: string | null;
-  activeProposals: SSEProposalEvent['proposal'][];
-  acceptedProposals: SSEProposalEvent['proposal'][];
-  patchError?: string; // Tracks if a diff failed to apply cleanly
+  // The strictly chronological sequence of all proposals in this session
+  proposalChain: ChangeProposal[];
+}
+
+export interface ChainResolution {
+  content: string | null;
+  error?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -33,7 +37,6 @@ export class WorkspaceStateService {
   private sessionSource = inject(LlmSessionSource);
   private firestoreClient = inject(LlmGithubFirestoreClient);
 
-  // --- INTERNAL STATE ---
   private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
   private readonly baseContents = signal<Map<string, string>>(new Map());
   private readonly loadingSet = signal<Set<string>>(new Set());
@@ -47,7 +50,6 @@ export class WorkspaceStateService {
 
   readonly activeCacheId = computed(() => {
     const sessionId = this.scrollSource.activeSessionId();
-    console.log('got session id', sessionId);
     if (!sessionId) return null;
     const session = this.sessionSource
       .sessions()
@@ -56,7 +58,6 @@ export class WorkspaceStateService {
   });
 
   constructor() {
-    // 1. Reactively load lightweight METADATA when session changes
     effect(async () => {
       const cacheId = this.activeCacheId();
       if (!cacheId) {
@@ -64,12 +65,10 @@ export class WorkspaceStateService {
         this.baseContents.set(new Map());
         return;
       }
-
       try {
         const metadataList = await firstValueFrom(
           this.firestoreClient.getFiles(cacheId),
         );
-        console.log('got metadata', metadataList);
         const metaMap = new Map<string, FileMetadata>();
         for (const meta of metadataList) {
           metaMap.set(meta.path, meta);
@@ -81,28 +80,24 @@ export class WorkspaceStateService {
       }
     });
 
-    // 2. Auto-Loader: If a file has proposals but no base content, fetch it!
+    // Auto-Loader updated to check the chain
     effect(() => {
       const fileMap = this.overlayMap();
       fileMap.forEach((record, filePath) => {
-        const hasProposals =
-          record.activeProposals.length > 0 ||
-          record.acceptedProposals.length > 0;
+        const hasProposals = record.proposalChain.length > 0;
         const needsContent =
           record.baseContent === null &&
           !record.isContentLoading &&
           record.metadata;
 
         if (hasProposals && needsContent) {
-          // Untracked to prevent circular effect dependencies
           setTimeout(() => this.loadContent(filePath), 0);
         }
       });
     });
   }
 
-  // --- ACTIONS ---
-
+  // ... (encodePathForGo and loadContent remain the same) ...
   private encodePathForGo(filePath: string): string {
     return btoa(unescape(encodeURIComponent(filePath)))
       .replace(/\+/g, '-')
@@ -118,23 +113,15 @@ export class WorkspaceStateService {
     )
       return;
 
-    this.loadingSet.update((set) => {
-      const newSet = new Set(set);
-      newSet.add(filePath);
-      return newSet;
-    });
-
+    this.loadingSet.update((set) => new Set(set).add(filePath));
     try {
       const base64Path = this.encodePathForGo(filePath);
       const res = await firstValueFrom(
         this.firestoreClient.getFileContent(cacheId, base64Path),
       );
-
-      this.baseContents.update((map) => {
-        const newMap = new Map(map);
-        newMap.set(filePath, res.content);
-        return newMap;
-      });
+      this.baseContents.update((map) =>
+        new Map(map).set(filePath, res.content),
+      );
     } catch (err) {
       this.logger.error(`Failed to load content for ${filePath}`, err);
     } finally {
@@ -146,7 +133,7 @@ export class WorkspaceStateService {
     }
   }
 
-  // --- COMPUTED VFS LOGIC ---
+  // --- NEW ENGINE CORE ---
 
   readonly overlayMap = computed(() => {
     const fileMap = new Map<string, ModifiedFile>();
@@ -155,21 +142,16 @@ export class WorkspaceStateService {
     const contents = this.baseContents();
     const loading = this.loadingSet();
 
-    // 1. Initialize map
     metaTree.forEach((meta, filePath) => {
-      const content = contents.get(filePath) || null;
       fileMap.set(filePath, {
         filePath,
         metadata: meta,
         isContentLoading: loading.has(filePath),
-        baseContent: content,
-        latestContent: content,
-        activeProposals: [],
-        acceptedProposals: [],
+        baseContent: contents.get(filePath) || null,
+        proposalChain: [],
       });
     });
 
-    // 2. Chronological Patch Application
     const decoder = new TextDecoder();
 
     for (const msg of messages) {
@@ -182,73 +164,111 @@ export class WorkspaceStateService {
           parsed.__type === 'workspace_proposal' ? parsed.data : parsed;
         const proposal = (payload as SSEProposalEvent).proposal;
 
-        const filePath = proposal.filePath;
-
-        if (!fileMap.has(filePath)) {
-          fileMap.set(filePath, {
-            filePath,
+        if (!fileMap.has(proposal.filePath)) {
+          fileMap.set(proposal.filePath, {
+            filePath: proposal.filePath,
             isContentLoading: false,
             baseContent: null,
-            latestContent: '', // Treat new files as empty strings for patching
-            activeProposals: [],
-            acceptedProposals: [],
+            proposalChain: [],
           });
         }
 
-        const fileRecord = fileMap.get(filePath)!;
-
-        const status = proposal.status || 'pending';
-
-        if (status === 'accepted') {
-          fileRecord.acceptedProposals.push(proposal);
-
-          if (proposal.newContent) {
-            // Absolute overwrite
-            fileRecord.latestContent = proposal.newContent;
-            fileRecord.patchError = undefined;
-          } else if (proposal.patch) {
-            // Sequential diff application
-            const currentText = fileRecord.latestContent;
-
-            if (currentText !== null) {
-              const patchedResult = applyPatch(currentText, proposal.patch);
-
-              if (patchedResult === false) {
-                fileRecord.patchError = `Failed to apply patch sequence cleanly.`;
-                this.logger.warn(`Patch conflict on ${filePath}`);
-              } else {
-                fileRecord.latestContent = patchedResult;
-                fileRecord.patchError = undefined;
-              }
-            }
-          }
-        } else if (status === 'pending') {
-          fileRecord.activeProposals.push(proposal);
-        }
+        // Push sequentially. The scroll source guarantees chronological order.
+        fileMap.get(proposal.filePath)!.proposalChain.push(proposal);
       } catch (e) {
-        this.logger.error('Failed to parse or patch proposal', e);
+        this.logger.error('Failed to parse proposal', e);
       }
     }
     return fileMap;
   });
 
+  /**
+   * The Query Engine: Calculates the applied state of a file dynamically up to a specific proposal node.
+   */
+  resolveChainState(
+    record: ModifiedFile,
+    targetProposalId?: string | null,
+  ): ChainResolution {
+    let currentText = record.baseContent || ''; // Treat new files as empty strings
+
+    // If asking for base state, and it truly doesn't exist, return null
+    if (!targetProposalId && record.baseContent === null)
+      return { content: null };
+
+    for (const proposal of record.proposalChain) {
+      // Apply the node sequentially
+      if (proposal.newContent) {
+        currentText = proposal.newContent;
+      } else if (proposal.patch) {
+        const patchedResult = applyPatch(currentText, proposal.patch);
+        if (patchedResult === false) {
+          return {
+            content: currentText,
+            error: `// ERROR: Chain conflict at Proposal ${proposal.id}.\n// The preceding patches did not result in a valid base for this diff.\n\n${proposal.patch}`,
+          };
+        }
+        currentText = patchedResult;
+      }
+
+      // Stop once we've reached the user's requested point in time
+      if (proposal.id === targetProposalId) {
+        break;
+      }
+    }
+
+    return { content: currentText };
+  }
+
   // --- UI DERIVATIONS ---
 
+  /**
+   * Evaluates whether a file has a broken chain.
+   * A conflict exists if applying the chronological patches results in an error.
+   */
   readonly conflictsMap = computed(() => {
     const conflicts = new Map<string, boolean>();
+
     this.overlayMap().forEach((record, filePath) => {
-      conflicts.set(filePath, record.activeProposals.length > 1);
+      if (record.proposalChain.length === 0) {
+        conflicts.set(filePath, false);
+        return;
+      }
+
+      // Query the engine for the complete chain state (no target ID = process all)
+      const resolution = this.resolveChainState(record);
+
+      // If the engine threw a patch error anywhere in the sequence, the chain is conflicted
+      conflicts.set(filePath, resolution.error !== undefined);
     });
+
     return conflicts;
   });
 
+  /**
+   * Drift score represents the number of files with committed (accepted) changes
+   * that haven't been synced back to the main repository yet.
+   */
   readonly driftScore = computed(() => {
     let count = 0;
-    this.overlayMap().forEach((r) => {
-      if (r.acceptedProposals.length > 0) count++;
+
+    this.overlayMap().forEach((record) => {
+      // If the chain contains ANY accepted proposals, this file has drifted from base
+      const hasAccepted = record.proposalChain.some(
+        (p) => p.status === 'accepted',
+      );
+      if (hasAccepted) {
+        count++;
+      }
     });
+
     return count;
   });
 
-  readonly requiresRecompile = computed(() => this.driftScore() >= 5);
+  /**
+   * Tracks if the workspace needs to be recompiled (e.g., if there are new uncompiled accepted edits)
+   * This can be expanded later to check against a build system state.
+   */
+  readonly requiresRecompile = computed(() => {
+    return this.driftScore() > 0;
+  });
 }

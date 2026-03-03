@@ -1,25 +1,15 @@
 <div class="h-full flex flex-col bg-white">
-  <div
-    class="z-10 relative bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between"
+  <llm-session-subpage-header
+    title="Workspace Review"
+    icon="code"
+    iconColor="text-indigo-600"
+    [sessionTitle]="activeSession().title"
+    (closed)="onClose()"
   >
-    <div class="flex items-center">
-      <button
-        type="button"
-        (click)="onClose()"
-        class="text-gray-600 mr-2 hover:bg-gray-100 rounded-full p-1 transition-colors"
-      >
-        <mat-icon>arrow_back</mat-icon>
-      </button>
-      <h2 class="font-bold text-gray-800 text-base flex items-center gap-2 m-0">
-        <mat-icon class="text-indigo-600">code</mat-icon>
-        Workspace Review
-      </h2>
-    </div>
-
-    <button mat-flat-button color="primary" [disabled]="!canCommit()">
+    <button actions mat-flat-button color="primary" [disabled]="!canCommit()">
       Commit Changes to GitHub
     </button>
-  </div>
+  </llm-session-subpage-header>
 
   <div class="flex-grow overflow-hidden flex flex-row">
     <llm-workspace-sidebar
@@ -33,8 +23,10 @@
       class="flex-1 h-full min-w-0"
       [filePath]="selectedFilePath()"
       [isLoading]="activeRecord()?.isContentLoading ?? false"
+      [hasBaseContent]="activeRecord()?.baseContent !== null"
       [displayContent]="displayContent()"
-      [activeProposals]="activeRecord()?.activeProposals ?? []"
+      [displayError]="displayError()"
+      [proposalChain]="activeChain()"
       [selectedProposalId]="selectedProposalId()"
       (previewSelected)="onPreviewSelected($event)"
       (acceptProposal)="onAcceptProposal($event)"

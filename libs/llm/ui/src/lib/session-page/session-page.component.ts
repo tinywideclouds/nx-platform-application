@@ -25,16 +25,18 @@ import {
   LlmDeleteSessionDialogComponent,
   DeleteSessionResult,
 } from '../delete-session-dialog/delete-session-dialog.component';
+import { LlmSessionSubpageHeaderComponent } from '../session-subpage-header/session-subpage-header.component';
 
 @Component({
   selector: 'llm-session-page',
   standalone: true,
   imports: [
     CommonModule,
-    LlmSessionFormComponent,
     MatButtonModule,
     MatIconModule,
     MatDialogModule,
+    LlmSessionFormComponent,
+    LlmSessionSubpageHeaderComponent,
   ],
   templateUrl: './session-page.component.html',
   styleUrl: './session-page.component.scss',

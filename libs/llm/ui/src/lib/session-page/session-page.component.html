@@ -1,19 +1,11 @@
 <div class="h-full flex flex-col bg-white">
-  <div
-    class="z-10 relative bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center"
+  <llm-session-subpage-header
+    title="Session Settings"
+    icon="tune"
+    [sessionTitle]="session()?.title"
+    (closed)="onClose()"
   >
-    <button
-      type="button"
-      (click)="onClose()"
-      class="text-gray-600 mr-2 hover:bg-gray-100 rounded-full p-1 transition-colors"
-    >
-      <mat-icon>arrow_back</mat-icon>
-    </button>
-    <h2 class="font-bold text-gray-800 text-base flex items-center gap-2 m-0">
-      <mat-icon class="text-gray-400">tune</mat-icon>
-      {{ session()?.title || 'Session Settings' }}
-    </h2>
-  </div>
+  </llm-session-subpage-header>
 
   <div class="flex-grow overflow-y-scroll flex justify-center">
     @if (session(); as data) {

@@ -4,14 +4,16 @@ import {
   FileStatePbSchema,
   FileStatePb,
   SessionPbSchema,
-  SessionPb,
 } from '@nx-platform-application/llm-protos/builder/v1/builder_pb';
 import { fromJson, fromJsonString } from '@bufbuild/protobuf';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 export interface FileState {
   content: string;
   isDeleted: boolean;
 }
+
+export type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'staged';
 
 export interface ChangeProposal {
   id: string;
@@ -20,8 +22,8 @@ export interface ChangeProposal {
   patch?: string;
   newContent?: string;
   reasoning: string;
-  status: string;
-  createdAt: string;
+  status: ProposalStatus;
+  createdAt: ISODateTimeString;
 }
 
 export interface WorkspaceSession {
@@ -38,6 +40,18 @@ export interface SSEProposalEvent {
 // --- INTERNAL MAPPERS ---
 
 function changeProposalFromProto(pk: ChangeProposalPb): ChangeProposal {
+  let status: ProposalStatus = 'pending';
+  switch (pk.status) {
+    case 'accepted':
+      status = 'accepted';
+      break;
+    case 'rejected':
+      status = 'rejected';
+      break;
+    case 'staged':
+      status = 'staged';
+      break;
+  }
   return {
     id: pk.id,
     sessionId: pk.sessionId,
@@ -45,8 +59,8 @@ function changeProposalFromProto(pk: ChangeProposalPb): ChangeProposal {
     patch: pk.patch,
     newContent: pk.newContent,
     reasoning: pk.reasoning,
-    status: pk.status,
-    createdAt: pk.createdAt,
+    status,
+    createdAt: pk.createdAt as ISODateTimeString,
   };
 }
 
