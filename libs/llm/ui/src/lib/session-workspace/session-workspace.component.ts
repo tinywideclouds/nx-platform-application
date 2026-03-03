@@ -26,6 +26,7 @@ import {
   WorkspaceSidebarFile,
 } from '../workspace-sidebar/workspace-sidebar.component';
 import { LlmWorkspaceFileViewerComponent } from '../workspace-file-viewer/workspace-file-viewer.component';
+import { LlmSession } from '@nx-platform-application/llm-types';
 
 @Component({
   selector: 'llm-session-workspace',
@@ -46,10 +47,9 @@ export class LlmSessionWorkspaceComponent {
   private route = inject(ActivatedRoute);
   private workspaceState = inject(WorkspaceStateService);
   private sessionActions = inject(LlmSessionActions);
-  private sessionSource = inject(LlmSessionSource);
 
   // --- INPUTS & OUTPUTS ---
-  sessionId = input.required<string>();
+  readonly activeSession = input.required<LlmSession>();
   closed = output<void>();
 
   // --- LOCAL UI STATE ---
@@ -165,7 +165,7 @@ export class LlmSessionWorkspaceComponent {
   }
 
   async onAcceptProposal(proposalId: string): Promise<void> {
-    const session = this.getActiveSession();
+    const session = this.activeSession();
     if (!session) return;
 
     await this.sessionActions.acceptProposal(session, proposalId);
@@ -177,7 +177,7 @@ export class LlmSessionWorkspaceComponent {
   }
 
   async onRejectProposal(proposalId: string): Promise<void> {
-    const session = this.getActiveSession();
+    const session = this.activeSession();
     if (!session) return;
 
     await this.sessionActions.rejectProposal(session, proposalId);
@@ -194,11 +194,5 @@ export class LlmSessionWorkspaceComponent {
       queryParamsHandling: 'merge',
     });
     this.closed.emit();
-  }
-
-  // --- UTILS ---
-  private getActiveSession() {
-    const urn = URN.parse(this.sessionId());
-    return this.sessionSource.sessions().find((s) => s.id.equals(urn));
   }
 }

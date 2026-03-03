@@ -92,7 +92,7 @@ export class TimeSeries {
         type: 'content',
         timestamp: instant,
         layout: { alignment: align, isContinuous },
-        renderingWeight: 1, // Default, updated by Renderer
+        renderingWeight: 1,
         data: item,
       };
 

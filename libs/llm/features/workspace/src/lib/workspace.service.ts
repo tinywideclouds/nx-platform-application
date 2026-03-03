@@ -47,6 +47,7 @@ export class WorkspaceStateService {
 
   readonly activeCacheId = computed(() => {
     const sessionId = this.scrollSource.activeSessionId();
+    console.log('got session id', sessionId);
     if (!sessionId) return null;
     const session = this.sessionSource
       .sessions()
@@ -68,6 +69,7 @@ export class WorkspaceStateService {
         const metadataList = await firstValueFrom(
           this.firestoreClient.getFiles(cacheId),
         );
+        console.log('got metadata', metadataList);
         const metaMap = new Map<string, FileMetadata>();
         for (const meta of metadataList) {
           metaMap.set(meta.path, meta);
@@ -179,6 +181,7 @@ export class WorkspaceStateService {
         const payload =
           parsed.__type === 'workspace_proposal' ? parsed.data : parsed;
         const proposal = (payload as SSEProposalEvent).proposal;
+
         const filePath = proposal.filePath;
 
         if (!fileMap.has(filePath)) {
@@ -194,7 +197,9 @@ export class WorkspaceStateService {
 
         const fileRecord = fileMap.get(filePath)!;
 
-        if (proposal.status === 'accepted') {
+        const status = proposal.status || 'pending';
+
+        if (status === 'accepted') {
           fileRecord.acceptedProposals.push(proposal);
 
           if (proposal.newContent) {
@@ -216,17 +221,14 @@ export class WorkspaceStateService {
                 fileRecord.patchError = undefined;
               }
             }
-            // If currentText is null, we do nothing. The auto-loader will fetch it,
-            // and this computed signal will re-run once the base text arrives!
           }
-        } else if (proposal.status === 'pending') {
+        } else if (status === 'pending') {
           fileRecord.activeProposals.push(proposal);
         }
       } catch (e) {
         this.logger.error('Failed to parse or patch proposal', e);
       }
     }
-
     return fileMap;
   });
 

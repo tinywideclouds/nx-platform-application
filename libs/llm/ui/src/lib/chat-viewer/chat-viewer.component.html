@@ -2,12 +2,12 @@
   <div
     class="w-full h-full bg-white relative z-50 flex flex-col animate-fade-in"
   >
-    @if (sessionId(); as idStr) {
+    @if (activeSession(); as session) {
       @if (viewMode() === 'details') {
-        <llm-session-page [sessionId]="idStr" (closed)="closeModalView()" />
+        <llm-session-page [session]="session" (closed)="closeModalView()" />
       } @else if (viewMode() === 'workspace') {
         <llm-session-workspace
-          [sessionId]="idStr"
+          [activeSession]="session"
           (closed)="closeModalView()"
         />
       }
@@ -51,9 +51,9 @@
       main
       class="flex-1 min-h-0 bg-gray-50 relative flex flex-col overflow-hidden"
     >
-      @if (sessionId(); as idStr) {
+      @if (sessionId(); as id) {
         <div class="flex-1 w-full h-full overflow-hidden">
-          <llm-chat-window [sessionId]="idStr" />
+          <llm-chat-window [session]="activeSession()" />
         </div>
       } @else {
         <div

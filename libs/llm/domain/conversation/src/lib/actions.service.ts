@@ -130,7 +130,6 @@ export class LlmChatActions {
               isExcluded: false,
             };
 
-            // CRITICAL FIX: Track the new message reference so we save to the correct ID later!
             this.activeBotMsg = newTextMsg;
 
             this.storage.saveMessage(newTextMsg);
@@ -146,7 +145,6 @@ export class LlmChatActions {
           this.logger.debug('Received Tool Interception Proposal', event.event);
           this.activeProposal.set(event.event);
 
-          // CRITICAL FIX: Commit the active text bubble to the database BEFORE spawning the proposal
           if (this.activeBotId && this.activeBotMsg) {
             const finalMsg: LlmMessage = {
               ...this.activeBotMsg,

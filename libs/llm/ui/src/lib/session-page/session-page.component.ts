@@ -47,7 +47,7 @@ export class LlmSessionPageComponent {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private dialog = inject(MatDialog);
-  sessionId = input<string | undefined>();
+  session = input<LlmSession | undefined>();
 
   closed = output<void>();
 
@@ -56,22 +56,6 @@ export class LlmSessionPageComponent {
     const s = this.session();
     return s ? this.sessionActions.isCompiling(s.id.toString())() : false;
   });
-  session = signal<LlmSession | null>(null);
-
-  constructor() {
-    effect(async () => {
-      const id = this.sessionId();
-      if (!id) return;
-      try {
-        const urn = URN.parse(id);
-        const sessions = await this.storage.getSessions();
-        const found = sessions.find((s) => s.id.toString() === urn.toString());
-        this.session.set(found || null);
-      } catch (e) {
-        console.error('Failed to load session details', e);
-      }
-    });
-  }
 
   onClose(): void {
     this.router.navigate([], {
@@ -84,9 +68,9 @@ export class LlmSessionPageComponent {
   async onSave(updatedSession: LlmSession): Promise<void> {
     // Because the form emitted this on blur or addition, we just save it instantly
     await this.storage.saveSession(updatedSession);
-    this.sessionSource.refresh(); // Sidebar updates immediately!
+    this.sessionSource.refresh();
 
-    this.session.set(updatedSession);
+    //TODO check local session is updated here
 
     this.snackBar.open('Session settings updated', 'Close', {
       duration: 2000,

@@ -22,7 +22,7 @@ import {
   MarkdownTokensPipe,
 } from '@nx-platform-application/scrollspace-ui';
 
-import { LlmMessage } from '@nx-platform-application/llm-types';
+import { LlmMessage, LlmSession } from '@nx-platform-application/llm-types';
 import { ScrollspaceInputDraft } from '@nx-platform-application/scrollspace-types';
 
 // Domain
@@ -34,7 +34,6 @@ import {
   LlmChatActions,
   LlmSessionActions,
 } from '@nx-platform-application/llm-domain-conversation';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmContentPipe } from '../pipes/llm-content.pipe';
 import { LlmChatHeaderComponent } from '../chat-header/chat-header.component';
 import {
@@ -73,16 +72,12 @@ export class LlmChatWindowComponent {
   // Services
   protected source = inject(LlmScrollSource);
   private actions = inject(LlmChatActions);
-  private storage = inject(LlmStorageService);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
-  private sessionSource = inject(LlmSessionSource);
   private sessionActions = inject(LlmSessionActions);
 
   private cdr = inject(ChangeDetectorRef);
-
-  readonly sessionId = input<string>();
 
   copiedMessageId = signal<string | null>(null);
 
@@ -90,27 +85,14 @@ export class LlmChatWindowComponent {
   selectedIds = signal<Set<string>>(new Set());
   focusedGroupUrn = signal<string | null>(null);
 
-  activeSession = computed(() => {
-    const idStr = this.sessionId();
-    if (!idStr) return null;
-    return (
-      this.sessionSource.sessions().find((s) => s.id.toString() === idStr) ||
-      null
-    );
-  });
+  readonly session = input<LlmSession | null>(null);
 
-  activeContextGroups = computed<Record<string, string>>(() => {
-    const currentId = this.source.activeSessionId();
-    if (!currentId) return {};
-
-    const session = this.sessionSource
-      .sessions()
-      .find((s) => s.id.equals(currentId));
-    return session?.contextGroups || {};
-  });
+  readonly activeContextGroups = computed(
+    () => this.session()?.contextGroups || {},
+  );
 
   chatLockState = computed(() => {
-    const session = this.activeSession();
+    const session = this.session();
     if (!session) return { locked: false, reason: '' };
 
     const isCompiling = this.sessionActions.isCompiling(
@@ -139,52 +121,12 @@ export class LlmChatWindowComponent {
     return { locked: false, reason: '' };
   });
 
-  constructor() {
-    // REACTIVE ROUTING LOGIC
-    effect(() => {
-      const idStr = this.sessionId();
-
-      if (idStr) {
-        // CASE A: Route has ID -> Hydrate Source
-        try {
-          const urn = URN.parse(idStr);
-          this.source.setSession(urn);
-        } catch (e) {
-          console.error('Invalid Session URN', e);
-          this.navigateToNew();
-        }
-      } else {
-        // CASE B: No ID -> Smart Resume (Find Last or Create New)
-        this.resumeLastSession();
-      }
-    });
-  }
-
   onOpenDetails() {
     // Uses queryParamsHandling: 'merge' to keep the sessionId intact
     this.router.navigate([], {
       queryParams: { view: 'details' },
       queryParamsHandling: 'merge',
     });
-  }
-
-  private async resumeLastSession() {
-    // 1. Ask DB for recent sessions (Ordered by LastModified DESC)
-    const sessions = await this.storage.getSessions();
-
-    if (sessions.length > 0) {
-      // Found one! (This catches the Scenario Seed)
-      const last = sessions[0];
-      this.router.navigate(['chat', last.id.toString()], { replaceUrl: true });
-    } else {
-      // Nothing found (Fresh Install), create new
-      this.navigateToNew();
-    }
-  }
-
-  private navigateToNew() {
-    const newId = URN.create('session', crypto.randomUUID(), 'llm');
-    this.router.navigate(['chat', newId.toString()], { replaceUrl: true });
   }
 
   toggleSelectionMode() {
@@ -338,19 +280,15 @@ export class LlmChatWindowComponent {
 
   async groupSelected() {
     const ids = Array.from(this.selectedIds());
-    const currentSessionId = this.source.activeSessionId();
-    if (ids.length === 0 || !currentSessionId) return;
+    const session = this.session();
+    if (!session) return;
 
-    // 1. Fetch existing groups from the currently active session
-    const currentSession = this.sessionSource
-      .sessions()
-      .find((s) => s.id.equals(currentSessionId));
-
-    const sessionGroups = currentSession?.contextGroups || {};
-    const existingGroups = Object.entries(sessionGroups).map(([urn, name]) => ({
-      urn,
-      name,
-    }));
+    const existingGroups = Object.entries(this.activeContextGroups()).map(
+      ([urn, name]) => ({
+        urn,
+        name,
+      }),
+    );
 
     // 2. Open the Dialog
     const dialogRef = this.dialog.open<
@@ -366,7 +304,7 @@ export class LlmChatWindowComponent {
 
     // 3. Dispatch action if confirmed
     if (result) {
-      await this.actions.groupMessages(ids, currentSessionId, result);
+      await this.actions.groupMessages(ids, session.id, result);
       this.toggleSelectionMode(); // Reset UI
 
       this.snackBar.open('Context grouped successfully', 'Close', {
@@ -446,7 +384,7 @@ export class LlmChatWindowComponent {
   }
 
   async onAcceptProposal(proposalId: string) {
-    const session = this.activeSession();
+    const session = this.session();
     if (!session) return;
 
     // Delegate to the global diff registry action
@@ -454,7 +392,7 @@ export class LlmChatWindowComponent {
   }
 
   async onRejectProposal(proposalId: string, messageId: string) {
-    const session = this.activeSession();
+    const session = this.session();
     if (!session) return;
 
     // 1. Clear the backend ephemeral queue
@@ -528,7 +466,7 @@ export class LlmChatWindowComponent {
   onOpenWorkspace(proposalId?: string) {
     console.log('opening workspace');
 
-    const session = this.activeSession();
+    const session = this.session();
 
     if (!session) return;
 

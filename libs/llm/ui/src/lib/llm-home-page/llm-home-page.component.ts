@@ -33,6 +33,7 @@ export class LlmHomePageComponent {
   );
 
   private getViewFromUrl(url: string): LlmAppView {
+    console.log('getting view from url', url);
     if (url.includes('/data-sources')) return 'data-sources';
     if (url.includes('/settings')) return 'settings';
     return 'chat';
