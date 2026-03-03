@@ -96,8 +96,6 @@ export class TimeSeries {
         data: item,
       };
 
-      console.log('pushing scrollitem', contentItem);
-
       results.push(contentItem);
 
       lastActorId = actorId;

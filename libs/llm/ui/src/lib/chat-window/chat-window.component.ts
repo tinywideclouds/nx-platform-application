@@ -525,9 +525,22 @@ export class LlmChatWindowComponent {
     }
   }
 
-  onOpenWorkspace(proposalId: string) {
+  onOpenWorkspace(proposalId?: string) {
+    console.log('opening workspace');
+
+    const session = this.activeSession();
+
+    if (!session) return;
+
+    const queryParams: Record<string, string> = { view: 'workspace' };
+
+    // If they clicked a specific proposal bubble, pass it along to pre-select it
+    if (proposalId) {
+      queryParams['proposal'] = proposalId;
+    }
+
     this.router.navigate([], {
-      queryParams: { view: 'workspace', proposal: proposalId },
+      queryParams,
       queryParamsHandling: 'merge',
     });
   }

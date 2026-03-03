@@ -17,6 +17,7 @@ import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-u
 import { LlmSessionSidebarComponent } from '../session-sidebar/session-sidebar.component';
 import { LlmChatWindowComponent } from '../chat-window/chat-window.component';
 import { LlmSessionPageComponent } from '../session-page/session-page.component';
+import { LlmSessionWorkspaceComponent } from '../session-workspace/session-workspace.component';
 
 @Component({
   selector: 'llm-chat-viewer',
@@ -27,6 +28,7 @@ import { LlmSessionPageComponent } from '../session-page/session-page.component'
     MasterDetailLayoutComponent,
     LlmSessionSidebarComponent,
     LlmSessionPageComponent,
+    LlmSessionWorkspaceComponent,
     LlmChatWindowComponent,
   ],
   templateUrl: './chat-viewer.component.html',
@@ -40,6 +42,7 @@ export class LlmChatViewerComponent {
   readonly sessionId = input<string | undefined>(undefined);
 
   readonly viewMode = input<string | undefined>(undefined, { alias: 'view' });
+
   // UI State
   isMobile = signal(false);
 
@@ -53,10 +56,10 @@ export class LlmChatViewerComponent {
     this.router.navigate(['/chat']);
   }
 
-  closeDetails(): void {
-    // Clear the view param to return to the default chat window
+  closeModalView(): void {
+    // Clears the ?view= parameter to return to the chat conversation
     this.router.navigate([], {
-      queryParams: { view: null },
+      queryParams: { view: null, proposal: null },
       queryParamsHandling: 'merge',
     });
   }

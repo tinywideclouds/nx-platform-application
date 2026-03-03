@@ -1,5 +1,9 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { SSEProposalEvent } from '@nx-platform-application/llm-types';
+import {
+  FileProposalType,
+  LlmMessage,
+  SSEProposalEvent,
+} from '@nx-platform-application/llm-types';
 
 export type LlmContentPayload =
   | { type: 'text'; content: string }
@@ -13,8 +17,7 @@ export type LlmContentPayload =
 export class LlmContentPipe implements PipeTransform {
   private decoder = new TextDecoder();
 
-  transform(value: any): LlmContentPayload {
-    console.log('transforming message', value);
+  transform(value: LlmMessage | undefined): LlmContentPayload {
     // Robust check for the domain object shape
     if (!value || !value.payloadBytes) {
       return { type: 'text', content: '' };
@@ -24,7 +27,7 @@ export class LlmContentPipe implements PipeTransform {
     const decodedText = this.decoder.decode(value.payloadBytes);
 
     // 1. Intercept specialized JSON payloads
-    if (decodedText.startsWith('{"__type":"workspace_proposal"')) {
+    if (value.typeId.equals(FileProposalType)) {
       try {
         const parsed = JSON.parse(decodedText);
         return { type: 'proposal', event: parsed.data };
