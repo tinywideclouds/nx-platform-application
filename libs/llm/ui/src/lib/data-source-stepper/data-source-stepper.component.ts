@@ -43,16 +43,23 @@ export class LlmDataSourceStepperComponent {
   addSource = output<SessionAttachment>();
 
   // --- STEPPER STATE ---
-  selectedCacheId = signal<string | null>(null);
-  selectedProfileId = signal<string | undefined>(undefined);
+  // FIX: Strictly type as URNs
+  selectedCacheId = signal<URN | null>(null);
+  selectedProfileId = signal<URN | undefined>(undefined);
   selectedTarget = signal<ContextInjectionTarget>('inline-context');
+
+  // --- HELPERS ---
+  compareUrns(a: URN | null | undefined, b: URN | null | undefined): boolean {
+    if (!a || !b) return a === b;
+    return a.equals(b);
+  }
 
   // --- ACTIONS ---
 
-  async onCacheSelected(cacheId: string): Promise<void> {
+  // FIX: Accept URN from select menu
+  async onCacheSelected(cacheId: URN): Promise<void> {
     this.selectedCacheId.set(cacheId);
     this.selectedProfileId.set(undefined);
-    // Triggers the state service to load profiles for Step 2
     await this.dataSourcesState.selectCache(cacheId);
   }
 
@@ -61,11 +68,9 @@ export class LlmDataSourceStepperComponent {
     if (!cId) return;
 
     const newAtt: SessionAttachment = {
-      id: crypto.randomUUID(),
-      cacheId: URN.parse(cId),
-      profileId: this.selectedProfileId()
-        ? URN.parse(this.selectedProfileId()!)
-        : undefined,
+      id: URN.parse('urn:llm:attachment:' + crypto.randomUUID()),
+      cacheId: cId, // Already a URN
+      profileId: this.selectedProfileId(), // Already a URN
       target: this.selectedTarget(),
     };
 

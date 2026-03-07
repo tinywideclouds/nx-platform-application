@@ -32,6 +32,18 @@
     </button>
 
     <div class="w-px h-6 bg-indigo-700 mx-2"></div>
+
+    @if (pendingMigrations() > 0) {
+      <button
+        type="button"
+        mat-icon-button
+        (click)="openMigrations.emit()"
+        matTooltip="Legacy Data Migration Required"
+        class="text-amber-400 hover:text-amber-300 transition-colors animate-pulse"
+      >
+        <mat-icon>notification_important</mat-icon>
+      </button>
+    }
     <button
       type="button"
       mat-icon-button

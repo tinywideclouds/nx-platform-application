@@ -55,20 +55,32 @@
         @if (selectedProposalId(); as activeId) {
           <div class="flex items-center gap-3 animate-fade-in">
             <button
+              type="button"
               mat-button
               color="warn"
               (click)="rejectProposal.emit(activeId)"
             >
               Reject
             </button>
+
             <button
+              type="button"
+              mat-stroked-button
+              class="text-amber-600 border-amber-600"
+              (click)="stageProposal.emit(activeId)"
+            >
+              {{
+                getSelectedIndex() > 0 ? 'Stage Up To Here' : 'Stage Proposal'
+              }}
+            </button>
+
+            <button
+              type="button"
               mat-flat-button
               color="primary"
               (click)="acceptProposal.emit(activeId)"
             >
-              {{
-                getSelectedIndex() > 0 ? 'Accept Up To Here' : 'Accept Proposal'
-              }}
+              Accept
             </button>
           </div>
         }
@@ -99,22 +111,50 @@
         </div>
       }
 
-      <div class="flex-1 overflow-auto p-4">
+      <div class="flex-1 overflow-auto p-4 flex flex-col">
         @if (displayError()) {
-          <pre class="font-mono text-sm m-0 text-red-600 leading-relaxed">{{
-            displayError()
-          }}</pre>
-        } @else if (viewMode() === 'raw' && rawContent()) {
-          <pre class="font-mono text-sm m-0 text-gray-800 leading-relaxed">{{
-            rawContent()
-          }}</pre>
+          <div
+            class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center justify-between shadow-sm shrink-0"
+          >
+            <div
+              class="flex items-center gap-2 text-amber-900 text-sm font-medium"
+            >
+              <mat-icon class="text-amber-600 scale-90 m-0">warning</mat-icon>
+              {{ displayError() }}
+            </div>
+
+            @if (healedPatch() && failedProposalId()) {
+              <button
+                type="button"
+                mat-flat-button
+                class="bg-amber-600 text-white"
+                (click)="
+                  healRequested.emit({
+                    proposalId: failedProposalId()!,
+                    patch: healedPatch()!,
+                  })
+                "
+              >
+                <mat-icon>auto_fix_high</mat-icon>
+                Auto-Fix Diff
+              </button>
+            }
+          </div>
+        }
+
+        @if (viewMode() === 'raw' && rawContent()) {
+          <pre
+            class="font-mono text-sm m-0 text-gray-800 leading-relaxed flex-1"
+            >{{ rawContent() }}</pre
+          >
         } @else if (displayContent() !== null) {
-          <pre class="font-mono text-sm m-0 text-gray-800 leading-relaxed">{{
-            displayContent() || '// File is empty'
-          }}</pre>
+          <pre
+            class="font-mono text-sm m-0 text-gray-800 leading-relaxed flex-1"
+            >{{ displayContent() || '// File is empty' }}</pre
+          >
         } @else if (!isLoading()) {
           <div
-            class="h-full flex items-center justify-center text-gray-400 italic"
+            class="flex-1 flex items-center justify-center text-gray-400 italic"
           >
             // No content available
           </div>

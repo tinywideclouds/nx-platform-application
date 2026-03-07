@@ -10,6 +10,7 @@ import {
   ProfileRequest,
   SyncStreamEvent,
 } from '@nx-platform-application/llm-types';
+import { URN } from '@nx-platform-application/platform-types';
 
 @Injectable({ providedIn: 'root' })
 export class LlmDataSourcesStateService {
@@ -21,7 +22,7 @@ export class LlmDataSourcesStateService {
   caches = signal<CacheBundle[]>([]);
   isCachesLoading = signal<boolean>(false);
 
-  activeCacheId = signal<string | null>(null);
+  activeCacheId = signal<URN | null>(null);
   activeFiles = signal<FileMetadata[]>([]);
   activeProfiles = signal<FilterProfile[]>([]);
   isActiveCacheLoading = signal<boolean>(false);
@@ -30,10 +31,18 @@ export class LlmDataSourcesStateService {
 
   // --- COMPUTED STATE ---
 
+  cachesById = computed(() => {
+    const map = new Map<string, CacheBundle>();
+    for (const cache of this.caches()) {
+      map.set(cache.id.toString(), cache);
+    }
+    return map;
+  });
+
   activeCache = computed(() => {
     const id = this.activeCacheId();
     if (!id) return null;
-    return this.caches().find((c) => c.id === id) || null;
+    return this.cachesById().get(id.toString()) || null;
   });
 
   groupedCaches = computed(() => {
@@ -78,22 +87,21 @@ export class LlmDataSourcesStateService {
     }
   }
 
-  async loadFilesForCache(cacheId: string): Promise<void> {
+  async loadFilesForCache(cacheId: URN): Promise<void> {
     try {
       const files = await firstValueFrom(this.client.getFiles(cacheId));
       this.activeFiles.set(files);
     } catch (e) {
-      console.error(`Failed to load files for cache ${cacheId}`, e);
+      console.error(`Failed to load files for cache ${cacheId.toString()}`, e);
       this.activeFiles.set([]);
-      // FIX 1: Rethrow so Promise.all in selectCache knows this failed!
       throw e;
     }
   }
 
-  async selectCache(cacheId: string): Promise<void> {
+  async selectCache(cacheId: URN): Promise<void> {
     this.activeCacheId.set(cacheId);
     this.isActiveCacheLoading.set(true);
-    this.syncLogs.set([]); // FIX 2: Clear terminal logs on new selection
+    this.syncLogs.set([]);
 
     try {
       await Promise.all([
@@ -117,7 +125,7 @@ export class LlmDataSourcesStateService {
   async createCache(payload: {
     repo: string;
     branch: string;
-  }): Promise<string | null> {
+  }): Promise<URN | null> {
     try {
       this.snackBar.open(`Analyzing ${payload.repo}...`, '', {
         duration: 2000,
@@ -136,11 +144,13 @@ export class LlmDataSourcesStateService {
     }
   }
 
-  executeSync(cacheId: string, ingestionRules: FilterRules): Promise<void> {
+  executeSync(cacheId: URN, ingestionRules: FilterRules): Promise<void> {
     this.syncLogs.set([]);
 
     this.caches.update((caches) =>
-      caches.map((c) => (c.id === cacheId ? { ...c, status: 'syncing' } : c)),
+      caches.map((c) =>
+        c.id.equals(cacheId) ? { ...c, status: 'syncing' } : c,
+      ),
     );
 
     return new Promise<void>((resolve, reject) => {
@@ -151,7 +161,7 @@ export class LlmDataSourcesStateService {
         error: (error) => {
           this.caches.update((caches) =>
             caches.map((c) =>
-              c.id === cacheId ? { ...c, status: 'failed' } : c,
+              c.id.equals(cacheId) ? { ...c, status: 'failed' } : c,
             ),
           );
           console.error('Failed to execute sync stream', error);
@@ -165,7 +175,7 @@ export class LlmDataSourcesStateService {
             });
 
             await this.loadAllCaches();
-            if (this.activeCacheId() === cacheId) {
+            if (this.activeCacheId()?.equals(cacheId)) {
               await this.loadFilesForCache(cacheId);
             }
             resolve();
@@ -179,7 +189,7 @@ export class LlmDataSourcesStateService {
 
   // --- FILTER PROFILES ---
 
-  async saveProfile(req: ProfileRequest, profileId?: string): Promise<void> {
+  async saveProfile(req: ProfileRequest, profileId?: URN): Promise<void> {
     const cacheId = this.activeCacheId();
     if (!cacheId) {
       throw new Error('Cannot save a profile without an active cache ID.');
@@ -199,7 +209,7 @@ export class LlmDataSourcesStateService {
       }
 
       this.activeProfiles.update((profiles) => {
-        const idx = profiles.findIndex((p) => p.id === savedProfile.id);
+        const idx = profiles.findIndex((p) => p.id.equals(savedProfile.id));
         if (idx >= 0) {
           const updated = [...profiles];
           updated[idx] = savedProfile;
@@ -215,7 +225,7 @@ export class LlmDataSourcesStateService {
     }
   }
 
-  async deleteProfile(profileId: string): Promise<void> {
+  async deleteProfile(profileId: URN): Promise<void> {
     const cacheId = this.activeCacheId();
     if (!cacheId) return;
 
@@ -223,7 +233,7 @@ export class LlmDataSourcesStateService {
       await firstValueFrom(this.client.deleteProfile(cacheId, profileId));
 
       this.activeProfiles.update((profiles) =>
-        profiles.filter((p) => p.id !== profileId),
+        profiles.filter((p) => !p.id.equals(profileId)),
       );
       this.snackBar.open('Filter profile deleted', 'Close', { duration: 3000 });
     } catch (e) {

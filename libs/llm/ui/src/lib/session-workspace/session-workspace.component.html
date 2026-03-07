@@ -3,11 +3,44 @@
     title="Workspace Review"
     icon="code"
     iconColor="text-indigo-600"
-    [sessionTitle]="activeSession().title"
+    [sessionTitle]="activeSession()?.title"
     (closed)="onClose()"
   >
-    <button actions mat-flat-button color="primary" [disabled]="!canCommit()">
-      Commit Changes to GitHub
+    @if (hasPendingChanges()) {
+      <button
+        type="button"
+        actions
+        mat-stroked-button
+        class="mr-2"
+        (click)="onStageAll()"
+      >
+        Stage All
+      </button>
+    }
+
+    @if (hasStagedChanges()) {
+      <button
+        type="button"
+        actions
+        mat-stroked-button
+        color="warn"
+        class="mr-2"
+        (click)="onUnstageAll()"
+      >
+        Unstage All
+      </button>
+    }
+    <button
+      type="button"
+      actions
+      mat-stroked-button
+      color="accent"
+      class="mr-2"
+      [disabled]="!hasStagedChanges()"
+      (click)="viewStagedPatch()"
+    >
+      <mat-icon>integration_instructions</mat-icon>
+      View Staged Patch
     </button>
   </llm-session-subpage-header>
 
@@ -26,8 +59,12 @@
       [hasBaseContent]="activeRecord()?.baseContent !== null"
       [displayContent]="displayContent()"
       [displayError]="displayError()"
+      [healedPatch]="healedPatch()"
+      [failedProposalId]="failedProposalId()"
+      (healRequested)="onHealProposal($event)"
       [proposalChain]="activeChain()"
       [selectedProposalId]="selectedProposalId()"
+      (stageProposal)="onStageProposal($event)"
       (previewSelected)="onPreviewSelected($event)"
       (acceptProposal)="onAcceptProposal($event)"
       (rejectProposal)="onRejectProposal($event)"

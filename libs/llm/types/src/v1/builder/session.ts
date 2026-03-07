@@ -6,29 +6,30 @@ import {
   SessionPbSchema,
 } from '@nx-platform-application/llm-protos/builder/v1/builder_pb';
 import { fromJson, fromJsonString } from '@bufbuild/protobuf';
-import { ISODateTimeString } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 
 export interface FileState {
   content: string;
   isDeleted: boolean;
 }
 
-export type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'staged';
-
 export interface ChangeProposal {
-  id: string;
-  sessionId: string;
+  id: string; // Ephemeral string IDs for proposals
+  sessionId: URN; // Strict URN
   filePath: string;
   patch?: string;
   newContent?: string;
   reasoning: string;
-  status: ProposalStatus;
   createdAt: ISODateTimeString;
+  status?: string; // TODO remove after current refactor
 }
 
 export interface WorkspaceSession {
-  id: string;
-  compiledCacheId: string;
+  id: URN; // Strict URN
+  compiledCacheId: URN; // Strict URN
   updatedAt: string;
 }
 
@@ -40,26 +41,13 @@ export interface SSEProposalEvent {
 // --- INTERNAL MAPPERS ---
 
 function changeProposalFromProto(pk: ChangeProposalPb): ChangeProposal {
-  let status: ProposalStatus = 'pending';
-  switch (pk.status) {
-    case 'accepted':
-      status = 'accepted';
-      break;
-    case 'rejected':
-      status = 'rejected';
-      break;
-    case 'staged':
-      status = 'staged';
-      break;
-  }
   return {
     id: pk.id,
-    sessionId: pk.sessionId,
+    sessionId: URN.parse(pk.sessionId),
     filePath: pk.filePath,
     patch: pk.patch,
     newContent: pk.newContent,
     reasoning: pk.reasoning,
-    status,
     createdAt: pk.createdAt as ISODateTimeString,
   };
 }
@@ -76,8 +64,8 @@ function fileStateFromProto(pk: FileStatePb): FileState {
 export function deserializeSession(jsonString: string): WorkspaceSession {
   const proto = fromJsonString(SessionPbSchema, jsonString);
   return {
-    id: proto.id,
-    compiledCacheId: proto.compiledCacheId,
+    id: URN.parse(proto.id),
+    compiledCacheId: URN.parse(proto.compiledCacheId),
     updatedAt: proto.updatedAt,
   };
 }

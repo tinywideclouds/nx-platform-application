@@ -13,13 +13,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
-import { URN } from '@nx-platform-application/platform-types';
 import { LlmSession } from '@nx-platform-application/llm-types';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 
 import { LlmSessionFormComponent } from '../session-form/session-form.component';
-import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
+import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import {
   LlmDeleteSessionDialogComponent,
@@ -49,7 +48,8 @@ export class LlmSessionPageComponent {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private dialog = inject(MatDialog);
-  session = input<LlmSession | undefined>();
+
+  readonly session = computed(() => this.sessionSource.activeSession());
 
   closed = output<void>();
 

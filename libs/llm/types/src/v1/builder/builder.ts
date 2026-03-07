@@ -1,18 +1,21 @@
+// libs/llm/types/src/v1/builder/builder.ts
 import {
   NetworkAttachmentPbSchema,
   NetworkAttachmentPb,
   BuildCacheRequestPbSchema,
   BuildCacheRequestPb,
   BuildCacheResponsePbSchema,
-  BuildCacheResponsePb,
   NetworkMessagePbSchema,
   NetworkMessagePb,
   GenerateStreamRequestPbSchema,
   GenerateStreamRequestPb,
 } from '@nx-platform-application/llm-protos/builder/v1/builder_pb';
 import { create, fromJsonString, toJsonString } from '@bufbuild/protobuf';
-
-// --- SMART TYPES ---
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import { SessionAttachment } from '../../lib/session_types';
 
 export interface NetworkMessage {
   id: string;
@@ -21,56 +24,44 @@ export interface NetworkMessage {
   timestamp: string;
 }
 
-export interface NetworkAttachment {
-  id: string;
-  cacheId: string;
-  profileId?: string;
-}
-
 export interface BuildCacheRequest {
-  sessionId: string;
+  sessionId: URN; // Strict URN
   model: string;
-  attachments: NetworkAttachment[];
+  attachments: SessionAttachment[]; // Strict Domain Type
+  expiresAtHint: ISODateTimeString;
 }
 
 export interface BuildCacheResponse {
-  geminiCacheId: string;
+  compiledCacheId: URN; // Strict URN
+  expiresAt: ISODateTimeString;
 }
 
 export interface GenerateStreamRequest {
-  sessionId: string;
+  sessionId: URN; // Strict URN
   model: string;
   history: NetworkMessage[];
-  cacheId?: string;
-  inlineAttachments?: NetworkAttachment[];
+  compiledCacheId?: URN; // Strict URN
+  inlineAttachments?: SessionAttachment[]; // Strict Domain Type
 }
 
-export function networkAttachmentToProto(
-  k: NetworkAttachment,
+// --- FACADE MAPPERS ---
+
+export function sessionAttachmentToProto(
+  k: SessionAttachment,
 ): NetworkAttachmentPb {
   return create(NetworkAttachmentPbSchema, {
-    id: k.id,
-    cacheId: k.cacheId,
-    profileId: k.profileId,
+    id: k.id.toString(), // Downcast URN to string for Go
+    cacheId: k.cacheId.toString(),
+    profileId: k.profileId?.toString(),
   });
-}
-
-export function networkAttachmentFromProto(
-  pk: NetworkAttachmentPb,
-): NetworkAttachment {
-  return {
-    id: pk.id,
-    cacheId: pk.cacheId,
-    profileId: pk.profileId, // Bufbuild maps this perfectly, even if it's undefined
-  };
 }
 
 function buildCacheRequestToProto(k: BuildCacheRequest): BuildCacheRequestPb {
   return create(BuildCacheRequestPbSchema, {
-    sessionId: k.sessionId,
+    sessionId: k.sessionId.toString(),
     model: k.model,
-    // FIX: Properly map the array of smart objects to proto objects
-    attachments: k.attachments.map(networkAttachmentToProto),
+    attachments: k.attachments.map(sessionAttachmentToProto),
+    expiresAtHint: k.expiresAtHint,
   });
 }
 
@@ -87,15 +78,15 @@ function generateStreamRequestToProto(
   k: GenerateStreamRequest,
 ): GenerateStreamRequestPb {
   return create(GenerateStreamRequestPbSchema, {
-    sessionId: k.sessionId,
+    sessionId: k.sessionId.toString(),
     model: k.model,
     history: k.history.map(networkMessageToProto),
-    geminiCacheId: k.cacheId,
-    inlineAttachments: k.inlineAttachments?.map(networkAttachmentToProto) || [],
+    compiledCacheId: k.compiledCacheId?.toString(),
+    inlineAttachments: k.inlineAttachments?.map(sessionAttachmentToProto) || [],
   });
 }
 
-// --- PUBLIC SERIALIZATION FACADES ---
+// --- PUBLIC SERIALIZATION ---
 
 export function serializeBuildCacheRequest(request: BuildCacheRequest): string {
   const proto = buildCacheRequestToProto(request);
@@ -106,7 +97,10 @@ export function deserializeBuildCacheResponse(
   jsonString: string,
 ): BuildCacheResponse {
   const proto = fromJsonString(BuildCacheResponsePbSchema, jsonString);
-  return { geminiCacheId: proto.geminiCacheId };
+  return {
+    compiledCacheId: URN.parse(proto.compiledCacheId),
+    expiresAt: proto.expiresAt as ISODateTimeString,
+  };
 }
 
 export function serializeGenerateStreamRequest(

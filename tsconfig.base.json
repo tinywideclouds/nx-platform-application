@@ -74,6 +74,12 @@
       "@nx-platform-application/llm-domain-conversation": [
         "libs/llm/domain/conversation/src/index.ts"
       ],
+      "@nx-platform-application/llm-domain-proposals": [
+        "libs/llm/domain/proposals/src/index.ts"
+      ],
+      "@nx-platform-application/llm-domain-session": [
+        "libs/llm/domain/session/src/index.ts"
+      ],
       "@nx-platform-application/llm-features-chat": [
         "libs/llm/features/chat/src/index.ts"
       ],
@@ -101,6 +107,9 @@
       "@nx-platform-application/llm-protos": ["libs/llm/protos/src/index.ts"],
       "@nx-platform-application/llm-protos/*": [
         "libs/llm/protos/dist/ts/src/types/*"
+      ],
+      "@nx-platform-application/llm-tools-migration": [
+        "libs/llm/tools/migration/src/index.ts"
       ],
       "@nx-platform-application/llm-types": ["libs/llm/types/src/index.ts"],
       "@nx-platform-application/llm-ui": ["libs/llm/ui/src/index.ts"],

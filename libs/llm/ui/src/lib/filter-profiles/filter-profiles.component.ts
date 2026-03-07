@@ -9,7 +9,7 @@ import {
   effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 
@@ -24,11 +24,13 @@ import {
   FilterProfile,
   ProfileRequest,
 } from '@nx-platform-application/llm-types';
+import { URN } from '@nx-platform-application/platform-types';
 import { LlmFilterProfileFormComponent } from '../filter-profile-form/filter-profile-form.component';
 
 export interface ProfileSaveEvent {
   payload: ProfileRequest;
-  profileId?: string;
+  // FIX: Interface correctly requires URN
+  profileId?: URN;
 }
 
 @Component({
@@ -52,16 +54,18 @@ export class LlmFilterProfilesComponent {
   // --- INPUTS & OUTPUTS ---
   profiles = input<FilterProfile[]>([]);
   save = output<ProfileSaveEvent>();
-  delete = output<string>();
+
+  // FIX: Output expects URN
+  delete = output<URN>();
 
   // --- LOCAL SOT ---
-  selectedProfileId = signal<string | null>(null);
+  // FIX: SOT explicitly types selection as URN
+  selectedProfileId = signal<URN | null>(null);
   isEditing = signal<boolean>(false);
   isSaving = signal<boolean>(false);
   saveError = signal<string | null>(null);
 
   // --- RESPONSIVE SOT ---
-  // Returns true on mobile screens (< 768px)
   isMobile = toSignal(
     this.breakpointObserver
       .observe('(max-width: 767px)')
@@ -73,15 +77,16 @@ export class LlmFilterProfilesComponent {
   activeProfile = computed(() => {
     const id = this.selectedProfileId();
     if (!id) return null;
-    return this.profiles().find((p) => p.id === id) || null;
+    // FIX: Structurally check URN equality
+    return this.profiles().find((p) => p.id.equals(id)) || null;
   });
 
   constructor() {
-    // Safety check: If the active profile gets deleted by the parent, clear our selection
     effect(() => {
       const id = this.selectedProfileId();
       const currentProfiles = this.profiles();
-      if (id && !currentProfiles.some((p) => p.id === id)) {
+      // FIX: Structurally check URN equality
+      if (id && !currentProfiles.some((p) => p.id.equals(id))) {
         this.selectedProfileId.set(null);
         this.isEditing.set(false);
       }
@@ -90,12 +95,12 @@ export class LlmFilterProfilesComponent {
 
   // --- ACTIONS ---
 
-  selectProfile(id: string) {
+  selectProfile(id: URN) {
     this.selectedProfileId.set(id);
     this.isEditing.set(false);
   }
 
-  onMobileSelect(value: string) {
+  onMobileSelect(value: URN | 'NEW') {
     if (value === 'NEW') {
       this.createNew();
     } else if (value) {
@@ -106,21 +111,26 @@ export class LlmFilterProfilesComponent {
     }
   }
 
+  // Allows mat-select to correctly match the active URN object
+  compareProfiles(a: URN | 'NEW' | null, b: URN | 'NEW' | null): boolean {
+    if (!a || !b) return a === b;
+    if (a === 'NEW' || b === 'NEW') return a === b;
+    return (a as URN).equals(b as URN);
+  }
+
   createNew() {
     this.selectedProfileId.set(null);
     this.isEditing.set(true);
   }
 
-  editSelected(id: string) {
+  editSelected(id: URN) {
     this.selectedProfileId.set(id);
     this.isEditing.set(true);
   }
 
   cancelEdit() {
     this.isEditing.set(false);
-    // If we were creating a new profile and cancelled, we have no active selection
     if (!this.selectedProfileId()) {
-      // Revert to first profile if available
       const all = this.profiles();
       if (all.length > 0) this.selectedProfileId.set(all[0].id);
     }
@@ -136,15 +146,15 @@ export class LlmFilterProfilesComponent {
 
   saveSuccess() {
     this.isSaving.set(false);
-    this.isEditing.set(false); // Only close on actual success
+    this.isEditing.set(false);
   }
 
   saveFailed(errorMessage: string) {
     this.isSaving.set(false);
-    this.saveError.set(errorMessage); // Keep form open and show error
+    this.saveError.set(errorMessage);
   }
 
-  onDelete(id: string) {
+  onDelete(id: URN) {
     this.delete.emit(id);
   }
 }

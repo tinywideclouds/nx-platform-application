@@ -1,5 +1,7 @@
 <div class="h-full flex flex-col bg-white overflow-hidden relative">
   <llm-toolbar
+    [pendingMigrations]="migrationCount()"
+    (openMigrations)="promptMigration()"
     [activeView]="activeView()"
     (viewChat)="onViewChat()"
     (viewDataSources)="onViewDataSources()"

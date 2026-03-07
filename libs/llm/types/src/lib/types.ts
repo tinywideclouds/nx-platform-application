@@ -7,6 +7,7 @@ export const TextType: URN = URN.parse('urn:llm:message-type:text');
 export const FileProposalType: URN = URN.parse(
   'urn:llm:message-type:fileProposal',
 );
+export const FileLinkType: URN = URN.parse('urn:llm:message-type:fileLink');
 /**
  * Domain representation of a single chat message.
  * Now payload-agnostic to align with Messenger architecture.

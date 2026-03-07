@@ -29,6 +29,12 @@ export class LlmChatHeaderComponent {
   isSelectionMode = input<boolean>(false);
   selectedCount = input<number>(0);
 
+  sessionTitle = input<string | undefined>(undefined);
+  alertState = input<{ alert: boolean; reason: string }>({
+    alert: false,
+    reason: '',
+  });
+
   // Action Outputs
   toggleSelection = output<void>();
   groupContext = output<void>();

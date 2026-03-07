@@ -28,7 +28,6 @@ import { LlmDataSourcesStateService } from '@nx-platform-application/llm-feature
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmContextHierarchyComponent {
-  // Inject state to look up rich repo details (name, branch) from the raw cacheId URN
   private dataSourcesState = inject(LlmDataSourcesStateService);
 
   // --- INPUTS ---
@@ -44,14 +43,14 @@ export class LlmContextHierarchyComponent {
   groupedAttachments = computed(() => {
     const atts = this.attachments() || [];
     return {
-      geminiCache: atts.filter((a) => a.target === 'gemini-cache'),
+      geminiCache: atts.filter((a) => a.target === 'compiled-cache'),
       inlineContext: atts.filter((a) => a.target === 'inline-context'),
       systemInstruction: atts.filter((a) => a.target === 'system-instruction'),
     };
   });
 
-  // Helper to fetch the rich display data for a given cache URN
   getCacheDetails(urn: URN): CacheBundle | undefined {
-    return this.dataSourcesState.caches().find((c) => c.id === urn.toString());
+    // FIX: Safely use URN structural equality
+    return this.dataSourcesState.caches().find((c) => c.id.equals(urn));
   }
 }

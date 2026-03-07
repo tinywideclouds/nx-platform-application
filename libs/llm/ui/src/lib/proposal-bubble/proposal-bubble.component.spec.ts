@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LlmProposalBubbleComponent } from './proposal-bubble.component';
 import { SSEProposalEvent } from '@nx-platform-application/llm-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 describe('LlmProposalBubbleComponent', () => {
   let component: LlmProposalBubbleComponent;
@@ -24,7 +25,7 @@ describe('LlmProposalBubbleComponent', () => {
       patch: mockPatch,
       reasoning: 'Fixed addition logic',
       status: 'pending',
-      createdAt: '2026-02-27T10:00:00Z',
+      createdAt: '2026-02-27T10:00:00Z' as ISODateTimeString,
     },
   };
 

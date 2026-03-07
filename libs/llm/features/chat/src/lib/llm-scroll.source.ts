@@ -4,6 +4,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import {
+  FileLinkType,
   FileProposalType,
   LlmMessage,
 } from '@nx-platform-application/llm-types';
@@ -48,7 +49,9 @@ export class LlmScrollSource {
       if (item.type !== 'content') return item;
 
       const data = item.data as LlmMessage;
-      const isProposal = data.typeId.equals(FileProposalType);
+      const isProposal =
+        data.typeId.equals(FileProposalType) ||
+        data.typeId.equals(FileLinkType);
 
       // 2. Grouping Algorithm
       let prevRole: string | null = null;

@@ -29,9 +29,11 @@ export type LlmAppView = 'chat' | 'data-sources' | 'settings';
 export class LlmToolbarComponent {
   // --- INPUTS ---
   activeView = input<LlmAppView>('chat');
+  pendingMigrations = input<number>(0);
 
   // --- OUTPUTS ---
   viewChat = output<void>();
   viewDataSources = output<void>();
   viewSettings = output<void>();
+  openMigrations = output<void>();
 }

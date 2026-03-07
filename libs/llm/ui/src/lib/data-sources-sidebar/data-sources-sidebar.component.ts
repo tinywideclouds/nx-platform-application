@@ -28,7 +28,7 @@ export class LlmDataSourcesSidebarComponent {
 
       return {
         repo,
-        primaryCacheId: primary.id,
+        primaryCacheId: primary.id.toString(),
         primaryBranch: primary.branch,
         branchCount: bundles.length,
         lastSyncedAt: primary.lastSyncedAt,

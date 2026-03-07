@@ -1,13 +1,22 @@
-import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  ChangeDetectionStrategy,
+  afterNextRender,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs/operators';
+import { LegacyMigrationService } from '@nx-platform-application/llm-tools-migration'; // Your new lib
+import { LlmMigrationDialogComponent } from '../migration/tools/migration-dialog.component';
 
+// UI
 import {
   LlmToolbarComponent,
   LlmAppView,
 } from '../llm-toolbar/llm-toolbar.component';
+import { MatDialog } from '@angular/material/dialog';
 
 @Component({
   selector: 'llm-home-page',
@@ -19,10 +28,12 @@ import {
 })
 export class LlmHomePageComponent {
   private router = inject(Router);
+  private dialog = inject(MatDialog);
 
-  /**
-   * Derives the active global view strictly from the URL to pass to the dumb toolbar.
-   */
+  migrationService = inject(LegacyMigrationService);
+
+  readonly migrationCount = this.migrationService.pendingLegacyCount;
+
   activeView = toSignal(
     this.router.events.pipe(
       filter((e) => e instanceof NavigationEnd),
@@ -32,17 +43,39 @@ export class LlmHomePageComponent {
     { initialValue: 'chat' as LlmAppView },
   );
 
+  constructor() {
+    // Replaces ngOnInit entirely.
+    // This runs once immediately after the browser paints the initial UI.
+    afterNextRender(async () => {
+      const count = await this.migrationService.scanForLegacyProposals();
+      if (count > 0) {
+        this.promptMigration();
+      }
+    });
+  }
+
+  async promptMigration() {
+    const dialogRef = this.dialog.open(LlmMigrationDialogComponent, {
+      width: '450px',
+      disableClose: true,
+    });
+
+    const wantsToMigrate = await dialogRef.afterClosed().toPromise();
+
+    if (wantsToMigrate) {
+      await this.migrationService.executeMigration();
+    }
+  }
+
   private getViewFromUrl(url: string): LlmAppView {
-    console.log('getting view from url', url);
     if (url.includes('/data-sources')) return 'data-sources';
     if (url.includes('/settings')) return 'settings';
     return 'chat';
   }
 
   // --- ACTIONS ---
-
   onViewChat() {
-    this.router.navigate(['/chat']);
+    this.router.navigate(['/']);
   }
 
   onViewDataSources() {

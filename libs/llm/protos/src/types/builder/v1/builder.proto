@@ -14,10 +14,12 @@ message BuildCacheRequestPb {
   string session_id = 1;
   string model = 2;
   repeated NetworkAttachmentPb attachments = 3;
+  optional string expires_at_hint = 4;
 }
 
 message BuildCacheResponsePb {
-  string gemini_cache_id = 1;
+  string compiled_cache_id = 1;
+  string expires_at = 2;
 }
 
 message NetworkMessagePb {
@@ -31,7 +33,7 @@ message GenerateStreamRequestPb {
   string session_id = 1;
   string model = 2;
   repeated NetworkMessagePb history = 3;
-  optional string gemini_cache_id = 4;
+  optional string compiled_cache_id = 4;
   repeated NetworkAttachmentPb inline_attachments = 5;
 }
 
@@ -57,13 +59,13 @@ message ChangeProposalPb {
 // --- 2. Compiled Cache Metadata ---
 
 message CompiledCachePb {
-  string id = 1;
-  string external_id = 2; // e.g., "cachedContents/12345"
-  string provider = 3;    // e.g., "gemini"
+  string id = 1; //urn e.g "urn:llm:gemini:cachedContents/12345"
+  string provider = 2;    // e.g., "gemini"
   
   // Reusing your existing NetworkAttachmentPb
-  repeated NetworkAttachmentPb attachments_used = 4; 
-  string created_at = 5;
+  repeated NetworkAttachmentPb attachments_used = 3; 
+  string created_at = 4;
+  string expires_at = 5;
 }
 
 // --- 3. Persistent Session State ---
@@ -71,6 +73,5 @@ message CompiledCachePb {
 message SessionPb {
   string id = 1;
   string compiled_cache_id = 2;
-  
-  string updated_at = 5;
+  string updated_at = 3;
 }

@@ -30,6 +30,7 @@ import {
   LlmSession,
   SessionAttachment,
 } from '@nx-platform-application/llm-types';
+import { Temporal } from '@js-temporal/polyfill';
 
 @Component({
   selector: 'llm-session-form',
@@ -124,13 +125,13 @@ export class LlmSessionFormComponent {
   confirmAddSource(newAtt: SessionAttachment): void {
     if (!this.session()) return;
 
-    // CACHE DRIFT: If they target the Gemini cache, the compiled ID is now invalid
-    const hasCacheDrift = newAtt.target === 'gemini-cache';
+    // CACHE DRIFT: If they target the compiled cache, the compiled ID is now invalid
+    const hasCacheDrift = newAtt.target === 'compiled-cache';
 
     this.save.emit({
       ...this.session()!,
       attachments: [...this.attachments(), newAtt],
-      geminiCache: hasCacheDrift ? undefined : this.session()?.geminiCache,
+      compiledCache: hasCacheDrift ? undefined : this.session()?.compiledCache,
     });
 
     this.isAddingSource.set(false);
@@ -139,14 +140,27 @@ export class LlmSessionFormComponent {
   removeAttachment(id: string): void {
     if (!this.session()) return;
 
-    const targetAtt = this.attachments().find((a) => a.id === id);
-    const hasCacheDrift = targetAtt?.target === 'gemini-cache';
+    const targetAtt = this.attachments().find((a) => a.id.toString() === id);
+    const hasCacheDrift = targetAtt?.target === 'compiled-cache';
 
     this.save.emit({
       ...this.session()!,
-      attachments: this.attachments().filter((a) => a.id !== id),
-      geminiCache: hasCacheDrift ? undefined : this.session()?.geminiCache,
+      attachments: this.attachments().filter((a) => a.id.toString() !== id),
+      compiledCache: hasCacheDrift ? undefined : this.session()?.compiledCache,
     });
+  }
+
+  isCacheExpired(expiresAt: string): boolean {
+    const now = Temporal.Now.instant();
+    const expiry = Temporal.Instant.from(expiresAt);
+    return Temporal.Instant.compare(now, expiry) >= 0;
+  }
+
+  formatExpiry(expiresAt: string): string {
+    const expiry = Temporal.Instant.from(expiresAt).toZonedDateTimeISO(
+      Temporal.Now.timeZoneId(),
+    );
+    return `${expiry.month}/${expiry.day} at ${expiry.hour.toString().padStart(2, '0')}:${expiry.minute.toString().padStart(2, '0')}`;
   }
 
   onDelete(): void {

@@ -1,9 +1,9 @@
 import {
   Component,
   inject,
-  input,
   effect,
   signal,
+  untracked,
   computed,
   ChangeDetectorRef,
 } from '@angular/core';
@@ -22,7 +22,7 @@ import {
   MarkdownTokensPipe,
 } from '@nx-platform-application/scrollspace-ui';
 
-import { LlmMessage, LlmSession } from '@nx-platform-application/llm-types';
+import { LlmMessage } from '@nx-platform-application/llm-types';
 import { ScrollspaceInputDraft } from '@nx-platform-application/scrollspace-types';
 
 // Domain
@@ -30,10 +30,8 @@ import {
   LlmScrollSource,
   LlmSessionSource,
 } from '@nx-platform-application/llm-features-chat';
-import {
-  LlmChatActions,
-  LlmSessionActions,
-} from '@nx-platform-application/llm-domain-conversation';
+import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation';
+import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import { LlmContentPipe } from '../pipes/llm-content.pipe';
 import { LlmChatHeaderComponent } from '../chat-header/chat-header.component';
 import {
@@ -48,7 +46,10 @@ import {
 import { LlmEditMessageDialogComponent } from '../edit-message-dialog/edit-message-dialog.component';
 
 import { LlmProposalBubbleComponent } from '../proposal-bubble/proposal-bubble.component';
+import { LlmFileLinkBubbleComponent } from '../file-link-bubble/file-link-bubble.component';
 import { LlmTypingIndicatorComponent } from '../typing-indicator/typing-indicator.component';
+import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
+import { Temporal } from '@js-temporal/polyfill';
 
 @Component({
   selector: 'llm-chat-window',
@@ -63,6 +64,7 @@ import { LlmTypingIndicatorComponent } from '../typing-indicator/typing-indicato
     LlmChatHeaderComponent,
     LlmContentPipe,
     LlmProposalBubbleComponent,
+    LlmFileLinkBubbleComponent,
     LlmTypingIndicatorComponent,
   ],
   templateUrl: './chat-window.component.html',
@@ -71,11 +73,15 @@ import { LlmTypingIndicatorComponent } from '../typing-indicator/typing-indicato
 export class LlmChatWindowComponent {
   // Services
   protected source = inject(LlmScrollSource);
+
+  private sessionSource = inject(LlmSessionSource);
   private actions = inject(LlmChatActions);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private sessionActions = inject(LlmSessionActions);
+
+  private proposalService = inject(LlmProposalService);
 
   private cdr = inject(ChangeDetectorRef);
 
@@ -85,7 +91,7 @@ export class LlmChatWindowComponent {
   selectedIds = signal<Set<string>>(new Set());
   focusedGroupUrn = signal<string | null>(null);
 
-  readonly session = input<LlmSession | null>(null);
+  readonly session = computed(() => this.sessionSource.activeSession());
 
   readonly activeContextGroups = computed(
     () => this.session()?.contextGroups || {},
@@ -108,8 +114,8 @@ export class LlmChatWindowComponent {
     // Check for "Cache Drift" (attachments exist, but no cache ID generated)
     // Note: Safe navigation `?` added in case legacy sessions have no attachments array
     const needsCompile =
-      session.attachments?.some((a) => a.target === 'gemini-cache') &&
-      !session.geminiCache;
+      session.attachments?.some((a) => a.target === 'compiled-cache') &&
+      !session.compiledCache;
 
     if (needsCompile) {
       return {
@@ -120,6 +126,17 @@ export class LlmChatWindowComponent {
 
     return { locked: false, reason: '' };
   });
+
+  constructor() {
+    // NEW: The chat window manages its own scroll source hydration
+    effect(() => {
+      const activeId = this.sessionSource.activeSessionId();
+      if (activeId) {
+        // Untracked so we don't accidentally re-trigger if setSession mutates something locally
+        untracked(() => this.source.setSession(activeId));
+      }
+    });
+  }
 
   onOpenDetails() {
     // Uses queryParamsHandling: 'merge' to keep the sessionId intact
@@ -388,7 +405,7 @@ export class LlmChatWindowComponent {
     if (!session) return;
 
     // Delegate to the global diff registry action
-    await this.sessionActions.acceptProposal(session, proposalId);
+    await this.proposalService.acceptProposal(proposalId);
   }
 
   async onRejectProposal(proposalId: string, messageId: string) {
@@ -396,7 +413,7 @@ export class LlmChatWindowComponent {
     if (!session) return;
 
     // 1. Clear the backend ephemeral queue
-    await this.sessionActions.rejectProposal(session, proposalId);
+    await this.proposalService.rejectProposal(proposalId);
     // 2. Exclude from local context so it doesn't waste tokens on the next prompt
     await this.actions.toggleExcludeSelected([messageId], true);
   }
@@ -482,4 +499,46 @@ export class LlmChatWindowComponent {
       queryParamsHandling: 'merge',
     });
   }
+
+  chatAlertState = computed(() => {
+    const session = this.session();
+    if (!session) return { alert: false, reason: '' };
+
+    const isCompiling = this.sessionActions.isCompiling(
+      session.id.toString(),
+    )();
+    if (isCompiling) {
+      return {
+        alert: true,
+        reason: '⚙️ Compiling context cache... please wait.',
+      };
+    }
+
+    const hasCacheTarget = session.attachments?.some(
+      (a) => a.target === 'compiled-cache',
+    );
+
+    if (hasCacheTarget && !session.compiledCache) {
+      return {
+        alert: true,
+        reason: '⚠️ Context changed. Please compile the cache in Settings.',
+      };
+    }
+
+    // NEW: Check if the cache is mathematically expired!
+    if (session.compiledCache?.expiresAt) {
+      const now = Temporal.Now.instant();
+      const expiry = Temporal.Instant.from(session.compiledCache.expiresAt);
+
+      if (Temporal.Instant.compare(now, expiry) >= 0) {
+        return {
+          alert: true,
+          reason:
+            '⏰ Context cache expired. Responses will be slower. Please renew in Settings.',
+        };
+      }
+    }
+
+    return { alert: false, reason: '' };
+  });
 }

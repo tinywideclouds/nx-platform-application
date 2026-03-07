@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { URN } from '@nx-platform-application/platform-types';
 import {
   CacheBundle,
   FileMetadata,
@@ -11,48 +12,59 @@ import {
   ProfileRequest,
   FilterRules,
 } from '@nx-platform-application/llm-types';
+import {
+  serializeCreateCacheRequest,
+  serializeSyncRequest,
+  serializeProfileRequest,
+  deserializeCacheBundle,
+  deserializeCacheBundleList,
+  deserializeSyncResponse,
+  deserializeFileMetadataList,
+  deserializeFilterProfile,
+  deserializeFilterProfileList,
+} from '@nx-platform-application/llm-types';
 
 @Injectable({ providedIn: 'root' })
 export class LlmGithubFirestoreClient {
   private http = inject(HttpClient);
 
-  // Note: Adjust this base URL or inject it via an environment token as per your workspace standard
   private readonly baseUrl = '';
 
   // --- CACHE BUNDLES ---
 
-  // Maps to POST /v1/caches
   async createCache(repo: string, branch: string): Promise<CacheBundle> {
-    return firstValueFrom(
-      this.http.post<CacheBundle>(`${this.baseUrl}/v1/caches`, {
-        repo,
-        branch,
+    const bodyString = serializeCreateCacheRequest(repo, branch);
+    const rawResponse = await firstValueFrom(
+      this.http.post(`${this.baseUrl}/v1/caches`, bodyString, {
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'text',
       }),
     );
+    return deserializeCacheBundle(rawResponse);
   }
 
-  // Maps to POST /v1/caches/{id}/sync
   async executeSync(
-    cacheId: string,
+    cacheId: URN,
     ingestionRules: FilterRules,
   ): Promise<SyncResponse> {
-    const syncUrl = `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId)}/sync`;
-    console.log('syncing: ', syncUrl);
-    return firstValueFrom(
-      this.http.post<SyncResponse>(syncUrl, { ingestionRules }),
+    const syncUrl = `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/sync`;
+    const bodyString = serializeSyncRequest(ingestionRules);
+
+    const rawResponse = await firstValueFrom(
+      this.http.post(syncUrl, bodyString, {
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'text',
+      }),
     );
+    return deserializeSyncResponse(rawResponse);
   }
 
-  /**
-   * Executes a sync and streams the Server-Sent Events (SSE) back as an Observable.
-   * We use native fetch here because Angular's HttpClient buffers the entire response
-   * and cannot process a continuous stream chunk-by-chunk.
-   */
   executeSyncStream(
-    cacheId: string,
+    cacheId: URN,
     ingestionRules: FilterRules,
   ): Observable<SyncStreamEvent> {
-    const syncUrl = `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId)}/sync`;
+    const syncUrl = `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/sync`;
+    const bodyString = serializeSyncRequest(ingestionRules);
 
     return new Observable<SyncStreamEvent>((subscriber) => {
       const controller = new AbortController();
@@ -63,13 +75,12 @@ export class LlmGithubFirestoreClient {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
         },
-        body: JSON.stringify({ ingestionRules }),
+        body: bodyString,
         signal: controller.signal,
       })
         .then(async (response) => {
-          if (!response.ok) {
+          if (!response.ok)
             throw new Error(`Sync failed with status: ${response.status}`);
-          }
 
           const reader = response.body?.getReader();
           if (!reader)
@@ -82,23 +93,16 @@ export class LlmGithubFirestoreClient {
             const { done, value } = await reader.read();
             if (done) break;
 
-            // Decode the chunk and add it to our text buffer
             buffer += decoder.decode(value, { stream: true });
-
-            // SSE messages are separated by double newlines
             const lines = buffer.split('\n\n');
-
-            // Keep the last incomplete segment in the buffer
             buffer = lines.pop() || '';
 
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 try {
-                  // Parse the JSON payload sent by your Go microservice's sendEvent function
                   const data: SyncStreamEvent = JSON.parse(line.substring(6));
                   subscriber.next(data);
 
-                  // If the Go service sends a complete or error stage, we can optionally handle it here
                   if (data.stage === 'error') {
                     subscriber.error(
                       new Error(
@@ -115,71 +119,83 @@ export class LlmGithubFirestoreClient {
 
           subscriber.complete();
         })
-        .catch((err) => {
-          subscriber.error(err);
-        });
+        .catch((err) => subscriber.error(err));
 
-      // Cleanup function when the Observable is unsubscribed
       return () => controller.abort();
     });
   }
 
   listCaches(): Observable<CacheBundle[]> {
     return this.http
-      .get<{ caches: CacheBundle[] }>(`${this.baseUrl}/v1/caches`)
-      .pipe(map((res) => res.caches || []));
+      .get(`${this.baseUrl}/v1/caches`, { responseType: 'text' })
+      .pipe(map(deserializeCacheBundleList));
   }
 
-  getFiles(cacheId: string): Observable<FileMetadata[]> {
+  getFiles(cacheId: URN): Observable<FileMetadata[]> {
     return this.http
-      .get<{
-        files: FileMetadata[];
-      }>(`${this.baseUrl}/v1/caches/${cacheId}/files`)
-      .pipe(map((res) => res.files || []));
+      .get(
+        `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/files`,
+        { responseType: 'text' },
+      )
+      .pipe(map(deserializeFileMetadataList));
   }
 
   getFileContent(
-    cacheId: string,
+    cacheId: URN,
     base64Path: string,
   ): Observable<{ content: string }> {
+    // This returns a simple generic JSON envelope, no complex proto mapping needed.
     return this.http.get<{ content: string }>(
-      `${this.baseUrl}/v1/caches/${cacheId}/files/${base64Path}/content`,
+      `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/files/${base64Path}/content`,
     );
   }
+
   // --- FILTER PROFILES ---
 
-  listProfiles(cacheId: string): Observable<FilterProfile[]> {
+  listProfiles(cacheId: URN): Observable<FilterProfile[]> {
     return this.http
-      .get<{
-        profiles: FilterProfile[];
-      }>(`${this.baseUrl}/v1/caches/${cacheId}/profiles`)
-      .pipe(map((res) => res.profiles || []));
+      .get(
+        `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/profiles`,
+        { responseType: 'text' },
+      )
+      .pipe(map(deserializeFilterProfileList));
   }
 
-  createProfile(
-    cacheId: string,
-    req: ProfileRequest,
-  ): Observable<FilterProfile> {
-    return this.http.post<FilterProfile>(
-      `${this.baseUrl}/v1/caches/${cacheId}/profiles`,
-      req,
-    );
+  createProfile(cacheId: URN, req: ProfileRequest): Observable<FilterProfile> {
+    const bodyString = serializeProfileRequest(req);
+    return this.http
+      .post(
+        `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/profiles`,
+        bodyString,
+        {
+          headers: { 'Content-Type': 'application/json' },
+          responseType: 'text',
+        },
+      )
+      .pipe(map(deserializeFilterProfile));
   }
 
   updateProfile(
-    cacheId: string,
-    profileId: string,
+    cacheId: URN,
+    profileId: URN,
     req: ProfileRequest,
   ): Observable<FilterProfile> {
-    return this.http.put<FilterProfile>(
-      `${this.baseUrl}/v1/caches/${cacheId}/profiles/${profileId}`,
-      req,
-    );
+    const bodyString = serializeProfileRequest(req);
+    return this.http
+      .put(
+        `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/profiles/${encodeURIComponent(profileId.toString())}`,
+        bodyString,
+        {
+          headers: { 'Content-Type': 'application/json' },
+          responseType: 'text',
+        },
+      )
+      .pipe(map(deserializeFilterProfile));
   }
 
-  deleteProfile(cacheId: string, profileId: string): Observable<void> {
+  deleteProfile(cacheId: URN, profileId: URN): Observable<void> {
     return this.http.delete<void>(
-      `${this.baseUrl}/v1/caches/${cacheId}/profiles/${profileId}`,
+      `${this.baseUrl}/v1/caches/${encodeURIComponent(cacheId.toString())}/profiles/${encodeURIComponent(profileId.toString())}`,
     );
   }
 }

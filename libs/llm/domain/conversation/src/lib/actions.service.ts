@@ -9,9 +9,10 @@ import {
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import {
-  FileProposalType,
+  FileLinkType,
   LlmMessage,
   LlmSession,
+  PointerPayload,
   SSEProposalEvent,
   TextType,
 } from '@nx-platform-application/llm-types';
@@ -21,6 +22,7 @@ import {
 } from '@nx-platform-application/llm-features-chat';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { LlmContextBuilderService } from './context-builder.service';
+import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 
 const encoder = new TextEncoder();
 
@@ -32,6 +34,9 @@ export class LlmChatActions {
   private storage = inject(LlmStorageService);
   private network = inject(LLM_NETWORK_CLIENT);
   private contextBuilder = inject(LlmContextBuilderService);
+  private proposalService = inject(LlmProposalService);
+
+  readonly registryMutated = signal<number>(0);
 
   // Cancellation & State Tracking
   private activeSubscription: Subscription | null = null;
@@ -41,6 +46,25 @@ export class LlmChatActions {
 
   // State for the UI to bind the Diff Viewer to
   readonly activeProposal = signal<SSEProposalEvent | null>(null);
+
+  /**
+   * Generates a lightweight preview snippet for the UI pointer
+   */
+  private extractCleanSnippet(patch?: string, newContent?: string): string {
+    if (patch) {
+      const lines = patch
+        .split('\n')
+        .filter(
+          (l) =>
+            !l.startsWith('---') && !l.startsWith('+++') && !l.startsWith('@@'),
+        );
+      return lines.slice(0, 12).join('\n') + (lines.length > 5 ? '\n...' : '');
+    }
+    if (newContent) {
+      return newContent.split('\n').slice(0, 5).join('\n') + '\n...';
+    }
+    return 'No preview available';
+  }
 
   /**
    * The Full "Chat Loop":
@@ -81,7 +105,22 @@ export class LlmChatActions {
 
     // --- STEP 2: ASSEMBLE CONTEXT (PRISTINE DB STATE) ---
     // We build the network request NOW, before the bot placeholder exists in the DB!
-    const assembly = await this.contextBuilder.buildStreamRequest(session);
+    let safeSession = { ...session };
+
+    // NEW: Actively strip expired caches so the backend doesn't crash!
+    if (safeSession.compiledCache) {
+      const now = Temporal.Now.instant();
+      const expiry = Temporal.Instant.from(safeSession.compiledCache.expiresAt);
+
+      if (Temporal.Instant.compare(now, expiry) >= 0) {
+        this.logger.warn(
+          `Cache ${safeSession.compiledCache.id} is expired. Stripping from request.`,
+        );
+        safeSession.compiledCache = undefined;
+      }
+    }
+
+    const assembly = await this.contextBuilder.buildStreamRequest(safeSession);
     const request = assembly.request;
 
     // DO NOT REMOVE the bot message MUST be later than the user message
@@ -153,28 +192,46 @@ export class LlmChatActions {
             this.storage.saveMessage(finalMsg);
           }
 
-          const storagePayload = JSON.stringify({
-            __type: 'workspace_proposal',
-            data: event.event,
-          });
+          // --- SPLIT WRITE ARCHITECTURE ---
+          const sseEvent = event.event as SSEProposalEvent;
+          const p = sseEvent.proposal;
 
-          const proposalMsgId = URN.create(
+          // Safely convert raw string IDs from the backend to URNs
+          const proposalUrn = p.id.startsWith('urn:')
+            ? URN.parse(p.id)
+            : URN.create('proposal', p.id, 'llm');
+
+          // Safely convert raw string IDs from the backend to URNs
+          this.proposalService.saveChangeProposal(session.id, proposalUrn, p);
+
+          // 2. Write lightweight pointer to Chat DB
+          const pointer: PointerPayload = {
+            proposalId: proposalUrn,
+            filePath: p.filePath,
+            snippet: p.newContent
+              ? p.newContent.split('\n').slice(0, 12).join('\n')
+              : this.extractCleanSnippet(p.patch),
+            reasoning: p.reasoning,
+          };
+
+          const pointerMsgId = URN.create(
             'message',
             crypto.randomUUID(),
             'llm',
           );
-          const proposalMsg: LlmMessage = {
-            id: proposalMsgId,
-            typeId: FileProposalType,
+
+          const pointerMsg: LlmMessage = {
+            id: pointerMsgId,
+            typeId: FileLinkType, // The new parallel dual-support type
             sessionId: sessionId,
             role: 'model',
             timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
-            payloadBytes: encoder.encode(storagePayload),
+            payloadBytes: encoder.encode(JSON.stringify(pointer)),
             isExcluded: false,
           };
 
-          this.storage.saveMessage(proposalMsg);
-          this.sink.addMessage(proposalMsg);
+          this.storage.saveMessage(pointerMsg);
+          this.sink.addMessage(pointerMsg);
 
           // Close the text bubble so the next text chunk starts fresh
           this.activeBotId = null;

@@ -1,73 +1,91 @@
 import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { applyPatch } from 'diff';
-import { URN } from '@nx-platform-application/platform-types';
+import { applyPatch, createTwoFilesPatch } from 'diff';
 import {
-  LlmMessage,
-  SSEProposalEvent,
-  FileProposalType,
   FileMetadata,
+  ChangeProposal,
 } from '@nx-platform-application/llm-types';
-import { ChangeProposal } from '@nx-platform-application/llm-types';
-import {
-  LlmScrollSource,
-  LlmSessionSource,
-} from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 import { LlmGithubFirestoreClient } from '@nx-platform-application/llm-infrastructure-github-firestore-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+
+import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
+import { healMalformedPatch } from './utils';
 
 export interface ModifiedFile {
   filePath: string;
   metadata?: FileMetadata;
   isContentLoading: boolean;
   baseContent: string | null;
-  // The strictly chronological sequence of all proposals in this session
   proposalChain: ChangeProposal[];
 }
 
 export interface ChainResolution {
   content: string | null;
+  healedPatch?: string; // NEW: The corrected diff string
+  failedProposalId?: string; // NEW: Which proposal caused the crash
   error?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class WorkspaceStateService {
   private readonly logger = inject(Logger);
-  private scrollSource = inject(LlmScrollSource);
-  private sessionSource = inject(LlmSessionSource);
+  private sessionSource = inject(LlmSessionSource); // Only care about sessions now!
   private firestoreClient = inject(LlmGithubFirestoreClient);
+  private proposalService = inject(LlmProposalService);
 
   private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
   private readonly baseContents = signal<Map<string, string>>(new Map());
   private readonly loadingSet = signal<Set<string>>(new Set());
 
-  private readonly sessionMessages = computed(() => {
-    return this.scrollSource
-      .items()
-      .filter((item) => item.type === 'content')
-      .map((item) => item.data as LlmMessage);
+  private readonly activeProposals = signal<ChangeProposal[]>([]);
+
+  // Inherit directly from the new centralized source
+  private readonly activeSessionId = computed(() =>
+    this.sessionSource.activeSessionId(),
+  );
+
+  // --- WORKSPACE TARGET STATE ---
+  readonly availableTargets = computed(() => {
+    const session = this.sessionSource.activeSession();
+    if (!session || !session.attachments) return [];
+    return session.attachments.filter((a) => a.target === 'compiled-cache');
   });
 
-  readonly activeCacheId = computed(() => {
-    const sessionId = this.scrollSource.activeSessionId();
-    if (!sessionId) return null;
-    const session = this.sessionSource
-      .sessions()
-      .find((s) => s.id.equals(sessionId));
-    return session?.geminiCache || null;
+  readonly activeWorkspaceTarget = computed(() => {
+    const session = this.sessionSource.activeSession();
+    if (session?.workspaceTarget) return session.workspaceTarget;
+
+    const available = this.availableTargets();
+    if (available.length === 1) return available[0].cacheId;
+
+    return null;
+  });
+
+  readonly hasStagedChanges = computed(() => {
+    for (const record of this.overlayMap().values()) {
+      if (record.proposalChain.some((p) => p.status === 'staged')) {
+        return true;
+      }
+    }
+    return false;
   });
 
   constructor() {
+    // 1. Base File Fetcher Effect (Now explicitly bound to targetId)
     effect(async () => {
-      const cacheId = this.activeCacheId();
-      if (!cacheId) {
+      const targetId = this.activeWorkspaceTarget();
+
+      this.proposalService.registryMutated();
+
+      if (!targetId) {
         this.baseMetadata.set(new Map());
         this.baseContents.set(new Map());
         return;
       }
       try {
         const metadataList = await firstValueFrom(
-          this.firestoreClient.getFiles(cacheId),
+          this.firestoreClient.getFiles(targetId),
         );
         const metaMap = new Map<string, FileMetadata>();
         for (const meta of metadataList) {
@@ -75,12 +93,49 @@ export class WorkspaceStateService {
         }
         this.baseMetadata.set(metaMap);
       } catch (err) {
-        this.logger.error(`Failed to fetch metadata for cache ${cacheId}`, err);
+        this.logger.error(
+          `Failed to fetch metadata for target ${targetId.toString()}`,
+          err,
+        );
         this.baseMetadata.set(new Map());
       }
     });
 
-    // Auto-Loader updated to check the chain
+    // 2. The Pure Registry Query Effect
+    effect(async () => {
+      const sessionId = this.activeSessionId();
+      if (!sessionId) {
+        this.activeProposals.set([]);
+        return;
+      }
+
+      try {
+        const entries =
+          await this.proposalService.getProposalsForSession(sessionId);
+
+        entries.sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+
+        const proposals: ChangeProposal[] = entries.map((entry) => ({
+          id: entry.id.toString(),
+          sessionId: entry.ownerSessionId,
+          filePath: entry.filePath,
+          patch: entry.patch,
+          newContent: entry.newContent,
+          reasoning: entry.reasoning,
+          status: entry.status || 'pending',
+          createdAt: entry.createdAt,
+        }));
+
+        this.activeProposals.set(proposals);
+      } catch (e) {
+        this.logger.error('Failed to load proposals from registry', e);
+      }
+    });
+
+    // 3. Auto-Loader Effect
     effect(() => {
       const fileMap = this.overlayMap();
       fileMap.forEach((record, filePath) => {
@@ -97,7 +152,46 @@ export class WorkspaceStateService {
     });
   }
 
-  // ... (encodePathForGo and loadContent remain the same) ...
+  generateStagedPatch(): string {
+    let unifiedPatch = '';
+
+    this.overlayMap().forEach((record, filePath) => {
+      const stagedProposals = record.proposalChain.filter(
+        (p) => p.status === 'staged',
+      );
+      if (stagedProposals.length === 0) return;
+
+      const lastStagedId = stagedProposals[stagedProposals.length - 1].id;
+      const resolution = this.resolveChainState(record, lastStagedId);
+
+      if (resolution.error) {
+        this.logger.warn(
+          `Skipping patch generation for ${filePath} due to conflict: ${resolution.error}`,
+        );
+        return;
+      }
+
+      const baseText = record.baseContent || '';
+      const stagedText = resolution.content || '';
+
+      if (baseText === stagedText) return;
+
+      const filePatch = createTwoFilesPatch(
+        `a/${filePath}`,
+        `b/${filePath}`,
+        baseText,
+        stagedText,
+        '',
+        '',
+        { context: 3 },
+      );
+
+      unifiedPatch += filePatch + '\n';
+    });
+
+    return unifiedPatch;
+  }
+
   private encodePathForGo(filePath: string): string {
     return btoa(unescape(encodeURIComponent(filePath)))
       .replace(/\+/g, '-')
@@ -105,9 +199,9 @@ export class WorkspaceStateService {
   }
 
   async loadContent(filePath: string): Promise<void> {
-    const cacheId = this.activeCacheId();
+    const targetId = this.activeWorkspaceTarget();
     if (
-      !cacheId ||
+      !targetId ||
       this.baseContents().has(filePath) ||
       this.loadingSet().has(filePath)
     )
@@ -117,7 +211,7 @@ export class WorkspaceStateService {
     try {
       const base64Path = this.encodePathForGo(filePath);
       const res = await firstValueFrom(
-        this.firestoreClient.getFileContent(cacheId, base64Path),
+        this.firestoreClient.getFileContent(targetId, base64Path),
       );
       this.baseContents.update((map) =>
         new Map(map).set(filePath, res.content),
@@ -133,11 +227,8 @@ export class WorkspaceStateService {
     }
   }
 
-  // --- NEW ENGINE CORE ---
-
   readonly overlayMap = computed(() => {
     const fileMap = new Map<string, ModifiedFile>();
-    const messages = this.sessionMessages();
     const metaTree = this.baseMetadata();
     const contents = this.baseContents();
     const loading = this.loadingSet();
@@ -152,65 +243,84 @@ export class WorkspaceStateService {
       });
     });
 
-    const decoder = new TextDecoder();
+    const proposals = this.activeProposals();
 
-    for (const msg of messages) {
-      if (!msg.payloadBytes || !msg.typeId.equals(FileProposalType)) continue;
-
-      try {
-        const text = decoder.decode(msg.payloadBytes);
-        const parsed = JSON.parse(text);
-        const payload =
-          parsed.__type === 'workspace_proposal' ? parsed.data : parsed;
-        const proposal = (payload as SSEProposalEvent).proposal;
-
-        if (!fileMap.has(proposal.filePath)) {
-          fileMap.set(proposal.filePath, {
-            filePath: proposal.filePath,
-            isContentLoading: false,
-            baseContent: null,
-            proposalChain: [],
-          });
-        }
-
-        // Push sequentially. The scroll source guarantees chronological order.
-        fileMap.get(proposal.filePath)!.proposalChain.push(proposal);
-      } catch (e) {
-        this.logger.error('Failed to parse proposal', e);
+    for (const proposal of proposals) {
+      if (!fileMap.has(proposal.filePath)) {
+        fileMap.set(proposal.filePath, {
+          filePath: proposal.filePath,
+          isContentLoading: false,
+          baseContent: null,
+          proposalChain: [],
+        });
       }
+
+      fileMap.get(proposal.filePath)!.proposalChain.push(proposal);
     }
     return fileMap;
   });
 
-  /**
-   * The Query Engine: Calculates the applied state of a file dynamically up to a specific proposal node.
-   */
   resolveChainState(
     record: ModifiedFile,
     targetProposalId?: string | null,
   ): ChainResolution {
-    let currentText = record.baseContent || ''; // Treat new files as empty strings
+    let currentText = record.baseContent || '';
 
-    // If asking for base state, and it truly doesn't exist, return null
     if (!targetProposalId && record.baseContent === null)
       return { content: null };
 
     for (const proposal of record.proposalChain) {
-      // Apply the node sequentially
+      if (proposal.status === 'rejected') {
+        // If the user explicitly clicks a rejected proposal tab in the UI,
+        // we stop here so they see the state of the code *right before* it was rejected.
+        // They can use the "Raw Diff" toggle to see the bad code itself.
+        if (proposal.id === targetProposalId) break;
+        continue;
+      }
+
       if (proposal.newContent) {
         currentText = proposal.newContent;
       } else if (proposal.patch) {
-        const patchedResult = applyPatch(currentText, proposal.patch);
-        if (patchedResult === false) {
+        try {
+          const patchedResult = applyPatch(currentText, proposal.patch);
+          if (patchedResult === false) {
+            return {
+              content: currentText,
+              error: `// ERROR: Chain conflict at Proposal ${proposal.id}.\n// The preceding patches did not result in a valid base for this diff.\n\n${proposal.patch}`,
+            };
+          }
+          currentText = patchedResult;
+        } catch (err: any) {
+          // Handles structurally broken diffs (LLM hallucinated wrong line counts)
+          // 2. If it's a syntax error (like bad math), attempt to HEAL it
+          if (
+            err.message.includes('line count did not match') ||
+            err.message.includes('invalid line')
+          ) {
+            try {
+              const healedPatch = healMalformedPatch(proposal.patch);
+              const healedResult = applyPatch(currentText, healedPatch);
+
+              if (healedResult !== false) {
+                // Return the error, but provide the healed code as the preview
+                return {
+                  content: healedResult,
+                  error: `Malformed Diff Syntax. The LLM hallucinated the line counts. An auto-fix is available (shown but unapplied)`,
+                  healedPatch: healedPatch,
+                  failedProposalId: proposal.id,
+                };
+              }
+            } catch (healErr) {
+              // The patch was too mangled to heal
+            }
+          }
           return {
             content: currentText,
-            error: `// ERROR: Chain conflict at Proposal ${proposal.id}.\n// The preceding patches did not result in a valid base for this diff.\n\n${proposal.patch}`,
+            error: `// ERROR: Malformed diff syntax from LLM at Proposal ${proposal.id}.\n// Detail: ${err.message}\n\n${proposal.patch}`,
           };
         }
-        currentText = patchedResult;
       }
 
-      // Stop once we've reached the user's requested point in time
       if (proposal.id === targetProposalId) {
         break;
       }
@@ -219,12 +329,6 @@ export class WorkspaceStateService {
     return { content: currentText };
   }
 
-  // --- UI DERIVATIONS ---
-
-  /**
-   * Evaluates whether a file has a broken chain.
-   * A conflict exists if applying the chronological patches results in an error.
-   */
   readonly conflictsMap = computed(() => {
     const conflicts = new Map<string, boolean>();
 
@@ -234,25 +338,17 @@ export class WorkspaceStateService {
         return;
       }
 
-      // Query the engine for the complete chain state (no target ID = process all)
       const resolution = this.resolveChainState(record);
-
-      // If the engine threw a patch error anywhere in the sequence, the chain is conflicted
       conflicts.set(filePath, resolution.error !== undefined);
     });
 
     return conflicts;
   });
 
-  /**
-   * Drift score represents the number of files with committed (accepted) changes
-   * that haven't been synced back to the main repository yet.
-   */
   readonly driftScore = computed(() => {
     let count = 0;
 
     this.overlayMap().forEach((record) => {
-      // If the chain contains ANY accepted proposals, this file has drifted from base
       const hasAccepted = record.proposalChain.some(
         (p) => p.status === 'accepted',
       );
@@ -264,10 +360,6 @@ export class WorkspaceStateService {
     return count;
   });
 
-  /**
-   * Tracks if the workspace needs to be recompiled (e.g., if there are new uncompiled accepted edits)
-   * This can be expanded later to check against a build system state.
-   */
   readonly requiresRecompile = computed(() => {
     return this.driftScore() > 0;
   });

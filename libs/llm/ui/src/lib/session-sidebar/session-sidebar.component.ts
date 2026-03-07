@@ -12,7 +12,7 @@ import {
   LlmSessionSource,
   LlmScrollSource,
 } from '@nx-platform-application/llm-features-chat';
-import { LlmSessionActions } from '@nx-platform-application/llm-domain-conversation';
+import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import {
   LlmCreateSessionDialogComponent,
   CreateSessionResult,

@@ -2,14 +2,11 @@
   <div
     class="w-full h-full bg-white relative z-50 flex flex-col animate-fade-in"
   >
-    @if (activeSession(); as session) {
+    @if (showDetail()) {
       @if (viewMode() === 'details') {
-        <llm-session-page [session]="session" (closed)="closeModalView()" />
+        <llm-session-page (closed)="closeModalView()" />
       } @else if (viewMode() === 'workspace') {
-        <llm-session-workspace
-          [activeSession]="session"
-          (closed)="closeModalView()"
-        />
+        <llm-session-workspace (closed)="closeModalView()" />
       }
     } @else {
       <div
@@ -18,6 +15,7 @@
         <mat-icon class="scale-[2] mb-4">error_outline</mat-icon>
         <p>No active session found.</p>
         <button
+          type="button"
           mat-button
           color="primary"
           class="mt-4"
@@ -53,7 +51,7 @@
     >
       @if (sessionId(); as id) {
         <div class="flex-1 w-full h-full overflow-hidden">
-          <llm-chat-window [session]="activeSession()" />
+          <llm-chat-window />
         </div>
       } @else {
         <div

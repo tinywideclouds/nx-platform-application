@@ -25,6 +25,7 @@ import { MatInputModule } from '@angular/material/input';
 
 import { LlmDataSourcesStateService } from '@nx-platform-application/llm-features-data-sources';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
+import { URN } from '@nx-platform-application/platform-types';
 import {
   LlmDataSourceFormComponent,
   DataSourceFormPayload,
@@ -73,7 +74,6 @@ export class LlmDataSourcePageComponent {
   @ViewChild(LlmFilterProfilesComponent)
   profileManager!: LlmFilterProfilesComponent;
 
-  // Derive the ID synchronously for UI bindings
   id = toSignal(this.route.paramMap.pipe(map((params) => params.get('id'))));
   isNew = computed(() => !this.id() || this.id() === 'new');
 
@@ -88,13 +88,18 @@ export class LlmDataSourcePageComponent {
   });
 
   constructor() {
-    // FIX: Safely orchestrate state mutations based on router events using RxJS
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const routeId = params.get('id');
       if (!routeId || routeId === 'new') {
         this.state.clearSelection();
       } else {
-        this.state.selectCache(routeId);
+        try {
+          // FIX: Parse string from URL into strict URN before passing to state
+          this.state.selectCache(URN.parse(routeId));
+        } catch (e) {
+          console.error('Invalid cache URN in URL', e);
+          this.router.navigate(['/data-sources']);
+        }
       }
     });
   }
@@ -109,7 +114,9 @@ export class LlmDataSourcePageComponent {
       repo: payload.repo,
       branch: payload.branch,
     });
-    if (newCacheId) this.router.navigate(['/data-sources', newCacheId]);
+    // FIX: Convert URN to string for Router
+    if (newCacheId)
+      this.router.navigate(['/data-sources', newCacheId.toString()]);
   }
 
   async onBranchChange(value: string) {
@@ -125,9 +132,12 @@ export class LlmDataSourcePageComponent {
           repo,
           branch: newBranch,
         });
-        if (newCacheId) this.router.navigate(['/data-sources', newCacheId]);
+        // FIX: Convert URN to string for Router
+        if (newCacheId)
+          this.router.navigate(['/data-sources', newCacheId.toString()]);
       }
     } else if (value) {
+      // Assuming value here is an ID string passed from the header component
       this.router.navigate(['/data-sources', value]);
     }
   }
@@ -183,7 +193,8 @@ export class LlmDataSourcePageComponent {
     }
   }
 
-  async onDeleteProfile(profileId: string) {
+  // FIX: Explicitly type parameter as URN
+  async onDeleteProfile(profileId: URN) {
     await this.state.deleteProfile(profileId);
   }
 }

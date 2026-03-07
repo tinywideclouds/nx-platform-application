@@ -21,7 +21,7 @@
               >Gemini Context Cache</span
             >
           </div>
-          @if (session()?.geminiCache) {
+          @if (session()?.compiledCache) {
             <span
               class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-md font-medium border border-green-200 flex items-center gap-1"
             >
@@ -58,7 +58,7 @@
           <button
             mat-flat-button
             color="primary"
-            [disabled]="isCompiling() || !!session()?.geminiCache"
+            [disabled]="isCompiling() || !!session()?.compiledCache"
             (click)="compileCache.emit()"
           >
             @if (isCompiling()) {
@@ -69,7 +69,7 @@
               {{
                 isCompiling()
                   ? 'Compiling...'
-                  : session()?.geminiCache
+                  : session()?.compiledCache
                     ? 'Cache Up to Date'
                     : 'Compile Cache'
               }}

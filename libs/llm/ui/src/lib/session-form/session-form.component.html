@@ -129,6 +129,53 @@
           (removeAttachment)="removeAttachment($event)"
           (compileCache)="compileCache.emit()"
         />
+
+        @if (session()?.compiledCache; as cache) {
+          <div
+            class="mt-4 p-4 rounded-xl flex items-center justify-between border shadow-sm transition-colors"
+            [class.bg-red-50]="isCacheExpired(cache.expiresAt)"
+            [class.border-red-200]="isCacheExpired(cache.expiresAt)"
+            [class.bg-emerald-50]="!isCacheExpired(cache.expiresAt)"
+            [class.border-emerald-200]="!isCacheExpired(cache.expiresAt)"
+          >
+            <div>
+              <span
+                class="font-bold flex items-center gap-2 m-0"
+                [class.text-red-800]="isCacheExpired(cache.expiresAt)"
+                [class.text-emerald-800]="!isCacheExpired(cache.expiresAt)"
+              >
+                <mat-icon>{{
+                  isCacheExpired(cache.expiresAt) ? 'timer_off' : 'timer'
+                }}</mat-icon>
+                {{
+                  isCacheExpired(cache.expiresAt)
+                    ? 'Cache Expired'
+                    : 'Cache Active'
+                }}
+              </span>
+              <p
+                class="text-sm m-0 mt-1"
+                [class.text-red-600]="isCacheExpired(cache.expiresAt)"
+                [class.text-emerald-700]="!isCacheExpired(cache.expiresAt)"
+              >
+                {{
+                  isCacheExpired(cache.expiresAt) ? 'Expired on' : 'Expires at'
+                }}: {{ formatExpiry(cache.expiresAt) }}
+              </p>
+            </div>
+
+            <button
+              mat-flat-button
+              type="button"
+              [color]="isCacheExpired(cache.expiresAt) ? 'warn' : 'primary'"
+              [disabled]="isCompiling()"
+              (click)="compileCache.emit()"
+            >
+              <mat-icon>autorenew</mat-icon>
+              {{ isCacheExpired(cache.expiresAt) ? 'Renew Now' : 'Recompile' }}
+            </button>
+          </div>
+        }
       }
     </div>
   </div>

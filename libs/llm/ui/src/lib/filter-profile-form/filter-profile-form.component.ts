@@ -20,6 +20,7 @@ import {
   ProfileRequest,
 } from '@nx-platform-application/llm-types';
 import { YamlRulesService } from '@nx-platform-application/llm-features-data-sources';
+import { URN } from '@nx-platform-application/platform-types';
 
 @Component({
   selector: 'llm-filter-profile-form',
@@ -48,8 +49,10 @@ export class LlmFilterProfileFormComponent {
   // Outputs
   save = output<ProfileRequest>();
   cancel = output<void>();
-  editRequested = output<string>();
-  deleteRequested = output<string>();
+
+  // FIX: Outputs strictly typed as URNs
+  editRequested = output<URN>();
+  deleteRequested = output<URN>();
 
   // Local Transient State
   draftName = signal<string>('');

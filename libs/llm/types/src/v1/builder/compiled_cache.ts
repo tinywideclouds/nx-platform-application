@@ -1,45 +1,38 @@
+// libs/llm/types/src/v1/builder/compiled_cache.ts
 import {
   CompiledCachePbSchema,
   CompiledCachePb,
 } from '@nx-platform-application/llm-protos/builder/v1/builder_pb';
 import { create, fromJsonString, toJsonString } from '@bufbuild/protobuf';
 import {
-  NetworkAttachment,
-  networkAttachmentToProto,
-  networkAttachmentFromProto,
-} from './builder';
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
+import { CompiledCache } from '../../lib/session_types';
+import { sessionAttachmentToProto } from './builder';
 
-export interface CompiledCache {
-  id: string;
-  externalId: string;
-  provider: string;
-  attachmentsUsed: NetworkAttachment[];
-  createdAt: string;
-}
-
-// --- INTERNAL MAPPERS ---
-
-function compiledCacheToProto(k: CompiledCache): CompiledCachePb {
+export function compiledCacheToProto(k: CompiledCache): CompiledCachePb {
   return create(CompiledCachePbSchema, {
-    id: k.id,
-    externalId: k.externalId,
-    provider: k.provider,
-    attachmentsUsed: k.attachmentsUsed.map(networkAttachmentToProto),
-    createdAt: k.createdAt,
+    id: k.id.toString(),
+    provider: k.provider ? k.provider.toString() : 'urn:llm:provider:gemini',
+    attachmentsUsed: k.attachmentsUsed.map(sessionAttachmentToProto),
+    createdAt: k.expiresAt, // Mocked for proto
+    expiresAt: k.expiresAt,
   });
 }
 
-function compiledCacheFromProto(pk: CompiledCachePb): CompiledCache {
+export function compiledCacheFromProto(pk: CompiledCachePb): CompiledCache {
   return {
-    id: pk.id,
-    externalId: pk.externalId,
-    provider: pk.provider,
-    attachmentsUsed: pk.attachmentsUsed.map(networkAttachmentFromProto),
-    createdAt: pk.createdAt,
+    id: URN.parse(pk.id),
+    expiresAt: pk.expiresAt as ISODateTimeString,
+    attachmentsUsed: pk.attachmentsUsed.map((a) => ({
+      id: URN.parse(a.id),
+      cacheId: URN.parse(a.cacheId),
+      profileId: a.profileId ? URN.parse(a.profileId) : undefined,
+      target: 'compiled-cache',
+    })),
   };
 }
-
-// --- PUBLIC FACADES ---
 
 export function serializeCompiledCache(cache: CompiledCache): string {
   return toJsonString(CompiledCachePbSchema, compiledCacheToProto(cache));

@@ -2,9 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { LlmChatActions } from './actions.service';
 import { signal } from '@angular/core';
 import { Subject } from 'rxjs';
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  ISODateTimeString,
+  URN,
+} from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { ProposalRegistryStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import {
   LlmScrollSource,
   LlmSessionSource,
@@ -49,6 +53,9 @@ describe('LlmChatActions', () => {
     getMessage: vi.fn(),
     updateMessageExclusions: vi.fn(),
   };
+  const mockRegistry = {
+    saveProposal: vi.fn().mockResolvedValue(true),
+  };
   const mockBuilder = {
     buildStreamRequest: vi
       .fn()
@@ -68,6 +75,7 @@ describe('LlmChatActions', () => {
         { provide: LlmScrollSource, useValue: mockSink },
         { provide: LlmSessionSource, useValue: mockSessionSource },
         { provide: LlmStorageService, useValue: mockStorage },
+        { provide: ProposalRegistryStorageService, useValue: mockRegistry },
         { provide: LlmContextBuilderService, useValue: mockBuilder },
         { provide: LLM_NETWORK_CLIENT, useValue: mockNetwork },
       ],
@@ -76,7 +84,7 @@ describe('LlmChatActions', () => {
   });
 
   it('should route stream events perfectly between text chunks and proposals', async () => {
-    const sessionId = URN.parse('urn:llm:session:123'); // FIX: 4-part URN
+    const sessionId = URN.parse('urn:llm:session:123');
 
     // 1. Start generation
     await service.sendMessage('Fix the bug', sessionId);
@@ -97,30 +105,43 @@ describe('LlmChatActions', () => {
       event: {
         originalContent: 'old',
         proposal: {
-          id: 'p1',
+          id: 'prop-123',
           sessionId: 's1',
           filePath: 'main.ts',
-          patch: '@@ -1 +1 @@',
+          patch: '@@ -1 +1 @@\n+ new code',
           reasoning: 'fix',
           status: 'pending',
-          createdAt: 'now',
+          createdAt: 'now' as ISODateTimeString,
         },
       },
     });
 
-    expect(service.activeProposal()?.originalContent).toBe('old');
-    expect(service.activeProposal()?.proposal.id).toBe('p1');
+    // Wait for microtasks to resolve to ensure the registry save is caught
+    await new Promise(process.nextTick);
 
-    // NEW: Verify a brand new message was pushed to the sink for the proposal
-    expect(mockSink.addMessage).toHaveBeenCalledTimes(3); // 1 User, 1 Text Placeholder, 1 New Proposal
+    // Verify the heavy payload was routed to the Global Registry
+    expect(mockRegistry.saveProposal).toHaveBeenCalled();
+    const registryArg = mockRegistry.saveProposal.mock.calls[0][0];
+    expect(registryArg.filePath).toBe('main.ts');
+    expect(registryArg.patch).toBe('@@ -1 +1 @@\n+ new code');
+    expect(registryArg.id.toString()).toBe('urn:llm:proposal:prop-123');
+
+    // Verify a brand new lightweight pointer was pushed to the sink
+    expect(mockSink.addMessage).toHaveBeenCalledTimes(3); // 1 User, 1 Text Placeholder, 1 New Pointer
     const lastAddedMessage = mockSink.addMessage.mock.calls[2][0];
     expect(lastAddedMessage.role).toBe('model');
+    expect(lastAddedMessage.typeId.toString()).toBe(
+      'urn:llm:message-type:fileLink',
+    );
 
-    // Verify the proposal JSON was encoded into this new message's payload
+    // Verify the pointer JSON was encoded correctly into the payload
     const decoder = new TextDecoder();
     const payloadStr = decoder.decode(lastAddedMessage.payloadBytes);
-    expect(payloadStr).toContain('workspace_proposal');
-    expect(payloadStr).toContain('main.ts');
+    const pointerPayload = JSON.parse(payloadStr);
+
+    expect(pointerPayload.proposalId).toBe('urn:llm:proposal:prop-123');
+    expect(pointerPayload.filePath).toBe('main.ts');
+    expect(pointerPayload.snippet).toContain('+ new code'); // The patch was stripped down to a preview
   });
 
   it('should ensure the assistant placeholder timestamp is strictly 1ms after the user message', async () => {

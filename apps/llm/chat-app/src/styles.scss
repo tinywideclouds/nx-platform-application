@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add this line to import the core Material theme! */
+@import '@angular/material/prebuilt-themes/indigo-pink.css';
+
 @layer base {
   /* Scoped specifically to the Chat Window focus toggle */
   ::view-transition-old(chat-workspace),
@@ -32,4 +35,17 @@ body {
 body {
   margin: 0;
   font-family: Roboto, 'Helvetica Neue', sans-serif;
+}
+
+.mdc-notched-outline__leading {
+  border-right: none !important;
+}
+
+.mdc-notched-outline__notch {
+  border-left: none !important;
+  border-right: none !important;
+}
+
+.mdc-notched-outline__trailing {
+  border-left: none !important;
 }

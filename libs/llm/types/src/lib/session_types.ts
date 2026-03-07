@@ -1,33 +1,58 @@
+// libs/llm/types/src/lib/session_types.ts
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 
-// Define the specific strategies we can use to pass context to the LLM
 export type ContextInjectionTarget =
-  | 'gemini-cache'
+  | 'compiled-cache'
   | 'system-instruction'
   | 'inline-context';
 
 export interface SessionAttachment {
-  id: string; // A unique ID for the UI to track this specific attachment (e.g., UUID)
-  cacheId: URN; // The URN of the synced datasource
-  profileId?: URN; // Optional: The URN of the filter profile (if undefined, include all files)
-  target: ContextInjectionTarget;
+  id: URN;
+  cacheId: URN;
+  profileId?: URN;
+  target?: ContextInjectionTarget;
+}
+
+export type CompiledCacheProvider = 'gemini' | 'open-ai';
+
+// 1. THE ONE TRUE COMPILED CACHE
+export interface CompiledCache {
+  id: URN;
+  provider?: CompiledCacheProvider;
+  expiresAt: ISODateTimeString;
+  attachmentsUsed: SessionAttachment[];
 }
 
 export interface LlmSession {
   id: URN;
   title: string;
   lastModified: ISODateTimeString;
-
-  //explicit reference to an optional Gemini cache for sessions that are tied to a specific codebase snapshot. This allows the UI to display relevant info and also enables future features like automatic cache refreshing or invalidation when the underlying code changes.
-  geminiCache?: string;
+  compiledCache?: CompiledCache;
   llmModel?: string;
-
-  // --- NEW ---
   attachments: SessionAttachment[];
-
-  // --- EXISTING ---
+  workspaceTarget?: URN;
   contextGroups?: Record<string, string>;
+}
+
+export type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'staged';
+
+export interface PointerPayload {
+  proposalId: URN;
+  filePath: string;
+  snippet: string;
+  reasoning?: string;
+}
+
+export interface RegistryEntry {
+  id: URN;
+  ownerSessionId: URN;
+  filePath: string;
+  patch?: string;
+  newContent?: string;
+  reasoning: string;
+  status: ProposalStatus;
+  createdAt: ISODateTimeString;
 }

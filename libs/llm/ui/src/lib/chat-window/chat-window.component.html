@@ -1,5 +1,7 @@
 <div class="flex flex-col h-full bg-gray-50 relative group-transition">
   <llm-chat-header
+    [sessionTitle]="session()?.title"
+    [alertState]="chatAlertState()"
     [isGenerating]="source.isGenerating()"
     [isSelectionMode]="isSelectionMode()"
     [selectedCount]="selectedIds().size"
@@ -170,6 +172,14 @@
         @if (payload.type === 'proposal') {
           <llm-proposal-bubble
             [event]="payload.event"
+            (accept)="onAcceptProposal($event)"
+            (reject)="onRejectProposal($event, message.id.toString())"
+            [isGrouped]="wrapper.layout.positionInGroup"
+            (openWorkspace)="onOpenWorkspace($event)"
+          />
+        } @else if (payload.type === 'pointer') {
+          <llm-file-link-bubble
+            [pointer]="payload.pointer"
             (accept)="onAcceptProposal($event)"
             (reject)="onRejectProposal($event, message.id.toString())"
             [isGrouped]="wrapper.layout.positionInGroup"

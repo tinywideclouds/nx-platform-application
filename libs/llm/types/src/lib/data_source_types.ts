@@ -1,5 +1,7 @@
 // libs/llm/features/data-sources/src/lib/data-sources.types.ts
 
+import { URN } from '@nx-platform-application/platform-types';
+
 export interface FileMetadata {
   path: string;
   sizeBytes: number;
@@ -7,7 +9,7 @@ export interface FileMetadata {
 }
 
 export interface FilterProfile {
-  id: string;
+  id: URN;
   name: string;
   rulesYaml: string;
   createdAt: string;
@@ -48,7 +50,7 @@ export interface CacheAnalysis {
 }
 
 export interface CacheBundle {
-  id: string;
+  id: URN;
   repo: string;
   branch: string;
   commitSha?: string;

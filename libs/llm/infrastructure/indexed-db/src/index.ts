@@ -1,3 +1,4 @@
 export * from './lib/llm.database';
 export * from './lib/mappers/message.mapper';
 export * from './lib/mappers/session.mapper';
+export * from './lib/mappers/proposal.mapper';

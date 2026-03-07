@@ -34,6 +34,10 @@ export class LlmWorkspaceFileViewerComponent {
 
   displayContent = input<string | null>(null);
   displayError = input<string | null | undefined>(null); // To show conflict errors cleanly
+  healedPatch = input<string | undefined>(undefined); // NEW
+  failedProposalId = input<string | undefined>(undefined); // NEW
+
+  healRequested = output<{ proposalId: string; patch: string }>();
 
   proposalChain = input<ChangeProposal[]>([]);
   selectedProposalId = input<string | null>(null);
@@ -41,6 +45,7 @@ export class LlmWorkspaceFileViewerComponent {
   previewSelected = output<string | null>();
   acceptProposal = output<string>();
   rejectProposal = output<string>();
+  stageProposal = output<string>();
 
   // NEW: Toggle state for Applied vs Raw Diff
   viewMode = signal<'applied' | 'raw'>('applied');
@@ -59,8 +64,16 @@ export class LlmWorkspaceFileViewerComponent {
     color: string;
     tooltip: string;
   } {
+    // Override color/icon if it's staged
+    if (proposal.status === 'staged') {
+      return {
+        icon: 'verified',
+        color: 'text-amber-500',
+        tooltip: 'Staged for Build',
+      };
+    }
+
     if (proposal.newContent) {
-      // If it's the first item and the file didn't exist, it's a creation
       if (
         this.proposalChain()[0].id === proposal.id &&
         !this.hasBaseContent()
