@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import {
-  LlmStorageService,
+  MessageStorageService,
+  SessionStorageService,
   ProposalRegistryStorageService,
 } from '@nx-platform-application/llm-infrastructure-storage';
 import {
@@ -14,7 +15,8 @@ import { URN } from '@nx-platform-application/platform-types';
 
 @Injectable({ providedIn: 'root' })
 export class LegacyMigrationService {
-  private storage = inject(LlmStorageService);
+  private sessionStorage = inject(SessionStorageService);
+  private messageStorage = inject(MessageStorageService);
   private registry = inject(ProposalRegistryStorageService);
   private logger = inject(Logger);
   private encoder = new TextEncoder();
@@ -29,10 +31,12 @@ export class LegacyMigrationService {
   async scanForLegacyProposals(): Promise<number> {
     try {
       let count = 0;
-      const sessions = await this.storage.getSessions();
+      const sessions = await this.sessionStorage.getSessions();
 
       for (const session of sessions) {
-        const messages = await this.storage.getSessionMessages(session.id);
+        const messages = await this.messageStorage.getSessionMessages(
+          session.id,
+        );
         const legacyMessages = messages.filter((m) =>
           m.typeId.equals(FileProposalType),
         );
@@ -52,11 +56,11 @@ export class LegacyMigrationService {
    * converts the message to a FileLinkType pointer, and overwrites the DB record.
    */
   async executeMigration(): Promise<void> {
-    const sessions = await this.storage.getSessions();
+    const sessions = await this.sessionStorage.getSessions();
     let migratedCount = 0;
 
     for (const session of sessions) {
-      const messages = await this.storage.getSessionMessages(session.id);
+      const messages = await this.messageStorage.getSessionMessages(session.id);
       console.log('session messages', messages.length);
       let sessionUpdated = false;
 
@@ -117,7 +121,7 @@ export class LegacyMigrationService {
       if (sessionUpdated) {
         // Assuming your storage service has an upsert/save method for messages:
         console.log('bulk save');
-        await this.storage.bulkSaveMessages(messages);
+        await this.messageStorage.bulkSaveMessages(messages);
       }
     }
 

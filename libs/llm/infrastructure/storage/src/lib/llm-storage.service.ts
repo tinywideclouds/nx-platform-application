@@ -47,13 +47,13 @@ export class LlmStorageService {
           });
         } else {
           // It's a brand NEW chat! Create the session record.
-          // Note: Adjust the fields below if your LlmSessionRecord has other required properties
           await this.db.sessions.put({
             id: msgRecord.sessionId,
             title: msgRecord.sessionId.toString(), // Default title is the session ID, can be updated later
             lastModified: msgRecord.timestamp,
             contextGroups: {}, // Initialize the empty dictionary
             attachments: [], // Start with no attachments
+            quickContext: [],
           });
         }
       },

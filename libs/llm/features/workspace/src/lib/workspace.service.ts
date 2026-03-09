@@ -1,12 +1,11 @@
 import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { applyPatch, createTwoFilesPatch } from 'diff';
-import {
-  FileMetadata,
-  ChangeProposal,
-} from '@nx-platform-application/llm-types';
+import { URN } from '@nx-platform-application/platform-types';
+import { ChangeProposal } from '@nx-platform-application/llm-types';
+import { FileMetadata } from '@nx-platform-application/data-sources-types';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
-import { LlmGithubFirestoreClient } from '@nx-platform-application/llm-infrastructure-github-firestore-access';
+import { GithubFirestoreClient } from '@nx-platform-application/data-sources/features/github-firestore-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
@@ -22,16 +21,16 @@ export interface ModifiedFile {
 
 export interface ChainResolution {
   content: string | null;
-  healedPatch?: string; // NEW: The corrected diff string
-  failedProposalId?: string; // NEW: Which proposal caused the crash
+  healedPatch?: string;
+  failedProposalId?: string;
   error?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class WorkspaceStateService {
   private readonly logger = inject(Logger);
-  private sessionSource = inject(LlmSessionSource); // Only care about sessions now!
-  private firestoreClient = inject(LlmGithubFirestoreClient);
+  private sessionSource = inject(LlmSessionSource);
+  private firestoreClient = inject(GithubFirestoreClient);
   private proposalService = inject(LlmProposalService);
 
   private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
@@ -40,7 +39,6 @@ export class WorkspaceStateService {
 
   private readonly activeProposals = signal<ChangeProposal[]>([]);
 
-  // Inherit directly from the new centralized source
   private readonly activeSessionId = computed(() =>
     this.sessionSource.activeSessionId(),
   );
@@ -48,8 +46,27 @@ export class WorkspaceStateService {
   // --- WORKSPACE TARGET STATE ---
   readonly availableTargets = computed(() => {
     const session = this.sessionSource.activeSession();
-    if (!session || !session.attachments) return [];
-    return session.attachments.filter((a) => a.target === 'compiled-cache');
+    if (!session) return [];
+
+    const targetMap = new Map<string, URN>();
+
+    // 1. Gather from inline attachments
+    (session.attachments || []).forEach((a) => {
+      if (a.dataSourceId) {
+        targetMap.set(a.dataSourceId.toString(), a.dataSourceId);
+      }
+    });
+
+    // 2. Gather from the hydrated compiled cache (if it exists)
+    if (session.compiledCache?.sources) {
+      session.compiledCache.sources.forEach((s) => {
+        if (s.dataSourceId) {
+          targetMap.set(s.dataSourceId.toString(), s.dataSourceId);
+        }
+      });
+    }
+
+    return Array.from(targetMap.values());
   });
 
   readonly activeWorkspaceTarget = computed(() => {
@@ -57,7 +74,7 @@ export class WorkspaceStateService {
     if (session?.workspaceTarget) return session.workspaceTarget;
 
     const available = this.availableTargets();
-    if (available.length === 1) return available[0].cacheId;
+    if (available.length === 1) return available[0];
 
     return null;
   });
@@ -72,17 +89,16 @@ export class WorkspaceStateService {
   });
 
   constructor() {
-    // 1. Base File Fetcher Effect (Now explicitly bound to targetId)
+    // 1. Base File Fetcher Effect
     effect(async () => {
       const targetId = this.activeWorkspaceTarget();
-
-      this.proposalService.registryMutated();
 
       if (!targetId) {
         this.baseMetadata.set(new Map());
         this.baseContents.set(new Map());
         return;
       }
+
       try {
         const metadataList = await firstValueFrom(
           this.firestoreClient.getFiles(targetId),
@@ -104,6 +120,10 @@ export class WorkspaceStateService {
     // 2. The Pure Registry Query Effect
     effect(async () => {
       const sessionId = this.activeSessionId();
+
+      // Track dependency: Re-run when registry mutates
+      this.proposalService.registryMutated();
+
       if (!sessionId) {
         this.activeProposals.set([]);
         return;
@@ -271,9 +291,6 @@ export class WorkspaceStateService {
 
     for (const proposal of record.proposalChain) {
       if (proposal.status === 'rejected') {
-        // If the user explicitly clicks a rejected proposal tab in the UI,
-        // we stop here so they see the state of the code *right before* it was rejected.
-        // They can use the "Raw Diff" toggle to see the bad code itself.
         if (proposal.id === targetProposalId) break;
         continue;
       }
@@ -291,8 +308,6 @@ export class WorkspaceStateService {
           }
           currentText = patchedResult;
         } catch (err: any) {
-          // Handles structurally broken diffs (LLM hallucinated wrong line counts)
-          // 2. If it's a syntax error (like bad math), attempt to HEAL it
           if (
             err.message.includes('line count did not match') ||
             err.message.includes('invalid line')
@@ -302,7 +317,6 @@ export class WorkspaceStateService {
               const healedResult = applyPatch(currentText, healedPatch);
 
               if (healedResult !== false) {
-                // Return the error, but provide the healed code as the preview
                 return {
                   content: healedResult,
                   error: `Malformed Diff Syntax. The LLM hallucinated the line counts. An auto-fix is available (shown but unapplied)`,
@@ -310,9 +324,7 @@ export class WorkspaceStateService {
                   failedProposalId: proposal.id,
                 };
               }
-            } catch (healErr) {
-              // The patch was too mangled to heal
-            }
+            } catch (healErr) {}
           }
           return {
             content: currentText,

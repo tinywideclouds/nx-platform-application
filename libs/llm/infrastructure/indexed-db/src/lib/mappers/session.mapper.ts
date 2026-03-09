@@ -3,77 +3,87 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { Temporal } from '@js-temporal/polyfill';
 import {
   LlmSessionRecord,
   SessionAttachmentRecord,
-  CompiledCacheRecord,
+  QuickContextFileRecord,
 } from '../records/session.record';
 import {
   LlmSession,
   SessionAttachment,
   ContextInjectionTarget,
+  QuickContextFile,
   CompiledCache,
 } from '@nx-platform-application/llm-types';
 
-/**
- * Safely parses a URN from the database.
- */
 function parseSafeUrn(val: string, fallbackPrefix: string): URN {
   if (val.startsWith('urn:')) {
     return URN.parse(val);
   }
-
   return URN.parse(`${fallbackPrefix}:${val}`);
 }
 
 @Injectable({ providedIn: 'root' })
 export class LlmSessionMapper {
+  extractCacheId(record: LlmSessionRecord): URN | undefined {
+    if (record.compiledCacheId) {
+      return parseSafeUrn(record.compiledCacheId, 'urn:gemini:compiled-cache');
+    }
+    if (record.compiledCache && record.compiledCache.id) {
+      return parseSafeUrn(record.compiledCache.id, 'urn:gemini:compiled-cache');
+    }
+    if (record.geminiCache) {
+      return parseSafeUrn(record.geminiCache, 'urn:gemini:compiled-cache');
+    }
+    return undefined;
+  }
+
   toDomain(record: LlmSessionRecord): LlmSession {
     let attachments: SessionAttachment[] = [];
 
-    // 1. Map structured attachments (Safe URN Parse)
     if (record.attachments && Array.isArray(record.attachments)) {
-      attachments = record.attachments.map((att) => ({
-        id: parseSafeUrn(att.id, 'urn:llm:attachment'),
-        cacheId: parseSafeUrn(att.cacheId, 'urn:llm:repo'),
-        profileId: att.profileId
-          ? parseSafeUrn(att.profileId, 'urn:llm:profile')
-          : undefined,
-        target: att.target as ContextInjectionTarget,
-      }));
+      attachments = record.attachments
+        .filter((att) => att.target !== 'compiled-cache')
+        .map((att) => ({
+          id: parseSafeUrn(att.id, 'urn:llm:attachment'),
+          dataSourceId: parseSafeUrn(
+            att.dataSourceId || (att as any).cacheId,
+            'urn:data-source',
+          ),
+          profileId: att.profileId
+            ? parseSafeUrn(att.profileId, 'urn:profile')
+            : undefined,
+          target: att.target as ContextInjectionTarget,
+        }));
     } else if (record.cacheId) {
       attachments.push({
         id: URN.create('attachment', crypto.randomUUID(), 'llm'),
-        cacheId: parseSafeUrn(record.cacheId, 'urn:llm:repo'),
+        dataSourceId: parseSafeUrn(record.cacheId, 'urn:data-source'),
         target: 'inline-context',
       });
     }
 
-    // 2. Map Compiled Cache (Safe URN Parse & Legacy Fallback)
-    let compiledCache: CompiledCache | undefined = undefined;
+    let quickContext: QuickContextFile[] | undefined = undefined;
+    if (record.quickContext && Array.isArray(record.quickContext)) {
+      quickContext = record.quickContext.map((file) => ({
+        id: parseSafeUrn(file.id, 'urn:llm:quick-context'),
+        name: file.name,
+        content: file.content,
+      }));
+    }
 
-    if (record.compiledCache) {
-      compiledCache = {
-        id: parseSafeUrn(record.compiledCache.id, 'urn:gemini:compiled-cache'),
-        expiresAt: record.compiledCache.expiresAt,
-        attachmentsUsed: (record.compiledCache.attachmentsUsed || []).map(
-          (att) => ({
-            id: parseSafeUrn(att.id, 'urn:llm:attachment'),
-            cacheId: parseSafeUrn(att.cacheId, 'urn:llm:repo'),
-            profileId: att.profileId
-              ? parseSafeUrn(att.profileId, 'urn:llm:profile')
-              : undefined,
-            target: att.target as ContextInjectionTarget,
-          }),
-        ),
-      };
-    } else if (record.geminiCache) {
-      // Auto-migrate legacy string caches
-      compiledCache = {
-        id: parseSafeUrn(record.geminiCache, 'urn:gemini:compiled-cache'),
-        expiresAt: Temporal.Now.instant().toString() as ISODateTimeString,
-        attachmentsUsed: [],
+    // Generate the stub for the Domain to hydrate later
+    const cacheId = this.extractCacheId(record);
+    let compiledCacheStub: CompiledCache | undefined = undefined;
+
+    if (cacheId) {
+      compiledCacheStub = {
+        id: cacheId,
+        // Defaults to satisfy the interface until LlmSessionSource hydrates it
+        provider: 'gemini',
+        sources: [],
+        createdAt: '' as ISODateTimeString,
+        expiresAt: '' as ISODateTimeString,
       };
     }
 
@@ -81,9 +91,10 @@ export class LlmSessionMapper {
       id: parseSafeUrn(record.id, 'urn:llm:session'),
       title: record.title,
       lastModified: record.lastModified,
-      compiledCache,
+      compiledCache: compiledCacheStub,
       llmModel: record.llmModel,
       attachments,
+      quickContext,
       workspaceTarget: record.workspaceTarget
         ? parseSafeUrn(record.workspaceTarget, 'urn:llm:repo')
         : undefined,
@@ -96,27 +107,29 @@ export class LlmSessionMapper {
       domain.attachments || []
     ).map((att) => ({
       id: att.id.toString(),
-      cacheId: att.cacheId.toString(),
+      dataSourceId: att.dataSourceId.toString(),
       profileId: att.profileId?.toString(),
       target: att.target || 'inline-context',
     }));
 
-    let compiledCacheRecord: CompiledCacheRecord | undefined = undefined;
-    if (domain.compiledCache) {
-      compiledCacheRecord = {
-        id: domain.compiledCache.id.toString(),
-        expiresAt: domain.compiledCache.expiresAt,
-        attachmentsUsed: attachmentsRecord,
-      };
+    let quickContextRecord: QuickContextFileRecord[] | undefined = undefined;
+    if (domain.quickContext) {
+      quickContextRecord = domain.quickContext.map((file) => ({
+        id: file.id.toString(),
+        name: file.name,
+        content: file.content,
+      }));
     }
 
     return {
       id: domain.id.toString(),
       title: domain.title,
       lastModified: domain.lastModified,
-      compiledCache: compiledCacheRecord,
+      // Flatten the object back into a database foreign key
+      compiledCacheId: domain.compiledCache?.id.toString(),
       llmModel: domain.llmModel,
       attachments: attachmentsRecord,
+      quickContext: quickContextRecord,
       workspaceTarget: domain.workspaceTarget?.toString(),
       contextGroups: domain.contextGroups || {},
     };

@@ -1,30 +1,25 @@
 import { TestBed } from '@angular/core/testing';
 import { LlmSessionActions } from './session-actions.service';
 import { Router } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { SessionStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
-import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { LlmSession } from '@nx-platform-application/llm-types';
 
 describe('LlmSessionActions', () => {
   let service: LlmSessionActions;
 
-  const mockNetwork = {
-    buildCache: vi.fn(),
-  };
-  const mockSnackBar = { open: vi.fn() };
   const mockLogger = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
   const mockRouter = { navigate: vi.fn() };
   const mockStorage = {
     saveSession: vi.fn().mockResolvedValue(undefined),
     getSession: vi.fn(),
+    deleteSession: vi.fn().mockResolvedValue(undefined),
   };
   const mockSource = { refresh: vi.fn() };
 
@@ -34,11 +29,9 @@ describe('LlmSessionActions', () => {
     TestBed.configureTestingModule({
       providers: [
         LlmSessionActions,
-        { provide: LLM_NETWORK_CLIENT, useValue: mockNetwork },
-        { provide: MatSnackBar, useValue: mockSnackBar },
         { provide: Logger, useValue: mockLogger },
         { provide: Router, useValue: mockRouter },
-        { provide: LlmStorageService, useValue: mockStorage },
+        { provide: SessionStorageService, useValue: mockStorage },
         { provide: LlmSessionSource, useValue: mockSource },
       ],
     });
@@ -52,92 +45,180 @@ describe('LlmSessionActions', () => {
     lastModified: '2026-03-01T10:00:00Z' as ISODateTimeString,
     attachments: [
       {
-        id: URN.parse('urn:llm:cache_id:1256'),
-        cacheId: URN.parse('urn:firestore:repo:123'),
-        target: 'compiled-cache',
+        id: URN.parse('urn:llm:attachment:1256'),
+        dataSourceId: URN.parse('urn:data-source:repo:123'),
+        target: 'inline-context',
       },
     ],
+    quickContext: [],
   };
 
   describe('Session Lifecycle', () => {
-    it('should create a new session', async () => {
-      const newId = await service.createNewSession(
-        'New Chat',
-        'chat',
-        'gemini-1.5-pro',
-      );
+    it('should create a new session and navigate to it', async () => {
+      await service.createNewSession('New Chat', 'chat', 'gemini-1.5-pro');
 
-      expect(newId).toBeInstanceOf(URN);
       expect(mockStorage.saveSession).toHaveBeenCalledWith(
         expect.objectContaining({
           title: 'New Chat',
           llmModel: 'gemini-1.5-pro',
+          quickContext: [],
         }),
       );
       expect(mockSource.refresh).toHaveBeenCalled();
-    });
-
-    it('should navigate to open a session', async () => {
-      await service.openSession(mockSession.id);
       expect(mockRouter.navigate).toHaveBeenCalledWith([
         '/chat',
-        'urn:llm:session:123',
+        expect.any(String),
       ]);
     });
-  });
 
-  describe('Cache Compilation', () => {
-    it('should successfully compile a cache and update the session', async () => {
-      mockNetwork.buildCache.mockResolvedValue({
-        geminiCacheId: 'cachedContents/999',
-        expiresAt: '2026-03-05T18:00:00Z',
-      });
+    it('should create a new session and navigate to details if options target is requested', async () => {
+      await service.createNewSession(
+        'Settings Chat',
+        'options',
+        'gemini-2.5-pro',
+      );
 
-      await service.compileSessionCache(mockSession);
+      expect(mockRouter.navigate).toHaveBeenCalledWith(
+        ['/chat', expect.any(String)],
+        { queryParams: { view: 'details' } },
+      );
+    });
 
-      expect(mockNetwork.buildCache).toHaveBeenCalledWith({
-        sessionId: 'urn:llm:session:123',
-        model: 'gemini-2.5-pro',
-        attachments: [
-          { id: 'att-1', cacheId: 'urn:repo:123', profileId: undefined },
-        ],
-        expiresAtHint: expect.any(String),
-      });
+    it('should open an existing session', async () => {
+      const targetUrn = URN.parse('urn:llm:session:999');
+      await service.openSession(targetUrn);
+      expect(mockRouter.navigate).toHaveBeenCalledWith([
+        '/chat',
+        'urn:llm:session:999',
+      ]);
+    });
+
+    it('should update a session and refresh the source', async () => {
+      await service.updateSession(mockSession);
+      expect(mockStorage.saveSession).toHaveBeenCalledWith(mockSession);
+      expect(mockSource.refresh).toHaveBeenCalled();
+    });
+
+    it('should delete a session and refresh the source', async () => {
+      await service.deleteSession(mockSession.id);
+      expect(mockStorage.deleteSession).toHaveBeenCalledWith(mockSession.id);
+      expect(mockSource.refresh).toHaveBeenCalled();
+    });
+
+    it('should safely set the workspace target', async () => {
+      const targetId = URN.parse('urn:data-source:repo:abc');
+      mockStorage.getSession.mockResolvedValue(mockSession);
+
+      await service.setWorkspaceTarget(mockSession.id, targetId);
 
       expect(mockStorage.saveSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: mockSession.id,
-          compiledCache: expect.objectContaining({
-            id: 'cachedContents/999',
-            expiresAt: '2026-03-05T18:00:00Z',
-            attachmentsUsed: expect.arrayContaining([
-              expect.objectContaining({ cacheId: 'urn:repo:123' }),
-            ]),
-          }),
-        }),
+        expect.objectContaining({ workspaceTarget: targetId }),
       );
-
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Context compiled successfully!',
-        'Close',
-        { duration: 3000 },
-      );
+      expect(mockSource.refresh).toHaveBeenCalled();
     });
   });
 
-  describe('Workspace Targeting', () => {
-    it('should set and save the workspace target', async () => {
+  describe('Quick Context Window', () => {
+    it('should add a quick file to the front of the array and return undefined if nothing dropped', async () => {
       mockStorage.getSession.mockResolvedValue(mockSession);
-      const targetUrn = URN.parse('urn:repo:999');
+      const dropped = await service.addQuickFile(mockSession.id, {
+        name: 'test.ts',
+        content: 'code',
+      });
 
-      await service.setWorkspaceTarget(mockSession.id, targetUrn);
-
+      expect(dropped).toBeUndefined();
       expect(mockStorage.saveSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          workspaceTarget: targetUrn,
+          quickContext: [
+            expect.objectContaining({ name: 'test.ts', content: 'code' }),
+          ],
         }),
       );
       expect(mockSource.refresh).toHaveBeenCalled();
+    });
+
+    it('should deduplicate files with the same name, moving it to the front', async () => {
+      mockStorage.getSession.mockResolvedValue({
+        ...mockSession,
+        quickContext: [
+          {
+            id: URN.parse('urn:llm:quick:old'),
+            name: 'test.ts',
+            content: 'old code',
+          },
+          {
+            id: URN.parse('urn:llm:quick:other'),
+            name: 'other.ts',
+            content: 'other code',
+          },
+        ],
+      });
+
+      const dropped = await service.addQuickFile(mockSession.id, {
+        name: 'test.ts',
+        content: 'new code',
+      });
+
+      expect(dropped).toBeUndefined();
+      const saveCallArgs = mockStorage.saveSession.mock.calls[0][0];
+      expect(saveCallArgs.quickContext).toHaveLength(2);
+      expect(saveCallArgs.quickContext[0].name).toBe('test.ts');
+      expect(saveCallArgs.quickContext[0].content).toBe('new code');
+      expect(saveCallArgs.quickContext[1].name).toBe('other.ts');
+    });
+
+    it('should enforce a maximum window of 6 files, dropping the oldest and returning it', async () => {
+      const fullContext = Array.from({ length: 6 }).map((_, i) => ({
+        id: URN.parse(`urn:llm:quick:f${i}`),
+        name: `file${i}.ts`,
+        content: 'code',
+      }));
+
+      mockStorage.getSession.mockResolvedValue({
+        ...mockSession,
+        quickContext: fullContext,
+      });
+
+      const dropped = await service.addQuickFile(mockSession.id, {
+        name: 'file7.ts',
+        content: 'new',
+      });
+
+      const saveCallArgs = mockStorage.saveSession.mock.calls[0][0];
+
+      expect(saveCallArgs.quickContext).toHaveLength(6);
+      expect(saveCallArgs.quickContext[0].name).toBe('file7.ts');
+
+      expect(saveCallArgs.quickContext[5].name).toBe('file4.ts');
+      expect(
+        saveCallArgs.quickContext.some((f: any) => f.name === 'file5.ts'),
+      ).toBe(false);
+
+      expect(dropped).toBeDefined();
+      expect(dropped?.name).toBe('file5.ts');
+    });
+
+    it('should safely remove a file by URN', async () => {
+      const targetUrn = URN.parse('urn:llm:quick:target');
+      mockStorage.getSession.mockResolvedValue({
+        ...mockSession,
+        quickContext: [
+          { id: targetUrn, name: 'delete.ts', content: 'code' },
+          {
+            id: URN.parse('urn:llm:quick:keep'),
+            name: 'keep.ts',
+            content: 'code',
+          },
+        ],
+      });
+
+      await service.removeQuickFile(mockSession.id, targetUrn);
+
+      expect(mockStorage.saveSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          quickContext: [expect.objectContaining({ name: 'keep.ts' })],
+        }),
+      );
     });
   });
 });

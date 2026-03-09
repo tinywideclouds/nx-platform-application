@@ -1,7 +1,12 @@
-import { Component, input, ChangeDetectionStrategy, computed } from '@angular/core';
+import {
+  Component,
+  input,
+  ChangeDetectionStrategy,
+  computed,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
-import { FileMetadata } from '@nx-platform-application/llm-types';
+import { FileMetadata } from '@nx-platform-application/data-sources-types';
 
 @Component({
   selector: 'llm-file-explorer-display',
@@ -13,8 +18,8 @@ import { FileMetadata } from '@nx-platform-application/llm-types';
 })
 export class LlmFileExplorerDisplayComponent {
   files = input<FileMetadata[]>([]);
-  
-  // Note: In a production refinement, we would use a library like 'minimatch' and 'js-yaml' 
+
+  // Note: In a production refinement, we would use a library like 'minimatch' and 'js-yaml'
   // to evaluate this rulesYaml string against the files() array and visually dim excluded files.
   activeRulesYaml = input<string | null>(null);
 

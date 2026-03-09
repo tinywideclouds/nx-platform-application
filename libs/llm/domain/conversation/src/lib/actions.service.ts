@@ -7,7 +7,10 @@ import {
 } from '@nx-platform-application/platform-types';
 
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import {
+  MessageStorageService,
+  SessionStorageService,
+} from '@nx-platform-application/llm-infrastructure-storage';
 import {
   FileLinkType,
   LlmMessage,
@@ -31,7 +34,8 @@ export class LlmChatActions {
   private readonly logger = inject(Logger);
   private sink = inject(LlmScrollSource);
   private sessionSource = inject(LlmSessionSource);
-  private storage = inject(LlmStorageService);
+  private messageStorage = inject(MessageStorageService);
+  private sessionStorage = inject(SessionStorageService);
   private network = inject(LLM_NETWORK_CLIENT);
   private contextBuilder = inject(LlmContextBuilderService);
   private proposalService = inject(LlmProposalService);
@@ -100,7 +104,7 @@ export class LlmChatActions {
       isExcluded: false,
     };
 
-    await this.storage.saveMessage(userMsg);
+    await this.messageStorage.saveMessage(userMsg);
     this.sink.addMessage(userMsg);
 
     // --- STEP 2: ASSEMBLE CONTEXT (PRISTINE DB STATE) ---
@@ -140,7 +144,7 @@ export class LlmChatActions {
     this.activeBotId = botMsgId;
     this.activeBotMsg = botMsg;
 
-    await this.storage.saveMessage(botMsg);
+    await this.messageStorage.saveMessage(botMsg);
     this.sink.addMessage(botMsg);
 
     // --- STEP 4: EXECUTE NETWORK STREAM ---
@@ -171,7 +175,7 @@ export class LlmChatActions {
 
             this.activeBotMsg = newTextMsg;
 
-            this.storage.saveMessage(newTextMsg);
+            this.messageStorage.saveMessage(newTextMsg);
             this.sink.addMessage(newTextMsg);
           }
 
@@ -189,7 +193,7 @@ export class LlmChatActions {
               ...this.activeBotMsg,
               payloadBytes: encoder.encode(this.accumulatedText),
             };
-            this.storage.saveMessage(finalMsg);
+            this.messageStorage.saveMessage(finalMsg);
           }
 
           // --- SPLIT WRITE ARCHITECTURE ---
@@ -230,7 +234,7 @@ export class LlmChatActions {
             isExcluded: false,
           };
 
-          this.storage.saveMessage(pointerMsg);
+          this.messageStorage.saveMessage(pointerMsg);
           this.sink.addMessage(pointerMsg);
 
           // Close the text bubble so the next text chunk starts fresh
@@ -266,10 +270,10 @@ export class LlmChatActions {
         ...this.activeBotMsg,
         payloadBytes: encoder.encode(this.accumulatedText),
       };
-      this.storage.saveMessage(finalMsg);
+      this.messageStorage.saveMessage(finalMsg);
     } else if (action === 'delete' && this.activeBotId) {
       this.sink.removeMessage(this.activeBotId);
-      this.storage.deleteMessages([this.activeBotId]);
+      this.messageStorage.deleteMessages([this.activeBotId]);
     }
 
     this.activeSubscription = null;
@@ -291,7 +295,7 @@ export class LlmChatActions {
         ...this.activeBotMsg,
         payloadBytes: encoder.encode(this.accumulatedText),
       };
-      this.storage.saveMessage(finalMsg);
+      this.messageStorage.saveMessage(finalMsg);
     }
 
     this.activeSubscription = null;
@@ -313,13 +317,13 @@ export class LlmChatActions {
       const newUrn = URN.create('tag', crypto.randomUUID(), 'llm');
       targetUrnStr = newUrn.toString();
 
-      const session = await this.storage.getSession(sessionId);
+      const session = await this.sessionStorage.getSession(sessionId);
       if (session) {
         session.contextGroups = {
           ...(session.contextGroups || {}),
           [targetUrnStr]: payload.newName,
         };
-        await this.storage.saveSession(session);
+        await this.sessionStorage.saveSession(session);
         this.sessionSource.refresh();
       }
     }
@@ -330,7 +334,7 @@ export class LlmChatActions {
     for (const idStr of messageIds) {
       try {
         const urn = URN.parse(idStr);
-        const msg = await this.storage.getMessage(urn);
+        const msg = await this.messageStorage.getMessage(urn);
 
         if (msg) {
           const existingTags = msg.tags || [];
@@ -338,7 +342,7 @@ export class LlmChatActions {
             const updatedTags = [...existingTags, groupUrn];
             const updatedMsg: LlmMessage = { ...msg, tags: updatedTags };
 
-            await this.storage.saveMessage(updatedMsg);
+            await this.messageStorage.saveMessage(updatedMsg);
             this.sink.updateMessageTags(urn, updatedTags);
           }
         }
@@ -367,17 +371,17 @@ export class LlmChatActions {
       attachments: [],
     };
 
-    await this.storage.saveSession(newSession);
+    await this.sessionStorage.saveSession(newSession);
 
     for (const idStr of messageIds) {
       try {
         const urn = URN.parse(idStr);
-        const msg = await this.storage.getMessage(urn);
+        const msg = await this.messageStorage.getMessage(urn);
 
         if (msg) {
           if (mode === 'move') {
             const movedMsg: LlmMessage = { ...msg, sessionId: newSessionId };
-            await this.storage.saveMessage(movedMsg);
+            await this.messageStorage.saveMessage(movedMsg);
             this.sink.removeMessage(urn);
           } else {
             const newMsgId = URN.create('message', crypto.randomUUID(), 'llm');
@@ -386,7 +390,7 @@ export class LlmChatActions {
               id: newMsgId,
               sessionId: newSessionId,
             };
-            await this.storage.saveMessage(copiedMsg);
+            await this.messageStorage.saveMessage(copiedMsg);
           }
         }
       } catch (e) {
@@ -404,7 +408,7 @@ export class LlmChatActions {
   ): Promise<void> {
     try {
       const msgId = URN.parse(messageIdStr);
-      const msg = await this.storage.getMessage(msgId);
+      const msg = await this.messageStorage.getMessage(msgId);
 
       if (msg) {
         const encoder = new TextEncoder();
@@ -412,7 +416,7 @@ export class LlmChatActions {
         const updatedMsg: LlmMessage = { ...msg, payloadBytes };
 
         // 1. Persist to IndexedDB
-        await this.storage.saveMessage(updatedMsg);
+        await this.messageStorage.saveMessage(updatedMsg);
 
         // 2. Optimistically update the UI View Model
         this.sink.updateMessagePayload(msgId, payloadBytes);
@@ -426,7 +430,7 @@ export class LlmChatActions {
     if (!messageIds || messageIds.length === 0) return;
 
     const urns = messageIds.map((id) => URN.parse(id));
-    await this.storage.deleteMessages(urns);
+    await this.messageStorage.deleteMessages(urns);
     this.sink.removeMessages(urns);
   }
 
@@ -437,7 +441,7 @@ export class LlmChatActions {
     if (!messageIds || messageIds.length === 0) return;
 
     const urns = messageIds.map((id) => URN.parse(id));
-    await this.storage.updateMessageExclusions(urns, exclude);
+    await this.messageStorage.updateMessageExclusions(urns, exclude);
     this.sink.updateMessageExclusions(urns, exclude);
   }
 }

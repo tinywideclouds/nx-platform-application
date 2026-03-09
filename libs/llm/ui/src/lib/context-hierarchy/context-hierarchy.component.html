@@ -8,77 +8,6 @@
   </div>
 } @else {
   <div class="flex flex-col gap-6 w-full animate-fade-in">
-    @if (groupedAttachments().geminiCache.length > 0) {
-      <div
-        class="border border-indigo-200 rounded-xl overflow-hidden shadow-sm"
-      >
-        <div
-          class="bg-indigo-50/80 px-4 py-2 border-b border-indigo-100 flex justify-between items-center"
-        >
-          <div class="flex items-center gap-2">
-            <mat-icon class="text-indigo-600 scale-75">memory</mat-icon>
-            <span class="font-bold text-indigo-900 text-sm"
-              >Gemini Context Cache</span
-            >
-          </div>
-          @if (session()?.compiledCache) {
-            <span
-              class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-md font-medium border border-green-200 flex items-center gap-1"
-            >
-              <mat-icon class="scale-50 -mx-1 m-0">check_circle</mat-icon>
-              Compiled
-            </span>
-          } @else {
-            <span
-              class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-medium border border-amber-200 flex items-center gap-1"
-            >
-              <div
-                class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"
-              ></div>
-              Needs Compilation
-            </span>
-          }
-        </div>
-        <div class="bg-white p-3 flex flex-col gap-2">
-          @for (
-            attachment of groupedAttachments().geminiCache;
-            track attachment.id
-          ) {
-            <ng-container
-              *ngTemplateOutlet="
-                attachmentCard;
-                context: { $implicit: attachment }
-              "
-            ></ng-container>
-          }
-        </div>
-        <div
-          class="bg-gray-50 px-4 py-3 border-t border-gray-200 flex justify-end"
-        >
-          <button
-            mat-flat-button
-            color="primary"
-            [disabled]="isCompiling() || !!session()?.compiledCache"
-            (click)="compileCache.emit()"
-          >
-            @if (isCompiling()) {
-              <mat-icon class="animate-spin">autorenew</mat-icon>
-            }
-
-            <span>
-              {{
-                isCompiling()
-                  ? 'Compiling...'
-                  : session()?.compiledCache
-                    ? 'Cache Up to Date'
-                    : 'Compile Cache'
-              }}
-            </span>
-          </button>
-        </div>
-      </div>
-    }
-
     @if (groupedAttachments().inlineContext.length > 0) {
       <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <div
@@ -132,17 +61,17 @@
 }
 
 <ng-template #attachmentCard let-attachment>
-  @let cache = getCacheDetails(attachment.cacheId);
+  @let bundle = getDataSourceBundleDetails(attachment.dataSourceId);
   <div
     class="border border-gray-100 rounded-lg p-3 bg-white shadow-sm flex justify-between items-center group w-full hover:border-gray-300 transition-colors"
   >
     <div class="flex flex-col gap-1">
       <p class="font-medium text-gray-800 m-0 text-sm flex items-center gap-2">
         <mat-icon class="text-gray-400 scale-75 m-0 h-5 w-5">source</mat-icon>
-        {{ cache ? cache.repo : attachment.cacheId.entityId }}
-        @if (cache) {
+        {{ bundle ? bundle.repo : attachment.dataSourceId.entityId }}
+        @if (bundle) {
           <span class="text-xs text-gray-500 font-normal ml-1"
-            >({{ cache.branch }})</span
+            >({{ bundle.branch }})</span
           >
         }
       </p>

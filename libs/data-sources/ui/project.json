@@ -1,0 +1,32 @@
+{
+  "name": "data-sources-ui",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/data-sources/ui/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:data-sources"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "dependsOn": [],
+      "options": {
+        "outputPath": "dist/libs/data-sources/ui",
+        "configFile": "libs/data-sources/ui/vite.config.mts",
+        "main": "libs/data-sources/ui/src/index.ts",
+        "assets": ["libs/data-sources/ui/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{workspaceRoot}/coverage/libs/data-sources/ui"],
+      "options": {
+        "reportsDirectory": "coverage/libs/data-sources/ui",
+        "configFile": "libs/data-sources/ui/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

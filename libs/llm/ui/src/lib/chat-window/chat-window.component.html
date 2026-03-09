@@ -51,6 +51,8 @@
   <div
     class="flex-grow overflow-hidden relative z-10 transition-all duration-500"
   >
+    <llm-quick-context-drawer [session]="session()" />
+
     <scrollspace-viewport
       [items]="$any(displayItems())"
       [rowTemplate]="renderer"

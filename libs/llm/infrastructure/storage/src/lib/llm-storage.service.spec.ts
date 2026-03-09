@@ -100,6 +100,7 @@ describe('LlmStorageService', () => {
         lastModified: '2026-02-28T10:00:00Z',
         contextGroups: {},
         attachments: [],
+        quickContext: [],
       });
     });
   });

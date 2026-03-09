@@ -3,4 +3,4 @@ plugins:
   - plugin: go
     opt:
       - module=github.com/tinywideclouds/gen-llm
-    out: dist/go
+    out: dist

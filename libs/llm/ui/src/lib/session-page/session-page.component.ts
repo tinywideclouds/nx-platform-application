@@ -1,12 +1,4 @@
-import {
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-  signal,
-  effect,
-} from '@angular/core';
+import { Component, computed, inject, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -14,7 +6,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { LlmSession } from '@nx-platform-application/llm-types';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
 
 import { LlmSessionFormComponent } from '../session-form/session-form.component';
@@ -41,7 +32,6 @@ import { LlmSessionSubpageHeaderComponent } from '../session-subpage-header/sess
   styleUrl: './session-page.component.scss',
 })
 export class LlmSessionPageComponent {
-  private storage = inject(LlmStorageService);
   private sessionSource = inject(LlmSessionSource);
   private sessionActions = inject(LlmSessionActions);
   private snackBar = inject(MatSnackBar);
@@ -53,12 +43,6 @@ export class LlmSessionPageComponent {
 
   closed = output<void>();
 
-  // Create a computed signal bound to the global tracker
-  isCompiling = computed(() => {
-    const s = this.session();
-    return s ? this.sessionActions.isCompiling(s.id.toString())() : false;
-  });
-
   onClose(): void {
     this.router.navigate([], {
       relativeTo: this.route,
@@ -68,11 +52,7 @@ export class LlmSessionPageComponent {
   }
 
   async onSave(updatedSession: LlmSession): Promise<void> {
-    // Because the form emitted this on blur or addition, we just save it instantly
-    await this.storage.saveSession(updatedSession);
-    this.sessionSource.refresh();
-
-    //TODO check local session is updated here
+    await this.sessionActions.updateSession(updatedSession);
 
     this.snackBar.open('Session settings updated', 'Close', {
       duration: 2000,
@@ -95,11 +75,7 @@ export class LlmSessionPageComponent {
       .subscribe(async (result: DeleteSessionResult | undefined) => {
         if (result?.confirmed) {
           try {
-            // TODO: In the future, pass result.clearProposals and result.clearCache
-            // to a dedicated sessionActions.deleteSession() method to handle the heavy lifting.
-
-            await this.storage.deleteSession(currentSession.id);
-            this.sessionSource.refresh();
+            await this.sessionActions.deleteSession(currentSession.id);
 
             this.snackBar.open('Session deleted', 'Close', { duration: 2000 });
             this.onClose();
@@ -111,14 +87,5 @@ export class LlmSessionPageComponent {
           }
         }
       });
-  }
-
-  // The button click is now strictly "fire and forget"
-  onCompileCache(): void {
-    const currentSession = this.session();
-    if (currentSession) {
-      // Don't await it! Let it run in the background.
-      this.sessionActions.compileSessionCache(currentSession);
-    }
   }
 }

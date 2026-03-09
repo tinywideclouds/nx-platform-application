@@ -1,29 +1,33 @@
-// libs/llm/types/src/lib/session_types.ts
 import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
+import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
 
-export type ContextInjectionTarget =
-  | 'compiled-cache'
-  | 'system-instruction'
-  | 'inline-context';
+export type ContextInjectionTarget = 'system-instruction' | 'inline-context'; // Removed 'compiled-cache'
 
 export interface SessionAttachment {
   id: URN;
-  cacheId: URN;
+  dataSourceId: URN; // Renamed from cacheId
   profileId?: URN;
   target?: ContextInjectionTarget;
 }
 
 export type CompiledCacheProvider = 'gemini' | 'open-ai';
 
-// 1. THE ONE TRUE COMPILED CACHE
+// 1. THE ONE TRUE COMPILED CACHE (Standalone Entity)
 export interface CompiledCache {
   id: URN;
   provider?: CompiledCacheProvider;
   expiresAt: ISODateTimeString;
-  attachmentsUsed: SessionAttachment[];
+  sources: FilteredDataSource[];
+  createdAt: ISODateTimeString;
+}
+
+export interface QuickContextFile {
+  id: URN;
+  name: string;
+  content: string;
 }
 
 export interface LlmSession {
@@ -33,6 +37,7 @@ export interface LlmSession {
   compiledCache?: CompiledCache;
   llmModel?: string;
   attachments: SessionAttachment[];
+  quickContext?: QuickContextFile[];
   workspaceTarget?: URN;
   contextGroups?: Record<string, string>;
 }

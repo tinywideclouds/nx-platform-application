@@ -1,5 +1,5 @@
 <div class="p-4 w-full max-w-4xl mx-auto block">
-  @if (attachments().length === 0 && !isAddingSource()) {
+  @if (attachments().length === 0) {
     <div
       class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8 shadow-sm flex items-start gap-4"
     >
@@ -13,7 +13,7 @@
         <p class="text-indigo-800 text-sm mt-2 mb-0 leading-relaxed">
           LLMs are incredibly smart, but they don't know your codebase until you
           teach them. Use the settings below to attach synced GitHub
-          repositories to this session.
+          repositories or compiled Gemini Caches to this session.
         </p>
       </div>
     </div>
@@ -76,107 +76,37 @@
           <mat-icon class="text-gray-400">dataset</mat-icon>
           Data Sources & Context
         </h3>
-
-        @if (!isAddingSource()) {
-          <button
-            mat-stroked-button
-            color="primary"
-            type="button"
-            class="bg-white"
-            (click)="startAddingSource()"
-          >
-            <mat-icon>add</mat-icon> Add Data Source
-          </button>
-        }
       </div>
 
-      @if (isAddingSource()) {
-        @if (hasDataSources()) {
-          <llm-data-source-stepper
-            class="animate-fade-in"
-            (cancel)="cancelAddingSource()"
-            (addSource)="confirmAddSource($event)"
-          />
-        } @else {
-          <div
-            class="border border-gray-200 rounded-xl p-8 text-center bg-white shadow-sm w-full animate-fade-in flex flex-col items-center gap-3"
+      <div class="flex gap-4 w-full mb-6">
+        <div
+          class="flex-1 p-6 border-2 border-dashed border-indigo-200 rounded-xl flex flex-col items-center justify-center text-indigo-400 bg-indigo-50/50 transition-colors hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+        >
+          <mat-icon class="mb-2 scale-125">source</mat-icon>
+          <span class="font-medium text-indigo-700"
+            >Attach Raw Data Source</span
           >
-            <div class="bg-gray-100 p-4 rounded-full text-gray-500 mb-2">
-              <mat-icon class="text-4xl m-0">inventory_2</mat-icon>
-            </div>
-            <div>
-              <h4 class="font-bold text-gray-800 m-0 text-lg">
-                No Data Sources Configured
-              </h4>
-              <p class="text-gray-500 m-0 mt-1 text-sm max-w-md">
-                You need to sync a repository before you can attach it to a
-                session.
-              </p>
-            </div>
-            <div class="flex gap-3 mt-4">
-              <button mat-button (click)="cancelAddingSource()">Cancel</button>
-              <a mat-flat-button color="primary" routerLink="/data-sources/new"
-                >Create One Now</a
-              >
-            </div>
-          </div>
-        }
-      } @else {
-        <llm-context-hierarchy
-          [session]="session()"
-          [attachments]="attachments()"
-          [isCompiling]="isCompiling()"
-          (removeAttachment)="removeAttachment($event)"
-          (compileCache)="compileCache.emit()"
-        />
-
-        @if (session()?.compiledCache; as cache) {
-          <div
-            class="mt-4 p-4 rounded-xl flex items-center justify-between border shadow-sm transition-colors"
-            [class.bg-red-50]="isCacheExpired(cache.expiresAt)"
-            [class.border-red-200]="isCacheExpired(cache.expiresAt)"
-            [class.bg-emerald-50]="!isCacheExpired(cache.expiresAt)"
-            [class.border-emerald-200]="!isCacheExpired(cache.expiresAt)"
+          <span class="text-xs text-indigo-500 mt-1 text-center"
+            >Standard inline context for smaller tasks</span
           >
-            <div>
-              <span
-                class="font-bold flex items-center gap-2 m-0"
-                [class.text-red-800]="isCacheExpired(cache.expiresAt)"
-                [class.text-emerald-800]="!isCacheExpired(cache.expiresAt)"
-              >
-                <mat-icon>{{
-                  isCacheExpired(cache.expiresAt) ? 'timer_off' : 'timer'
-                }}</mat-icon>
-                {{
-                  isCacheExpired(cache.expiresAt)
-                    ? 'Cache Expired'
-                    : 'Cache Active'
-                }}
-              </span>
-              <p
-                class="text-sm m-0 mt-1"
-                [class.text-red-600]="isCacheExpired(cache.expiresAt)"
-                [class.text-emerald-700]="!isCacheExpired(cache.expiresAt)"
-              >
-                {{
-                  isCacheExpired(cache.expiresAt) ? 'Expired on' : 'Expires at'
-                }}: {{ formatExpiry(cache.expiresAt) }}
-              </p>
-            </div>
+        </div>
 
-            <button
-              mat-flat-button
-              type="button"
-              [color]="isCacheExpired(cache.expiresAt) ? 'warn' : 'primary'"
-              [disabled]="isCompiling()"
-              (click)="compileCache.emit()"
-            >
-              <mat-icon>autorenew</mat-icon>
-              {{ isCacheExpired(cache.expiresAt) ? 'Renew Now' : 'Recompile' }}
-            </button>
-          </div>
-        }
-      }
+        <div
+          class="flex-1 p-6 border-2 border-dashed border-teal-200 rounded-xl flex flex-col items-center justify-center text-teal-400 bg-teal-50/50 transition-colors hover:bg-teal-50 hover:border-teal-300 cursor-pointer"
+        >
+          <mat-icon class="mb-2 scale-125">auto_awesome</mat-icon>
+          <span class="font-medium text-teal-700">Attach Compiled Cache</span>
+          <span class="text-xs text-teal-500 mt-1 text-center"
+            >Optimized, high-speed context for huge codebases</span
+          >
+        </div>
+      </div>
+
+      <llm-context-hierarchy
+        [session]="session()"
+        [attachments]="attachments()"
+        (removeAttachment)="removeAttachment($event)"
+      />
     </div>
   </div>
 

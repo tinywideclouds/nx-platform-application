@@ -1,0 +1,71 @@
+// Defines the message contract for the LLM service.
+syntax = "proto3";
+
+package src.types.datasources.v1;
+option go_package = "github.com/tinywideclouds/gen-data-sources/go/types/v1;datasources_v1";
+
+message StoreCollectionsPb {
+  string bundle_collection = 1;
+  string files_collection = 2;
+  string profiles_collection = 3;
+}
+
+// --- Domain Models ---
+
+message FilterRulesPb {
+  repeated string include = 1;
+  repeated string exclude = 2;
+}
+
+message ProfilePb {
+  string id = 1;
+  string name = 2;
+  string rules_yaml = 3;
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+message DataSourceAnalysisPb {
+  int32 total_files = 1;
+  int32 total_size_bytes = 2;
+  map<string, int32> extensions = 3;
+}
+
+message DataSourceMetadataPb {
+  string id = 1;
+  string repo = 2;
+  string branch = 3;
+  string synced_commit_sha = 4;
+  int64 last_synced_at = 5;
+  int32 file_count = 6;
+  string status = 7;
+  DataSourceAnalysisPb analysis = 8;
+}
+
+message FileMetadataPb {
+  string path = 1;
+  int32 size_bytes = 2;
+  string extension = 3;
+}
+
+// --- API Requests & Responses ---
+
+message CreateDataSourceRequestPb {
+  string repo = 1;
+  string branch = 2;
+}
+
+message SyncRequestPb {
+  FilterRulesPb ingestion_rules = 1;
+}
+
+message SyncResponsePb {
+  string cache_id = 1;
+  string status = 2;
+  int32 files_processed = 3;
+}
+
+message ProfileRequestPb {
+  string name = 1;
+  string rules_yaml = 2;
+}

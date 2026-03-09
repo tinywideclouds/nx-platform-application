@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import {
   ProposalRegistryStorageService,
-  LlmStorageService,
+  MessageStorageService,
 } from '@nx-platform-application/llm-infrastructure-storage';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
@@ -17,7 +17,7 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 @Injectable({ providedIn: 'root' })
 export class LlmProposalService {
   private registry = inject(ProposalRegistryStorageService);
-  private storage = inject(LlmStorageService);
+  private storage = inject(MessageStorageService);
   private network = inject(LLM_NETWORK_CLIENT);
   private sink = inject(LlmScrollSource);
   private logger = inject(Logger);

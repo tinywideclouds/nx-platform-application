@@ -1,0 +1,13 @@
+{
+  "name": "data-sources-protos",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/data-sources/protos/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:data-sources"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

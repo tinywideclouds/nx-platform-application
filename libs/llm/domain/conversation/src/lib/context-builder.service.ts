@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { ProposalRegistryStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import {
   GenerateStreamRequest,
@@ -12,6 +12,7 @@ import {
   FileLinkType,
   PointerPayload,
 } from '@nx-platform-application/llm-types';
+import { Temporal } from '@js-temporal/polyfill';
 
 export interface ContextAssembly {
   request: GenerateStreamRequest;
@@ -25,7 +26,7 @@ export interface ContextAssembly {
 
 @Injectable({ providedIn: 'root' })
 export class LlmContextBuilderService {
-  private storage = inject(LlmStorageService);
+  private storage = inject(MessageStorageService);
   private registry = inject(ProposalRegistryStorageService);
 
   private readonly MAX_SHORT_TERM_MEMORY = 50;
@@ -41,7 +42,6 @@ export class LlmContextBuilderService {
     for (const msg of activeMessages) {
       let currentContent = '';
 
-      // 1. Handle New Lightweight Pointers (The Join Operation)
       if (msg.typeId.equals(FileLinkType)) {
         try {
           const text = decoder.decode(msg.payloadBytes);
@@ -59,9 +59,7 @@ export class LlmContextBuilderService {
           console.error('Failed to resolve FileLinkType pointer', e);
           currentContent = `[System Error: Failed to resolve file modification pointer.]`;
         }
-      }
-      // 2. Handle Legacy Heavy Payloads (Transition Support)
-      else if (msg.typeId.equals(FileProposalType)) {
+      } else if (msg.typeId.equals(FileProposalType)) {
         try {
           const text = decoder.decode(msg.payloadBytes);
           const parsed = JSON.parse(text);
@@ -74,13 +72,10 @@ export class LlmContextBuilderService {
           console.error('Failed to parse legacy FileProposalType', e);
           currentContent = `[System Error: Failed to read legacy file proposal.]`;
         }
-      }
-      // 3. Handle Standard Text
-      else {
+      } else {
         currentContent = decoder.decode(msg.payloadBytes);
       }
 
-      // Collapse consecutive messages from the same role
       const lastMsg = collapsedHistory[collapsedHistory.length - 1];
       if (lastMsg && lastMsg.role === msg.role) {
         lastMsg.content = `${lastMsg.content}\n\n${currentContent}`;
@@ -107,7 +102,34 @@ export class LlmContextBuilderService {
 
     const networkHistory = collapsedHistory.slice(startIndex);
 
-    // Map inline-context attachments securely to the protobuf facade
+    // --- NEW: Inject the Quick Context Drawer Files ---
+    if (session.quickContext && session.quickContext.length > 0) {
+      let quickContextBlock = `<CURRENT_ACTIVE_FOCUS>\n`;
+      quickContextBlock += `System Note: The user has explicitly pinned the following files as their current working context.\n`;
+      quickContextBlock += `These files are highly relevant to the latest messages. Prioritize this code over the broader repository cache.\n\n`;
+
+      for (const file of session.quickContext) {
+        quickContextBlock += `<file name="${file.name}">\n${file.content}\n</file>\n\n`;
+      }
+      quickContextBlock += `</CURRENT_ACTIVE_FOCUS>\n\n`;
+
+      // Prepend this massive semantic block to the very first message in the outgoing array
+      if (networkHistory.length > 0) {
+        const latestIndex = networkHistory.length - 1;
+        networkHistory[latestIndex].content =
+          quickContextBlock + networkHistory[latestIndex].content;
+      } else {
+        // Fallback if history is empty
+        networkHistory.push({
+          id: 'quick-context-injection',
+          role: 'user',
+          content: quickContextBlock,
+          timestamp: Temporal.Now.instant().toString(),
+        });
+      }
+    }
+    // --------------------------------------------------
+
     const inlineAttachments: SessionAttachment[] = (
       session.attachments || []
     ).filter((a) => a.target === 'inline-context');

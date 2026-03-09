@@ -9,14 +9,17 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import { CompiledCache } from '../../lib/session_types';
-import { sessionAttachmentToProto } from './builder';
 
 export function compiledCacheToProto(k: CompiledCache): CompiledCachePb {
   return create(CompiledCachePbSchema, {
     id: k.id.toString(),
     provider: k.provider ? k.provider.toString() : 'urn:llm:provider:gemini',
-    attachmentsUsed: k.attachmentsUsed.map(sessionAttachmentToProto),
-    createdAt: k.expiresAt, // Mocked for proto
+    // NEW: Map the pure sources array
+    sources: k.sources.map((s) => ({
+      dataSourceId: s.dataSourceId.toString(),
+      profileId: s.profileId ? s.profileId.toString() : undefined,
+    })),
+    createdAt: k.createdAt,
     expiresAt: k.expiresAt,
   });
 }
@@ -24,12 +27,13 @@ export function compiledCacheToProto(k: CompiledCache): CompiledCachePb {
 export function compiledCacheFromProto(pk: CompiledCachePb): CompiledCache {
   return {
     id: URN.parse(pk.id),
+    provider: pk.provider as any,
     expiresAt: pk.expiresAt as ISODateTimeString,
-    attachmentsUsed: pk.attachmentsUsed.map((a) => ({
-      id: URN.parse(a.id),
-      cacheId: URN.parse(a.cacheId),
-      profileId: a.profileId ? URN.parse(a.profileId) : undefined,
-      target: 'compiled-cache',
+    createdAt: pk.createdAt as ISODateTimeString,
+    // NEW: Map back to FilteredDataSource
+    sources: pk.sources.map((s) => ({
+      dataSourceId: URN.parse(s.dataSourceId),
+      profileId: s.profileId ? URN.parse(s.profileId) : undefined,
     })),
   };
 }

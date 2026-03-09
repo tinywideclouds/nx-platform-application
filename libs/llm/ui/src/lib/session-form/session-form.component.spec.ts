@@ -12,7 +12,7 @@ import {
   LlmSession,
   SessionAttachment,
 } from '@nx-platform-application/llm-types';
-import { LlmDataSourcesStateService } from '@nx-platform-application/llm-features-data-sources';
+import { LlmDataSourcesStateService } from '@nx-platform-application/data-sources/features/state';
 import { Temporal } from '@js-temporal/polyfill';
 
 describe('LlmSessionFormComponent', () => {

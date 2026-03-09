@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { LlmContextBuilderService } from './context-builder.service';
 import {
-  LlmStorageService,
+  MessageStorageService,
   ProposalRegistryStorageService,
 } from '@nx-platform-application/llm-infrastructure-storage';
 import {
@@ -20,7 +20,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 describe('LlmContextBuilderService', () => {
   let service: LlmContextBuilderService;
 
-  const mockStorageService = {
+  const mockMessageStorageService = {
     getSessionMessages: vi.fn(),
   };
 
@@ -33,7 +33,7 @@ describe('LlmContextBuilderService', () => {
     TestBed.configureTestingModule({
       providers: [
         LlmContextBuilderService,
-        { provide: LlmStorageService, useValue: mockStorageService },
+        { provide: MessageStorageService, useValue: mockMessageStorageService },
         {
           provide: ProposalRegistryStorageService,
           useValue: mockRegistryService,
@@ -46,7 +46,6 @@ describe('LlmContextBuilderService', () => {
   it('should join lightweight pointers with registry status securely', async () => {
     const encoder = new TextEncoder();
 
-    // Setup Pointer Message
     const pointer: PointerPayload = {
       proposalId: URN.parse('urn:llm:proposal:123'),
       filePath: 'src/main.ts',
@@ -71,9 +70,10 @@ describe('LlmContextBuilderService', () => {
         isExcluded: false,
       },
     ];
-    mockStorageService.getSessionMessages.mockResolvedValue(mockMessages);
+    mockMessageStorageService.getSessionMessages.mockResolvedValue(
+      mockMessages,
+    );
 
-    // Setup Registry Mock
     const mockRegistryEntry: Partial<RegistryEntry> = {
       id: URN.parse('urn:llm:proposal:123'),
       filePath: 'src/main.ts',
@@ -90,13 +90,55 @@ describe('LlmContextBuilderService', () => {
 
     const assembly = await service.buildStreamRequest(mockSession);
 
-    // Verify the builder successfully looked up the registry and injected the correct system note
     expect(mockRegistryService.getProposal).toHaveBeenCalledWith(
       pointer.proposalId,
     );
     expect(assembly.request.history[1].content).toContain(
       '[System Note: You proposed a modification for src/main.ts. The user has marked this proposal as: ACCEPTED.]',
     );
+  });
+
+  it('should successfully inject the Quick Context Drawer payload with XML framing', async () => {
+    const encoder = new TextEncoder();
+    const mockMessages: Partial<LlmMessage>[] = [
+      {
+        id: URN.parse('urn:llm:message:1'),
+        role: 'user',
+        typeId: URN.parse('urn:llm:message-type:text'),
+        payloadBytes: encoder.encode('Hello'),
+        timestamp: '2026-02-27T10:00:00Z' as ISODateTimeString,
+        isExcluded: false,
+      },
+    ];
+    mockMessageStorageService.getSessionMessages.mockResolvedValue(
+      mockMessages,
+    );
+
+    const mockSession: LlmSession = {
+      id: URN.parse('urn:llm:session:123'),
+      title: 'Test',
+      lastModified: '2026-02-27T10:00:00Z' as ISODateTimeString,
+      attachments: [],
+      quickContext: [
+        {
+          id: URN.parse('urn:llm:quick:1'),
+          name: 'focused-file.ts',
+          content: 'export const X = 1;',
+        },
+      ],
+    };
+
+    const assembly = await service.buildStreamRequest(mockSession);
+    const firstMessageContent = assembly.request.history[0].content;
+
+    expect(firstMessageContent).toContain('<CURRENT_ACTIVE_FOCUS>');
+    expect(firstMessageContent).toContain('</CURRENT_ACTIVE_FOCUS>');
+    expect(firstMessageContent).toContain(
+      'Prioritize this code over the broader repository cache',
+    );
+    expect(firstMessageContent).toContain('<file name="focused-file.ts">');
+    expect(firstMessageContent).toContain('export const X = 1;');
+    expect(firstMessageContent).toContain('Hello');
   });
 
   it('should bundle the stream request with correct cache IDs and inline attachments', async () => {
@@ -111,24 +153,28 @@ describe('LlmContextBuilderService', () => {
         isExcluded: false,
       },
     ];
-    mockStorageService.getSessionMessages.mockResolvedValue(mockMessages);
+    mockMessageStorageService.getSessionMessages.mockResolvedValue(
+      mockMessages,
+    );
 
     const mockSession: LlmSession = {
       id: URN.parse('urn:llm:session:123'),
       title: 'Test',
       lastModified: '2026-02-27T10:00:00Z' as ISODateTimeString,
       llmModel: 'gemini-1.5-pro',
-      geminiCache: 'cachedContents/abc',
+      compiledCache: {
+        id: URN.parse('urn:gemini:compiled-cache:abc'),
+        provider: 'gemini',
+        expiresAt: 'now' as ISODateTimeString,
+        createdAt: 'now' as ISODateTimeString,
+        sources: [],
+      },
       attachments: [
         {
-          id: 'att-1',
-          target: 'gemini-cache',
-          cacheId: URN.parse('urn:llm:repo:1'),
-        },
-        {
-          id: 'att-2',
+          id: URN.parse('urn:llm:attachment:1'),
           target: 'inline-context',
-          cacheId: URN.parse('urn:llm:repo:2'),
+          // SCHEMA UPDATE: cacheId -> dataSourceId
+          dataSourceId: URN.parse('urn:data-source:repo:2'),
         },
       ],
     };
@@ -136,10 +182,10 @@ describe('LlmContextBuilderService', () => {
     const assembly = await service.buildStreamRequest(mockSession);
 
     expect(assembly.request.model).toBe('gemini-1.5-pro');
-    expect(assembly.request.cacheId).toBe('cachedContents/abc');
+    expect(assembly.request.compiledCacheId).toBeInstanceOf(URN);
     expect(assembly.request.inlineAttachments?.length).toBe(1);
-    expect(assembly.request.inlineAttachments?.[0].cacheId).toBe(
-      'urn:llm:repo:2',
-    );
+    expect(
+      assembly.request.inlineAttachments?.[0].dataSourceId.toString(),
+    ).toBe('urn:data-source:repo:2');
   });
 });

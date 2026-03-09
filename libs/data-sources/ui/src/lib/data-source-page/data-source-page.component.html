@@ -1,0 +1,210 @@
+<div class="h-full flex flex-col bg-white">
+  <div
+    class="z-10 relative bg-white shadow-sm px-6 py-4 flex items-center justify-between border-b border-gray-200 shrink-0 min-h-[72px]"
+  >
+    <data-sources-header
+      [isNew]="isNew()"
+      [cache]="state.activeDataSource()"
+      [availableBranches]="availableBranches()"
+      (branchChange)="onBranchChange($event)"
+    />
+
+    <div class="flex items-center gap-2">
+      @if (isNew()) {
+        <button type="button" mat-button (click)="onCancel()">Cancel</button>
+        <button
+          type="button"
+          mat-flat-button
+          [color]="formErrorCount() > 0 ? 'warn' : 'primary'"
+          (click)="triggerFormSave()"
+        >
+          Create Data Source
+        </button>
+      }
+    </div>
+  </div>
+
+  <div
+    class="flex-grow overflow-y-auto bg-gray-50 relative flex justify-center"
+  >
+    @if (state.isActiveDataSourceLoading()) {
+      <div
+        class="w-full flex flex-col items-center justify-center pt-32 gap-4 text-gray-400"
+      >
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading repository...</span>
+      </div>
+    } @else {
+      <div class="w-full max-w-5xl px-4 md:px-8 py-8 pb-24 flex flex-col gap-8">
+        @if (isNew()) {
+          <section class="w-full animate-fade-in">
+            <data-sources-form
+              [cache]="null"
+              [isNew]="true"
+              (errorsChange)="formErrorCount.set($event)"
+              (saveRepo)="onSaveRepo($event)"
+            />
+          </section>
+        } @else if (state.activeDataSource(); as cache) {
+          @if (cache.analysis) {
+            <div
+              class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 shadow-sm flex flex-col gap-6 animate-fade-in"
+            >
+              <data-sources-analysis
+                [analysis]="cache.analysis"
+                [status]="cache.status"
+              />
+
+              <div
+                class="flex flex-col gap-4 border-t border-indigo-200/60 pt-4"
+              >
+                <p class="text-sm text-indigo-800 m-0">
+                  Configure ingestion rules to limit what gets saved to the
+                  database during sync.
+                </p>
+                <div
+                  class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-lg border border-indigo-100"
+                >
+                  <mat-form-field appearance="outline" class="w-full">
+                    <mat-label>Include Patterns</mat-label>
+                    <input
+                      matInput
+                      [ngModel]="ingestionIncludes()"
+                      (ngModelChange)="ingestionIncludes.set($event)"
+                      placeholder="e.g. **/*.go, **/*.ts"
+                    />
+                    <mat-hint>Comma separated globs</mat-hint>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="w-full">
+                    <mat-label>Exclude Patterns</mat-label>
+                    <input
+                      matInput
+                      [ngModel]="ingestionExcludes()"
+                      (ngModelChange)="ingestionExcludes.set($event)"
+                      placeholder="e.g. node_modules/**"
+                    />
+                  </mat-form-field>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 mt-2">
+                  @if (
+                    cache.status === 'ready' &&
+                    cache.commitSha === cache.syncedCommitSha
+                  ) {
+                    <span class="text-sm text-gray-500 flex items-center gap-1">
+                      <mat-icon class="text-green-600 scale-75 m-0"
+                        >check_circle</mat-icon
+                      >
+                      Up to date
+                    </span>
+                  }
+                  <button
+                    type="button"
+                    mat-flat-button
+                    color="primary"
+                    class="px-8 py-6 text-lg"
+                    (click)="onExecuteSync()"
+                    [disabled]="
+                      cache.status === 'syncing' ||
+                      (cache.status === 'ready' &&
+                        cache.commitSha === cache.syncedCommitSha)
+                    "
+                  >
+                    <mat-icon>sync</mat-icon>
+                    {{
+                      cache.status === 'unsynced'
+                        ? 'Execute Initial Sync'
+                        : 'Resync Changes'
+                    }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
+          @if (cache.status === 'syncing') {
+            <div
+              class="bg-gray-900 border border-gray-800 rounded-xl shadow-xl flex flex-col overflow-hidden animate-fade-in"
+            >
+              <div
+                class="bg-gray-800 px-4 py-3 border-b border-gray-700 flex items-center justify-between"
+              >
+                <span
+                  class="text-xs font-mono text-gray-400 tracking-wider uppercase"
+                  >Sync Execution Stream</span
+                >
+                <mat-icon class="text-indigo-400 animate-spin scale-75 m-0"
+                  >autorenew</mat-icon
+                >
+              </div>
+              <div
+                class="p-4 h-64 overflow-y-auto font-mono text-sm text-gray-300 flex flex-col gap-2"
+              >
+                @for (log of state.syncLogs(); track $index) {
+                  <div class="flex flex-wrap gap-x-3 gap-y-1 items-start">
+                    <span class="text-indigo-400 font-bold shrink-0"
+                      >[{{ log.stage | uppercase }}]</span
+                    >
+                    <span class="text-green-400">{{
+                      log.details['message'] ||
+                        log.details['msg'] ||
+                        'Processing...'
+                    }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          @if (cache.status !== 'syncing') {
+            <section
+              class="w-full animate-fade-in animate-short"
+              [class.opacity-60]="cache.status === 'unsynced'"
+              [class.pointer-events-none]="cache.status === 'unsynced'"
+            >
+              <data-sources-filter-profiles
+                [profiles]="state.activeProfiles()"
+                (save)="onSaveProfile($event)"
+                (delete)="onDeleteProfile($event)"
+              />
+            </section>
+
+            <section
+              class="w-full animate-fade-in animate-medium"
+              [class.opacity-60]="cache.status === 'unsynced'"
+              [class.pointer-events-none]="cache.status === 'unsynced'"
+            >
+              <div
+                class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex items-center justify-between"
+              >
+                <div class="flex items-center gap-4">
+                  <div class="p-3 bg-indigo-50 rounded-lg text-indigo-600">
+                    <mat-icon class="m-0">folder_open</mat-icon>
+                  </div>
+                  <div>
+                    <h3 class="font-medium text-gray-900 m-0 text-lg">
+                      Repository Files
+                    </h3>
+                    <p class="m-0 text-sm text-gray-500 mt-1">
+                      Browse and preview the
+                      <strong>{{ state.activeFiles().length | number }}</strong>
+                      files currently ingested in this cache.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  mat-stroked-button
+                  color="primary"
+                  [routerLink]="['files']"
+                >
+                  Browse Files
+                  <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+                </button>
+              </div>
+            </section>
+          }
+        }
+      </div>
+    }
+  </div>
+</div>

@@ -330,3 +330,17 @@ nx g @nx/angular:library --name=llm-tools-migration --directory=libs/llm/tools/m
 nx g @nx/angular:library --name=llm-domain-proposals --directory=libs/llm/domain/proposals --tags="scope:llm"  
 
 nx g @nx/angular:library --name=llm-domain-session --directory=libs/llm/domain/session --tags="scope:llm"  
+
+
+nx g @nx/angular:library --name=data-sources-protos --directory=libs/data-sources/protos --tags="scope:data-sources"
+
+nx g @nx/angular:library --name=data-sources-types --directory=libs/data-sources/types --tags="scope:data-sources"
+
+nx g @nx/workspace:move --project=llm-features-data-sources --destination=libs/data-sources/features/state --importPath=@nx-platform-application/data-sources/features/state
+
+nx g @nx/workspace:move --project=llm-infrastructure-github-firestore-access --destination=libs/data-sources/infrastructure/github-firestore-access --importPath=@nx-platform-application/data-sources/features/github-firestore-access
+
+nx g @nx/angular:library --name=data-sources-ui --directory=libs/data-sources/ui --tags="scope:data-sources"
+
+
+nx g @nx/angular:library --name=llm-domain-compiled-cache --directory=libs/llm/domain/compiled-cache --tags="scope:llm"  

@@ -152,7 +152,8 @@ export class GeminiDataService implements LlmNetworkClient {
   async buildCache(request: BuildCacheRequest): Promise<BuildCacheResponse> {
     const bodyString = serializeBuildCacheRequest(request);
 
-    // FIX: Updated to match api.go BuildCompiledCacheHandler
+    this.logger.info('sending compile request', bodyString);
+
     const response = await fetch(
       `${this.baseUrl}/v1/llm/compiled_cache/build`,
       {

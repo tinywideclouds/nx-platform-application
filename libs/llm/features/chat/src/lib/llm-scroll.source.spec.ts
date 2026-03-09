@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { LlmScrollSource } from './llm-scroll.source';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { URN } from '@nx-platform-application/platform-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -16,7 +16,7 @@ describe('LlmScrollSource', () => {
     TestBed.configureTestingModule({
       providers: [
         LlmScrollSource,
-        { provide: LlmStorageService, useValue: mockStorage },
+        { provide: MessageStorageService, useValue: mockStorage },
       ],
     });
 
@@ -33,19 +33,16 @@ describe('LlmScrollSource', () => {
       },
     ]);
 
-    // Set session, which triggers the effect
     service.setSession(urn);
 
-    // In zoneless testing, we manually flush effects to resolve the promise
     TestBed.flushEffects();
     await new Promise(process.nextTick);
 
     expect(mockStorage.getSessionMessages).toHaveBeenCalledWith(urn);
 
-    // Filter out date headers to check just the content
     const contentItems = service.items().filter((i) => i.type === 'content');
     expect(contentItems).toHaveLength(1);
-    expect(contentItems[0].layout.alignment).toBe('end'); // user role maps to 'end'
+    expect(contentItems[0].layout.alignment).toBe('end');
   });
 
   it('should update message payload bytes via signal mutation', () => {
@@ -60,7 +57,6 @@ describe('LlmScrollSource', () => {
     const newBytes = new Uint8Array([1, 2, 3]);
     service.updateMessagePayload(msgId, newBytes);
 
-    // FIX: Safely find the content item and cast it so TypeScript knows it has an 'id'
     const item = service
       .items()
       .find((i) => i.type === 'content' && (i.data as any).id.equals(msgId));
@@ -79,7 +75,6 @@ describe('LlmScrollSource', () => {
 
     service.updateMessageExclusions([msgId], true);
 
-    // FIX: Safely find the content item
     const item = service
       .items()
       .find((i) => i.type === 'content' && (i.data as any).id.equals(msgId));

@@ -2,7 +2,7 @@ import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import {
   FileLinkType,
   FileProposalType,
@@ -12,7 +12,7 @@ import { TimeSeries } from '@nx-platform-application/scrollspace-core';
 
 @Injectable({ providedIn: 'root' })
 export class LlmScrollSource {
-  private storage = inject(LlmStorageService);
+  private messageStorage = inject(MessageStorageService);
 
   // 1. INPUTS
   readonly activeSessionId = signal<URN | null>(null);
@@ -29,7 +29,7 @@ export class LlmScrollSource {
         this._messages.set([]);
         return;
       }
-      const history = await this.storage.getSessionMessages(sessionId);
+      const history = await this.messageStorage.getSessionMessages(sessionId);
       this._messages.set(history);
     });
   }

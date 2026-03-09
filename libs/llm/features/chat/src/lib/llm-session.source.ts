@@ -4,22 +4,24 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import {
+  SessionStorageService,
+  CompiledCacheStorageService,
+} from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmSession } from '@nx-platform-application/llm-types';
 
 export type DisplaySession = LlmSession & { isOptimistic?: boolean };
 
 @Injectable({ providedIn: 'root' })
 export class LlmSessionSource {
-  private storage = inject(LlmStorageService);
+  private sessionStorage = inject(SessionStorageService);
+  private cacheStorage = inject(CompiledCacheStorageService);
 
   // The reactive state the sidebar will bind to
   readonly sessions = signal<LlmSession[]>([]);
 
-  // NEW: Centralized active session tracking
   readonly activeSessionId = signal<URN | null>(null);
 
-  // NEW: Provide the full resolved session to any consumer automatically
   readonly activeSession = computed(() => {
     const targetId = this.activeSessionId();
     if (!targetId) return null;
@@ -49,7 +51,27 @@ export class LlmSessionSource {
   }
 
   async refresh(): Promise<void> {
-    const sessionList = await this.storage.getSessions();
-    this.sessions.set(sessionList);
+    const sessionList = await this.sessionStorage.getSessions();
+
+    // HYDRATION: The domain coordinator joins the cached data into the session objects
+    const hydratedSessions = await Promise.all(
+      sessionList.map(async (session) => {
+        if (session.compiledCache?.id) {
+          const fullCache = await this.cacheStorage.getCache(
+            session.compiledCache.id,
+          );
+
+          if (fullCache) {
+            return { ...session, compiledCache: fullCache };
+          } else {
+            // If it points to a dead cache in the DB, we strip the stub to prevent frontend errors
+            return { ...session, compiledCache: undefined };
+          }
+        }
+        return session;
+      }),
+    );
+
+    this.sessions.set(hydratedSessions);
   }
 }

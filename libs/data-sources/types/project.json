@@ -1,0 +1,13 @@
+{
+  "name": "data-sources-types",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/data-sources/types/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:data-sources"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

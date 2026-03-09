@@ -1,7 +1,6 @@
 import {
   Component,
   output,
-  inject,
   input,
   effect,
   signal,
@@ -12,7 +11,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
-// MATERIAL IMPORTS (Drastically reduced)
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -20,17 +18,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 
-// NEW CHILD COMPONENTS
-import { LlmDataSourceStepperComponent } from '../data-source-stepper/data-source-stepper.component';
 import { LlmContextHierarchyComponent } from '../context-hierarchy/context-hierarchy.component';
 
-import { LlmDataSourcesStateService } from '@nx-platform-application/llm-features-data-sources';
 import {
   LlmSession,
   SessionAttachment,
 } from '@nx-platform-application/llm-types';
-import { Temporal } from '@js-temporal/polyfill';
+import { URN } from '@nx-platform-application/platform-types';
 
 @Component({
   selector: 'llm-session-form',
@@ -46,7 +42,7 @@ import { Temporal } from '@js-temporal/polyfill';
     MatChipsModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
-    LlmDataSourceStepperComponent,
+    MatSelectModule,
     LlmContextHierarchyComponent,
   ],
   templateUrl: './session-form.component.html',
@@ -54,30 +50,15 @@ import { Temporal } from '@js-temporal/polyfill';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmSessionFormComponent {
-  // NEW: Inject state to check for existing data sources
-  dataSourcesState = inject(LlmDataSourcesStateService);
-
-  // NEW: Computed property to check if caches exist
-  hasDataSources = computed(() => this.dataSourcesState.caches().length > 0);
-  // --- INPUTS & OUTPUTS ---
   session = input<LlmSession | null>(null);
-
-  // NEW: Pass-through for compilation
-  isCompiling = input<boolean>(false);
-  compileCache = output<void>();
 
   save = output<LlmSession>();
   delete = output<void>();
 
-  // --- INLINE TITLE EDIT STATE ---
   isEditingTitle = signal(false);
   editTitleValue = signal('');
-
-  // --- ATTACHMENTS STATE ---
   attachments = signal<SessionAttachment[]>([]);
-  isAddingSource = signal(false);
 
-  // --- COMPUTED ---
   contextGroupEntries = computed(() => {
     const groups = this.session()?.contextGroups || {};
     return Object.entries(groups).map(([urn, name]) => ({ urn, name }));
@@ -95,7 +76,6 @@ export class LlmSessionFormComponent {
     });
   }
 
-  // --- TITLE ACTIONS ---
   startTitleEdit(): void {
     this.editTitleValue.set(this.session()?.title || '');
     this.isEditingTitle.set(true);
@@ -113,54 +93,13 @@ export class LlmSessionFormComponent {
     this.isEditingTitle.set(false);
   }
 
-  // --- ATTACHMENT ORCHESTRATION ---
-  startAddingSource(): void {
-    this.isAddingSource.set(true);
-  }
-
-  cancelAddingSource(): void {
-    this.isAddingSource.set(false);
-  }
-
-  confirmAddSource(newAtt: SessionAttachment): void {
+  removeAttachment(id: URN): void {
     if (!this.session()) return;
-
-    // CACHE DRIFT: If they target the compiled cache, the compiled ID is now invalid
-    const hasCacheDrift = newAtt.target === 'compiled-cache';
 
     this.save.emit({
       ...this.session()!,
-      attachments: [...this.attachments(), newAtt],
-      compiledCache: hasCacheDrift ? undefined : this.session()?.compiledCache,
+      attachments: this.attachments().filter((a) => !a.id.equals(id)),
     });
-
-    this.isAddingSource.set(false);
-  }
-
-  removeAttachment(id: string): void {
-    if (!this.session()) return;
-
-    const targetAtt = this.attachments().find((a) => a.id.toString() === id);
-    const hasCacheDrift = targetAtt?.target === 'compiled-cache';
-
-    this.save.emit({
-      ...this.session()!,
-      attachments: this.attachments().filter((a) => a.id.toString() !== id),
-      compiledCache: hasCacheDrift ? undefined : this.session()?.compiledCache,
-    });
-  }
-
-  isCacheExpired(expiresAt: string): boolean {
-    const now = Temporal.Now.instant();
-    const expiry = Temporal.Instant.from(expiresAt);
-    return Temporal.Instant.compare(now, expiry) >= 0;
-  }
-
-  formatExpiry(expiresAt: string): string {
-    const expiry = Temporal.Instant.from(expiresAt).toZonedDateTimeISO(
-      Temporal.Now.timeZoneId(),
-    );
-    return `${expiry.month}/${expiry.day} at ${expiry.hour.toString().padStart(2, '0')}:${expiry.minute.toString().padStart(2, '0')}`;
   }
 
   onDelete(): void {

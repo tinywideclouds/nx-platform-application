@@ -1,10 +1,14 @@
 import { Injectable, inject } from '@angular/core';
-import { LlmStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import {
+  SessionStorageService,
+  MessageStorageService,
+} from '@nx-platform-application/llm-infrastructure-storage';
 import { LLM_SCENARIOS } from './data/llm-scenarios.const';
 
 @Injectable({ providedIn: 'root' })
 export class LlmScenarioService {
-  private storage = inject(LlmStorageService);
+  private sessionStorage = inject(SessionStorageService);
+  private messageStorage = inject(MessageStorageService);
 
   /**
    * checks URL query params for ?scenario=key
@@ -24,17 +28,19 @@ export class LlmScenarioService {
 
     console.info(`[LlmScenario] Initializing: "${key}"`);
 
-    // 1. Wipe
-    await this.storage.clearDatabase();
+    // 1. Wipe (clearAllSessions clears both tables now)
+    await this.sessionStorage.clearAllSessions();
 
     // 2. Seed Sessions
     for (const session of data.sessions) {
-      await this.storage.saveSession(session);
+      await this.sessionStorage.saveSession(session);
     }
 
-    // 3. Seed Messages (Bulk is faster)
+    // 3. Seed Messages
     if (data.messages.length > 0) {
-      await this.storage.bulkSaveMessages(data.messages);
+      for (const msg of data.messages) {
+        await this.messageStorage.saveMessage(msg);
+      }
     }
   }
 }

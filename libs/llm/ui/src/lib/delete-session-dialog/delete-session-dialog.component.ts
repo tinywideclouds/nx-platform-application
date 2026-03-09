@@ -61,16 +61,16 @@ export interface DeleteSessionResult {
           [(ngModel)]="clearCache"
           color="warn"
           class="text-sm"
-          [disabled]="!data.session.geminiCache"
+          [disabled]="!data.session.compiledCache"
         >
           <div class="flex flex-col">
             <span
               class="text-gray-700"
-              [class.opacity-50]="!data.session.geminiCache"
+              [class.opacity-50]="!data.session.compiledCache"
             >
               Drop Compiled Context Cache
             </span>
-            @if (data.session.geminiCache) {
+            @if (data.session.compiledCache) {
               <span
                 class="text-[10px] text-amber-600 leading-tight mt-0.5 max-w-[90%]"
               >

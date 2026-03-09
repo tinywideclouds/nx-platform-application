@@ -47,6 +47,24 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
+      "@nx-platform-application/data-sources-protos": [
+        "libs/data-sources/protos/src/index.ts"
+      ],
+      "@nx-platform-application/data-sources-protos/*": [
+        "libs/data-sources/protos/dist/ts/src/lib/*"
+      ],
+      "@nx-platform-application/data-sources-types": [
+        "libs/data-sources/types/src/index.ts"
+      ],
+      "@nx-platform-application/data-sources-ui": [
+        "libs/data-sources/ui/src/index.ts"
+      ],
+      "@nx-platform-application/data-sources/features/github-firestore-access": [
+        "libs/data-sources/infrastructure/github-firestore-access/src/index.ts"
+      ],
+      "@nx-platform-application/data-sources/features/state": [
+        "libs/data-sources/features/state/src/index.ts"
+      ],
       "@nx-platform-application/directory-api": [
         "libs/directory/api/src/index.ts"
       ],
@@ -71,6 +89,9 @@
       "@nx-platform-application/llm-app-mocking": [
         "libs/llm/app-mocking/src/index.ts"
       ],
+      "@nx-platform-application/llm-domain-compiled-cache": [
+        "libs/llm/domain/compiled-cache/src/index.ts"
+      ],
       "@nx-platform-application/llm-domain-conversation": [
         "libs/llm/domain/conversation/src/index.ts"
       ],
@@ -83,9 +104,6 @@
       "@nx-platform-application/llm-features-chat": [
         "libs/llm/features/chat/src/index.ts"
       ],
-      "@nx-platform-application/llm-features-data-sources": [
-        "libs/llm/features/data-sources/src/index.ts"
-      ],
       "@nx-platform-application/llm-features-workspace": [
         "libs/llm/features/workspace/src/index.ts"
       ],
@@ -94,9 +112,6 @@
       ],
       "@nx-platform-application/llm-infrastructure-gemini-access": [
         "libs/llm/infrastructure/gemini-access/src/index.ts"
-      ],
-      "@nx-platform-application/llm-infrastructure-github-firestore-access": [
-        "libs/llm/infrastructure/github-firestore-access/src/index.ts"
       ],
       "@nx-platform-application/llm-infrastructure-indexed-db": [
         "libs/llm/infrastructure/indexed-db/src/index.ts"

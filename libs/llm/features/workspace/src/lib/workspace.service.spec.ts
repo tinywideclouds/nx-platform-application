@@ -5,8 +5,7 @@ import {
   LlmScrollSource,
   LlmSessionSource,
 } from '@nx-platform-application/llm-features-chat';
-import { LlmGithubFirestoreClient } from '@nx-platform-application/llm-infrastructure-github-firestore-access';
-import { ProposalRegistryStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { GithubFirestoreClient } from '@nx-platform-application/data-sources/features/github-firestore-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   URN,
@@ -18,6 +17,7 @@ import {
   RegistryEntry,
   LlmMessage,
 } from '@nx-platform-application/llm-types';
+import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { of } from 'rxjs';
 
@@ -33,22 +33,25 @@ describe('WorkspaceStateService', () => {
     activeSessionId: signal<URN | null>(null),
     activeSession: signal<any>({
       id: URN.parse('urn:llm:session:123'),
-      workspaceTarget: URN.parse('urn:llm:cache:123'),
+      workspaceTarget: URN.parse('urn:data-source:repo:123'), // Fix URN
       attachments: [
-        { cacheId: URN.parse('urn:llm:cache:123'), target: 'compiled-cache' },
+        {
+          dataSourceId: URN.parse('urn:data-source:repo:123'),
+          target: 'inline-context',
+        },
       ],
     }),
     sessions: signal([]),
   };
 
   const mockFirestoreClient = {
-    // Return empty observables to satisfy the constructor effects
     getFiles: vi.fn().mockReturnValue(of([])),
     getFileContent: vi.fn(),
   };
 
   const mockRegistry = {
     getProposalsForSession: vi.fn().mockResolvedValue([]),
+    registryMutated: signal(0), // Provided correctly as a signal
   };
 
   const mockLogger = {
@@ -64,9 +67,8 @@ describe('WorkspaceStateService', () => {
         WorkspaceStateService,
         { provide: LlmScrollSource, useValue: mockScrollSource },
         { provide: LlmSessionSource, useValue: mockSessionSource },
-        { provide: LlmGithubFirestoreClient, useValue: mockFirestoreClient },
-        // Use the new domain service injection token
-        { provide: 'LlmProposalService', useValue: mockRegistry },
+        { provide: GithubFirestoreClient, useValue: mockFirestoreClient },
+        { provide: LlmProposalService, useValue: mockRegistry },
         { provide: Logger, useValue: mockLogger },
       ],
     });
@@ -74,7 +76,6 @@ describe('WorkspaceStateService', () => {
   });
 
   it('should successfully build the overlayMap by joining Pointers with Registry Data', async () => {
-    // 1. Setup a Pointer Message in the UI Stream
     const encoder = new TextEncoder();
     const pointer: PointerPayload = {
       proposalId: URN.parse('urn:llm:proposal:prop-1'),
@@ -89,7 +90,6 @@ describe('WorkspaceStateService', () => {
 
     mockScrollSource.items.set([{ type: 'content', data: mockMessage }]);
 
-    // 2. Setup the Heavy Registry Data
     const mockRegistryEntry: Partial<RegistryEntry> = {
       id: URN.parse('urn:llm:proposal:prop-1'),
       ownerSessionId: URN.parse('urn:llm:session:123'),
@@ -101,12 +101,10 @@ describe('WorkspaceStateService', () => {
 
     mockRegistry.getProposalsForSession.mockResolvedValue([mockRegistryEntry]);
 
-    // 3. Trigger Effects
     mockSessionSource.activeSessionId.set(URN.parse('urn:llm:session:123'));
     TestBed.flushEffects();
     await new Promise(process.nextTick);
 
-    // 4. Verify Engine Construction
     const overlay = service.overlayMap();
     expect(overlay.has('src/main.ts')).toBe(true);
 
@@ -134,7 +132,7 @@ describe('WorkspaceStateService', () => {
       ],
     };
 
-    const result = service.resolveChainState(record);
+    const result = service.resolveChainState(record as any);
 
     expect(result.error).toBeUndefined();
     expect(result.content).toBe('Line 1\nLine 2\nLine 3\n');

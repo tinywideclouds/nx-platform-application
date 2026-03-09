@@ -14,10 +14,12 @@ describe('CompiledCache Facade', () => {
     id: URN.parse('urn:llm:compiled-cache:123'),
     provider: 'gemini',
     expiresAt: '2026-02-27T16:00:00Z' as ISODateTimeString,
-    attachmentsUsed: [
+    createdAt: '2026-02-27T10:00:00Z' as ISODateTimeString,
+    // NEW: Using the decoupled sources array
+    sources: [
       {
-        id: URN.parse('urn:llm:attachment:1'),
-        cacheId: URN.parse('urn:llm:repo:1'),
+        dataSourceId: URN.parse('urn:data-source:repo1'),
+        profileId: URN.parse('urn:profile:prof1'),
       },
     ],
   };
@@ -28,21 +30,27 @@ describe('CompiledCache Facade', () => {
 
     expect(parsed.id).toBe('urn:llm:compiled-cache:123');
     expect(parsed.provider).toBe('urn:llm:provider:gemini');
-    expect(parsed.attachmentsUsed[0].cacheId).toBe('urn:llm:repo:1');
+    expect(parsed.sources[0].dataSourceId).toBe('urn:data-source:repo1');
+    expect(parsed.sources[0].profileId).toBe('urn:profile:prof1');
   });
 
   it('should deserialize gracefully from snake_case JSON', () => {
+    // Simulating the updated Go backend response
     const rawGoJson = `{
       "id": "urn:llm:compiled-cache:123",
       "provider": "urn:llm:provider:gemini",
-      "attachments_used": [{"id": "urn:llm:attachment:1", "cache_id": "urn:llm:repo:1"}],
+      "sources": [{"data_source_id": "urn:data-source:repo1", "profile_id": "urn:profile:prof1"}],
+      "created_at": "2026-02-27T10:00:00Z",
       "expires_at": "2026-02-27T16:00:00Z"
     }`;
 
     const result = deserializeCompiledCache(rawGoJson);
 
     expect(result.id.toString()).toBe('urn:llm:compiled-cache:123');
-    expect(result.attachmentsUsed[0].cacheId.toString()).toBe('urn:llm:repo:1');
+    expect(result.sources[0].dataSourceId.toString()).toBe(
+      'urn:data-source:repo1',
+    );
+    expect(result.sources[0].profileId?.toString()).toBe('urn:profile:prof1');
     expect(result.expiresAt).toBe('2026-02-27T16:00:00Z');
   });
 });

@@ -4,17 +4,17 @@ syntax = "proto3";
 package src.types.builder.v1;
 option go_package = "github.com/tinywideclouds/gen-llm/go/types/builder/v1;builder_v1";
 
+// Shared wire format for both inline attachments and data source pointers
 message NetworkAttachmentPb {
   string id = 1;
-  string cache_id = 2;
+  string data_source_id = 2; 
   optional string profile_id = 3;
 }
 
 message BuildCacheRequestPb {
-  string session_id = 1;
-  string model = 2;
-  repeated NetworkAttachmentPb attachments = 3;
-  optional string expires_at_hint = 4;
+  string model = 1;
+  repeated NetworkAttachmentPb sources = 2; 
+  optional string expires_at_hint = 3;
 }
 
 message BuildCacheResponsePb {
@@ -37,7 +37,6 @@ message GenerateStreamRequestPb {
   repeated NetworkAttachmentPb inline_attachments = 5;
 }
 
-
 message FileStatePb {
   string content = 1;
   bool is_deleted = 2;
@@ -46,29 +45,20 @@ message FileStatePb {
 message ChangeProposalPb {
   string id = 1;
   string file_path = 2;
-  
-  // Provide either a patch OR the full new content
-  optional string patch = 3;       
+  optional string patch = 3;
   optional string new_content = 4; 
-  
   string reasoning = 5;
   string created_at = 6; 
-  string session_id = 7;  
+  string session_id = 7;
 }
 
-// --- 2. Compiled Cache Metadata ---
-
 message CompiledCachePb {
-  string id = 1; //urn e.g "urn:llm:gemini:cachedContents/12345"
-  string provider = 2;    // e.g., "gemini"
-  
-  // Reusing your existing NetworkAttachmentPb
-  repeated NetworkAttachmentPb attachments_used = 3; 
+  string id = 1;
+  string provider = 2;    
+  repeated NetworkAttachmentPb sources = 3; 
   string created_at = 4;
   string expires_at = 5;
 }
-
-// --- 3. Persistent Session State ---
 
 message SessionPb {
   string id = 1;

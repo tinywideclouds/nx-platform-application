@@ -28,7 +28,7 @@ export interface BuildCacheRequest {
   sessionId: URN; // Strict URN
   model: string;
   attachments: SessionAttachment[]; // Strict Domain Type
-  expiresAtHint: ISODateTimeString;
+  expiresAtHint?: ISODateTimeString;
 }
 
 export interface BuildCacheResponse {
@@ -50,17 +50,16 @@ export function sessionAttachmentToProto(
   k: SessionAttachment,
 ): NetworkAttachmentPb {
   return create(NetworkAttachmentPbSchema, {
-    id: k.id.toString(), // Downcast URN to string for Go
-    cacheId: k.cacheId.toString(),
+    id: k.id.toString(),
+    dataSourceId: k.dataSourceId.toString(),
     profileId: k.profileId?.toString(),
   });
 }
 
 function buildCacheRequestToProto(k: BuildCacheRequest): BuildCacheRequestPb {
   return create(BuildCacheRequestPbSchema, {
-    sessionId: k.sessionId.toString(),
     model: k.model,
-    attachments: k.attachments.map(sessionAttachmentToProto),
+    sources: k.attachments.map(sessionAttachmentToProto),
     expiresAtHint: k.expiresAtHint,
   });
 }

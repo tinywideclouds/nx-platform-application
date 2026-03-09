@@ -1,0 +1,43 @@
+<div class="flex flex-col h-full w-full bg-gray-50 overflow-hidden">
+  <div
+    class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm relative z-30 w-full h-[52px]"
+  >
+    <div class="w-[280px] sm:w-[320px] flex items-center">
+      <div
+        class="bg-gray-100 p-1 rounded-lg inline-flex gap-1 border border-gray-200"
+      >
+        <button
+          type="button"
+          (click)="switchView('repos')"
+          [class.bg-white]="activeView() === 'repos'"
+          [class.shadow-sm]="activeView() === 'repos'"
+          [class.text-gray-900]="activeView() === 'repos'"
+          [class.text-gray-600]="activeView() !== 'repos'"
+          class="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+        >
+          GitHub Repos
+        </button>
+        <button
+          type="button"
+          (click)="switchView('caches')"
+          [class.bg-white]="activeView() === 'caches'"
+          [class.shadow-sm]="activeView() === 'caches'"
+          [class.text-gray-900]="activeView() === 'caches'"
+          [class.text-gray-600]="activeView() !== 'caches'"
+          class="px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+        >
+          <mat-icon class="scale-[0.7] -mx-1 text-indigo-500"
+            >auto_awesome</mat-icon
+          >
+          Gemini Caches
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2"></div>
+  </div>
+
+  <div class="flex-1 min-h-0 w-full relative">
+    <router-outlet></router-outlet>
+  </div>
+</div>

@@ -2,16 +2,15 @@ import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 export interface SessionAttachmentRecord {
   id: string;
-  cacheId: string;
+  dataSourceId: string; // Renamed
   profileId?: string;
   target: string;
 }
 
-export interface CompiledCacheRecord {
+export interface QuickContextFileRecord {
   id: string;
-  typeId?: string; // Stored as primitive string
-  expiresAt: ISODateTimeString;
-  attachmentsUsed: SessionAttachmentRecord[];
+  name: string;
+  content: string;
 }
 
 export interface LlmSessionRecord {
@@ -19,17 +18,17 @@ export interface LlmSessionRecord {
   title: string;
   lastModified: ISODateTimeString;
 
-  // --- NEW ---
-  compiledCache?: CompiledCacheRecord;
   attachments: SessionAttachmentRecord[];
-
+  quickContext?: QuickContextFileRecord[];
   workspaceTarget?: string;
 
+  compiledCacheId?: string; // NEW: The clean pointer
+
   // --- LEGACY (Kept for migration mapping only) ---
+  compiledCache?: any;
   geminiCache?: string;
   cacheId?: string;
 
-  // --- EXISTING ---
   llmModel?: string;
   systemPromptsId?: string;
   contextGroups?: Record<string, string>;
