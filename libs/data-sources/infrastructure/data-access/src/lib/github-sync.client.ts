@@ -6,29 +6,21 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   DataSourceBundle,
   FileMetadata,
-  FilterProfile,
   SyncResponse,
   SyncStreamEvent,
-  ProfileRequest,
   FilterRules,
   serializeCreateDataSourceRequest,
   serializeSyncRequest,
-  serializeProfileRequest,
   deserializeDataSourceBundle,
   deserializeDataSourceBundleList,
   deserializeSyncResponse,
   deserializeFileMetadataList,
-  deserializeFilterProfile,
-  deserializeFilterProfileList,
 } from '@nx-platform-application/data-sources-types';
 
 @Injectable({ providedIn: 'root' })
-export class GithubFirestoreClient {
+export class GithubSyncClient {
   private http = inject(HttpClient);
-
   private readonly baseUrl = '';
-
-  // --- CACHE BUNDLES ---
 
   async createDataSource(
     repo: string,
@@ -36,7 +28,7 @@ export class GithubFirestoreClient {
   ): Promise<DataSourceBundle> {
     const bodyString = serializeCreateDataSourceRequest(repo, branch);
     const rawResponse = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/v1/caches`, bodyString, {
+      this.http.post(`${this.baseUrl}/v1/data/sources`, bodyString, {
         headers: { 'Content-Type': 'application/json' },
         responseType: 'text',
       }),
@@ -48,7 +40,7 @@ export class GithubFirestoreClient {
     dataSourceId: URN,
     ingestionRules: FilterRules,
   ): Promise<SyncResponse> {
-    const syncUrl = `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/sync`;
+    const syncUrl = `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/sync`;
     const bodyString = serializeSyncRequest(ingestionRules);
 
     const rawResponse = await firstValueFrom(
@@ -64,7 +56,7 @@ export class GithubFirestoreClient {
     dataSourceId: URN,
     ingestionRules: FilterRules,
   ): Observable<SyncStreamEvent> {
-    const syncUrl = `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/sync`;
+    const syncUrl = `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/sync`;
     const bodyString = serializeSyncRequest(ingestionRules);
 
     return new Observable<SyncStreamEvent>((subscriber) => {
@@ -82,7 +74,6 @@ export class GithubFirestoreClient {
         .then(async (response) => {
           if (!response.ok)
             throw new Error(`Sync failed with status: ${response.status}`);
-
           const reader = response.body?.getReader();
           if (!reader)
             throw new Error('ReadableStream not supported by browser');
@@ -103,7 +94,6 @@ export class GithubFirestoreClient {
                 try {
                   const data: SyncStreamEvent = JSON.parse(line.substring(6));
                   subscriber.next(data);
-
                   if (data.stage === 'error') {
                     subscriber.error(
                       new Error(
@@ -117,7 +107,6 @@ export class GithubFirestoreClient {
               }
             }
           }
-
           subscriber.complete();
         })
         .catch((err) => subscriber.error(err));
@@ -128,14 +117,14 @@ export class GithubFirestoreClient {
 
   listDataSources(): Observable<DataSourceBundle[]> {
     return this.http
-      .get(`${this.baseUrl}/v1/caches`, { responseType: 'text' })
+      .get(`${this.baseUrl}/v1/data/sources`, { responseType: 'text' })
       .pipe(map(deserializeDataSourceBundleList));
   }
 
   getFiles(dataSourceId: URN): Observable<FileMetadata[]> {
     return this.http
       .get(
-        `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/files`,
+        `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/files`,
         { responseType: 'text' },
       )
       .pipe(map(deserializeFileMetadataList));
@@ -145,61 +134,8 @@ export class GithubFirestoreClient {
     dataSourceId: URN,
     base64Path: string,
   ): Observable<{ content: string }> {
-    // This returns a simple generic JSON envelope, no complex proto mapping needed.
     return this.http.get<{ content: string }>(
-      `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/files/${base64Path}/content`,
-    );
-  }
-
-  // --- FILTER PROFILES ---
-
-  listProfiles(dataSourceId: URN): Observable<FilterProfile[]> {
-    return this.http
-      .get(
-        `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/profiles`,
-        { responseType: 'text' },
-      )
-      .pipe(map(deserializeFilterProfileList));
-  }
-
-  createProfile(
-    dataSourceId: URN,
-    req: ProfileRequest,
-  ): Observable<FilterProfile> {
-    const bodyString = serializeProfileRequest(req);
-    return this.http
-      .post(
-        `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/profiles`,
-        bodyString,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          responseType: 'text',
-        },
-      )
-      .pipe(map(deserializeFilterProfile));
-  }
-
-  updateProfile(
-    dataSourceId: URN,
-    profileId: URN,
-    req: ProfileRequest,
-  ): Observable<FilterProfile> {
-    const bodyString = serializeProfileRequest(req);
-    return this.http
-      .put(
-        `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/profiles/${encodeURIComponent(profileId.toString())}`,
-        bodyString,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          responseType: 'text',
-        },
-      )
-      .pipe(map(deserializeFilterProfile));
-  }
-
-  deleteProfile(dataSourceId: URN, profileId: URN): Observable<void> {
-    return this.http.delete<void>(
-      `${this.baseUrl}/v1/caches/${encodeURIComponent(dataSourceId.toString())}/profiles/${encodeURIComponent(profileId.toString())}`,
+      `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/files/${base64Path}/content`,
     );
   }
 }

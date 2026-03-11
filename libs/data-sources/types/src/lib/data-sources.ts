@@ -1,4 +1,7 @@
-import { URN } from '@nx-platform-application/platform-types';
+import {
+  URN,
+  ISODateTimeString,
+} from '@nx-platform-application/platform-types';
 
 export interface FileMetadata {
   path: string;
@@ -63,4 +66,28 @@ export interface DataSourceBundle {
   status: 'unsynced' | 'syncing' | 'ready' | 'failed';
   analysis?: DataSourceAnalysis;
   ingestionRules?: FilterRules;
+}
+
+// --- (Data Groups) ---
+
+export interface DataGroupSource {
+  dataSourceId: URN;
+  profileId?: URN;
+}
+
+export interface DataGroup {
+  id: URN;
+  name: string;
+  description?: string;
+  sources: DataGroupSource[];
+  metadata?: Record<string, string>; // Intentionally generic for mixed domain usage
+  createdAt?: ISODateTimeString;
+  updatedAt?: ISODateTimeString;
+}
+
+export interface DataGroupRequest {
+  name: string;
+  description?: string;
+  sources: DataGroupSource[];
+  metadata?: Record<string, string>;
 }

@@ -10,14 +10,14 @@ import {
 } from './builder';
 
 describe('Protobuf Builder Facade', () => {
-  it('should securely serialize a BuildCacheRequest to proto3 JSON', () => {
+  it('should securely serialize a BuildCacheRequest to proto3 JSON using ContextAttachments', () => {
     const request: BuildCacheRequest = {
       sessionId: URN.parse('urn:llm:session:123'),
       model: 'gemini-1.5-pro',
       attachments: [
         {
           id: URN.parse('urn:llm:attachment:1'),
-          cacheId: URN.parse('urn:llm:cache:abc'),
+          dataSourceId: URN.parse('urn:data-source:repo:abc'),
           profileId: URN.parse('urn:llm:profile:xyz'),
         },
       ],
@@ -27,16 +27,18 @@ describe('Protobuf Builder Facade', () => {
     const jsonString = serializeBuildCacheRequest(request);
     const parsed = JSON.parse(jsonString);
 
-    // Verify it correctly applied camelCase formatting per proto3 specs
-    expect(parsed.sessionId).toBe('urn:llm:session:123');
+    // Verify proto3 camelCase mapping for the wire
     expect(parsed.model).toBe('gemini-1.5-pro');
-    expect(parsed.attachments[0].cacheId).toBe('urn:llm:cache:abc');
-    expect(parsed.attachments[0].profileId).toBe('urn:llm:profile:xyz');
+    // In BuildCacheRequestPb, the field is named 'sources'
+    expect(parsed.sources[0].id).toBe('urn:llm:attachment:1');
+    expect(parsed.sources[0].dataSourceId).toBe('urn:data-source:repo:abc');
+    expect(parsed.sources[0].profileId).toBe('urn:llm:profile:xyz');
   });
 
-  it('should cleanly deserialize a BuildCacheResponse ignoring snake_case/camelCase mismatch', () => {
+  it('should cleanly deserialize a BuildCacheResponse ignoring snake_case mismatch from Go', () => {
+    // Note: Buf's fromJsonString handles snake_case to camelCase mapping automatically
     const rawGoResponse = `{
-      "gemini_cache_id": "urn:llm:compiled-cache:999",
+      "compiled_cache_id": "urn:llm:compiled-cache:999",
       "expires_at": "2026-03-06T18:00:00Z"
     }`;
 

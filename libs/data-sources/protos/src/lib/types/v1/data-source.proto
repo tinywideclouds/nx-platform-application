@@ -1,4 +1,4 @@
-// Defines the message contract for the LLM service.
+// Defines the message contract for the Data Sources service.
 syntax = "proto3";
 
 package src.types.datasources.v1;
@@ -8,6 +8,7 @@ message StoreCollectionsPb {
   string bundle_collection = 1;
   string files_collection = 2;
   string profiles_collection = 3;
+  string datagroups_collection = 4; // NEW: Added collection for groups
 }
 
 // --- Domain Models ---
@@ -48,6 +49,23 @@ message FileMetadataPb {
   string extension = 3;
 }
 
+// --- NEW: Data Group Models (Context Blueprints) ---
+
+message DataGroupSourcePb {
+  string data_source_id = 1;
+  optional string profile_id = 2;
+}
+
+message DataGroupPb {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  repeated DataGroupSourcePb sources = 4;
+  map<string, string> metadata = 5; // e.g., for Gemini compiledCacheId and expiry
+  optional string created_at = 6;
+  optional string updated_at = 7;
+}
+
 // --- API Requests & Responses ---
 
 message CreateDataSourceRequestPb {
@@ -68,4 +86,11 @@ message SyncResponsePb {
 message ProfileRequestPb {
   string name = 1;
   string rules_yaml = 2;
+}
+
+message DataGroupRequestPb {
+  string name = 1;
+  optional string description = 2;
+  repeated DataGroupSourcePb sources = 3;
+  map<string, string> metadata = 4;
 }

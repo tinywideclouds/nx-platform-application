@@ -72,22 +72,25 @@ describe('MessageStorageService', () => {
       );
     });
 
-    it('should create a brand new session record if it does not exist', async () => {
+    it('should create a brand new session record with new intent buckets if it does not exist', async () => {
       dbMock.sessions.get.mockResolvedValue(undefined);
 
       await service.saveMessage(mockMsg);
 
-      expect(dbMock.sessions.put).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'urn:llm:session:99',
-          lastModified: '2026-03-09T10:00:00Z',
-        }),
-      );
+      expect(dbMock.sessions.put).toHaveBeenCalledWith({
+        id: 'urn:llm:session:99',
+        title: 'urn:llm:session:99',
+        lastModified: '2026-03-09T10:00:00Z',
+        inlineContexts: [],
+        systemContexts: [],
+        compiledContext: undefined,
+        quickContext: [],
+      });
     });
   });
 
   describe('getSessionMessages', () => {
-    it('should query messages using the compound index', async () => {
+    it('should query messages using the compound index [sessionId+timestamp]', async () => {
       dbMock.messages.toArray.mockResolvedValue([]);
 
       await service.getSessionMessages(URN.parse('urn:llm:session:123'));

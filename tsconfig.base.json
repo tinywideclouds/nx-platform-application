@@ -59,8 +59,8 @@
       "@nx-platform-application/data-sources-ui": [
         "libs/data-sources/ui/src/index.ts"
       ],
-      "@nx-platform-application/data-sources/features/github-firestore-access": [
-        "libs/data-sources/infrastructure/github-firestore-access/src/index.ts"
+      "@nx-platform-application/data-sources-infrastructure-data-access": [
+        "libs/data-sources/infrastructure/data-access/src/index.ts"
       ],
       "@nx-platform-application/data-sources/features/state": [
         "libs/data-sources/features/state/src/index.ts"

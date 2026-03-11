@@ -45,12 +45,15 @@ export class MessageStorageService {
             lastModified: msgRecord.timestamp,
           });
         } else {
+          // FIX: Align with new LlmSessionRecord schema
           await this.db.sessions.put({
             id: msgRecord.sessionId,
             title: msgRecord.sessionId.toString(),
             lastModified: msgRecord.timestamp,
-            contextGroups: {},
-            attachments: [],
+            // Initialize the new explicit intent buckets
+            inlineContexts: [],
+            systemContexts: [],
+            compiledContext: undefined,
             quickContext: [],
           });
         }

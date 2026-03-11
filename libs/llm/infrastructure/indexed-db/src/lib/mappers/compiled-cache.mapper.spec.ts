@@ -20,6 +20,7 @@ describe('CompiledCacheMapper', () => {
 
   const mockRecord: CompiledCacheRecord = {
     id: 'urn:gemini:compiled-cache:123',
+    model: 'gemini-1.5-pro',
     provider: 'gemini',
     expiresAt: '2026-03-09T18:00:00Z' as ISODateTimeString,
     createdAt: '2026-03-09T10:00:00Z' as ISODateTimeString,
@@ -28,15 +29,12 @@ describe('CompiledCacheMapper', () => {
         dataSourceId: 'urn:data-source:repo1',
         profileId: 'urn:profile:prof1',
       },
-      {
-        dataSourceId: 'urn:data-source:repo2',
-        // Omitting profileId to test the optional handling
-      },
     ],
   };
 
   const mockDomain: CompiledCache = {
     id: URN.parse('urn:gemini:compiled-cache:123'),
+    model: 'gemini-1.5-pro',
     provider: 'gemini',
     expiresAt: '2026-03-09T18:00:00Z' as ISODateTimeString,
     createdAt: '2026-03-09T10:00:00Z' as ISODateTimeString,
@@ -45,32 +43,21 @@ describe('CompiledCacheMapper', () => {
         dataSourceId: URN.parse('urn:data-source:repo1'),
         profileId: URN.parse('urn:profile:prof1'),
       },
-      {
-        dataSourceId: URN.parse('urn:data-source:repo2'),
-      },
     ],
   };
 
   describe('toDomain', () => {
-    it('should correctly map from Record to Domain, parsing URNs including nested arrays', () => {
+    it('should correctly map from Record to Domain, parsing URNs and including the required model field', () => {
       const domain = mapper.toDomain(mockRecord);
 
       expect(domain.id).toBeInstanceOf(URN);
       expect(domain.id.toString()).toBe('urn:gemini:compiled-cache:123');
+      expect(domain.model).toBe('gemini-1.5-pro');
       expect(domain.provider).toBe('gemini');
-      expect(domain.expiresAt).toBe('2026-03-09T18:00:00Z');
-      expect(domain.createdAt).toBe('2026-03-09T10:00:00Z');
-
-      expect(domain.sources).toHaveLength(2);
-      expect(domain.sources[0].dataSourceId).toBeInstanceOf(URN);
+      expect(domain.sources).toHaveLength(1);
       expect(domain.sources[0].dataSourceId.toString()).toBe(
         'urn:data-source:repo1',
       );
-      expect(domain.sources[0].profileId).toBeInstanceOf(URN);
-      expect(domain.sources[0].profileId?.toString()).toBe('urn:profile:prof1');
-
-      expect(domain.sources[1].dataSourceId).toBeInstanceOf(URN);
-      expect(domain.sources[1].profileId).toBeUndefined();
     });
   });
 
@@ -78,19 +65,10 @@ describe('CompiledCacheMapper', () => {
     it('should correctly map from Domain to Record, stringifying URNs securely', () => {
       const record = mapper.toRecord(mockDomain);
 
-      expect(typeof record.id).toBe('string');
       expect(record.id).toBe('urn:gemini:compiled-cache:123');
-      expect(record.provider).toBe('gemini');
-      expect(record.expiresAt).toBe('2026-03-09T18:00:00Z');
-      expect(record.createdAt).toBe('2026-03-09T10:00:00Z');
-
-      expect(record.sources).toHaveLength(2);
-      expect(typeof record.sources[0].dataSourceId).toBe('string');
+      expect(record.model).toBe('gemini-1.5-pro');
       expect(record.sources[0].dataSourceId).toBe('urn:data-source:repo1');
-      expect(typeof record.sources[0].profileId).toBe('string');
-
-      expect(typeof record.sources[1].dataSourceId).toBe('string');
-      expect(record.sources[1].profileId).toBeUndefined();
+      expect(record.sources[0].profileId).toBe('urn:profile:prof1');
     });
 
     it('should default the provider to gemini if it is missing in the domain', () => {

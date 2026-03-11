@@ -1,15 +1,5 @@
 import { Route } from '@angular/router';
 
-// A temporary placeholder until we build the real cache UI next
-import { Component } from '@angular/core';
-@Component({
-  standalone: true,
-  template: `<div class="p-8 text-xl text-gray-500 font-medium">
-    Gemini Caches UI goes here
-  </div>`,
-})
-export class DummyCachesComponent {}
-
 export const appRoutes: Route[] = [
   {
     path: '',
@@ -46,12 +36,12 @@ export const appRoutes: Route[] = [
         ],
       },
 
-      // --- LAYER 2: KNOWLEDGE HUB (The New Wrapper) ---
+      // --- LAYER 2: KNOWLEDGE HUB (Data Sources & Blueprints) ---
       {
         path: 'data-sources',
         loadComponent: () =>
-          import('@nx-platform-application/llm-ui').then(
-            (m) => m.DataSourceWrapperComponent,
+          import('@nx-platform-application/data-sources-ui').then(
+            (m) => m.DataSourcesLayoutComponent,
           ),
         children: [
           {
@@ -60,13 +50,9 @@ export const appRoutes: Route[] = [
             pathMatch: 'full',
           },
 
-          // LAYER 3a: Pure Data Sources (Components from the external library)
+          // LAYER 3a: Repositories (Raw Data)
           {
             path: 'repos',
-            loadComponent: () =>
-              import('@nx-platform-application/data-sources-ui').then(
-                (m) => m.DataSourcesLayoutComponent,
-              ),
             children: [
               {
                 path: 'new',
@@ -93,10 +79,26 @@ export const appRoutes: Route[] = [
             ],
           },
 
-          // LAYER 3b: Compiled Caches (Owned by LLM UI)
+          // LAYER 3b: Context Groups (Blueprints)
           {
-            path: 'caches',
-            loadComponent: () => DummyCachesComponent,
+            path: 'groups',
+            children: [
+              {
+                path: ':id',
+                loadComponent: () =>
+                  import('@nx-platform-application/data-sources-ui').then(
+                    (m) => m.DataGroupPageComponent,
+                  ),
+              },
+              {
+                path: '',
+                loadComponent: () =>
+                  import('@nx-platform-application/data-sources-ui').then(
+                    (m) => m.DataGroupPageComponent,
+                  ),
+                pathMatch: 'full',
+              },
+            ],
           },
         ],
       },

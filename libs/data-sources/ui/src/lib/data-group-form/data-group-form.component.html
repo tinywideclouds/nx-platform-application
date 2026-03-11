@@ -1,0 +1,177 @@
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-6">
+  <div class="flex flex-col sm:flex-row gap-4">
+    <mat-form-field
+      appearance="outline"
+      class="flex-1"
+      [hideRequiredMarker]="!isEditing()"
+    >
+      <mat-label>Blueprint Name</mat-label>
+      <input
+        matInput
+        formControlName="name"
+        placeholder="e.g. Go Backend Core"
+        [readonly]="!isEditing()"
+      />
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="outline"
+      class="flex-1"
+      [hideRequiredMarker]="!isEditing()"
+    >
+      <mat-label>Description (Optional)</mat-label>
+      <input
+        matInput
+        formControlName="description"
+        placeholder="What is this context used for?"
+        [readonly]="!isEditing()"
+      />
+    </mat-form-field>
+  </div>
+
+  <div class="border-t border-gray-200 pt-6">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h3 class="text-lg font-bold text-gray-900 m-0">
+          Bundled Repositories
+        </h3>
+        <p class="text-xs text-gray-500 m-0 mt-1">
+          Combine multiple repositories and apply specific filter profiles to
+          them.
+        </p>
+      </div>
+      @if (isEditing()) {
+        <button
+          type="button"
+          mat-stroked-button
+          color="primary"
+          (click)="addSource()"
+        >
+          <mat-icon>add</mat-icon> Add Source
+        </button>
+      }
+    </div>
+
+    <div formArrayName="sources" class="flex flex-col gap-3">
+      @for (source of sources.controls; track $index) {
+        <div
+          [formGroupName]="$index"
+          class="flex items-start gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 animate-fade-in"
+          [class.opacity-90]="!isEditing()"
+        >
+          <mat-form-field
+            appearance="outline"
+            class="flex-1 m-0 subscript-hidden bg-white"
+            [hideRequiredMarker]="!isEditing()"
+          >
+            <mat-label>Repository</mat-label>
+            <mat-select
+              formControlName="dataSourceId"
+              (selectionChange)="onRepoSelected($event.value, $index)"
+            >
+              @for (repo of availableSources(); track repo.id) {
+                <mat-option [value]="repo.id.toString()">
+                  <span class="font-medium">{{ repo.repo }}</span>
+                  <span class="text-gray-400 text-xs ml-2"
+                    >({{ repo.branch }})</span
+                  >
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field
+            appearance="outline"
+            class="flex-1 m-0 subscript-hidden bg-white"
+            [hideRequiredMarker]="!isEditing()"
+          >
+            <mat-label>Filter Profile</mat-label>
+            <mat-select formControlName="profileId">
+              <mat-option [value]="null">
+                <span class="text-gray-500 italic"
+                  >No Filter (Include All Files)</span
+                >
+              </mat-option>
+
+              @if (
+                source.value.dataSourceId &&
+                profileMap()[source.value.dataSourceId]
+              ) {
+                @for (
+                  profile of profileMap()[source.value.dataSourceId];
+                  track profile.id
+                ) {
+                  <mat-option [value]="profile.id.toString()">{{
+                    profile.name
+                  }}</mat-option>
+                }
+              }
+            </mat-select>
+          </mat-form-field>
+
+          @if (isEditing()) {
+            <button
+              type="button"
+              mat-icon-button
+              color="warn"
+              class="shrink-0 mt-1"
+              (click)="removeSource($index)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
+        </div>
+      }
+
+      @if (sources.length === 0) {
+        <div
+          class="text-center p-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl bg-white"
+        >
+          No repositories bundled yet. Click "Add Source" to start building.
+        </div>
+      }
+    </div>
+  </div>
+
+  <div
+    class="flex items-center justify-between mt-4 pt-6 border-t border-gray-200"
+  >
+    <div>
+      @if (group() && !isEditing()) {
+        <button
+          type="button"
+          mat-button
+          color="warn"
+          (click)="delete.emit(group()!.id)"
+        >
+          <mat-icon>delete</mat-icon> Delete Blueprint
+        </button>
+      }
+    </div>
+
+    <div class="flex items-center gap-3">
+      @if (isEditing()) {
+        <button type="button" mat-button (click)="cancel.emit()">Cancel</button>
+        <button
+          type="submit"
+          mat-flat-button
+          color="primary"
+          class="px-6"
+          [disabled]="form.invalid || sources.length === 0"
+        >
+          {{ group() ? 'Save Changes' : 'Create Context Blueprint' }}
+        </button>
+      } @else {
+        <button
+          type="button"
+          mat-flat-button
+          color="primary"
+          class="px-6"
+          (click)="requestEdit.emit()"
+        >
+          <mat-icon>edit</mat-icon> Edit Blueprint
+        </button>
+      }
+    </div>
+  </div>
+</form>

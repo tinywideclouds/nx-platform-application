@@ -1,9 +1,13 @@
 import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map, startWith } from 'rxjs/operators';
+
+export type DataSourceActiveView = 'repos' | 'groups';
 
 @Component({
   selector: 'data-sources-sidebar',
@@ -13,16 +17,30 @@ import { DataSourcesService } from '@nx-platform-application/data-sources/featur
 })
 export class DataSourcesSidebarComponent {
   state = inject(DataSourcesService);
+  private router = inject(Router);
 
-  // Transforms the grouped dictionary into an array sorted for the UI
+  activeView = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(
+        () =>
+          (this.router.url.includes('/groups')
+            ? 'groups'
+            : 'repos') as DataSourceActiveView,
+      ),
+      startWith(
+        (this.router.url.includes('/groups')
+          ? 'groups'
+          : 'repos') as DataSourceActiveView,
+      ),
+    ),
+    { initialValue: 'repos' as DataSourceActiveView },
+  );
+
   repoSummaries = computed(() => {
     const groups = this.state.groupedDataSources();
-
     return Object.keys(groups).map((repo) => {
-      // Copy the array before sorting to avoid mutating the signal's internal state
       const bundles = [...groups[repo]];
-
-      // Sort so the most recently synced branch is always the primary destination
       bundles.sort((a, b) => b.lastSyncedAt - a.lastSyncedAt);
       const primary = bundles[0];
 
@@ -38,7 +56,15 @@ export class DataSourcesSidebarComponent {
   });
 
   constructor() {
-    // Dispatch initial load immediately upon instantiation
     this.state.loadAllDataSources();
+    this.state.loadAllDataGroups();
+  }
+
+  switchView(view: DataSourceActiveView) {
+    if (view === 'repos') {
+      this.router.navigate(['/data-sources/repos']);
+    } else {
+      this.router.navigate(['/data-sources/groups']);
+    }
   }
 }

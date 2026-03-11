@@ -8,6 +8,7 @@ export interface CompiledCacheSourceRecord {
 export interface CompiledCacheRecord {
   id: string;
   provider: 'gemini' | 'open-ai';
+  model: string;
   expiresAt: ISODateTimeString;
   sources: CompiledCacheSourceRecord[];
   createdAt: ISODateTimeString;

@@ -1,3 +1,4 @@
+// libs/llm/infrastructure/indexed-db/src/lib/mappers/session.mapper.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { LlmSessionMapper } from './session.mapper';
 import {
@@ -17,60 +18,62 @@ describe('LlmSessionMapper', () => {
   });
 
   describe('toDomain', () => {
-    it('should correctly map a modern record and create a compiledCache stub', () => {
+    it('should cleanly map the new explicit intent buckets', () => {
       const record: LlmSessionRecord = {
         id: 'urn:llm:session:1',
         title: 'Modern Session',
         lastModified: '2026-02-28T10:00:00Z' as ISODateTimeString,
-        compiledCacheId: 'urn:gemini:compiled-cache:123',
-        attachments: [],
+        inlineContexts: [
+          {
+            id: 'urn:llm:attachment:1',
+            resourceUrn: 'urn:data-source:repo:123',
+            resourceType: 'source',
+          },
+        ],
+        systemContexts: [],
+        compiledContext: undefined,
       };
 
       const domain = mapper.toDomain(record);
 
-      // Verify the stub was created
-      expect(domain.compiledCache).toBeDefined();
-      expect(domain.compiledCache?.id.toString()).toBe(
-        'urn:gemini:compiled-cache:123',
+      // Verify the intent pointers mapped correctly
+      expect(domain.inlineContexts).toBeDefined();
+      expect(domain.inlineContexts![0].id.toString()).toBe(
+        'urn:llm:attachment:1',
       );
-      expect(domain.compiledCache?.expiresAt).toBe(''); // Verifying stub nature
-    });
-
-    it('should auto-migrate legacy cache objects into a stub', () => {
-      const legacyRecord: any = {
-        id: 'urn:llm:session:2',
-        title: 'Legacy Session',
-        lastModified: '2026-02-28T10:00:00Z' as ISODateTimeString,
-        compiledCache: { id: 'cached/999' },
-      };
-
-      const domain = mapper.toDomain(legacyRecord);
-      expect(domain.compiledCache?.id.toString()).toBe(
-        'urn:gemini:compiled-cache:cached/999',
+      expect(domain.inlineContexts![0].resourceUrn.toString()).toBe(
+        'urn:data-source:repo:1',
       );
     });
   });
 
   describe('toRecord', () => {
-    it('should correctly flatten the rich object to the database foreign key', () => {
+    it('should map the pure intent buckets directly to the database record', () => {
       const domain: LlmSession = {
         id: URN.parse('urn:llm:session:3'),
         title: 'Save Session',
         lastModified: '2026-02-28T10:00:00Z' as ISODateTimeString,
-        compiledCache: {
-          id: URN.parse('urn:gemini:compiled-cache:456'),
-          provider: 'gemini',
-          expiresAt: '2026-03-09T18:00:00Z' as ISODateTimeString,
-          createdAt: '2026-03-09T10:00:00Z' as ISODateTimeString,
-          sources: [],
+        llmModel: 'gemini-1.5-pro',
+        inlineContexts: [],
+        systemContexts: [],
+        compiledContext: {
+          id: URN.parse('urn:llm:attachment:2'),
+          resourceUrn: URN.parse('urn:data-source:group:abc'),
+          resourceType: 'group',
         },
-        attachments: [],
       };
 
       const record = mapper.toRecord(domain);
 
-      expect(record.compiledCacheId).toBe('urn:gemini:compiled-cache:456');
-      expect((record as any).compiledCache).toBeUndefined(); // Should NOT save the object
+      // Verify intent pointer is saved perfectly
+      expect(record.compiledContext).toBeDefined();
+      expect(record.compiledContext?.resourceUrn).toBe(
+        'urn:data-source:group:abc',
+      );
+      expect(record.compiledContext?.resourceType).toBe('group');
+
+      // Verify basic fields
+      expect(record.llmModel).toBe('gemini-1.5-pro');
     });
   });
 });

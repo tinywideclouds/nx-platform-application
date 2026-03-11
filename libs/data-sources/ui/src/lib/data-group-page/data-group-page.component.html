@@ -1,0 +1,94 @@
+<div class="h-full flex flex-col bg-gray-50 overflow-hidden relative">
+  @if (state.isDataSourcesLoading() || state.isDataGroupsLoading()) {
+    <div
+      class="absolute inset-0 flex items-center justify-center bg-gray-50 z-10"
+    >
+      <div class="flex flex-col items-center gap-4 text-gray-400">
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading Context Blueprints...</span>
+      </div>
+    </div>
+  } @else if (state.bundles().length === 0) {
+    <div
+      class="flex-grow flex flex-col items-center justify-center p-8 text-center animate-fade-in"
+    >
+      <div class="bg-indigo-50 p-6 rounded-full text-indigo-500 mb-6 shadow-sm">
+        <mat-icon class="text-6xl scale-150 m-0">inventory_2</mat-icon>
+      </div>
+      <h2 class="text-2xl font-bold text-gray-900 mb-3">
+        You need raw materials first
+      </h2>
+      <p class="text-gray-500 max-w-md mb-8 leading-relaxed">
+        Context Groups (Blueprints) are built by combining multiple repositories
+        and filter profiles together. Sync at least one GitHub repository to get
+        started.
+      </p>
+      <button
+        type="button"
+        mat-flat-button
+        color="primary"
+        class="px-8 py-6 text-lg"
+        (click)="goToNewRepo()"
+      >
+        <mat-icon>add</mat-icon> Add a Repository
+      </button>
+    </div>
+  } @else if (!isNew() && !state.activeDataGroup()) {
+    <div
+      class="flex-grow flex flex-col items-center justify-center p-8 text-center animate-fade-in text-gray-400"
+    >
+      <mat-icon class="text-6xl mb-4 opacity-50">account_tree</mat-icon>
+      <h2 class="text-xl font-medium text-gray-600 mb-2">
+        Select a Context Group
+      </h2>
+      <p class="max-w-sm">
+        Choose a group from the sidebar to view its details or create a new one
+        to bundle your repositories.
+      </p>
+      <button
+        type="button"
+        mat-stroked-button
+        color="primary"
+        class="mt-6"
+        routerLink="/data-sources/groups/new"
+      >
+        <mat-icon>add</mat-icon> Create New Group
+      </button>
+    </div>
+  } @else {
+    <div class="flex-grow overflow-y-auto w-full bg-gray-50">
+      <div class="max-w-4xl mx-auto px-4 py-8 md:px-8">
+        <div
+          class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-8 animate-fade-in flex flex-col gap-6"
+        >
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900 m-0">
+              {{
+                isNew()
+                  ? 'Create Context Blueprint'
+                  : state.activeDataGroup()?.name
+              }}
+            </h2>
+            <p class="text-sm text-gray-500 mt-1">
+              {{
+                isNew()
+                  ? 'Define a new blueprint to attach to LLM sessions.'
+                  : 'Manage your context blueprint.'
+              }}
+            </p>
+          </div>
+
+          <data-sources-group-form
+            [group]="state.activeDataGroup()"
+            [availableSources]="state.bundles()"
+            [isEditing]="isEditing()"
+            (requestEdit)="isEditing.set(true)"
+            (save)="onSave($event)"
+            (delete)="onDelete($event)"
+            (cancel)="onCancel()"
+          />
+        </div>
+      </div>
+    </div>
+  }
+</div>

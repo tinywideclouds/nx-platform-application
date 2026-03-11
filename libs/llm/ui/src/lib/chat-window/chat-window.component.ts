@@ -9,9 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-
 import { Temporal } from '@js-temporal/polyfill';
-
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
@@ -34,8 +32,6 @@ import {
 import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
-
-// NEW IMPORT
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
 
 import { LlmContentPipe } from '../pipes/llm-content.pipe';
@@ -87,8 +83,6 @@ export class LlmChatWindowComponent {
   private sessionActions = inject(LlmSessionActions);
   private proposalService = inject(LlmProposalService);
   private cdr = inject(ChangeDetectorRef);
-
-  // NEW INJECT
   private cacheService = inject(CompiledCacheService);
 
   copiedMessageId = signal<string | null>(null);
@@ -98,6 +92,7 @@ export class LlmChatWindowComponent {
 
   readonly session = computed(() => this.sessionSource.activeSession());
 
+  // RESTORED logic:
   readonly activeContextGroups = computed(
     () => this.session()?.contextGroups || {},
   );
@@ -106,7 +101,6 @@ export class LlmChatWindowComponent {
     const session = this.session();
     if (!session) return { locked: false, reason: '' };
 
-    // Swapped to global compiling state
     if (this.cacheService.isCompiling()) {
       return {
         locked: true,
@@ -119,9 +113,8 @@ export class LlmChatWindowComponent {
 
   chatAlertState = computed(() => {
     const session = this.session();
-    if (!session) return { alert: false, reason: '' };
+    if (!session || !session.llmModel) return { alert: false, reason: '' };
 
-    // Swapped to global compiling state
     if (this.cacheService.isCompiling()) {
       return {
         alert: true,
@@ -129,16 +122,31 @@ export class LlmChatWindowComponent {
       };
     }
 
-    if (session.compiledCache?.expiresAt) {
-      const now = Temporal.Now.instant();
-      const expiry = Temporal.Instant.from(session.compiledCache.expiresAt);
+    // UPDATED: Check for warm cache presence via service
+    if (session.compiledContext) {
+      // In a real scenario, we'd unroll the intent here, but for simple alert,
+      // we check if the service has a matching warm cache artifact.
+      const activeCache = this.cacheService
+        .activeCaches()
+        .find(
+          (c) =>
+            c.model === session.llmModel &&
+            c.id
+              .toString()
+              .includes(session.compiledContext!.resourceUrn.entityId),
+        );
 
-      if (Temporal.Instant.compare(now, expiry) >= 0) {
-        return {
-          alert: true,
-          reason:
-            '⏰ Context cache expired. Responses will be slower. Please renew in Settings.',
-        };
+      if (activeCache) {
+        const now = Temporal.Now.instant();
+        const expiry = Temporal.Instant.from(activeCache.expiresAt);
+
+        if (Temporal.Instant.compare(now, expiry) >= 0) {
+          return {
+            alert: true,
+            reason:
+              '⏰ Context cache expired. Responses will be slower. Please renew in Settings.',
+          };
+        }
       }
     }
 
@@ -154,7 +162,6 @@ export class LlmChatWindowComponent {
     });
   }
 
-  // ... (Rest of the component methods remain exactly the same)
   onOpenDetails() {
     this.router.navigate([], {
       queryParams: { view: 'details' },
@@ -303,7 +310,7 @@ export class LlmChatWindowComponent {
     const existingGroups = Object.entries(this.activeContextGroups()).map(
       ([urn, name]) => ({
         urn,
-        name,
+        name: String(name),
       }),
     );
 
@@ -371,11 +378,12 @@ export class LlmChatWindowComponent {
   }
 
   private executeWithTransition(updateFn: () => void) {
-    if (!document.startViewTransition) {
+    const doc = document as any;
+    if (!doc.startViewTransition) {
       updateFn();
       return;
     }
-    document.startViewTransition(() => {
+    doc.startViewTransition(() => {
       updateFn();
       this.cdr.detectChanges();
     });

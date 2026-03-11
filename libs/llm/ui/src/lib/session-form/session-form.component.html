@@ -1,5 +1,5 @@
 <div class="p-4 w-full max-w-4xl mx-auto block">
-  @if (attachments().length === 0) {
+  @if (!session()?.inlineContexts?.length && !session()?.compiledContext) {
     <div
       class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8 shadow-sm flex items-start gap-4"
     >
@@ -13,7 +13,7 @@
         <p class="text-indigo-800 text-sm mt-2 mb-0 leading-relaxed">
           LLMs are incredibly smart, but they don't know your codebase until you
           teach them. Use the settings below to attach synced GitHub
-          repositories or compiled Gemini Caches to this session.
+          repositories or compiled blueprints to this session.
         </p>
       </div>
     </div>
@@ -83,11 +83,9 @@
           class="flex-1 p-6 border-2 border-dashed border-indigo-200 rounded-xl flex flex-col items-center justify-center text-indigo-400 bg-indigo-50/50 transition-colors hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
         >
           <mat-icon class="mb-2 scale-125">source</mat-icon>
-          <span class="font-medium text-indigo-700"
-            >Attach Raw Data Source</span
-          >
+          <span class="font-medium text-indigo-700">Attach Inline Context</span>
           <span class="text-xs text-indigo-500 mt-1 text-center"
-            >Standard inline context for smaller tasks</span
+            >Standard context for smaller tasks</span
           >
         </div>
 
@@ -97,15 +95,17 @@
           <mat-icon class="mb-2 scale-125">auto_awesome</mat-icon>
           <span class="font-medium text-teal-700">Attach Compiled Cache</span>
           <span class="text-xs text-teal-500 mt-1 text-center"
-            >Optimized, high-speed context for huge codebases</span
+            >Optimized context for huge codebases</span
           >
         </div>
       </div>
 
       <llm-context-hierarchy
         [session]="session()"
-        [attachments]="attachments()"
-        (removeAttachment)="removeAttachment($event)"
+        [inlineAttachments]="session()?.inlineContexts || []"
+        [compiledContext]="session()?.compiledContext"
+        (removeInline)="onRemoveAttachment($event, 'inlineContexts')"
+        (removeCompiled)="onRemoveAttachment($event, 'compiledContext')"
       />
     </div>
   </div>

@@ -1,4 +1,3 @@
-// libs/llm/types/src/v1/cache/cache.ts
 import {
   create,
   fromJson,
@@ -20,6 +19,9 @@ import {
   FileMetadataPb,
   ProfilePbSchema,
   ProfilePb,
+  DataGroupPb,
+  DataGroupPbSchema,
+  DataGroupRequestPbSchema,
 } from '@nx-platform-application/data-sources-protos/types/v1/data-source_pb';
 import {
   DataSourceBundle,
@@ -28,6 +30,8 @@ import {
   FilterProfile,
   ProfileRequest,
   FilterRules,
+  DataGroup,
+  DataGroupRequest,
 } from '../lib/data-sources';
 
 // --- SERIALIZERS ---
@@ -53,6 +57,19 @@ export function serializeProfileRequest(req: ProfileRequest): string {
     rulesYaml: req.rulesYaml,
   });
   return toJsonString(ProfileRequestPbSchema, proto);
+}
+
+export function serializeDataGroupRequest(req: DataGroupRequest): string {
+  const proto = create(DataGroupRequestPbSchema, {
+    name: req.name,
+    description: req.description,
+    sources: req.sources.map((s) => ({
+      dataSourceId: s.dataSourceId.toString(),
+      profileId: s.profileId?.toString(),
+    })),
+    metadata: req.metadata || {},
+  });
+  return toJsonString(DataGroupRequestPbSchema, proto);
 }
 
 // --- INTERNAL PROTO MAPPERS ---
@@ -88,12 +105,59 @@ function mapFileMetadataFromProto(pb: FileMetadataPb): FileMetadata {
 
 function mapFilterProfileFromProto(pb: ProfilePb): FilterProfile {
   return {
-    id: URN.parse(pb.id), // Strictly mapped to URN
+    id: URN.parse(pb.id),
     name: pb.name,
     rulesYaml: pb.rulesYaml,
     createdAt: pb.createdAt as ISODateTimeString,
     updatedAt: pb.updatedAt as ISODateTimeString,
   };
+}
+
+function mapDataGroupFromProto(pb: DataGroupPb): DataGroup {
+  return {
+    id: URN.parse(pb.id),
+    name: pb.name,
+    description: pb.description,
+    sources: pb.sources.map((s) => ({
+      dataSourceId: URN.parse(s.dataSourceId),
+      profileId: s.profileId ? URN.parse(s.profileId) : undefined,
+    })),
+    metadata: pb.metadata,
+    createdAt: pb.createdAt as ISODateTimeString | undefined,
+    updatedAt: pb.updatedAt as ISODateTimeString | undefined,
+  };
+}
+
+export function deserializeDataSourceBundleList(
+  jsonString: string,
+): DataSourceBundle[] {
+  const raw = JSON.parse(jsonString);
+
+  // The Go backend returns a naked JSON array directly
+  const list = Array.isArray(raw)
+    ? raw
+    : raw.dataSources || raw.datasources || raw.caches;
+
+  if (!list || !Array.isArray(list)) return [];
+
+  return list.map((c: any) =>
+    mapDataSourceBundleFromProto(fromJson(DataSourceMetadataPbSchema, c)),
+  );
+}
+
+export function deserializeDataGroupList(jsonString: string): DataGroup[] {
+  const raw = JSON.parse(jsonString);
+
+  // The Go backend returns a naked JSON array directly
+  const list = Array.isArray(raw)
+    ? raw
+    : raw.dataGroups || raw.datagroups || raw.data_groups;
+
+  if (!list || !Array.isArray(list)) return [];
+
+  return list.map((g: any) =>
+    mapDataGroupFromProto(fromJson(DataGroupPbSchema, g)),
+  );
 }
 
 // --- DESERIALIZERS ---
@@ -105,20 +169,10 @@ export function deserializeDataSourceBundle(
   return mapDataSourceBundleFromProto(pb);
 }
 
-export function deserializeDataSourceBundleList(
-  jsonString: string,
-): DataSourceBundle[] {
-  const raw = JSON.parse(jsonString);
-  if (!raw.caches) return [];
-  return raw.caches.map((c: any) =>
-    mapDataSourceBundleFromProto(fromJson(DataSourceMetadataPbSchema, c)),
-  );
-}
-
 export function deserializeSyncResponse(jsonString: string): SyncResponse {
   const pb = fromJsonString(SyncResponsePbSchema, jsonString);
   return {
-    dataSourceId: URN.parse(pb.cacheId) as any, // Cast assuming types were updated to URN
+    dataSourceId: URN.parse(pb.cacheId) as any,
     status: pb.status,
     filesProcessed: pb.filesProcessed,
   };
@@ -147,4 +201,9 @@ export function deserializeFilterProfileList(
   return raw.profiles.map((p: any) =>
     mapFilterProfileFromProto(fromJson(ProfilePbSchema, p)),
   );
+}
+
+export function deserializeDataGroup(jsonString: string): DataGroup {
+  const pb = fromJsonString(DataGroupPbSchema, jsonString);
+  return mapDataGroupFromProto(pb);
 }

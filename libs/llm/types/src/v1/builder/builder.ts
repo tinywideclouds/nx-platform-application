@@ -1,4 +1,3 @@
-// libs/llm/types/src/v1/builder/builder.ts
 import {
   NetworkAttachmentPbSchema,
   NetworkAttachmentPb,
@@ -15,8 +14,11 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { SessionAttachment } from '../../lib/session_types';
+import { ContextAttachment } from '../../lib/types';
 
+/**
+ * Domain-to-Network message interface for history segments.
+ */
 export interface NetworkMessage {
   id: string;
   role: string;
@@ -24,30 +26,43 @@ export interface NetworkMessage {
   timestamp: string;
 }
 
+/**
+ * Request payload for the CompiledCache compilation action.
+ * Uses ContextAttachment (the flattened physical sources).
+ */
 export interface BuildCacheRequest {
-  sessionId: URN; // Strict URN
+  sessionId: URN;
   model: string;
-  attachments: SessionAttachment[]; // Strict Domain Type
+  attachments: ContextAttachment[];
   expiresAtHint?: ISODateTimeString;
 }
 
+/**
+ * Response payload from the Go backend after successful compilation.
+ */
 export interface BuildCacheResponse {
-  compiledCacheId: URN; // Strict URN
+  compiledCacheId: URN;
   expiresAt: ISODateTimeString;
 }
 
+/**
+ * The unified request for initiating an LLM stream.
+ */
 export interface GenerateStreamRequest {
-  sessionId: URN; // Strict URN
+  sessionId: URN;
   model: string;
   history: NetworkMessage[];
-  compiledCacheId?: URN; // Strict URN
-  inlineAttachments?: SessionAttachment[]; // Strict Domain Type
+  compiledCacheId?: URN;
+  inlineAttachments?: ContextAttachment[];
 }
 
 // --- FACADE MAPPERS ---
 
-export function sessionAttachmentToProto(
-  k: SessionAttachment,
+/**
+ * Maps a single flattened ContextAttachment to its Protobuf wire representation.
+ */
+export function contextAttachmentToProto(
+  k: ContextAttachment,
 ): NetworkAttachmentPb {
   return create(NetworkAttachmentPbSchema, {
     id: k.id.toString(),
@@ -59,7 +74,8 @@ export function sessionAttachmentToProto(
 function buildCacheRequestToProto(k: BuildCacheRequest): BuildCacheRequestPb {
   return create(BuildCacheRequestPbSchema, {
     model: k.model,
-    sources: k.attachments.map(sessionAttachmentToProto),
+    // Backend expects 'sources' as the field name for BuildCache
+    sources: k.attachments.map(contextAttachmentToProto),
     expiresAtHint: k.expiresAtHint,
   });
 }
@@ -81,7 +97,7 @@ function generateStreamRequestToProto(
     model: k.model,
     history: k.history.map(networkMessageToProto),
     compiledCacheId: k.compiledCacheId?.toString(),
-    inlineAttachments: k.inlineAttachments?.map(sessionAttachmentToProto) || [],
+    inlineAttachments: k.inlineAttachments?.map(contextAttachmentToProto) || [],
   });
 }
 

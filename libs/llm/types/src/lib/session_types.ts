@@ -2,27 +2,8 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
-import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
 
-export type ContextInjectionTarget = 'system-instruction' | 'inline-context'; // Removed 'compiled-cache'
-
-export interface SessionAttachment {
-  id: URN;
-  dataSourceId: URN; // Renamed from cacheId
-  profileId?: URN;
-  target?: ContextInjectionTarget;
-}
-
-export type CompiledCacheProvider = 'gemini' | 'open-ai';
-
-// 1. THE ONE TRUE COMPILED CACHE (Standalone Entity)
-export interface CompiledCache {
-  id: URN;
-  provider?: CompiledCacheProvider;
-  expiresAt: ISODateTimeString;
-  sources: FilteredDataSource[];
-  createdAt: ISODateTimeString;
-}
+import { WorkspaceAttachment } from './types';
 
 export interface QuickContextFile {
   id: URN;
@@ -33,13 +14,16 @@ export interface QuickContextFile {
 export interface LlmSession {
   id: URN;
   title: string;
-  lastModified: ISODateTimeString;
-  compiledCache?: CompiledCache;
-  llmModel?: string;
-  attachments: SessionAttachment[];
-  quickContext?: QuickContextFile[];
-  workspaceTarget?: URN;
   contextGroups?: Record<string, string>;
+  lastModified: ISODateTimeString;
+  llmModel?: string;
+  workspaceTarget?: URN;
+
+  // THE INTENTS (WorkspaceAttachments = URN pointers to Data Groups or Sources)
+  inlineContexts?: WorkspaceAttachment[];
+  systemContexts?: WorkspaceAttachment[];
+  compiledContext?: WorkspaceAttachment;
+  quickContext?: QuickContextFile[];
 }
 
 export type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'staged';

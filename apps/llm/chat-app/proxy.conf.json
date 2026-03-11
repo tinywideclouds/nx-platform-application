@@ -1,5 +1,5 @@
 {
-  "/v1/caches": {
+  "/v1/data": {
     "target": "http://localhost:8096",
     "secure": false,
     "changeOrigin": true,

@@ -5,6 +5,8 @@ import {
   serializeSyncRequest,
   deserializeDataSourceBundle,
   deserializeFilterProfileList,
+  serializeDataGroupRequest,
+  deserializeDataGroupList,
 } from './data-source.facade';
 
 describe('Protobuf Sync DataSource Facade', () => {
@@ -61,5 +63,50 @@ describe('Protobuf Sync DataSource Facade', () => {
     expect(profiles[0].id).toBeInstanceOf(URN);
     expect(profiles[0].id.toString()).toBe('urn:data-source:profile:abc');
     expect(profiles[0].rulesYaml).toBe('include: [*.go]');
+  });
+
+  describe('DataGroup Mappers', () => {
+    it('should serialize DataGroupRequest and downgrade URNs to strings', () => {
+      const jsonString = serializeDataGroupRequest({
+        name: 'Go Backend',
+        description: 'Core API context',
+        sources: [
+          {
+            dataSourceId: URN.parse('urn:data-source:bundle:repo-1'),
+            profileId: URN.parse('urn:data-source:profile:p-1'),
+          },
+        ],
+        metadata: { compiledCacheId: 'urn:gemini:cache:xyz' },
+      });
+
+      const parsed = JSON.parse(jsonString);
+      expect(parsed.name).toBe('Go Backend');
+      expect(parsed.sources[0].dataSourceId).toBe(
+        'urn:data-source:bundle:repo-1',
+      );
+      expect(parsed.metadata.compiledCacheId).toBe('urn:gemini:cache:xyz');
+    });
+
+    it('should deserialize DataGroupList and upgrade raw strings back to URN objects', () => {
+      const rawGoResponse = `{
+        "dataGroups": [
+          {
+            "id": "urn:data-source:group:1",
+            "name": "UI Layer",
+            "sources": [
+              { "dataSourceId": "urn:data-source:bundle:ui-repo" }
+            ],
+            "metadata": {}
+          }
+        ]
+      }`;
+
+      const groups = deserializeDataGroupList(rawGoResponse);
+
+      expect(groups).toHaveLength(1);
+      expect(groups[0].id).toBeInstanceOf(URN);
+      expect(groups[0].id.toString()).toBe('urn:data-source:group:1');
+      expect(groups[0].sources[0].dataSourceId).toBeInstanceOf(URN);
+    });
   });
 });

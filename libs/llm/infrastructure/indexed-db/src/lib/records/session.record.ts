@@ -1,10 +1,10 @@
+// libs/llm/infrastructure/indexed-db/src/lib/records/session.record.ts
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
-export interface SessionAttachmentRecord {
+export interface WorkspaceAttachmentRecord {
   id: string;
-  dataSourceId: string; // Renamed
-  profileId?: string;
-  target: string;
+  resourceUrn: string;
+  resourceType: 'source' | 'group';
 }
 
 export interface QuickContextFileRecord {
@@ -16,20 +16,16 @@ export interface QuickContextFileRecord {
 export interface LlmSessionRecord {
   id: string; // PK
   title: string;
-  lastModified: ISODateTimeString;
+  contextGroups?: Record<string, string>;
 
-  attachments: SessionAttachmentRecord[];
-  quickContext?: QuickContextFileRecord[];
+  lastModified: ISODateTimeString;
+  llmModel?: string;
   workspaceTarget?: string;
 
-  compiledCacheId?: string; // NEW: The clean pointer
+  // THE NEW INTENT BUCKETS
+  inlineContexts?: WorkspaceAttachmentRecord[];
+  systemContexts?: WorkspaceAttachmentRecord[];
+  compiledContext?: WorkspaceAttachmentRecord;
 
-  // --- LEGACY (Kept for migration mapping only) ---
-  compiledCache?: any;
-  geminiCache?: string;
-  cacheId?: string;
-
-  llmModel?: string;
-  systemPromptsId?: string;
-  contextGroups?: Record<string, string>;
+  quickContext?: QuickContextFileRecord[];
 }

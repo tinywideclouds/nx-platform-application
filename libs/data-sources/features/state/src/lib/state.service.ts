@@ -1,7 +1,12 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { GithubFirestoreClient } from '@nx-platform-application/data-sources/features/github-firestore-access';
+
+// NEW IMPORTS
+import { GithubSyncClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
+import { FilterProfilesClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
+import { DataGroupsClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
+
 import {
   DataSourceBundle,
   FileMetadata,
@@ -9,27 +14,36 @@ import {
   FilterRules,
   ProfileRequest,
   SyncStreamEvent,
+  DataGroup,
+  DataGroupRequest,
 } from '@nx-platform-application/data-sources-types';
 import { URN } from '@nx-platform-application/platform-types';
 
 @Injectable({ providedIn: 'root' })
 export class DataSourcesService {
-  private client = inject(GithubFirestoreClient);
+  // SPLIT INJECTIONS
+  private syncClient = inject(GithubSyncClient);
+  private profilesClient = inject(FilterProfilesClient);
+  private groupsClient = inject(DataGroupsClient);
   private snackBar = inject(MatSnackBar);
 
   // --- STATE SIGNALS ---
   bundles = signal<DataSourceBundle[]>([]);
   isDataSourcesLoading = signal<boolean>(false);
 
+  dataGroups = signal<DataGroup[]>([]);
+  isDataGroupsLoading = signal<boolean>(false);
+
   activeDataSourceId = signal<URN | null>(null);
   activeFiles = signal<FileMetadata[]>([]);
   activeProfiles = signal<FilterProfile[]>([]);
   isActiveDataSourceLoading = signal<boolean>(false);
 
+  activeDataGroupId = signal<URN | null>(null);
+
   syncLogs = signal<SyncStreamEvent[]>([]);
 
   // --- COMPUTED STATE ---
-
   bundlesById = computed(() => {
     const map = new Map<string, DataSourceBundle>();
     for (const bundle of this.bundles()) {
@@ -47,7 +61,6 @@ export class DataSourcesService {
   groupedDataSources = computed(() => {
     const list = this.bundles();
     const groups: Record<string, DataSourceBundle[]> = {};
-
     for (const bundle of list) {
       if (!groups[bundle.repo]) groups[bundle.repo] = [];
       groups[bundle.repo].push(bundle);
@@ -55,8 +68,13 @@ export class DataSourcesService {
     return groups;
   });
 
-  // --- HELPERS ---
+  activeDataGroup = computed(() => {
+    const id = this.activeDataGroupId();
+    if (!id) return null;
+    return this.dataGroups().find((g) => g.id.equals(id)) || null;
+  });
 
+  // --- HELPERS ---
   private showError(message: string) {
     this.snackBar.open(message, 'Close', {
       duration: 5000,
@@ -71,11 +89,11 @@ export class DataSourcesService {
   }
 
   // --- DATA LOADING ---
-
   async loadAllDataSources(): Promise<void> {
     this.isDataSourcesLoading.set(true);
     try {
-      const data = await firstValueFrom(this.client.listDataSources());
+      const data = await firstValueFrom(this.syncClient.listDataSources());
+      console.log('got data source bundles', data);
       this.bundles.set(data);
     } catch (error) {
       console.error('Failed to load bundles', error);
@@ -86,9 +104,23 @@ export class DataSourcesService {
     }
   }
 
+  async loadAllDataGroups(): Promise<void> {
+    this.isDataGroupsLoading.set(true);
+    try {
+      const groups = await firstValueFrom(this.groupsClient.listDataGroups());
+      this.dataGroups.set(groups);
+    } catch (error) {
+      console.error('Failed to load data groups', error);
+      this.showError('Failed to load data groups.');
+      this.dataGroups.set([]);
+    } finally {
+      this.isDataGroupsLoading.set(false);
+    }
+  }
+
   async loadFilesForDataSource(bundleId: URN): Promise<void> {
     try {
-      const files = await firstValueFrom(this.client.getFiles(bundleId));
+      const files = await firstValueFrom(this.syncClient.getFiles(bundleId));
       this.activeFiles.set(files);
     } catch (e) {
       console.error(
@@ -108,7 +140,7 @@ export class DataSourcesService {
     try {
       await Promise.all([
         this.loadFilesForDataSource(bundleId),
-        firstValueFrom(this.client.listProfiles(bundleId)).then((p) =>
+        firstValueFrom(this.profilesClient.listProfiles(bundleId)).then((p) =>
           this.activeProfiles.set(p),
         ),
       ]);
@@ -123,7 +155,6 @@ export class DataSourcesService {
   }
 
   // --- REPOSITORY LIFECYCLE ACTIONS ---
-
   async createDataSource(payload: {
     repo: string;
     branch: string;
@@ -132,11 +163,10 @@ export class DataSourcesService {
       this.snackBar.open(`Analyzing ${payload.repo}...`, '', {
         duration: 2000,
       });
-      const newDataSource = await this.client.createDataSource(
+      const newDataSource = await this.syncClient.createDataSource(
         payload.repo,
         payload.branch,
       );
-
       this.bundles.update((c) => [...c, newDataSource]);
       return newDataSource.id;
     } catch (error) {
@@ -148,7 +178,6 @@ export class DataSourcesService {
 
   executeSync(bundleId: URN, ingestionRules: FilterRules): Promise<void> {
     this.syncLogs.set([]);
-
     this.bundles.update((bundles) =>
       bundles.map((c) =>
         c.id.equals(bundleId) ? { ...c, status: 'syncing' } : c,
@@ -156,7 +185,7 @@ export class DataSourcesService {
     );
 
     return new Promise<void>((resolve, reject) => {
-      this.client.executeSyncStream(bundleId, ingestionRules).subscribe({
+      this.syncClient.executeSyncStream(bundleId, ingestionRules).subscribe({
         next: (event: SyncStreamEvent) => {
           this.syncLogs.update((logs) => [...logs, event]);
         },
@@ -175,7 +204,6 @@ export class DataSourcesService {
             this.snackBar.open('Sync completed successfully.', 'Close', {
               duration: 3000,
             });
-
             await this.loadAllDataSources();
             if (this.activeDataSourceId()?.equals(bundleId)) {
               await this.loadFilesForDataSource(bundleId);
@@ -190,23 +218,20 @@ export class DataSourcesService {
   }
 
   // --- FILTER PROFILES ---
-
   async saveProfile(req: ProfileRequest, profileId?: URN): Promise<void> {
     const bundleId = this.activeDataSourceId();
-    if (!bundleId) {
+    if (!bundleId)
       throw new Error('Cannot save a profile without an active bundle ID.');
-    }
 
     try {
       let savedProfile: FilterProfile;
-
       if (profileId) {
         savedProfile = await firstValueFrom(
-          this.client.updateProfile(bundleId, profileId, req),
+          this.profilesClient.updateProfile(bundleId, profileId, req),
         );
       } else {
         savedProfile = await firstValueFrom(
-          this.client.createProfile(bundleId, req),
+          this.profilesClient.createProfile(bundleId, req),
         );
       }
 
@@ -232,8 +257,9 @@ export class DataSourcesService {
     if (!bundleId) return;
 
     try {
-      await firstValueFrom(this.client.deleteProfile(bundleId, profileId));
-
+      await firstValueFrom(
+        this.profilesClient.deleteProfile(bundleId, profileId),
+      );
       this.activeProfiles.update((profiles) =>
         profiles.filter((p) => !p.id.equals(profileId)),
       );
@@ -241,6 +267,58 @@ export class DataSourcesService {
     } catch (e) {
       console.error('Failed to delete profile', e);
       this.showError('Failed to delete profile.');
+    }
+  }
+
+  // --- DATA GROUPS ---
+  async saveDataGroup(
+    req: DataGroupRequest,
+    groupId?: URN,
+  ): Promise<URN | null> {
+    try {
+      let savedGroup: DataGroup;
+      if (groupId) {
+        savedGroup = await firstValueFrom(
+          this.groupsClient.updateDataGroup(groupId, req),
+        );
+      } else {
+        savedGroup = await firstValueFrom(
+          this.groupsClient.createDataGroup(req),
+        );
+      }
+
+      this.dataGroups.update((groups) => {
+        const idx = groups.findIndex((g) => g.id.equals(savedGroup.id));
+        if (idx >= 0) {
+          const updated = [...groups];
+          updated[idx] = savedGroup;
+          return updated;
+        }
+        return [...groups, savedGroup];
+      });
+
+      this.snackBar.open(`Data Group saved`, 'Close', { duration: 3000 });
+      return savedGroup.id;
+    } catch (e) {
+      console.error('Failed to save data group', e);
+      this.showError('Failed to save Data Group.');
+      return null;
+    }
+  }
+
+  async deleteDataGroup(groupId: URN): Promise<void> {
+    try {
+      await firstValueFrom(this.groupsClient.deleteDataGroup(groupId));
+      this.dataGroups.update((groups) =>
+        groups.filter((g) => !g.id.equals(groupId)),
+      );
+      if (this.activeDataGroupId()?.equals(groupId)) {
+        this.activeDataGroupId.set(null);
+      }
+      this.snackBar.open('Data Group deleted', 'Close', { duration: 3000 });
+    } catch (e) {
+      console.error('Failed to delete data group', e);
+      this.showError('Failed to delete Data Group.');
     }
   }
 }

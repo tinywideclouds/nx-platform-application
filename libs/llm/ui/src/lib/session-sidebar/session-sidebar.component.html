@@ -71,7 +71,14 @@
               class="flex justify-between items-center text-xs text-gray-400 mt-1"
             >
               <span>{{ session.lastModified | date: 'shortDate' }}</span>
-              <span>{{ session.attachments.length || 0 }} Sources</span>
+              <span>
+                {{
+                  (session.inlineContexts?.length || 0) +
+                    (session.systemContexts?.length || 0) +
+                    (session.compiledContext ? 1 : 0)
+                }}
+                Sources
+              </span>
             </div>
           </li>
         }

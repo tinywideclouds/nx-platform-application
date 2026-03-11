@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Temporal } from '@js-temporal/polyfill';
 import {
@@ -6,12 +6,11 @@ import {
   URN,
 } from '@nx-platform-application/platform-types';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
-import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import {
   LlmSession,
   QuickContextFile,
+  WorkspaceAttachment,
 } from '@nx-platform-application/llm-types';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { SessionStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 
@@ -37,7 +36,10 @@ export class LlmSessionActions {
       title: title.trim(),
       llmModel: model,
       lastModified: now,
-      attachments: [],
+      // Initialize the explicit intent buckets
+      inlineContexts: [],
+      systemContexts: [],
+      compiledContext: undefined,
       quickContext: [],
     };
 
@@ -76,6 +78,65 @@ export class LlmSessionActions {
       throw e;
     }
   }
+
+  // --- NEW CONTEXT INTENT MANAGEMENT ---
+
+  async attachContext(
+    sessionId: URN,
+    resourceUrn: URN,
+    resourceType: 'source' | 'group',
+    targetBucket: 'inlineContexts' | 'systemContexts' | 'compiledContext',
+  ): Promise<void> {
+    try {
+      const session = await this.storage.getSession(sessionId);
+      if (!session) return;
+
+      const attachment: WorkspaceAttachment = {
+        id: URN.create('attachment', crypto.randomUUID(), 'llm'),
+        resourceUrn,
+        resourceType,
+      };
+
+      if (targetBucket === 'compiledContext') {
+        session.compiledContext = attachment; // Only 1 allowed
+      } else {
+        session[targetBucket] = [...(session[targetBucket] || []), attachment]; // Append to arrays
+      }
+
+      await this.storage.saveSession(session);
+      await this.source.refresh();
+    } catch (e) {
+      this.logger.error(`Failed to attach context to ${targetBucket}`, e);
+    }
+  }
+
+  async removeContext(
+    sessionId: URN,
+    attachmentId: URN,
+    targetBucket: 'inlineContexts' | 'systemContexts' | 'compiledContext',
+  ): Promise<void> {
+    try {
+      const session = await this.storage.getSession(sessionId);
+      if (!session) return;
+
+      if (targetBucket === 'compiledContext') {
+        if (session.compiledContext?.id.equals(attachmentId)) {
+          session.compiledContext = undefined;
+        }
+      } else {
+        session[targetBucket] = (session[targetBucket] || []).filter(
+          (a) => !a.id.equals(attachmentId),
+        );
+      }
+
+      await this.storage.saveSession(session);
+      await this.source.refresh();
+    } catch (e) {
+      this.logger.error(`Failed to remove context from ${targetBucket}`, e);
+    }
+  }
+
+  // --- WORKSPACE & QUICK CONTEXT ---
 
   async setWorkspaceTarget(sessionId: URN, targetId: URN): Promise<void> {
     try {
@@ -135,6 +196,7 @@ export class LlmSessionActions {
   }
 
   async removeQuickFile(sessionId: URN, fileId: URN): Promise<void> {
+    // ... [No changes needed to quick context implementation] ...
     try {
       const session = await this.storage.getSession(sessionId);
       if (!session || !session.quickContext) return;

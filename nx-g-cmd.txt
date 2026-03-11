@@ -344,3 +344,6 @@ nx g @nx/angular:library --name=data-sources-ui --directory=libs/data-sources/ui
 
 
 nx g @nx/angular:library --name=llm-domain-compiled-cache --directory=libs/llm/domain/compiled-cache --tags="scope:llm"  
+
+
+nx g @nx/workspace:move --project=data-sources-infrastructure-github-firestore-access --destination=libs/data-sources/infrastructure/data-access

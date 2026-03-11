@@ -6,6 +6,7 @@ import {
   signal,
   computed,
   ChangeDetectionStrategy,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -24,9 +25,10 @@ import { LlmContextHierarchyComponent } from '../context-hierarchy/context-hiera
 
 import {
   LlmSession,
-  SessionAttachment,
+  WorkspaceAttachment,
 } from '@nx-platform-application/llm-types';
 import { URN } from '@nx-platform-application/platform-types';
+import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 
 @Component({
   selector: 'llm-session-form',
@@ -52,12 +54,13 @@ import { URN } from '@nx-platform-application/platform-types';
 export class LlmSessionFormComponent {
   session = input<LlmSession | null>(null);
 
+  private actions = inject(LlmSessionActions);
+
   save = output<LlmSession>();
   delete = output<void>();
 
   isEditingTitle = signal(false);
   editTitleValue = signal('');
-  attachments = signal<SessionAttachment[]>([]);
 
   contextGroupEntries = computed(() => {
     const groups = this.session()?.contextGroups || {};
@@ -68,7 +71,6 @@ export class LlmSessionFormComponent {
     effect(() => {
       const s = this.session();
       if (s) {
-        this.attachments.set(s.attachments ? [...s.attachments] : []);
         if (!this.isEditingTitle()) {
           this.editTitleValue.set(s.title || '');
         }
@@ -87,19 +89,24 @@ export class LlmSessionFormComponent {
 
   saveTitle(): void {
     const newTitle = this.editTitleValue().trim();
-    if (newTitle && this.session()) {
-      this.save.emit({ ...this.session()!, title: newTitle });
+    const current = this.session();
+    if (newTitle && current) {
+      this.save.emit({ ...current, title: newTitle });
     }
     this.isEditingTitle.set(false);
   }
 
-  removeAttachment(id: URN): void {
-    if (!this.session()) return;
-
-    this.save.emit({
-      ...this.session()!,
-      attachments: this.attachments().filter((a) => !a.id.equals(id)),
-    });
+  /**
+   * Triggers removal through the Domain Actions service,
+   * targeting the specific intent bucket.
+   */
+  async onRemoveAttachment(
+    attachmentId: URN,
+    bucket: 'inlineContexts' | 'systemContexts' | 'compiledContext',
+  ): Promise<void> {
+    const current = this.session();
+    if (!current) return;
+    await this.actions.removeContext(current.id, attachmentId, bucket);
   }
 
   onDelete(): void {

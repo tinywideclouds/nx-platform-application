@@ -3,7 +3,6 @@ import {
   input,
   output,
   computed,
-  signal,
   ChangeDetectionStrategy,
   inject,
 } from '@angular/core';
@@ -11,13 +10,11 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
 
 import { URN } from '@nx-platform-application/platform-types';
 import {
   LlmSession,
-  SessionAttachment,
+  WorkspaceAttachment,
 } from '@nx-platform-application/llm-types';
 import { DataSourceBundle } from '@nx-platform-application/data-sources-types';
 import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
@@ -25,14 +22,7 @@ import { DataSourcesService } from '@nx-platform-application/data-sources/featur
 @Component({
   selector: 'llm-context-hierarchy',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatIconModule,
-    MatButtonModule,
-    MatTooltipModule,
-    MatFormFieldModule,
-    MatSelectModule,
-  ],
+  imports: [CommonModule, MatIconModule, MatButtonModule, MatTooltipModule],
   templateUrl: './context-hierarchy.component.html',
   styleUrl: './context-hierarchy.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,24 +30,27 @@ import { DataSourcesService } from '@nx-platform-application/data-sources/featur
 export class LlmContextHierarchyComponent {
   private dataSourcesState = inject(DataSourcesService);
 
+  // Updated Inputs to match explicit session buckets
   session = input.required<LlmSession | null>();
-  attachments = input.required<SessionAttachment[]>();
+  inlineAttachments = input<WorkspaceAttachment[]>([]);
+  systemAttachments = input<WorkspaceAttachment[]>([]);
+  compiledContext = input<WorkspaceAttachment | undefined>(undefined);
+
   isCompiling = input<boolean>(false);
 
-  removeAttachment = output<URN>();
-  compileCache = output<number | undefined>();
-
-  ttlValue = signal<number | undefined>(undefined);
-
-  groupedAttachments = computed(() => {
-    const atts = this.attachments() || [];
-    return {
-      inlineContext: atts.filter((a) => a.target === 'inline-context'),
-      systemInstruction: atts.filter((a) => a.target === 'system-instruction'),
-    };
-  });
+  // Outputs targeting specific buckets
+  removeInline = output<URN>();
+  removeSystem = output<URN>();
+  removeCompiled = output<URN>();
 
   getDataSourceBundleDetails(urn: URN): DataSourceBundle | undefined {
     return this.dataSourcesState.bundles().find((c) => c.id.equals(urn));
+  }
+
+  /**
+   * Identifies if a URN points to a Data Group vs a Raw Source
+   */
+  isGroup(urn: URN): boolean {
+    return urn.entityType === 'group';
   }
 }

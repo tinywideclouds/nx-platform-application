@@ -1,18 +1,24 @@
 import { Injectable, inject } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
+import { Temporal } from '@js-temporal/polyfill';
+
 import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { ProposalRegistryStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
+import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+
+import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
 import {
   GenerateStreamRequest,
   NetworkMessage,
   LlmSession,
-  SessionAttachment,
+  ContextAttachment,
   SSEProposalEvent,
   FileProposalType,
   FileLinkType,
   PointerPayload,
+  WorkspaceAttachment,
 } from '@nx-platform-application/llm-types';
-import { Temporal } from '@js-temporal/polyfill';
 
 export interface ContextAssembly {
   request: GenerateStreamRequest;
@@ -28,9 +34,45 @@ export interface ContextAssembly {
 export class LlmContextBuilderService {
   private storage = inject(MessageStorageService);
   private registry = inject(ProposalRegistryStorageService);
+  private cacheService = inject(CompiledCacheService);
+  private dataSources = inject(DataSourcesService);
 
   private readonly MAX_SHORT_TERM_MEMORY = 50;
   private readonly FLUSH_THRESHOLD = 25;
+
+  /**
+   * JIT Unrolling Helper: Translates high-level UI intents (Groups/Sources)
+   * into a flat array of physical sources required by the LLM backend.
+   */
+  private resolvePhysicalSources(
+    attachments: WorkspaceAttachment[],
+  ): FilteredDataSource[] {
+    const groups = this.dataSources.dataGroups();
+    const physicalSources: FilteredDataSource[] = [];
+    const uniqueKeys = new Set<string>();
+
+    for (const att of attachments) {
+      if (att.resourceType === 'source') {
+        const key = att.resourceUrn.toString();
+        if (!uniqueKeys.has(key)) {
+          uniqueKeys.add(key);
+          physicalSources.push({ dataSourceId: att.resourceUrn });
+        }
+      } else if (att.resourceType === 'group') {
+        const group = groups.find((g) => g.id.equals(att.resourceUrn));
+        if (group) {
+          for (const src of group.sources) {
+            const key = `${src.dataSourceId.toString()}|${src.profileId?.toString() || 'none'}`;
+            if (!uniqueKeys.has(key)) {
+              uniqueKeys.add(key);
+              physicalSources.push(src);
+            }
+          }
+        }
+      }
+    }
+    return physicalSources;
+  }
 
   async buildStreamRequest(session: LlmSession): Promise<ContextAssembly> {
     const fullHistory = await this.storage.getSessionMessages(session.id);
@@ -102,7 +144,6 @@ export class LlmContextBuilderService {
 
     const networkHistory = collapsedHistory.slice(startIndex);
 
-    // --- NEW: Inject the Quick Context Drawer Files ---
     if (session.quickContext && session.quickContext.length > 0) {
       let quickContextBlock = `<CURRENT_ACTIVE_FOCUS>\n`;
       quickContextBlock += `System Note: The user has explicitly pinned the following files as their current working context.\n`;
@@ -113,13 +154,11 @@ export class LlmContextBuilderService {
       }
       quickContextBlock += `</CURRENT_ACTIVE_FOCUS>\n\n`;
 
-      // Prepend this massive semantic block to the very first message in the outgoing array
       if (networkHistory.length > 0) {
         const latestIndex = networkHistory.length - 1;
         networkHistory[latestIndex].content =
           quickContextBlock + networkHistory[latestIndex].content;
       } else {
-        // Fallback if history is empty
         networkHistory.push({
           id: 'quick-context-injection',
           role: 'user',
@@ -128,18 +167,43 @@ export class LlmContextBuilderService {
         });
       }
     }
-    // --------------------------------------------------
 
-    const inlineAttachments: SessionAttachment[] = (
-      session.attachments || []
-    ).filter((a) => a.target === 'inline-context');
+    // --- NEW JIT CONTEXT RESOLUTION ---
+    const targetModel = session.llmModel || 'gemini-2.5-pro';
+
+    // 1. Unroll Inline Contexts
+    const physicalInlineSources = this.resolvePhysicalSources(
+      session.inlineContexts || [],
+    );
+    const inlineAttachments: ContextAttachment[] = physicalInlineSources.map(
+      (src) => ({
+        id: URN.create('attachment', crypto.randomUUID(), 'llm'),
+        dataSourceId: src.dataSourceId,
+        profileId: src.profileId,
+      }),
+    );
+
+    // 2. Resolve Compiled Cache via pure source hashing
+    let compiledCacheId: URN | undefined = undefined;
+    if (session.compiledContext) {
+      const physicalCacheSources = this.resolvePhysicalSources([
+        session.compiledContext,
+      ]);
+      const validCache = this.cacheService.getValidCache(
+        physicalCacheSources,
+        targetModel,
+      );
+      if (validCache) {
+        compiledCacheId = validCache.id;
+      }
+    }
 
     return {
       request: {
         sessionId: session.id,
-        model: session.llmModel || 'gemini-2.5-pro',
+        model: targetModel,
         history: networkHistory,
-        compiledCacheId: session.compiledCache?.id,
+        compiledCacheId: compiledCacheId,
         inlineAttachments: inlineAttachments,
       },
       memoryMetrics: {

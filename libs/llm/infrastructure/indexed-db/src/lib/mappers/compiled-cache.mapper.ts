@@ -8,6 +8,7 @@ export class CompiledCacheMapper {
   toDomain(record: CompiledCacheRecord): CompiledCache {
     return {
       id: URN.parse(record.id),
+      model: record.model,
       provider: record.provider,
       expiresAt: record.expiresAt,
       createdAt: record.createdAt,
@@ -21,6 +22,7 @@ export class CompiledCacheMapper {
   toRecord(domain: CompiledCache): CompiledCacheRecord {
     return {
       id: domain.id.toString(),
+      model: domain.model,
       provider: domain.provider || 'gemini',
       expiresAt: domain.expiresAt,
       createdAt: domain.createdAt,
@@ -28,6 +30,6 @@ export class CompiledCacheMapper {
         dataSourceId: s.dataSourceId.toString(),
         profileId: s.profileId?.toString(),
       })),
-    };
+    } as CompiledCacheRecord;
   }
 }

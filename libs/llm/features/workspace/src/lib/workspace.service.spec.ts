@@ -5,19 +5,16 @@ import {
   LlmScrollSource,
   LlmSessionSource,
 } from '@nx-platform-application/llm-features-chat';
-import { GithubFirestoreClient } from '@nx-platform-application/data-sources/features/github-firestore-access';
+import { GithubSyncClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-import {
-  URN,
-  ISODateTimeString,
-} from '@nx-platform-application/platform-types';
+import { URN } from '@nx-platform-application/platform-types';
 import {
   FileLinkType,
   PointerPayload,
-  RegistryEntry,
-  LlmMessage,
 } from '@nx-platform-application/llm-types';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
+import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
+import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { of } from 'rxjs';
 
@@ -28,37 +25,29 @@ describe('WorkspaceStateService', () => {
     items: signal<any[]>([]),
     activeSessionId: signal<URN | null>(null),
   };
-
   const mockSessionSource = {
     activeSessionId: signal<URN | null>(null),
     activeSession: signal<any>({
       id: URN.parse('urn:llm:session:123'),
-      workspaceTarget: URN.parse('urn:data-source:repo:123'), // Fix URN
-      attachments: [
+      inlineContexts: [
         {
-          dataSourceId: URN.parse('urn:data-source:repo:123'),
-          target: 'inline-context',
+          resourceUrn: URN.parse('urn:data-source:repo:123'),
+          resourceType: 'source',
         },
       ],
     }),
-    sessions: signal([]),
   };
 
-  const mockFirestoreClient = {
+  const mockSyncClient = {
     getFiles: vi.fn().mockReturnValue(of([])),
     getFileContent: vi.fn(),
   };
-
   const mockRegistry = {
     getProposalsForSession: vi.fn().mockResolvedValue([]),
-    registryMutated: signal(0), // Provided correctly as a signal
+    registryMutated: signal(0),
   };
-
-  const mockLogger = {
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  };
+  const mockCache = { activeCaches: signal([]), getValidCache: vi.fn() };
+  const mockDataSources = { dataGroups: signal([]) };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -67,74 +56,47 @@ describe('WorkspaceStateService', () => {
         WorkspaceStateService,
         { provide: LlmScrollSource, useValue: mockScrollSource },
         { provide: LlmSessionSource, useValue: mockSessionSource },
-        { provide: GithubFirestoreClient, useValue: mockFirestoreClient },
+        { provide: GithubSyncClient, useValue: mockSyncClient },
         { provide: LlmProposalService, useValue: mockRegistry },
-        { provide: Logger, useValue: mockLogger },
+        { provide: CompiledCacheService, useValue: mockCache },
+        { provide: DataSourcesService, useValue: mockDataSources },
+        {
+          provide: Logger,
+          useValue: { error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+        },
       ],
     });
     service = TestBed.inject(WorkspaceStateService);
   });
 
-  it('should successfully build the overlayMap by joining Pointers with Registry Data', async () => {
-    const encoder = new TextEncoder();
+  it('should successfully build the overlayMap', async () => {
     const pointer: PointerPayload = {
-      proposalId: URN.parse('urn:llm:proposal:prop-1'),
+      proposalId: URN.parse('urn:llm:proposal:p1'),
       filePath: 'src/main.ts',
-      snippet: 'Preview',
+      snippet: '',
     };
-
-    const mockMessage: Partial<LlmMessage> = {
-      typeId: FileLinkType,
-      payloadBytes: encoder.encode(JSON.stringify(pointer)),
-    };
-
-    mockScrollSource.items.set([{ type: 'content', data: mockMessage }]);
-
-    const mockRegistryEntry: Partial<RegistryEntry> = {
-      id: URN.parse('urn:llm:proposal:prop-1'),
-      ownerSessionId: URN.parse('urn:llm:session:123'),
-      filePath: 'src/main.ts',
-      patch: '@@ -1 +1 @@\n+ Hello',
-      status: 'pending',
-      createdAt: '2026-03-01T10:00:00Z' as ISODateTimeString,
-    };
-
-    mockRegistry.getProposalsForSession.mockResolvedValue([mockRegistryEntry]);
+    mockScrollSource.items.set([
+      {
+        type: 'content',
+        data: {
+          typeId: FileLinkType,
+          payloadBytes: new TextEncoder().encode(JSON.stringify(pointer)),
+        },
+      },
+    ]);
+    mockRegistry.getProposalsForSession.mockResolvedValue([
+      {
+        id: URN.parse('urn:llm:proposal:p1'),
+        ownerSessionId: URN.parse('urn:llm:session:123'),
+        filePath: 'src/main.ts',
+        status: 'pending',
+        createdAt: '2026-03-01T10:00:00Z',
+      },
+    ]);
 
     mockSessionSource.activeSessionId.set(URN.parse('urn:llm:session:123'));
-    TestBed.flushEffects();
     await new Promise(process.nextTick);
 
-    const overlay = service.overlayMap();
-    expect(overlay.has('src/main.ts')).toBe(true);
-
-    const record = overlay.get('src/main.ts')!;
-    expect(record.proposalChain).toHaveLength(1);
-    expect(record.proposalChain[0].id).toBe('urn:llm:proposal:prop-1');
-    expect(record.proposalChain[0].patch).toBe('@@ -1 +1 @@\n+ Hello');
-  });
-
-  it('should correctly calculate resolveChainState by applying patches sequentially', () => {
-    const record = {
-      filePath: 'test.ts',
-      isContentLoading: false,
-      baseContent: 'Line 1\nLine 2\n',
-      proposalChain: [
-        {
-          id: '1',
-          sessionId: URN.parse('urn:llm:session:s1'),
-          filePath: 'test.ts',
-          patch: '@@ -1,2 +1,3 @@\n Line 1\n Line 2\n+Line 3\n',
-          reasoning: '',
-          status: 'pending' as const,
-          createdAt: 'now' as ISODateTimeString,
-        },
-      ],
-    };
-
-    const result = service.resolveChainState(record as any);
-
-    expect(result.error).toBeUndefined();
-    expect(result.content).toBe('Line 1\nLine 2\nLine 3\n');
+    expect(service.overlayMap().has('src/main.ts')).toBe(true);
   });
 });

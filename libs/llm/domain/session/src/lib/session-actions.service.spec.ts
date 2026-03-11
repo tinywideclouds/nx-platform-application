@@ -43,24 +43,29 @@ describe('LlmSessionActions', () => {
     id: URN.parse('urn:llm:session:123'),
     title: 'Test Session',
     lastModified: '2026-03-01T10:00:00Z' as ISODateTimeString,
-    attachments: [
+    inlineContexts: [
       {
         id: URN.parse('urn:llm:attachment:1256'),
-        dataSourceId: URN.parse('urn:data-source:repo:123'),
-        target: 'inline-context',
+        resourceUrn: URN.parse('urn:data-source:repo:123'),
+        resourceType: 'source',
       },
     ],
+    systemContexts: [],
+    compiledContext: undefined,
     quickContext: [],
   };
 
   describe('Session Lifecycle', () => {
-    it('should create a new session and navigate to it', async () => {
+    it('should create a new session with empty intent buckets and navigate to it', async () => {
       await service.createNewSession('New Chat', 'chat', 'gemini-1.5-pro');
 
       expect(mockStorage.saveSession).toHaveBeenCalledWith(
         expect.objectContaining({
           title: 'New Chat',
           llmModel: 'gemini-1.5-pro',
+          inlineContexts: [],
+          systemContexts: [],
+          compiledContext: undefined,
           quickContext: [],
         }),
       );
@@ -115,6 +120,75 @@ describe('LlmSessionActions', () => {
         expect.objectContaining({ workspaceTarget: targetId }),
       );
       expect(mockSource.refresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('Context Intent Management', () => {
+    it('should append a new attachment pointer to an array bucket', async () => {
+      mockStorage.getSession.mockResolvedValue(mockSession);
+      const resourceUrn = URN.parse('urn:data-source:repo:456');
+
+      await service.attachContext(
+        mockSession.id,
+        resourceUrn,
+        'source',
+        'inlineContexts',
+      );
+
+      const saveCallArgs = mockStorage.saveSession.mock.calls[0][0];
+      expect(saveCallArgs.inlineContexts).toHaveLength(2);
+      expect(saveCallArgs.inlineContexts[1].resourceUrn.toString()).toBe(
+        'urn:data-source:repo:456',
+      );
+      expect(mockSource.refresh).toHaveBeenCalled();
+    });
+
+    it('should directly assign an attachment pointer to the singleton compiledContext bucket', async () => {
+      mockStorage.getSession.mockResolvedValue(mockSession);
+      const blueprintUrn = URN.parse('urn:data-source:group:blueprint-1');
+
+      await service.attachContext(
+        mockSession.id,
+        blueprintUrn,
+        'group',
+        'compiledContext',
+      );
+
+      const saveCallArgs = mockStorage.saveSession.mock.calls[0][0];
+      expect(saveCallArgs.compiledContext).toBeDefined();
+      expect(saveCallArgs.compiledContext.resourceUrn.toString()).toBe(
+        'urn:data-source:group:blueprint-1',
+      );
+      expect(saveCallArgs.compiledContext.resourceType).toBe('group');
+    });
+
+    it('should remove an attachment pointer from an array bucket', async () => {
+      mockStorage.getSession.mockResolvedValue(mockSession);
+      const targetId = URN.parse('urn:llm:attachment:1256');
+
+      await service.removeContext(mockSession.id, targetId, 'inlineContexts');
+
+      const saveCallArgs = mockStorage.saveSession.mock.calls[0][0];
+      expect(saveCallArgs.inlineContexts).toHaveLength(0);
+      expect(mockSource.refresh).toHaveBeenCalled();
+    });
+
+    it('should clear the singleton compiledContext bucket', async () => {
+      const activeCompiledSession = {
+        ...mockSession,
+        compiledContext: {
+          id: URN.parse('urn:llm:attachment:comp1'),
+          resourceUrn: URN.parse('urn:data-source:group:blueprint-1'),
+          resourceType: 'group' as const,
+        },
+      };
+      mockStorage.getSession.mockResolvedValue(activeCompiledSession);
+
+      const targetId = URN.parse('urn:llm:attachment:comp1');
+      await service.removeContext(mockSession.id, targetId, 'compiledContext');
+
+      const saveCallArgs = mockStorage.saveSession.mock.calls[0][0];
+      expect(saveCallArgs.compiledContext).toBeUndefined();
     });
   });
 

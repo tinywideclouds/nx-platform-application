@@ -18,6 +18,7 @@ import {
   PointerPayload,
   SSEProposalEvent,
   TextType,
+  FileProposalType,
 } from '@nx-platform-application/llm-types';
 import {
   LlmScrollSource,
@@ -109,22 +110,7 @@ export class LlmChatActions {
 
     // --- STEP 2: ASSEMBLE CONTEXT (PRISTINE DB STATE) ---
     // We build the network request NOW, before the bot placeholder exists in the DB!
-    let safeSession = { ...session };
-
-    // NEW: Actively strip expired caches so the backend doesn't crash!
-    if (safeSession.compiledCache) {
-      const now = Temporal.Now.instant();
-      const expiry = Temporal.Instant.from(safeSession.compiledCache.expiresAt);
-
-      if (Temporal.Instant.compare(now, expiry) >= 0) {
-        this.logger.warn(
-          `Cache ${safeSession.compiledCache.id} is expired. Stripping from request.`,
-        );
-        safeSession.compiledCache = undefined;
-      }
-    }
-
-    const assembly = await this.contextBuilder.buildStreamRequest(safeSession);
+    const assembly = await this.contextBuilder.buildStreamRequest(session);
     const request = assembly.request;
 
     // DO NOT REMOVE the bot message MUST be later than the user message
@@ -205,10 +191,10 @@ export class LlmChatActions {
             ? URN.parse(p.id)
             : URN.create('proposal', p.id, 'llm');
 
-          // Safely convert raw string IDs from the backend to URNs
+          // Write heavy proposal to Registry DB
           this.proposalService.saveChangeProposal(session.id, proposalUrn, p);
 
-          // 2. Write lightweight pointer to Chat DB
+          // Write lightweight pointer to Chat DB
           const pointer: PointerPayload = {
             proposalId: proposalUrn,
             filePath: p.filePath,
@@ -226,7 +212,7 @@ export class LlmChatActions {
 
           const pointerMsg: LlmMessage = {
             id: pointerMsgId,
-            typeId: FileLinkType, // The new parallel dual-support type
+            typeId: FileLinkType,
             sessionId: sessionId,
             role: 'model',
             timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
@@ -317,15 +303,11 @@ export class LlmChatActions {
       const newUrn = URN.create('tag', crypto.randomUUID(), 'llm');
       targetUrnStr = newUrn.toString();
 
-      const session = await this.sessionStorage.getSession(sessionId);
-      if (session) {
-        session.contextGroups = {
-          ...(session.contextGroups || {}),
-          [targetUrnStr]: payload.newName,
-        };
-        await this.sessionStorage.saveSession(session);
-        this.sessionSource.refresh();
-      }
+      // NOTE: session.contextGroups was removed in the schema update.
+      // Message tagging metadata now requires a dedicated entity or storage if names are needed.
+      this.logger.warn(
+        'Tag name saving is temporarily bypassed due to session schema update.',
+      );
     }
 
     if (!targetUrnStr) return;
@@ -363,12 +345,15 @@ export class LlmChatActions {
     const newSessionId = URN.create('session', crypto.randomUUID(), 'llm');
     const now = Temporal.Now.instant().toString() as ISODateTimeString;
 
+    // FIX: Updated to match the strict explicit intent buckets
     const newSession: LlmSession = {
       id: newSessionId,
       title: mode === 'copy' ? 'Branched Session' : 'Extracted Session',
       lastModified: now,
-      contextGroups: {},
-      attachments: [],
+      inlineContexts: [],
+      systemContexts: [],
+      compiledContext: undefined,
+      quickContext: [],
     };
 
     await this.sessionStorage.saveSession(newSession);
@@ -415,10 +400,7 @@ export class LlmChatActions {
         const payloadBytes = encoder.encode(newText);
         const updatedMsg: LlmMessage = { ...msg, payloadBytes };
 
-        // 1. Persist to IndexedDB
         await this.messageStorage.saveMessage(updatedMsg);
-
-        // 2. Optimistically update the UI View Model
         this.sink.updateMessagePayload(msgId, payloadBytes);
       }
     } catch (e) {

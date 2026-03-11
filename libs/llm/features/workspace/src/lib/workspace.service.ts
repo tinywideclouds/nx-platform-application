@@ -2,13 +2,16 @@ import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { applyPatch, createTwoFilesPatch } from 'diff';
 import { URN } from '@nx-platform-application/platform-types';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
+
+import { GithubSyncClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
 import { ChangeProposal } from '@nx-platform-application/llm-types';
 import { FileMetadata } from '@nx-platform-application/data-sources-types';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
-import { GithubFirestoreClient } from '@nx-platform-application/data-sources/features/github-firestore-access';
-import { Logger } from '@nx-platform-application/platform-tools-console-logger';
-
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
+import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
+import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+
 import { healMalformedPatch } from './utils';
 
 export interface ModifiedFile {
@@ -30,40 +33,49 @@ export interface ChainResolution {
 export class WorkspaceStateService {
   private readonly logger = inject(Logger);
   private sessionSource = inject(LlmSessionSource);
-  private firestoreClient = inject(GithubFirestoreClient);
+  private synClient = inject(GithubSyncClient);
   private proposalService = inject(LlmProposalService);
+  private cacheService = inject(CompiledCacheService);
+  private dataSources = inject(DataSourcesService);
 
   private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
   private readonly baseContents = signal<Map<string, string>>(new Map());
   private readonly loadingSet = signal<Set<string>>(new Set());
-
   private readonly activeProposals = signal<ChangeProposal[]>([]);
 
   private readonly activeSessionId = computed(() =>
     this.sessionSource.activeSessionId(),
   );
 
-  // --- WORKSPACE TARGET STATE ---
   readonly availableTargets = computed(() => {
     const session = this.sessionSource.activeSession();
     if (!session) return [];
 
     const targetMap = new Map<string, URN>();
 
-    // 1. Gather from inline attachments
-    (session.attachments || []).forEach((a) => {
-      if (a.dataSourceId) {
-        targetMap.set(a.dataSourceId.toString(), a.dataSourceId);
+    // Gather from inline intents
+    (session.inlineContexts || []).forEach((a) => {
+      if (a.resourceType === 'source') {
+        targetMap.set(a.resourceUrn.toString(), a.resourceUrn);
       }
     });
 
-    // 2. Gather from the hydrated compiled cache (if it exists)
-    if (session.compiledCache?.sources) {
-      session.compiledCache.sources.forEach((s) => {
-        if (s.dataSourceId) {
-          targetMap.set(s.dataSourceId.toString(), s.dataSourceId);
-        }
-      });
+    // Gather from compiled intent
+    if (session.compiledContext) {
+      if (session.compiledContext.resourceType === 'source') {
+        targetMap.set(
+          session.compiledContext.resourceUrn.toString(),
+          session.compiledContext.resourceUrn,
+        );
+      } else {
+        // If it's a group, we show the individual sources within it
+        const group = this.dataSources
+          .dataGroups()
+          .find((g) => g.id.equals(session.compiledContext!.resourceUrn));
+        group?.sources.forEach((s) =>
+          targetMap.set(s.dataSourceId.toString(), s.dataSourceId),
+        );
+      }
     }
 
     return Array.from(targetMap.values());
@@ -89,10 +101,8 @@ export class WorkspaceStateService {
   });
 
   constructor() {
-    // 1. Base File Fetcher Effect
     effect(async () => {
       const targetId = this.activeWorkspaceTarget();
-
       if (!targetId) {
         this.baseMetadata.set(new Map());
         this.baseContents.set(new Map());
@@ -101,27 +111,19 @@ export class WorkspaceStateService {
 
       try {
         const metadataList = await firstValueFrom(
-          this.firestoreClient.getFiles(targetId),
+          this.synClient.getFiles(targetId),
         );
         const metaMap = new Map<string, FileMetadata>();
-        for (const meta of metadataList) {
-          metaMap.set(meta.path, meta);
-        }
+        for (const meta of metadataList) metaMap.set(meta.path, meta);
         this.baseMetadata.set(metaMap);
       } catch (err) {
-        this.logger.error(
-          `Failed to fetch metadata for target ${targetId.toString()}`,
-          err,
-        );
+        this.logger.error(`Failed to fetch metadata`, err);
         this.baseMetadata.set(new Map());
       }
     });
 
-    // 2. The Pure Registry Query Effect
     effect(async () => {
       const sessionId = this.activeSessionId();
-
-      // Track dependency: Re-run when registry mutates
       this.proposalService.registryMutated();
 
       if (!sessionId) {
@@ -132,86 +134,42 @@ export class WorkspaceStateService {
       try {
         const entries =
           await this.proposalService.getProposalsForSession(sessionId);
-
         entries.sort(
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );
-
-        const proposals: ChangeProposal[] = entries.map((entry) => ({
-          id: entry.id.toString(),
-          sessionId: entry.ownerSessionId,
-          filePath: entry.filePath,
-          patch: entry.patch,
-          newContent: entry.newContent,
-          reasoning: entry.reasoning,
-          status: entry.status || 'pending',
-          createdAt: entry.createdAt,
-        }));
-
-        this.activeProposals.set(proposals);
+        this.activeProposals.set(
+          entries.map((e) => ({
+            id: e.id.toString(),
+            sessionId: e.ownerSessionId,
+            filePath: e.filePath,
+            patch: e.patch,
+            newContent: e.newContent,
+            reasoning: e.reasoning,
+            status: e.status,
+            createdAt: e.createdAt,
+          })),
+        );
       } catch (e) {
-        this.logger.error('Failed to load proposals from registry', e);
+        this.logger.error('Failed to load proposals', e);
       }
     });
 
-    // 3. Auto-Loader Effect
     effect(() => {
-      const fileMap = this.overlayMap();
-      fileMap.forEach((record, filePath) => {
-        const hasProposals = record.proposalChain.length > 0;
-        const needsContent =
+      this.overlayMap().forEach((record, filePath) => {
+        if (
+          record.proposalChain.length > 0 &&
           record.baseContent === null &&
           !record.isContentLoading &&
-          record.metadata;
-
-        if (hasProposals && needsContent) {
+          record.metadata
+        ) {
           setTimeout(() => this.loadContent(filePath), 0);
         }
       });
     });
   }
 
-  generateStagedPatch(): string {
-    let unifiedPatch = '';
-
-    this.overlayMap().forEach((record, filePath) => {
-      const stagedProposals = record.proposalChain.filter(
-        (p) => p.status === 'staged',
-      );
-      if (stagedProposals.length === 0) return;
-
-      const lastStagedId = stagedProposals[stagedProposals.length - 1].id;
-      const resolution = this.resolveChainState(record, lastStagedId);
-
-      if (resolution.error) {
-        this.logger.warn(
-          `Skipping patch generation for ${filePath} due to conflict: ${resolution.error}`,
-        );
-        return;
-      }
-
-      const baseText = record.baseContent || '';
-      const stagedText = resolution.content || '';
-
-      if (baseText === stagedText) return;
-
-      const filePatch = createTwoFilesPatch(
-        `a/${filePath}`,
-        `b/${filePath}`,
-        baseText,
-        stagedText,
-        '',
-        '',
-        { context: 3 },
-      );
-
-      unifiedPatch += filePatch + '\n';
-    });
-
-    return unifiedPatch;
-  }
-
+  // ... [Keep loadContent and encodePathForGo methods as they were] ...
   private encodePathForGo(filePath: string): string {
     return btoa(unescape(encodeURIComponent(filePath)))
       .replace(/\+/g, '-')
@@ -231,7 +189,7 @@ export class WorkspaceStateService {
     try {
       const base64Path = this.encodePathForGo(filePath);
       const res = await firstValueFrom(
-        this.firestoreClient.getFileContent(targetId, base64Path),
+        this.synClient.getFileContent(targetId, base64Path),
       );
       this.baseContents.update((map) =>
         new Map(map).set(filePath, res.content),
@@ -263,9 +221,7 @@ export class WorkspaceStateService {
       });
     });
 
-    const proposals = this.activeProposals();
-
-    for (const proposal of proposals) {
+    for (const proposal of this.activeProposals()) {
       if (!fileMap.has(proposal.filePath)) {
         fileMap.set(proposal.filePath, {
           filePath: proposal.filePath,
@@ -274,7 +230,6 @@ export class WorkspaceStateService {
           proposalChain: [],
         });
       }
-
       fileMap.get(proposal.filePath)!.proposalChain.push(proposal);
     }
     return fileMap;
@@ -285,7 +240,6 @@ export class WorkspaceStateService {
     targetProposalId?: string | null,
   ): ChainResolution {
     let currentText = record.baseContent || '';
-
     if (!targetProposalId && record.baseContent === null)
       return { content: null };
 
@@ -294,85 +248,83 @@ export class WorkspaceStateService {
         if (proposal.id === targetProposalId) break;
         continue;
       }
-
       if (proposal.newContent) {
         currentText = proposal.newContent;
       } else if (proposal.patch) {
         try {
           const patchedResult = applyPatch(currentText, proposal.patch);
-          if (patchedResult === false) {
+          if (patchedResult === false)
             return {
               content: currentText,
-              error: `// ERROR: Chain conflict at Proposal ${proposal.id}.\n// The preceding patches did not result in a valid base for this diff.\n\n${proposal.patch}`,
+              error: `Conflict at ${proposal.id}`,
             };
-          }
           currentText = patchedResult;
         } catch (err: any) {
-          if (
-            err.message.includes('line count did not match') ||
-            err.message.includes('invalid line')
-          ) {
-            try {
-              const healedPatch = healMalformedPatch(proposal.patch);
-              const healedResult = applyPatch(currentText, healedPatch);
-
-              if (healedResult !== false) {
-                return {
-                  content: healedResult,
-                  error: `Malformed Diff Syntax. The LLM hallucinated the line counts. An auto-fix is available (shown but unapplied)`,
-                  healedPatch: healedPatch,
-                  failedProposalId: proposal.id,
-                };
-              }
-            } catch (healErr) {}
-          }
+          const healedPatch = healMalformedPatch(proposal.patch);
+          const healedResult = applyPatch(currentText, healedPatch);
+          if (healedResult !== false)
+            return {
+              content: healedResult,
+              error: 'Malformed Diff',
+              healedPatch,
+              failedProposalId: proposal.id,
+            };
           return {
             content: currentText,
-            error: `// ERROR: Malformed diff syntax from LLM at Proposal ${proposal.id}.\n// Detail: ${err.message}\n\n${proposal.patch}`,
+            error: `Malformed diff at ${proposal.id}`,
           };
         }
       }
-
-      if (proposal.id === targetProposalId) {
-        break;
-      }
+      if (proposal.id === targetProposalId) break;
     }
-
     return { content: currentText };
+  }
+
+  generateStagedPatch(): string {
+    let unifiedPatch = '';
+    this.overlayMap().forEach((record, filePath) => {
+      const stagedProposals = record.proposalChain.filter(
+        (p) => p.status === 'staged',
+      );
+      if (stagedProposals.length === 0) return;
+      const res = this.resolveChainState(
+        record,
+        stagedProposals[stagedProposals.length - 1].id,
+      );
+      if (!res.error)
+        unifiedPatch +=
+          createTwoFilesPatch(
+            `a/${filePath}`,
+            `b/${filePath}`,
+            record.baseContent || '',
+            res.content || '',
+            '',
+            '',
+            { context: 3 },
+          ) + '\n';
+    });
+    return unifiedPatch;
   }
 
   readonly conflictsMap = computed(() => {
     const conflicts = new Map<string, boolean>();
-
     this.overlayMap().forEach((record, filePath) => {
-      if (record.proposalChain.length === 0) {
-        conflicts.set(filePath, false);
-        return;
-      }
-
-      const resolution = this.resolveChainState(record);
-      conflicts.set(filePath, resolution.error !== undefined);
+      conflicts.set(
+        filePath,
+        record.proposalChain.length > 0 &&
+          this.resolveChainState(record).error !== undefined,
+      );
     });
-
     return conflicts;
   });
 
   readonly driftScore = computed(() => {
     let count = 0;
-
     this.overlayMap().forEach((record) => {
-      const hasAccepted = record.proposalChain.some(
-        (p) => p.status === 'accepted',
-      );
-      if (hasAccepted) {
-        count++;
-      }
+      if (record.proposalChain.some((p) => p.status === 'accepted')) count++;
     });
-
     return count;
   });
 
-  readonly requiresRecompile = computed(() => {
-    return this.driftScore() > 0;
-  });
+  readonly requiresRecompile = computed(() => this.driftScore() > 0);
 }

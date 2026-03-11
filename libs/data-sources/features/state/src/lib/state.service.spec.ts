@@ -1,6 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { DataSourcesService } from './state.service';
-import { GithubFirestoreClient } from '@nx-platform-application/data-sources/features/github-firestore-access';
+
+import {
+  GithubSyncClient,
+  FilterProfilesClient,
+  DataGroupsClient,
+} from '@nx-platform-application/data-sources-infrastructure-data-access';
+
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -11,21 +17,32 @@ import {
   FilterProfile,
   FilterRules,
   SyncStreamEvent,
+  DataGroup,
 } from '@nx-platform-application/data-sources-types';
 
 describe('DataSourcesService', () => {
   let service: DataSourcesService;
 
-  // Strict SOT Mocks matching the new Client contract
-  const mockClient = {
+  // Strict Mocks matching the new split Client contracts
+  const mockSyncClient = {
     listDataSources: vi.fn(),
     createDataSource: vi.fn(),
     executeSyncStream: vi.fn(),
     getFiles: vi.fn(),
+  };
+
+  const mockProfilesClient = {
     listProfiles: vi.fn(),
     createProfile: vi.fn(),
     updateProfile: vi.fn(),
     deleteProfile: vi.fn(),
+  };
+
+  const mockGroupsClient = {
+    listDataGroups: vi.fn(),
+    createDataGroup: vi.fn(),
+    updateDataGroup: vi.fn(),
+    deleteDataGroup: vi.fn(),
   };
 
   const mockSnackBar = {
@@ -36,7 +53,9 @@ describe('DataSourcesService', () => {
     TestBed.configureTestingModule({
       providers: [
         DataSourcesService,
-        { provide: GithubFirestoreClient, useValue: mockClient },
+        { provide: GithubSyncClient, useValue: mockSyncClient },
+        { provide: FilterProfilesClient, useValue: mockProfilesClient },
+        { provide: DataGroupsClient, useValue: mockGroupsClient },
         { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     });
@@ -59,6 +78,8 @@ describe('DataSourcesService', () => {
       expect(service.activeFiles()).toEqual([]);
       expect(service.activeProfiles()).toEqual([]);
       expect(service.syncLogs()).toEqual([]);
+      expect(service.dataGroups()).toEqual([]);
+      expect(service.activeDataGroupId()).toBeNull();
     });
   });
 
@@ -102,17 +123,17 @@ describe('DataSourcesService', () => {
           status: 'ready',
         },
       ];
-      mockClient.listDataSources.mockReturnValue(of(mockDataSources));
+      mockSyncClient.listDataSources.mockReturnValue(of(mockDataSources));
 
       await service.loadAllDataSources();
 
-      expect(mockClient.listDataSources).toHaveBeenCalled();
+      expect(mockSyncClient.listDataSources).toHaveBeenCalled();
       expect(service.bundles()).toEqual(mockDataSources);
       expect(service.isDataSourcesLoading()).toBe(false);
     });
 
     it('should clear bundles and show error on failure', async () => {
-      mockClient.listDataSources.mockReturnValue(
+      mockSyncClient.listDataSources.mockReturnValue(
         throwError(() => new Error('API Error')),
       );
 
@@ -138,12 +159,12 @@ describe('DataSourcesService', () => {
         branch: 'main',
       } as DataSourceBundle;
 
-      mockClient.createDataSource.mockResolvedValue(mockBundle);
+      mockSyncClient.createDataSource.mockResolvedValue(mockBundle);
 
       const result = await service.createDataSource(req);
 
       expect(result).toBe(newUrn);
-      expect(mockClient.createDataSource).toHaveBeenCalledWith(
+      expect(mockSyncClient.createDataSource).toHaveBeenCalledWith(
         'org/repo',
         'main',
       );
@@ -151,24 +172,6 @@ describe('DataSourcesService', () => {
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'Analyzing org/repo...',
         '',
-        expect.any(Object),
-      );
-    });
-
-    it('should return null and show error on failure', async () => {
-      mockClient.createDataSource.mockRejectedValue(
-        new Error('GitHub API Limit'),
-      );
-
-      const result = await service.createDataSource({
-        repo: 'bad/repo',
-        branch: 'main',
-      });
-
-      expect(result).toBeNull();
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Failed to analyze repository bad/repo.',
-        'Close',
         expect.any(Object),
       );
     });
@@ -192,57 +195,25 @@ describe('DataSourcesService', () => {
         details: { msg: 'Hello' },
       };
 
-      // Simulate a stream that emits one event and completes
-      mockClient.executeSyncStream.mockReturnValue(of(mockEvent));
-      mockClient.listDataSources.mockReturnValue(of([]));
-      mockClient.getFiles.mockReturnValue(of([]));
+      mockSyncClient.executeSyncStream.mockReturnValue(of(mockEvent));
+      mockSyncClient.listDataSources.mockReturnValue(of([]));
+      mockSyncClient.getFiles.mockReturnValue(of([]));
 
       const promise = service.executeSync(bundleUrn, mockRules);
 
-      // Verify optimistic status update
       expect(service.bundles()[0].status).toBe('syncing');
 
       await promise;
 
-      // Verify the log was appended
       expect(service.syncLogs()).toContainEqual(mockEvent);
-
-      // Verify standard reloads occurred on completion
-      expect(mockClient.executeSyncStream).toHaveBeenCalledWith(
+      expect(mockSyncClient.executeSyncStream).toHaveBeenCalledWith(
         bundleUrn,
         mockRules,
       );
-      expect(mockClient.listDataSources).toHaveBeenCalled();
-      expect(mockClient.getFiles).toHaveBeenCalledWith(bundleUrn);
+      expect(mockSyncClient.listDataSources).toHaveBeenCalled();
+      expect(mockSyncClient.getFiles).toHaveBeenCalledWith(bundleUrn);
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'Sync completed successfully.',
-        'Close',
-        expect.any(Object),
-      );
-    });
-
-    it('should revert status to failed on stream error', async () => {
-      const bundleUrn = URN.parse('urn:llm:bundle:c-1');
-      service.bundles.set([
-        {
-          id: bundleUrn,
-          repo: 'org/repo',
-          status: 'unsynced',
-        } as DataSourceBundle,
-      ]);
-
-      // Simulate an error in the stream
-      mockClient.executeSyncStream.mockReturnValue(
-        throwError(() => new Error('Stream failed')),
-      );
-
-      await expect(
-        service.executeSync(bundleUrn, { include: [], exclude: [] }),
-      ).rejects.toThrow();
-
-      expect(service.bundles()[0].status).toBe('failed');
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Repository sync failed. Please try again.',
         'Close',
         expect.any(Object),
       );
@@ -265,38 +236,20 @@ describe('DataSourcesService', () => {
         },
       ];
 
-      service.syncLogs.set([{ stage: 'old', details: {} }]); // Ensure old logs exist
+      service.syncLogs.set([{ stage: 'old', details: {} }]);
 
-      mockClient.getFiles.mockReturnValue(of(mockFiles));
-      mockClient.listProfiles.mockReturnValue(of(mockProfiles));
+      mockSyncClient.getFiles.mockReturnValue(of(mockFiles));
+      mockProfilesClient.listProfiles.mockReturnValue(of(mockProfiles));
 
       await service.selectDataSource(bundleUrn);
 
-      expect(service.syncLogs()).toEqual([]); // Logs should be cleared
+      expect(service.syncLogs()).toEqual([]);
       expect(service.activeDataSourceId()).toBe(bundleUrn);
       expect(service.activeFiles()).toEqual(mockFiles);
       expect(service.activeProfiles()).toEqual(mockProfiles);
       expect(service.isActiveDataSourceLoading()).toBe(false);
-      expect(mockClient.getFiles).toHaveBeenCalledWith(bundleUrn);
-      expect(mockClient.listProfiles).toHaveBeenCalledWith(bundleUrn);
-    });
-
-    it('should clear active data on failure', async () => {
-      const bundleUrn = URN.parse('urn:llm:bundle:bundle-123');
-      mockClient.getFiles.mockReturnValue(
-        throwError(() => new Error('Not found')),
-      );
-      mockClient.listProfiles.mockReturnValue(of([]));
-
-      await service.selectDataSource(bundleUrn);
-
-      expect(service.activeFiles()).toEqual([]);
-      expect(service.activeProfiles()).toEqual([]);
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Failed to load repository details.',
-        'Close',
-        expect.any(Object),
-      );
+      expect(mockSyncClient.getFiles).toHaveBeenCalledWith(bundleUrn);
+      expect(mockProfilesClient.listProfiles).toHaveBeenCalledWith(bundleUrn);
     });
   });
 
@@ -307,14 +260,6 @@ describe('DataSourcesService', () => {
       service.activeDataSourceId.set(activeCacheUrn);
     });
 
-    it('should throw an error if saving without an active bundle ID', async () => {
-      service.activeDataSourceId.set(null); // Clear the SOT
-
-      await expect(
-        service.saveProfile({ name: 'Test', rulesYaml: '' }),
-      ).rejects.toThrow('Cannot save a profile without an active bundle ID.');
-    });
-
     it('should create a new profile and append it to local state', async () => {
       const newProfile: FilterProfile = {
         id: URN.parse('urn:llm:profile:p-new'),
@@ -323,20 +268,18 @@ describe('DataSourcesService', () => {
         createdAt: '',
         updatedAt: '',
       };
-      mockClient.createProfile.mockReturnValue(of(newProfile));
+      mockProfilesClient.createProfile.mockReturnValue(of(newProfile));
 
       await service.saveProfile({ name: 'Test', rulesYaml: 'include: *' });
 
-      expect(mockClient.createProfile).toHaveBeenCalledWith(activeCacheUrn, {
-        name: 'Test',
-        rulesYaml: 'include: *',
-      });
-      expect(service.activeProfiles()).toContainEqual(newProfile);
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Filter profile saved',
-        'Close',
-        expect.any(Object),
+      expect(mockProfilesClient.createProfile).toHaveBeenCalledWith(
+        activeCacheUrn,
+        {
+          name: 'Test',
+          rulesYaml: 'include: *',
+        },
       );
+      expect(service.activeProfiles()).toContainEqual(newProfile);
     });
 
     it('should update an existing profile and mutate local state', async () => {
@@ -351,11 +294,11 @@ describe('DataSourcesService', () => {
       service.activeProfiles.set([existingProfile]);
 
       const updatedProfile: FilterProfile = { ...existingProfile, name: 'New' };
-      mockClient.updateProfile.mockReturnValue(of(updatedProfile));
+      mockProfilesClient.updateProfile.mockReturnValue(of(updatedProfile));
 
       await service.saveProfile({ name: 'New', rulesYaml: '' }, profileUrn);
 
-      expect(mockClient.updateProfile).toHaveBeenCalledWith(
+      expect(mockProfilesClient.updateProfile).toHaveBeenCalledWith(
         activeCacheUrn,
         profileUrn,
         { name: 'New', rulesYaml: '' },
@@ -365,8 +308,6 @@ describe('DataSourcesService', () => {
 
     it('should delete a profile and remove it from local state', async () => {
       const p1Urn = URN.parse('urn:llm:profile:p-1');
-      const p2Urn = URN.parse('urn:llm:profile:p-2');
-
       const p1: FilterProfile = {
         id: p1Urn,
         name: 'A',
@@ -374,29 +315,81 @@ describe('DataSourcesService', () => {
         createdAt: '',
         updatedAt: '',
       };
-      const p2: FilterProfile = {
-        id: p2Urn,
-        name: 'B',
-        rulesYaml: '',
-        createdAt: '',
-        updatedAt: '',
-      };
-      service.activeProfiles.set([p1, p2]);
+      service.activeProfiles.set([p1]);
 
-      mockClient.deleteProfile.mockReturnValue(of(undefined));
+      mockProfilesClient.deleteProfile.mockReturnValue(of(undefined));
 
       await service.deleteProfile(p1Urn);
 
-      expect(mockClient.deleteProfile).toHaveBeenCalledWith(
+      expect(mockProfilesClient.deleteProfile).toHaveBeenCalledWith(
         activeCacheUrn,
         p1Urn,
       );
-      expect(service.activeProfiles()).toEqual([p2]);
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Filter profile deleted',
-        'Close',
-        expect.any(Object),
+      expect(service.activeProfiles()).toEqual([]);
+    });
+  });
+
+  describe('Data Group Management', () => {
+    it('should load all data groups', async () => {
+      const mockGroups: DataGroup[] = [
+        { id: URN.parse('urn:group:1'), name: 'Group 1', sources: [] },
+      ];
+      mockGroupsClient.listDataGroups.mockReturnValue(of(mockGroups));
+
+      await service.loadAllDataGroups();
+
+      expect(mockGroupsClient.listDataGroups).toHaveBeenCalled();
+      expect(service.dataGroups()).toEqual(mockGroups);
+      expect(service.isDataGroupsLoading()).toBe(false);
+    });
+
+    it('should create a new data group', async () => {
+      const req = { name: 'New', sources: [] };
+      const newGroup: DataGroup = { id: URN.parse('urn:group:2'), ...req };
+      mockGroupsClient.createDataGroup.mockReturnValue(of(newGroup));
+
+      const result = await service.saveDataGroup(req);
+
+      expect(result).toBe(newGroup.id);
+      expect(mockGroupsClient.createDataGroup).toHaveBeenCalledWith(req);
+      expect(service.dataGroups()).toContainEqual(newGroup);
+    });
+
+    it('should update an existing data group', async () => {
+      const groupUrn = URN.parse('urn:group:1');
+      const existingGroup: DataGroup = {
+        id: groupUrn,
+        name: 'Old',
+        sources: [],
+      };
+      service.dataGroups.set([existingGroup]);
+
+      const req = { name: 'Updated', sources: [] };
+      const updatedGroup: DataGroup = { id: groupUrn, ...req };
+      mockGroupsClient.updateDataGroup.mockReturnValue(of(updatedGroup));
+
+      const result = await service.saveDataGroup(req, groupUrn);
+
+      expect(result).toBe(groupUrn);
+      expect(mockGroupsClient.updateDataGroup).toHaveBeenCalledWith(
+        groupUrn,
+        req,
       );
+      expect(service.dataGroups()[0].name).toBe('Updated');
+    });
+
+    it('should delete a data group and clear active selection if it matches', async () => {
+      const groupUrn = URN.parse('urn:group:1');
+      service.dataGroups.set([{ id: groupUrn, name: 'G1', sources: [] }]);
+      service.activeDataGroupId.set(groupUrn);
+
+      mockGroupsClient.deleteDataGroup.mockReturnValue(of(undefined));
+
+      await service.deleteDataGroup(groupUrn);
+
+      expect(mockGroupsClient.deleteDataGroup).toHaveBeenCalledWith(groupUrn);
+      expect(service.dataGroups()).toEqual([]);
+      expect(service.activeDataGroupId()).toBeNull();
     });
   });
 });

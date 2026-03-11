@@ -8,7 +8,7 @@ import { join } from 'path';
 export default defineConfig({
   root: __dirname,
   cacheDir:
-    '../../../node_modules/.vite/libs/data-sources/infrastructure/github-firestore-access',
+    '../../../node_modules/.vite/libs/data-sources/infrastructure/data-access',
   plugins: [
     angular({
       tsconfig: join(__dirname, 'tsconfig.test.json'),
@@ -16,7 +16,7 @@ export default defineConfig({
     nxViteTsPaths(),
   ],
   test: {
-    name: 'data-sources-infrastructure-github-firestore-access',
+    name: 'data-sources-infrastructure-data-access',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -26,12 +26,12 @@ export default defineConfig({
     outputFile: {
       html: join(
         __dirname,
-        '../../../../dist/test-reports/libs/data-sources/infrastructure/github-firestore-access/index.html',
+        '../../../../dist/test-reports/libs/data-sources/infrastructure/data-access/index.html',
       ),
     },
     coverage: {
       reportsDirectory:
-        '../../../../coverage/libs/data-sources/infrastructure/github-firestore-access',
+        '../../../../coverage/libs/data-sources/infrastructure/data-access',
       provider: 'v8' as const,
     },
   },

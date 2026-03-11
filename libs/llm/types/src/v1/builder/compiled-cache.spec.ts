@@ -3,7 +3,7 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
-import { CompiledCache } from '../../lib/session_types';
+import { CompiledCache } from '../../lib/types';
 import {
   serializeCompiledCache,
   deserializeCompiledCache,
@@ -12,10 +12,11 @@ import {
 describe('CompiledCache Facade', () => {
   const mockCache: CompiledCache = {
     id: URN.parse('urn:llm:compiled-cache:123'),
+    model: 'gemini-1.5-pro',
     provider: 'gemini',
     expiresAt: '2026-02-27T16:00:00Z' as ISODateTimeString,
     createdAt: '2026-02-27T10:00:00Z' as ISODateTimeString,
-    // NEW: Using the decoupled sources array
+    // Using the decoupled physical sources array
     sources: [
       {
         dataSourceId: URN.parse('urn:data-source:repo1'),
@@ -24,7 +25,7 @@ describe('CompiledCache Facade', () => {
     ],
   };
 
-  it('should cleanly serialize to proto3 JSON', () => {
+  it('should cleanly serialize a CompiledCache to proto3 JSON', () => {
     const jsonStr = serializeCompiledCache(mockCache);
     const parsed = JSON.parse(jsonStr);
 
@@ -34,8 +35,8 @@ describe('CompiledCache Facade', () => {
     expect(parsed.sources[0].profileId).toBe('urn:profile:prof1');
   });
 
-  it('should deserialize gracefully from snake_case JSON', () => {
-    // Simulating the updated Go backend response
+  it('should deserialize gracefully from Go-style snake_case JSON', () => {
+    // Simulating the backend response with snake_case keys
     const rawGoJson = `{
       "id": "urn:llm:compiled-cache:123",
       "provider": "urn:llm:provider:gemini",

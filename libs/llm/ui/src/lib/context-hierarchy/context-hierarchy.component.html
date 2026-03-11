@@ -1,4 +1,8 @@
-@if (attachments().length === 0) {
+@if (
+  inlineAttachments().length === 0 &&
+  systemAttachments().length === 0 &&
+  !compiledContext()
+) {
   <div
     class="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center bg-gray-50/50 w-full animate-fade-in"
   >
@@ -8,7 +12,39 @@
   </div>
 } @else {
   <div class="flex flex-col gap-6 w-full animate-fade-in">
-    @if (groupedAttachments().inlineContext.length > 0) {
+    @if (compiledContext(); as attachment) {
+      <div class="border border-teal-200 rounded-xl overflow-hidden shadow-sm">
+        <div
+          class="bg-teal-50 px-4 py-2 border-b border-teal-100 flex items-center justify-between gap-2"
+        >
+          <div class="flex items-center gap-2">
+            <mat-icon class="text-teal-600 scale-75">auto_awesome</mat-icon>
+            <span class="font-bold text-teal-800 text-sm"
+              >Compiled Context Cache</span
+            >
+          </div>
+          <span
+            class="text-[10px] uppercase tracking-wider font-bold text-teal-600 bg-white px-2 py-0.5 rounded border border-teal-200"
+          >
+            High Performance
+          </span>
+        </div>
+        <div class="bg-white p-3">
+          <ng-container
+            *ngTemplateOutlet="
+              attachmentCard;
+              context: {
+                $implicit: attachment,
+                color: 'teal',
+                bucket: 'compiled',
+              }
+            "
+          ></ng-container>
+        </div>
+      </div>
+    }
+
+    @if (inlineAttachments().length > 0) {
       <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <div
           class="bg-gray-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2"
@@ -17,14 +53,15 @@
           <span class="font-bold text-gray-700 text-sm">Inline Context</span>
         </div>
         <div class="bg-white p-3 flex flex-col gap-2">
-          @for (
-            attachment of groupedAttachments().inlineContext;
-            track attachment.id
-          ) {
+          @for (attachment of inlineAttachments(); track attachment.id) {
             <ng-container
               *ngTemplateOutlet="
                 attachmentCard;
-                context: { $implicit: attachment }
+                context: {
+                  $implicit: attachment,
+                  color: 'indigo',
+                  bucket: 'inline',
+                }
               "
             ></ng-container>
           }
@@ -32,7 +69,7 @@
       </div>
     }
 
-    @if (groupedAttachments().systemInstruction.length > 0) {
+    @if (systemAttachments().length > 0) {
       <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <div
           class="bg-gray-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2"
@@ -43,14 +80,15 @@
           >
         </div>
         <div class="bg-white p-3 flex flex-col gap-2">
-          @for (
-            attachment of groupedAttachments().systemInstruction;
-            track attachment.id
-          ) {
+          @for (attachment of systemAttachments(); track attachment.id) {
             <ng-container
               *ngTemplateOutlet="
                 attachmentCard;
-                context: { $implicit: attachment }
+                context: {
+                  $implicit: attachment,
+                  color: 'gray',
+                  bucket: 'system',
+                }
               "
             ></ng-container>
           }
@@ -60,31 +98,47 @@
   </div>
 }
 
-<ng-template #attachmentCard let-attachment>
-  @let bundle = getDataSourceBundleDetails(attachment.dataSourceId);
+<ng-template
+  #attachmentCard
+  let-attachment
+  let-color="color"
+  let-bucket="bucket"
+>
+  @let bundle = getDataSourceBundleDetails(attachment.resourceUrn);
   <div
     class="border border-gray-100 rounded-lg p-3 bg-white shadow-sm flex justify-between items-center group w-full hover:border-gray-300 transition-colors"
   >
     <div class="flex flex-col gap-1">
       <p class="font-medium text-gray-800 m-0 text-sm flex items-center gap-2">
-        <mat-icon class="text-gray-400 scale-75 m-0 h-5 w-5">source</mat-icon>
-        {{ bundle ? bundle.repo : attachment.dataSourceId.entityId }}
+        <mat-icon class="text-gray-400 scale-75 m-0 h-5 w-5">
+          {{
+            attachment.resourceType === 'group' ? 'folder_special' : 'source'
+          }}
+        </mat-icon>
+        {{ bundle ? bundle.repo : attachment.resourceUrn.entityId }}
         @if (bundle) {
           <span class="text-xs text-gray-500 font-normal ml-1"
             >({{ bundle.branch }})</span
           >
         }
       </p>
+
       <div class="flex items-center gap-2 mt-1">
-        @if (attachment.profileId) {
-          <span
-            class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200"
-          >
-            Filter: {{ attachment.profileId.entityId }}
-          </span>
-        } @else {
-          <span class="text-xs text-gray-400 italic">Entire Repository</span>
-        }
+        <span
+          class="text-[10px] px-2 py-0.5 rounded-full border"
+          [ngClass]="{
+            'bg-indigo-50 text-indigo-700 border-indigo-100':
+              color === 'indigo',
+            'bg-teal-50 text-teal-700 border-teal-100': color === 'teal',
+            'bg-gray-50 text-gray-700 border-gray-100': color === 'gray',
+          }"
+        >
+          {{
+            attachment.resourceType === 'group'
+              ? 'Data Group'
+              : 'Raw Repository'
+          }}
+        </span>
       </div>
     </div>
 
@@ -93,7 +147,13 @@
       color="warn"
       type="button"
       class="opacity-0 group-hover:opacity-100 transition-opacity scale-90"
-      (click)="removeAttachment.emit(attachment.id)"
+      (click)="
+        bucket === 'inline'
+          ? removeInline.emit(attachment.id)
+          : bucket === 'system'
+            ? removeSystem.emit(attachment.id)
+            : removeCompiled.emit(attachment.id)
+      "
       matTooltip="Remove Source"
     >
       <mat-icon>close</mat-icon>

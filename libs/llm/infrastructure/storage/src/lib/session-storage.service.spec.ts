@@ -1,3 +1,4 @@
+// libs/llm/infrastructure/storage/src/lib/session-storage.service.spec.ts
 import { TestBed } from '@angular/core/testing';
 import { SessionStorageService } from './session-storage.service';
 import {
@@ -12,6 +13,7 @@ import { LlmSession } from '@nx-platform-application/llm-types';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 describe('SessionStorageService', () => {
+  // ... Keep setup the same ...
   let service: SessionStorageService;
   let dbMock: any;
   let mapperMock: any;
@@ -30,12 +32,7 @@ describe('SessionStorageService', () => {
       messages: { clear: vi.fn() },
       transaction: vi.fn(async (mode, tables, callback) => await callback()),
     };
-
-    mapperMock = {
-      toRecord: vi.fn(),
-      toDomain: vi.fn(),
-    };
-
+    mapperMock = { toRecord: vi.fn(), toDomain: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         SessionStorageService,
@@ -43,7 +40,6 @@ describe('SessionStorageService', () => {
         { provide: LlmSessionMapper, useValue: mapperMock },
       ],
     });
-
     service = TestBed.inject(SessionStorageService);
   });
 
@@ -51,7 +47,8 @@ describe('SessionStorageService', () => {
     id: URN.parse('urn:llm:session:1'),
     title: 'Test',
     lastModified: '2026-03-09T10:00:00Z' as ISODateTimeString,
-    attachments: [],
+    inlineContexts: [], // NEW
+    systemContexts: [], // NEW
   };
 
   const mockRecord = { id: 'urn:llm:session:1', title: 'Test' };
@@ -65,7 +62,6 @@ describe('SessionStorageService', () => {
   it('should retrieve a session', async () => {
     dbMock.sessions.get.mockResolvedValue(mockRecord);
     mapperMock.toDomain.mockReturnValue(mockSession);
-
     const result = await service.getSession(mockSession.id);
     expect(result).toEqual(mockSession);
   });

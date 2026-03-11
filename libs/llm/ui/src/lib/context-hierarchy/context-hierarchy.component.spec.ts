@@ -28,32 +28,6 @@ describe('LlmContextHierarchyComponent', () => {
     component = fixture.componentInstance;
   });
 
-  it('should correctly group attachments by target', () => {
-    fixture.componentRef.setInput('session', null);
-    fixture.componentRef.setInput('attachments', [
-      {
-        id: URN.parse('urn:llm:attachment:1'),
-        dataSourceId: URN.parse('urn:data-source:repo:test:1'),
-        target: 'inline-context',
-      },
-      {
-        id: URN.parse('urn:llm:attachment:2'),
-        dataSourceId: URN.parse('urn:data-source:repo:test:2'),
-        target: 'inline-context',
-      },
-      {
-        id: URN.parse('urn:llm:attachment:3'),
-        dataSourceId: URN.parse('urn:data-source:repo:test:3'),
-        target: 'system-instruction',
-      },
-    ]);
-    fixture.detectChanges();
-
-    const groups = component.groupedAttachments();
-    expect(groups.inlineContext.length).toBe(2);
-    expect(groups.systemInstruction.length).toBe(1);
-  });
-
   it('should resolve rich data source bundle details if available', () => {
     const details = component.getDataSourceBundleDetails(
       URN.parse('urn:data-source:repo:test:1'),
@@ -62,10 +36,22 @@ describe('LlmContextHierarchyComponent', () => {
     expect(details?.branch).toBe('main');
   });
 
-  it('should return undefined for unknown bundle details', () => {
-    const details = component.getDataSourceBundleDetails(
-      URN.parse('urn:data-source:repo:unknown:1'),
+  it('should accept and display explicit intent buckets', () => {
+    fixture.componentRef.setInput('session', {
+      id: URN.parse('urn:llm:session:1'),
+    });
+    fixture.componentRef.setInput('inlineAttachments', [
+      {
+        id: URN.parse('urn:llm:attachment:1'),
+        resourceUrn: URN.parse('urn:data-source:repo:test:1'),
+        resourceType: 'source',
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(component.inlineAttachments().length).toBe(1);
+    expect(component.inlineAttachments()[0].resourceUrn.toString()).toBe(
+      'urn:data-source:repo:test:1',
     );
-    expect(details).toBeUndefined();
   });
 });

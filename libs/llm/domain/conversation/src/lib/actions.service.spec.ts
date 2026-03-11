@@ -40,31 +40,41 @@ describe('LlmChatActions', () => {
     removeMessages: vi.fn(),
     updateMessageExclusions: vi.fn(),
   };
+
   const mockSessionSource = {
     sessions: signal([
       {
         id: URN.parse('urn:llm:session:123'),
-        // SCHEMA UPDATE: cacheId -> dataSourceId
-        attachments: [
+        // FIX: Replaced old attachments with new intent buckets
+        inlineContexts: [
           {
-            dataSourceId: URN.parse('urn:data-source:repo:base'),
-            target: 'inline-context',
+            id: URN.parse('urn:llm:attachment:1'),
+            resourceUrn: URN.parse('urn:data-source:repo:base'),
+            resourceType: 'source',
           },
         ],
+        systemContexts: [],
+        compiledContext: undefined,
+        quickContext: [],
       },
     ]),
     refresh: vi.fn(),
   };
 
-  // STORAGE SPLIT
   const mockMessageStorage = {
     saveMessage: vi.fn().mockResolvedValue(true),
     deleteMessages: vi.fn().mockResolvedValue(true),
     getMessage: vi.fn(),
     updateMessageExclusions: vi.fn(),
   };
+
   const mockSessionStorage = {
-    getSession: vi.fn(),
+    getSession: vi.fn().mockResolvedValue({
+      id: URN.parse('urn:llm:session:123'),
+      inlineContexts: [],
+      systemContexts: [],
+      quickContext: [],
+    }),
     saveSession: vi.fn(),
   };
 
@@ -74,11 +84,13 @@ describe('LlmChatActions', () => {
   const mockProposalService = {
     saveChangeProposal: vi.fn().mockResolvedValue(true),
   };
+
   const mockBuilder = {
     buildStreamRequest: vi
       .fn()
-      .mockResolvedValue({ request: {}, memoryMetrics: {} }),
+      .mockResolvedValue({ request: { history: [] }, memoryMetrics: {} }),
   };
+
   const mockNetwork = { generateStream: vi.fn() };
 
   beforeEach(() => {
@@ -159,6 +171,24 @@ describe('LlmChatActions', () => {
 
     expect(placeholderTime.epochMilliseconds).toBe(
       userTime.epochMilliseconds + 1,
+    );
+  });
+
+  it('should successfully extract a clean session with valid explicit intent buckets', async () => {
+    await service.extractToNewSession(
+      ['urn:llm:message:1'],
+      URN.parse('urn:llm:session:123'),
+      'copy',
+    );
+
+    // Verifies compilation and correct initial state of extracted sessions
+    expect(mockSessionStorage.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inlineContexts: [],
+        systemContexts: [],
+        compiledContext: undefined,
+        quickContext: [],
+      }),
     );
   });
 });
