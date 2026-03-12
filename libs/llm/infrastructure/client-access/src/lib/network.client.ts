@@ -10,6 +10,7 @@ import {
 
 export type LlmStreamEvent =
   | { type: 'text'; content: string }
+  | { type: 'thought'; content: string }
   | { type: 'proposal'; event: SSEProposalEvent };
 
 export interface LlmNetworkClient {

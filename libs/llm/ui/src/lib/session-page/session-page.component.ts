@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { LlmSession } from '@nx-platform-application/llm-types';
-import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 
 import { LlmSessionFormComponent } from '../session-form/session-form.component';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';

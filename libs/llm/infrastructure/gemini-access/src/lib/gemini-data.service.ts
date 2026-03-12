@@ -118,8 +118,19 @@ export class GeminiDataService implements LlmNetworkClient {
                         typeof part === 'string'
                           ? part
                           : (part.Text ?? part.text);
+
                       if (typeof textToken === 'string' && textToken !== '') {
-                        subscriber.next({ type: 'text', content: textToken });
+                        const isThoughtToken =
+                          part.isThought === true || part.IsThought === true;
+
+                        if (isThoughtToken) {
+                          subscriber.next({
+                            type: 'thought',
+                            content: textToken,
+                          });
+                        } else {
+                          subscriber.next({ type: 'text', content: textToken });
+                        }
                       }
                     }
                   }
@@ -152,8 +163,6 @@ export class GeminiDataService implements LlmNetworkClient {
   async buildCache(request: BuildCacheRequest): Promise<BuildCacheResponse> {
     const bodyString = serializeBuildCacheRequest(request);
 
-    this.logger.info('sending compile request', bodyString);
-
     const response = await fetch(
       `${this.baseUrl}/v1/llm/compiled_cache/build`,
       {
@@ -185,7 +194,6 @@ export class GeminiDataService implements LlmNetworkClient {
   }
 
   async removeProposal(sessionId: string, proposalId: string): Promise<void> {
-    // FIX: Unified DELETE endpoint replaces accept/reject
     const response = await fetch(
       `${this.baseUrl}/v1/llm/session/${sessionId}/proposals/${proposalId}`,
       {

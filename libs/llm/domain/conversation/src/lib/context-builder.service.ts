@@ -5,9 +5,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { ProposalRegistryStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
 
-import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
 import {
   GenerateStreamRequest,
   NetworkMessage,
@@ -17,8 +15,10 @@ import {
   FileProposalType,
   FileLinkType,
   PointerPayload,
-  WorkspaceAttachment,
 } from '@nx-platform-application/llm-types';
+
+import { DataSourceResolver } from '@nx-platform-application/llm-features-workspace';
+import { LlmChatActions } from './actions.service';
 
 export interface ContextAssembly {
   request: GenerateStreamRequest;
@@ -35,46 +35,15 @@ export class LlmContextBuilderService {
   private storage = inject(MessageStorageService);
   private registry = inject(ProposalRegistryStorageService);
   private cacheService = inject(CompiledCacheService);
-  private dataSources = inject(DataSourcesService);
+  private resolver = inject(DataSourceResolver);
 
   private readonly MAX_SHORT_TERM_MEMORY = 50;
   private readonly FLUSH_THRESHOLD = 25;
 
-  /**
-   * JIT Unrolling Helper: Translates high-level UI intents (Groups/Sources)
-   * into a flat array of physical sources required by the LLM backend.
-   */
-  private resolvePhysicalSources(
-    attachments: WorkspaceAttachment[],
-  ): FilteredDataSource[] {
-    const groups = this.dataSources.dataGroups();
-    const physicalSources: FilteredDataSource[] = [];
-    const uniqueKeys = new Set<string>();
-
-    for (const att of attachments) {
-      if (att.resourceType === 'source') {
-        const key = att.resourceUrn.toString();
-        if (!uniqueKeys.has(key)) {
-          uniqueKeys.add(key);
-          physicalSources.push({ dataSourceId: att.resourceUrn });
-        }
-      } else if (att.resourceType === 'group') {
-        const group = groups.find((g) => g.id.equals(att.resourceUrn));
-        if (group) {
-          for (const src of group.sources) {
-            const key = `${src.dataSourceId.toString()}|${src.profileId?.toString() || 'none'}`;
-            if (!uniqueKeys.has(key)) {
-              uniqueKeys.add(key);
-              physicalSources.push(src);
-            }
-          }
-        }
-      }
-    }
-    return physicalSources;
-  }
-
-  async buildStreamRequest(session: LlmSession): Promise<ContextAssembly> {
+  async buildStreamRequest(
+    session: LlmSession,
+    modelToUse?: string,
+  ): Promise<ContextAssembly> {
     const fullHistory = await this.storage.getSessionMessages(session.id);
     const activeMessages = fullHistory.filter((m) => !m.isExcluded);
 
@@ -98,7 +67,6 @@ export class LlmContextBuilderService {
             currentContent = `[System Note: You proposed a modification for ${pointer.filePath}, but the heavy diff was not found in the registry.]`;
           }
         } catch (e) {
-          console.error('Failed to resolve FileLinkType pointer', e);
           currentContent = `[System Error: Failed to resolve file modification pointer.]`;
         }
       } else if (msg.typeId.equals(FileProposalType)) {
@@ -111,7 +79,6 @@ export class LlmContextBuilderService {
 
           currentContent = `[System Note: You proposed a modification for ${event.proposal.filePath}. The user has marked this proposal as: ${event.proposal.status?.toUpperCase() || 'PENDING'}.]`;
         } catch (e) {
-          console.error('Failed to parse legacy FileProposalType', e);
           currentContent = `[System Error: Failed to read legacy file proposal.]`;
         }
       } else {
@@ -168,27 +135,47 @@ export class LlmContextBuilderService {
       }
     }
 
-    // --- NEW JIT CONTEXT RESOLUTION ---
-    const targetModel = session.llmModel || 'gemini-2.5-pro';
+    //allows the overriding of the session model
+    const targetModel = modelToUse || session.llmModel;
 
-    // 1. Unroll Inline Contexts
-    const physicalInlineSources = this.resolvePhysicalSources(
-      session.inlineContexts || [],
-    );
-    const inlineAttachments: ContextAttachment[] = physicalInlineSources.map(
-      (src) => ({
-        id: URN.create('attachment', crypto.randomUUID(), 'llm'),
-        dataSourceId: src.dataSourceId,
-        profileId: src.profileId,
-      }),
-    );
+    // --- SYSTEM INSTRUCTIONS UNROLLING ---
+    if (session.systemContexts && session.systemContexts.length > 0) {
+      let systemBlock = `[SYSTEM_INSTRUCTIONS]\nAdopt the persona and behavior rules defined in these attached system instructions:\n`;
+      for (const intent of session.systemContexts) {
+        const physicals = await this.resolver.resolve(intent);
+        physicals.forEach(
+          (p) => (systemBlock += `- Reference: ${p.dataSourceId.toString()}\n`),
+        );
+      }
+      systemBlock += `[/SYSTEM_INSTRUCTIONS]\n\n`;
 
-    // 2. Resolve Compiled Cache via pure source hashing
+      if (networkHistory.length > 0) {
+        networkHistory[0].content = systemBlock + networkHistory[0].content;
+      }
+    }
+
+    // --- INLINE CONTEXT UNROLLING ---
+    const inlineAttachments: ContextAttachment[] = [];
+    if (session.inlineContexts) {
+      for (const intent of session.inlineContexts) {
+        const physicals = await this.resolver.resolve(intent);
+        physicals.forEach((p) =>
+          inlineAttachments.push({
+            id: URN.create('attachment', crypto.randomUUID(), 'llm'),
+            dataSourceId: p.dataSourceId,
+            profileId: p.profileId,
+          }),
+        );
+      }
+    }
+
+    // --- COMPILED CACHE JIT MATCHING ---
     let compiledCacheId: URN | undefined = undefined;
+    console.log('getting compiledCacheId');
     if (session.compiledContext) {
-      const physicalCacheSources = this.resolvePhysicalSources([
+      const physicalCacheSources = await this.resolver.resolve(
         session.compiledContext,
-      ]);
+      );
       const validCache = this.cacheService.getValidCache(
         physicalCacheSources,
         targetModel,

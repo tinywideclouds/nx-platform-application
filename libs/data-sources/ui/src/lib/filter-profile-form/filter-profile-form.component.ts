@@ -19,7 +19,7 @@ import {
   FilterProfile,
   ProfileRequest,
 } from '@nx-platform-application/data-sources-types';
-import { YamlRulesService } from '@nx-platform-application/data-sources/features/state';
+import { YamlRulesService } from '@nx-platform-application/data-sources-features-state';
 import { URN } from '@nx-platform-application/platform-types';
 
 @Component({

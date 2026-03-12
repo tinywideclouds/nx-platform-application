@@ -1,9 +1,7 @@
 import {
   Component,
   inject,
-  effect,
   signal,
-  untracked,
   computed,
   ChangeDetectorRef,
 } from '@angular/core';
@@ -11,9 +9,9 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { Temporal } from '@js-temporal/polyfill';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
-import { URN } from '@nx-platform-application/platform-types';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatButtonModule } from '@angular/material/button';
 
 import {
   ScrollspaceViewportComponent,
@@ -25,29 +23,16 @@ import {
 import { LlmMessage } from '@nx-platform-application/llm-types';
 import { ScrollspaceInputDraft } from '@nx-platform-application/scrollspace-types';
 
-import {
-  LlmScrollSource,
-  LlmSessionSource,
-} from '@nx-platform-application/llm-features-chat';
+import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
 import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation';
-import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
 
+import { ChatWorkspacePresenter } from './chat-window.presenter'; // NEW
+import { LlmFocusedGroupBannerComponent } from '../chat-group-banner/chat-group-banner.component'; // NEW
+
 import { LlmContentPipe } from '../pipes/llm-content.pipe';
 import { LlmChatHeaderComponent } from '../chat-header/chat-header.component';
-
-import {
-  GroupContextDialogComponent,
-  GroupContextDialogResult,
-} from '../group-context-dialog/group-context-dialog.component';
-import {
-  BranchContextDialogComponent,
-  BranchContextDialogResult,
-} from '../branch-context-dialog/branch-context-dialog.component';
-
-import { LlmEditMessageDialogComponent } from '../edit-message-dialog/edit-message-dialog.component';
-
 import { LlmProposalBubbleComponent } from '../proposal-bubble/proposal-bubble.component';
 import { LlmFileLinkBubbleComponent } from '../file-link-bubble/file-link-bubble.component';
 import { LlmTypingIndicatorComponent } from '../typing-indicator/typing-indicator.component';
@@ -56,14 +41,18 @@ import { LlmQuickContextDrawerComponent } from '../quick-context-drawer/quick-co
 @Component({
   selector: 'llm-chat-window',
   standalone: true,
+  providers: [ChatWorkspacePresenter], // Ties presenter strictly to this component!
   imports: [
     CommonModule,
     ScrollspaceViewportComponent,
     ScrollspaceInputComponent,
     ScrollspaceMarkdownBubbleComponent,
     MatIcon,
+    MatMenuModule,
+    MatButtonModule,
     MarkdownTokensPipe,
     LlmChatHeaderComponent,
+    LlmFocusedGroupBannerComponent,
     LlmContentPipe,
     LlmProposalBubbleComponent,
     LlmFileLinkBubbleComponent,
@@ -75,30 +64,18 @@ import { LlmQuickContextDrawerComponent } from '../quick-context-drawer/quick-co
 })
 export class LlmChatWindowComponent {
   protected source = inject(LlmScrollSource);
-  private sessionSource = inject(LlmSessionSource);
-  private actions = inject(LlmChatActions);
+  protected actions = inject(LlmChatActions);
+  protected presenter = inject(ChatWorkspacePresenter);
+
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
-  private dialog = inject(MatDialog);
-  private sessionActions = inject(LlmSessionActions);
   private proposalService = inject(LlmProposalService);
-  private cdr = inject(ChangeDetectorRef);
   private cacheService = inject(CompiledCacheService);
 
   copiedMessageId = signal<string | null>(null);
-  isSelectionMode = signal(false);
-  selectedIds = signal<Set<string>>(new Set());
-  focusedGroupUrn = signal<string | null>(null);
-
-  readonly session = computed(() => this.sessionSource.activeSession());
-
-  // RESTORED logic:
-  readonly activeContextGroups = computed(
-    () => this.session()?.contextGroups || {},
-  );
 
   chatLockState = computed(() => {
-    const session = this.session();
+    const session = this.presenter.session();
     if (!session) return { locked: false, reason: '' };
 
     if (this.cacheService.isCompiling()) {
@@ -112,8 +89,9 @@ export class LlmChatWindowComponent {
   });
 
   chatAlertState = computed(() => {
-    const session = this.session();
-    if (!session || !session.llmModel) return { alert: false, reason: '' };
+    const session = this.presenter.session();
+    if (!session || !this.presenter.activeModelId())
+      return { alert: false, reason: '' };
 
     if (this.cacheService.isCompiling()) {
       return {
@@ -122,15 +100,14 @@ export class LlmChatWindowComponent {
       };
     }
 
-    // UPDATED: Check for warm cache presence via service
+    const isUsingOverride = !!this.presenter.temporaryModelOverride();
+
     if (session.compiledContext) {
-      // In a real scenario, we'd unroll the intent here, but for simple alert,
-      // we check if the service has a matching warm cache artifact.
       const activeCache = this.cacheService
         .activeCaches()
         .find(
           (c) =>
-            c.model === session.llmModel &&
+            c.model === this.presenter.activeModelId() &&
             c.id
               .toString()
               .includes(session.compiledContext!.resourceUrn.entityId),
@@ -147,35 +124,19 @@ export class LlmChatWindowComponent {
               '⏰ Context cache expired. Responses will be slower. Please renew in Settings.',
           };
         }
+      } else if (!isUsingOverride && session.strategy?.useCacheIfAvailable) {
+        return {
+          alert: true,
+          reason: '❄️ Context cache is COLD. Response will be slow.',
+        };
       }
     }
 
     return { alert: false, reason: '' };
   });
 
-  constructor() {
-    effect(() => {
-      const activeId = this.sessionSource.activeSessionId();
-      if (activeId) {
-        untracked(() => this.source.setSession(activeId));
-      }
-    });
-  }
-
-  onOpenDetails() {
-    this.router.navigate([], {
-      queryParams: { view: 'details' },
-      queryParamsHandling: 'merge',
-    });
-  }
-
-  toggleSelectionMode() {
-    this.isSelectionMode.set(!this.isSelectionMode());
-    this.selectedIds.set(new Set());
-  }
-
   collapsedBlocks = computed(() => {
-    const focusUrn = this.focusedGroupUrn();
+    const focusUrn = this.presenter.focusedGroupUrn();
     const items = this.source.items();
     const blocks: Record<string, { count: number; isFirst: boolean }> = {};
 
@@ -188,7 +149,7 @@ export class LlmChatWindowComponent {
       const msg = item.data;
       const isValidMsg = msg && typeof msg !== 'string';
 
-      if (isValidMsg && !this.isMessageInFocus(msg)) {
+      if (isValidMsg && !this.presenter.isMessageInFocus(msg)) {
         if (currentBlockCount === 0) {
           firstIdInBlock = msg.id.toString();
         }
@@ -211,7 +172,7 @@ export class LlmChatWindowComponent {
   });
 
   displayItems = computed(() => {
-    const focusUrn = this.focusedGroupUrn();
+    const focusUrn = this.presenter.focusedGroupUrn();
     const items = this.source.items();
     const blocks = this.collapsedBlocks();
 
@@ -220,145 +181,22 @@ export class LlmChatWindowComponent {
     return items.filter((item) => {
       const msg = item.data;
       if (!msg || typeof msg === 'string') return true;
-      if (this.isMessageInFocus(msg)) return true;
+      if (this.presenter.isMessageInFocus(msg)) return true;
 
       const blockMeta = blocks[msg.id.toString()];
       return blockMeta && blockMeta.isFirst;
     });
   });
 
-  focusGroup(urnString: string) {
-    this.executeWithTransition(() => {
-      if (this.focusedGroupUrn() === urnString) {
-        this.focusedGroupUrn.set(null);
-      } else {
-        this.focusedGroupUrn.set(urnString);
-        this.isSelectionMode.set(false);
-      }
+  onOpenDetails() {
+    this.router.navigate([], {
+      queryParams: { view: 'details' },
+      queryParamsHandling: 'merge',
     });
-  }
-
-  clearFocus() {
-    this.executeWithTransition(() => {
-      this.focusedGroupUrn.set(null);
-    });
-  }
-
-  isMessageInFocus(message: any): boolean {
-    const focusUrn = this.focusedGroupUrn();
-    if (!focusUrn || !message || typeof message === 'string' || !message.tags)
-      return false;
-
-    return message.tags.some((t: URN) => t.toString() === focusUrn);
-  }
-
-  async extractFocusedGroup() {
-    const focusUrn = this.focusedGroupUrn();
-    const currentId = this.source.activeSessionId();
-
-    if (!focusUrn || !currentId) return;
-
-    const ids = this.source
-      .items()
-      .map((item) => item.data)
-      .filter(
-        (msg): msg is LlmMessage =>
-          !!msg && typeof msg !== 'string' && this.isMessageInFocus(msg),
-      )
-      .map((m) => m.id.toString());
-
-    if (ids.length === 0) return;
-
-    const dialogRef = this.dialog.open<
-      BranchContextDialogComponent,
-      any,
-      BranchContextDialogResult
-    >(BranchContextDialogComponent, { width: '450px' });
-
-    const result = await dialogRef.afterClosed().toPromise();
-    if (!result) return;
-
-    try {
-      const newSessionId = await this.actions.extractToNewSession(
-        ids,
-        currentId,
-        result.mode,
-      );
-
-      this.clearFocus();
-      this.sessionActions.openSession(newSessionId);
-
-      const actionText = result.mode === 'copy' ? 'copied' : 'moved';
-      this.snackBar.open(`Group ${actionText} to new session`, 'Close', {
-        duration: 3000,
-        horizontalPosition: 'end',
-        verticalPosition: 'bottom',
-      });
-    } catch (e) {
-      console.error('Extraction failed', e);
-      this.snackBar.open('Failed to extract session', 'Close', {
-        duration: 3000,
-      });
-    }
-  }
-
-  async groupSelected() {
-    const ids = Array.from(this.selectedIds());
-    const session = this.session();
-    if (!session) return;
-
-    const existingGroups = Object.entries(this.activeContextGroups()).map(
-      ([urn, name]) => ({
-        urn,
-        name: String(name),
-      }),
-    );
-
-    const dialogRef = this.dialog.open<
-      GroupContextDialogComponent,
-      { existingGroups: { urn: string; name: string }[] },
-      GroupContextDialogResult
-    >(GroupContextDialogComponent, {
-      width: '400px',
-      data: { existingGroups },
-    });
-
-    const result = await dialogRef.afterClosed().toPromise();
-
-    if (result) {
-      await this.actions.groupMessages(ids, session.id, result);
-      this.toggleSelectionMode();
-
-      this.snackBar.open('Context grouped successfully', 'Close', {
-        duration: 3000,
-        horizontalPosition: 'end',
-        verticalPosition: 'bottom',
-      });
-    }
-  }
-
-  async excludeSelected(exclude: boolean) {
-    const ids = Array.from(this.selectedIds());
-    if (ids.length === 0) return;
-
-    await this.actions.toggleExcludeSelected(ids, exclude);
-    this.toggleSelectionMode();
-  }
-
-  async deleteSelected() {
-    const ids = Array.from(this.selectedIds());
-    if (ids.length === 0) return;
-
-    await this.actions.deleteSelected(ids);
-    this.toggleSelectionMode();
   }
 
   onSend(draft: ScrollspaceInputDraft) {
-    if (!draft.text) return;
-    const currentId = this.source.activeSessionId();
-    if (currentId) {
-      this.actions.sendMessage(draft.text, currentId);
-    }
+    this.presenter.handleSend(draft.text);
   }
 
   onStop() {
@@ -377,74 +215,17 @@ export class LlmChatWindowComponent {
     });
   }
 
-  private executeWithTransition(updateFn: () => void) {
-    const doc = document as any;
-    if (!doc.startViewTransition) {
-      updateFn();
-      return;
-    }
-    doc.startViewTransition(() => {
-      updateFn();
-      this.cdr.detectChanges();
-    });
-  }
-
   async onAcceptProposal(proposalId: string) {
-    const session = this.session();
+    const session = this.presenter.session();
     if (!session) return;
     await this.proposalService.acceptProposal(proposalId);
   }
 
   async onRejectProposal(proposalId: string, messageId: string) {
-    const session = this.session();
+    const session = this.presenter.session();
     if (!session) return;
     await this.proposalService.rejectProposal(proposalId);
     await this.actions.toggleExcludeSelected([messageId], true);
-  }
-
-  async onEditSelected() {
-    const selectedSet = this.selectedIds();
-    if (selectedSet.size !== 1) return;
-
-    const messageIdStr = Array.from(selectedSet)[0];
-    const messageId = URN.parse(messageIdStr);
-
-    const item = this.source
-      .items()
-      .find(
-        (i) =>
-          i.type === 'content' && (i.data as LlmMessage).id.equals(messageId),
-      );
-
-    if (!item || item.type !== 'content') return;
-
-    const msgData = item.data as LlmMessage;
-    const decoder = new TextDecoder();
-    const currentText = msgData.payloadBytes
-      ? decoder.decode(msgData.payloadBytes)
-      : '';
-
-    if (currentText.startsWith('{"__type":"workspace_proposal"')) {
-      this.snackBar.open('Cannot directly edit workspace proposals.', 'Close', {
-        duration: 3000,
-      });
-      return;
-    }
-
-    const dialogRef = this.dialog.open(LlmEditMessageDialogComponent, {
-      width: '600px',
-      data: {
-        content: currentText,
-        role: msgData.role,
-      },
-    });
-
-    dialogRef.afterClosed().subscribe(async (newText: string | undefined) => {
-      if (newText !== undefined && newText !== currentText) {
-        await this.actions.updateMessageText(messageIdStr, newText);
-        this.toggleSelectionMode();
-      }
-    });
   }
 
   async copyMessage(text: string, messageId: string) {
@@ -462,7 +243,7 @@ export class LlmChatWindowComponent {
   }
 
   onOpenWorkspace(proposalId?: string) {
-    const session = this.session();
+    const session = this.presenter.session();
     if (!session) return;
 
     const queryParams: Record<string, string> = { view: 'workspace' };

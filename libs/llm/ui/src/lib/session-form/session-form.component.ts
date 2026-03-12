@@ -7,9 +7,9 @@ import {
   computed,
   ChangeDetectionStrategy,
   inject,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 import { MatButtonModule } from '@angular/material/button';
@@ -20,22 +20,33 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { MatRadioModule } from '@angular/material/radio';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 import { LlmContextHierarchyComponent } from '../context-hierarchy/context-hierarchy.component';
 
 import {
   LlmSession,
   WorkspaceAttachment,
+  LlmModelStrategy,
 } from '@nx-platform-application/llm-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
+import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
+import { DataSourceResolver } from '@nx-platform-application/llm-features-workspace';
+
+import {
+  ContextPickerDialogComponent,
+  ContextPickerResult,
+} from '@nx-platform-application/data-sources-ui';
 
 @Component({
   selector: 'llm-session-form',
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
     RouterModule,
     MatButtonModule,
     MatFormFieldModule,
@@ -45,6 +56,9 @@ import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
     MatTooltipModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    MatRadioModule,
+    MatCheckboxModule,
+    MatDialogModule,
     LlmContextHierarchyComponent,
   ],
   templateUrl: './session-form.component.html',
@@ -52,15 +66,25 @@ import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmSessionFormComponent {
+  private readonly sessionActions = inject(LlmSessionActions);
+  private readonly cacheService = inject(CompiledCacheService);
+  private readonly resolver = inject(DataSourceResolver);
+  private readonly dataSources = inject(DataSourcesService);
+  private readonly dialog = inject(MatDialog);
+
   session = input<LlmSession | null>(null);
-
-  private actions = inject(LlmSessionActions);
-
   save = output<LlmSession>();
   delete = output<void>();
 
   isEditingTitle = signal(false);
   editTitleValue = signal('');
+
+  // UI display masking for technical resource names
+  readonly availableModels = [
+    { label: 'Gemini 3.1 Pro', value: 'gemini-3.1-pro-preview' },
+    { label: 'Gemini 3 Flash', value: 'gemini-3-flash-preview' },
+    { label: 'Gemini 3.1 Flash Lite', value: 'gemini-3.1-flash-lite-preview' },
+  ];
 
   contextGroupEntries = computed(() => {
     const groups = this.session()?.contextGroups || {};
@@ -69,13 +93,123 @@ export class LlmSessionFormComponent {
 
   constructor() {
     effect(() => {
+      untracked(() => {
+        this.dataSources.loadAllDataSources();
+        this.dataSources.loadAllDataGroups();
+      });
+    });
+
+    effect(() => {
       const s = this.session();
-      if (s) {
-        if (!this.isEditingTitle()) {
-          this.editTitleValue.set(s.title || '');
-        }
+      if (s && !this.isEditingTitle()) {
+        untracked(() => this.editTitleValue.set(s.title || ''));
       }
     });
+  }
+
+  /**
+   * Updates specific strategy fields while preserving the overall session contract.
+   *
+   */
+  updateStrategy(field: keyof LlmModelStrategy, value: any) {
+    const s = this.session();
+    if (!s) return;
+
+    // Default strategy fallback for legacy sessions
+    const currentStrategy: LlmModelStrategy = s.strategy || {
+      primaryModel: s.llmModel,
+      secondaryModel: 'gemini-3.1-pro-preview',
+      secondaryModelLimit: 1,
+      fallbackStrategy: 'history_only',
+      useCacheIfAvailable: true,
+    };
+
+    const updatedSession: LlmSession = {
+      ...s,
+      // If primary engine changes, we sync the legacy top-level model pointer
+      llmModel: field === 'primaryModel' ? value : s.llmModel,
+      strategy: {
+        ...currentStrategy,
+        [field]: value,
+      },
+    };
+
+    this.save.emit(updatedSession);
+  }
+
+  /**
+   * Handles the radio toggle between "Flick Back" (1 turn) and "Alert" (n turns).
+   *
+   */
+  onOverrideStrategyChange(type: 'flick' | 'alert') {
+    const limit = type === 'flick' ? 1 : 2;
+    this.updateStrategy('secondaryModelLimit', limit);
+  }
+
+  /**
+   * Updates the numeric alert threshold, enforcing a minimum of 2.
+   */
+  onLimitChange(event: Event) {
+    const target = event.target as HTMLSelectElement | HTMLInputElement;
+    const val = parseInt(target.value, 10);
+    if (!isNaN(val) && val >= 2) {
+      this.updateStrategy('secondaryModelLimit', val);
+    }
+  }
+
+  /**
+   * Triggers context compilation using the Primary Model defined in the strategy.
+   *
+   */
+  async onCompileRequest(event: { intent: WorkspaceAttachment; ttl?: number }) {
+    const s = this.session();
+    if (!s) return;
+
+    const model = s.strategy?.primaryModel || s.llmModel;
+    const sources = await this.resolver.resolve(event.intent);
+
+    await this.cacheService.compileCache({
+      sources,
+      model: model,
+      ttlHours: event.ttl,
+    });
+  }
+
+  async onAttachTrigger(
+    targetBucket: 'inlineContexts' | 'systemContexts' | 'compiledContext',
+  ) {
+    const s = this.session();
+    if (!s) return;
+
+    const dialogRef = this.dialog.open<
+      ContextPickerDialogComponent,
+      any,
+      ContextPickerResult
+    >(ContextPickerDialogComponent, { width: '600px' });
+
+    const result = await dialogRef.afterClosed().toPromise();
+    if (result) {
+      await this.sessionActions.attachContext(
+        s.id,
+        result.id,
+        result.type,
+        targetBucket,
+      );
+    }
+  }
+
+  async removeAttachment(
+    id: URN,
+    bucket: 'inlineContexts' | 'systemContexts' | 'compiledContext',
+  ) {
+    const s = this.session();
+    if (s) {
+      await this.sessionActions.removeContext(s.id, id, bucket);
+    }
+  }
+
+  onTitleInput(event: Event): void {
+    this.editTitleValue.set((event.target as HTMLInputElement).value);
   }
 
   startTitleEdit(): void {
@@ -83,30 +217,13 @@ export class LlmSessionFormComponent {
     this.isEditingTitle.set(true);
   }
 
-  cancelTitleEdit(): void {
-    this.isEditingTitle.set(false);
-  }
-
   saveTitle(): void {
+    const s = this.session();
     const newTitle = this.editTitleValue().trim();
-    const current = this.session();
-    if (newTitle && current) {
-      this.save.emit({ ...current, title: newTitle });
+    if (newTitle && s) {
+      this.save.emit({ ...s, title: newTitle });
     }
     this.isEditingTitle.set(false);
-  }
-
-  /**
-   * Triggers removal through the Domain Actions service,
-   * targeting the specific intent bucket.
-   */
-  async onRemoveAttachment(
-    attachmentId: URN,
-    bucket: 'inlineContexts' | 'systemContexts' | 'compiledContext',
-  ): Promise<void> {
-    const current = this.session();
-    if (!current) return;
-    await this.actions.removeContext(current.id, attachmentId, bucket);
   }
 
   onDelete(): void {

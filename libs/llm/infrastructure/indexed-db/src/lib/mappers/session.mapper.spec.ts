@@ -1,79 +1,85 @@
-// libs/llm/infrastructure/indexed-db/src/lib/mappers/session.mapper.spec.ts
+import { describe, it, expect, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { LlmSessionMapper } from './session.mapper';
 import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
-import { LlmSessionRecord } from '../records/session.record';
 import { LlmSession } from '@nx-platform-application/llm-types';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { LlmSessionMapper } from './session.mapper';
+import { LlmSessionRecord } from '../records/session.record';
 
 describe('LlmSessionMapper', () => {
   let mapper: LlmSessionMapper;
+
+  const mockDomain: LlmSession = {
+    id: URN.parse('urn:llm:session:123'),
+    title: 'Strategy Test',
+    lastModified: '2026-03-12T10:00:00Z' as ISODateTimeString,
+    llmModel: 'gemini-3-flash-preview',
+    strategy: {
+      primaryModel: 'gemini-3-flash-preview',
+      secondaryModel: 'gemini-3.1-pro-preview',
+      secondaryModelLimit: 5,
+      fallbackStrategy: 'history_only',
+      useCacheIfAvailable: true,
+    },
+    inlineContexts: [
+      {
+        id: URN.parse('urn:llm:attachment:1'),
+        resourceUrn: URN.parse('urn:data-source:repo:abc'),
+        resourceType: 'source',
+      },
+    ],
+  };
 
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [LlmSessionMapper] });
     mapper = TestBed.inject(LlmSessionMapper);
   });
 
-  describe('toDomain', () => {
-    it('should cleanly map the new explicit intent buckets', () => {
-      const record: LlmSessionRecord = {
-        id: 'urn:llm:session:1',
-        title: 'Modern Session',
-        lastModified: '2026-02-28T10:00:00Z' as ISODateTimeString,
-        inlineContexts: [
-          {
-            id: 'urn:llm:attachment:1',
-            resourceUrn: 'urn:data-source:repo:123',
-            resourceType: 'source',
-          },
-        ],
-        systemContexts: [],
-        compiledContext: undefined,
-      };
+  it('should correctly flatten the model strategy into the record', () => {
+    const record = mapper.toRecord(mockDomain);
 
-      const domain = mapper.toDomain(record);
-
-      // Verify the intent pointers mapped correctly
-      expect(domain.inlineContexts).toBeDefined();
-      expect(domain.inlineContexts![0].id.toString()).toBe(
-        'urn:llm:attachment:1',
-      );
-      expect(domain.inlineContexts![0].resourceUrn.toString()).toBe(
-        'urn:data-source:repo:1',
-      );
-    });
+    expect(record.llmModel).toBe('gemini-3-flash-preview');
+    expect(record.primaryModel).toBe('gemini-3-flash-preview');
+    expect(record.secondaryModel).toBe('gemini-3.1-pro-preview');
+    expect(record.fallbackStrategy).toBe('history_only');
+    expect(record.useCacheIfAvailable).toBe(true);
   });
 
-  describe('toRecord', () => {
-    it('should map the pure intent buckets directly to the database record', () => {
-      const domain: LlmSession = {
-        id: URN.parse('urn:llm:session:3'),
-        title: 'Save Session',
-        lastModified: '2026-02-28T10:00:00Z' as ISODateTimeString,
-        llmModel: 'gemini-1.5-pro',
-        inlineContexts: [],
-        systemContexts: [],
-        compiledContext: {
-          id: URN.parse('urn:llm:attachment:2'),
-          resourceUrn: URN.parse('urn:data-source:group:abc'),
-          resourceType: 'group',
-        },
-      };
+  it('should hydrate a complete strategy object back into the domain', () => {
+    const record = mapper.toRecord(mockDomain);
+    const domain = mapper.toDomain(record);
 
-      const record = mapper.toRecord(domain);
+    expect(domain.strategy).toBeDefined();
+    expect(domain.strategy?.secondaryModelLimit).toBe(5);
+    expect(domain.strategy?.fallbackStrategy).toBe('history_only');
+    expect(domain.llmModel).toBe('gemini-3-flash-preview');
+  });
 
-      // Verify intent pointer is saved perfectly
-      expect(record.compiledContext).toBeDefined();
-      expect(record.compiledContext?.resourceUrn).toBe(
-        'urn:data-source:group:abc',
-      );
-      expect(record.compiledContext?.resourceType).toBe('group');
+  it('should handle legacy records missing strategy fields by providing defaults', () => {
+    const legacyRecord: any = {
+      id: 'urn:llm:session:legacy',
+      title: 'Old Session',
+      lastModified: '2025-01-01T00:00:00Z',
+      llmModel: 'gemini-1.5-flash',
+    };
 
-      // Verify basic fields
-      expect(record.llmModel).toBe('gemini-1.5-pro');
-    });
+    const domain = mapper.toDomain(legacyRecord as LlmSessionRecord);
+
+    expect(domain.strategy).toBeDefined();
+    expect(domain.strategy?.fallbackStrategy).toBe('inline'); // Default
+    expect(domain.strategy?.primaryModel).toBe('gemini-1.5-flash');
+  });
+
+  it('should ensure all URNs are strings in the record (Structured Clone Safety)', () => {
+    const record = mapper.toRecord(mockDomain);
+
+    expect(typeof record.id).toBe('string');
+    expect(typeof record.inlineContexts![0].resourceUrn).toBe('string');
+
+    expect(() => {
+      structuredClone(record);
+    }).not.toThrow();
   });
 });

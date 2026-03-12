@@ -8,10 +8,8 @@ import { MatInputModule } from '@angular/material/input';
 import { URN } from '@nx-platform-application/platform-types';
 
 // Domain & Feature Layers
-import {
-  LlmSessionSource,
-  LlmScrollSource,
-} from '@nx-platform-application/llm-features-chat';
+import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import {
   LlmCreateSessionDialogComponent,

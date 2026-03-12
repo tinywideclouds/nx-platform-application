@@ -15,7 +15,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
 
-import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
 import { URN } from '@nx-platform-application/platform-types';
 
 export interface ContextPickerResult {

@@ -5,15 +5,27 @@ import {
   LlmDatabase,
   CompiledCacheMapper,
 } from '@nx-platform-application/llm-infrastructure-indexed-db';
+import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
 @Injectable({ providedIn: 'root' })
 export class CompiledCacheStorageService {
   private db = inject(LlmDatabase);
   private mapper = inject(CompiledCacheMapper);
+  private logger = inject(Logger);
 
-  async saveCache(cache: CompiledCache): Promise<void> {
-    const record = this.mapper.toRecord(cache);
-    await this.db.compiledCaches.put(record);
+  async saveCache(cache: CompiledCache): Promise<URN | undefined> {
+    try {
+      const record = this.mapper.toRecord(cache);
+      await this.db.compiledCaches.put(record);
+      return cache.id;
+    } catch (error) {
+      // Catching the DataCloneError or other storage failures
+      this.logger.error('CRITICAL: CompiledCache persistence failed', {
+        errorName: (error as Error).name,
+        cacheId: cache.id.toString(),
+      });
+      throw error;
+    }
   }
 
   async getCache(id: URN): Promise<CompiledCache | undefined> {

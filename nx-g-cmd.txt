@@ -347,3 +347,7 @@ nx g @nx/angular:library --name=llm-domain-compiled-cache --directory=libs/llm/d
 
 
 nx g @nx/workspace:move --project=data-sources-infrastructure-github-firestore-access --destination=libs/data-sources/infrastructure/data-access
+
+
+
+nx g @nx/angular:library --name=llm-features-session --directory=libs/llm/features/session --tags="scope:llm"  

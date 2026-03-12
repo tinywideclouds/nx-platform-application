@@ -39,8 +39,9 @@ describe('GeminiDataService', () => {
   });
 
   describe('SSE Stream Parser', () => {
-    it('should multiplex standard text and proposal_created events seamlessly', (done) => {
+    it('should multiplex reasoning thoughts, standard text, and proposal_created events seamlessly', (done) => {
       const mockStreamData =
+        `data: {"candidates": [{"content": {"parts": [{"text": "Hmm, I need to look at main.ts", "isThought": true}]}}]}\n\n` +
         `data: {"candidates": [{"content": {"parts": [{"text": "I will fix that."}]}}]}\n\n` +
         `event: proposal_created\n` +
         `data: {"originalContent": "old code", "proposal": {"id": "prop-1", "file_path": "main.ts", "patch": "@@ -1 +1 @@", "status": "pending", "created_at": "now"}}\n\n` +
@@ -49,7 +50,6 @@ describe('GeminiDataService', () => {
 
       const encoder = new TextEncoder();
 
-      // FIX: Mock the getReader interface directly instead of relying on the browser ReadableStream global
       const mockBody = {
         getReader: () => {
           let hasRead = false;
@@ -77,11 +77,21 @@ describe('GeminiDataService', () => {
         .subscribe({
           next: (event) => events.push(event),
           complete: () => {
-            expect(events).toHaveLength(2);
-            expect(events[0].type).toBe('text');
-            expect((events[0] as any).content).toBe('I will fix that.');
-            expect(events[1].type).toBe('proposal');
-            expect((events[1] as any).event.proposal.patch).toBe('@@ -1 +1 @@');
+            expect(events).toHaveLength(3);
+
+            // Assert Thought Parsing
+            expect(events[0].type).toBe('thought');
+            expect((events[0] as any).content).toBe(
+              'Hmm, I need to look at main.ts',
+            );
+
+            // Assert Standard Text Parsing
+            expect(events[1].type).toBe('text');
+            expect((events[1] as any).content).toBe('I will fix that.');
+
+            // Assert Proposal Parsing
+            expect(events[2].type).toBe('proposal');
+            expect((events[2] as any).event.proposal.patch).toBe('@@ -1 +1 @@');
           },
         });
     });

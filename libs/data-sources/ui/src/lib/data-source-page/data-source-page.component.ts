@@ -23,7 +23,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 
-import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { URN } from '@nx-platform-application/platform-types';
 import {

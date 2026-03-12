@@ -47,6 +47,12 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
+      "@nx-platform-application/data-sources-features-state": [
+        "libs/data-sources/features/state/src/index.ts"
+      ],
+      "@nx-platform-application/data-sources-infrastructure-data-access": [
+        "libs/data-sources/infrastructure/data-access/src/index.ts"
+      ],
       "@nx-platform-application/data-sources-protos": [
         "libs/data-sources/protos/src/index.ts"
       ],
@@ -58,12 +64,6 @@
       ],
       "@nx-platform-application/data-sources-ui": [
         "libs/data-sources/ui/src/index.ts"
-      ],
-      "@nx-platform-application/data-sources-infrastructure-data-access": [
-        "libs/data-sources/infrastructure/data-access/src/index.ts"
-      ],
-      "@nx-platform-application/data-sources/features/state": [
-        "libs/data-sources/features/state/src/index.ts"
       ],
       "@nx-platform-application/directory-api": [
         "libs/directory/api/src/index.ts"
@@ -103,6 +103,9 @@
       ],
       "@nx-platform-application/llm-features-chat": [
         "libs/llm/features/chat/src/index.ts"
+      ],
+      "@nx-platform-application/llm-features-session": [
+        "libs/llm/features/session/src/index.ts"
       ],
       "@nx-platform-application/llm-features-workspace": [
         "libs/llm/features/workspace/src/index.ts"

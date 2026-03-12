@@ -131,28 +131,25 @@ export class CompiledCacheService {
         }),
       );
 
-      // A Dummy Session ID is passed as this action is now globally decoupled
       const response = await this.network.buildCache({
-        sessionId: URN.create('session', 'global-cache-build', 'llm'),
         model: payload.model,
         attachments: mappedAttachments,
         expiresAtHint: expiresAtHint,
       });
-
-      const fallbackExpiry = Temporal.Now.instant()
-        .add({ hours: 24 })
-        .toString() as ISODateTimeString;
 
       const newCache: CompiledCache = {
         id: response.compiledCacheId,
         model: payload.model,
         provider: 'gemini',
         createdAt: Temporal.Now.instant().toString() as ISODateTimeString,
-        expiresAt: response.expiresAt || expiresAtHint || fallbackExpiry,
+        expiresAt: response.expiresAt,
         sources: payload.sources,
       };
 
-      await this.cacheStorage.saveCache(newCache);
+      const savedURN = await this.cacheStorage.saveCache(newCache);
+
+      console.log('got good response', response, savedURN);
+
       await this.refresh();
 
       this.snackBar.open('Context cache compiled successfully!', 'Close', {

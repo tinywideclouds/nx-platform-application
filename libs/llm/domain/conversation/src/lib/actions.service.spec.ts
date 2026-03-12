@@ -12,10 +12,8 @@ import {
   SessionStorageService,
   ProposalRegistryStorageService,
 } from '@nx-platform-application/llm-infrastructure-storage';
-import {
-  LlmScrollSource,
-  LlmSessionSource,
-} from '@nx-platform-application/llm-features-chat';
+import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import {
   LLM_NETWORK_CLIENT,
   LlmStreamEvent,
@@ -45,7 +43,6 @@ describe('LlmChatActions', () => {
     sessions: signal([
       {
         id: URN.parse('urn:llm:session:123'),
-        // FIX: Replaced old attachments with new intent buckets
         inlineContexts: [
           {
             id: URN.parse('urn:llm:attachment:1'),
@@ -151,6 +148,25 @@ describe('LlmChatActions', () => {
     expect(lastAddedMessage.typeId.toString()).toBe(
       'urn:llm:message-type:fileLink',
     );
+  });
+
+  it('should cleanly accumulate and reset ephemeral thought states', async () => {
+    const sessionId = URN.parse('urn:llm:session:123');
+
+    await service.sendMessage('Plan the task', sessionId);
+
+    // Simulate reasoning tokens arriving
+    streamSubject.next({
+      type: 'thought',
+      content: 'First, I need to check the ',
+    });
+    streamSubject.next({ type: 'thought', content: 'logs.' });
+
+    expect(service.activeThought()).toBe('First, I need to check the logs.');
+
+    // Complete the stream and verify cleanup
+    streamSubject.complete();
+    expect(service.activeThought()).toBe('');
   });
 
   it('should ensure the assistant placeholder timestamp is strictly 1ms after the user message', async () => {

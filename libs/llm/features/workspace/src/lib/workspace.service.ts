@@ -1,4 +1,11 @@
-import { Injectable, signal, computed, inject, effect } from '@angular/core';
+import {
+  Injectable,
+  signal,
+  computed,
+  inject,
+  effect,
+  untracked,
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { applyPatch, createTwoFilesPatch } from 'diff';
 import { URN } from '@nx-platform-application/platform-types';
@@ -7,12 +14,13 @@ import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { GithubSyncClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
 import { ChangeProposal } from '@nx-platform-application/llm-types';
 import { FileMetadata } from '@nx-platform-application/data-sources-types';
-import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
 
 import { healMalformedPatch } from './utils';
+import { DataSourceResolver } from './datasource-resolver';
 
 export interface ModifiedFile {
   filePath: string;
@@ -37,6 +45,7 @@ export class WorkspaceStateService {
   private proposalService = inject(LlmProposalService);
   private cacheService = inject(CompiledCacheService);
   private dataSources = inject(DataSourcesService);
+  private resolver = inject(DataSourceResolver);
 
   private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
   private readonly baseContents = signal<Map<string, string>>(new Map());
@@ -47,36 +56,33 @@ export class WorkspaceStateService {
     this.sessionSource.activeSessionId(),
   );
 
+  /**
+   * REFACTORED: Centralized target resolution using the shared unrolling logic.
+   */
   readonly availableTargets = computed(() => {
     const session = this.sessionSource.activeSession();
     if (!session) return [];
 
     const targetMap = new Map<string, URN>();
 
-    // Gather from inline intents
-    (session.inlineContexts || []).forEach((a) => {
-      if (a.resourceType === 'source') {
-        targetMap.set(a.resourceUrn.toString(), a.resourceUrn);
-      }
-    });
+    const allAttachments = [
+      ...(session.inlineContexts || []),
+      ...(session.compiledContext ? [session.compiledContext] : []),
+    ];
 
-    // Gather from compiled intent
-    if (session.compiledContext) {
-      if (session.compiledContext.resourceType === 'source') {
-        targetMap.set(
-          session.compiledContext.resourceUrn.toString(),
-          session.compiledContext.resourceUrn,
-        );
+    allAttachments.forEach((att) => {
+      if (att.resourceType === 'source') {
+        targetMap.set(att.resourceUrn.toString(), att.resourceUrn);
       } else {
-        // If it's a group, we show the individual sources within it
         const group = this.dataSources
           .dataGroups()
-          .find((g) => g.id.equals(session.compiledContext!.resourceUrn));
+          .find((g) => g.id.equals(att.resourceUrn));
+
         group?.sources.forEach((s) =>
           targetMap.set(s.dataSourceId.toString(), s.dataSourceId),
         );
       }
-    }
+    });
 
     return Array.from(targetMap.values());
   });
@@ -101,11 +107,17 @@ export class WorkspaceStateService {
   });
 
   constructor() {
+    /**
+     * EFFECT 1: File List Hydration
+     * Automatically fetches repository structure when the active target changes.
+     */
     effect(async () => {
       const targetId = this.activeWorkspaceTarget();
       if (!targetId) {
-        this.baseMetadata.set(new Map());
-        this.baseContents.set(new Map());
+        untracked(() => {
+          this.baseMetadata.set(new Map());
+          this.baseContents.set(new Map());
+        });
         return;
       }
 
@@ -115,19 +127,23 @@ export class WorkspaceStateService {
         );
         const metaMap = new Map<string, FileMetadata>();
         for (const meta of metadataList) metaMap.set(meta.path, meta);
-        this.baseMetadata.set(metaMap);
+        untracked(() => this.baseMetadata.set(metaMap));
       } catch (err) {
-        this.logger.error(`Failed to fetch metadata`, err);
-        this.baseMetadata.set(new Map());
+        this.logger.error(`Failed to fetch metadata for ${targetId}`, err);
+        untracked(() => this.baseMetadata.set(new Map()));
       }
     });
 
+    /**
+     * EFFECT 2: Proposal Sync
+     * Keeps the IDE's diff overlays in sync with the current chat session.
+     */
     effect(async () => {
       const sessionId = this.activeSessionId();
       this.proposalService.registryMutated();
 
       if (!sessionId) {
-        this.activeProposals.set([]);
+        untracked(() => this.activeProposals.set([]));
         return;
       }
 
@@ -138,23 +154,29 @@ export class WorkspaceStateService {
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );
-        this.activeProposals.set(
-          entries.map((e) => ({
-            id: e.id.toString(),
-            sessionId: e.ownerSessionId,
-            filePath: e.filePath,
-            patch: e.patch,
-            newContent: e.newContent,
-            reasoning: e.reasoning,
-            status: e.status,
-            createdAt: e.createdAt,
-          })),
+        untracked(() =>
+          this.activeProposals.set(
+            entries.map((e) => ({
+              id: e.id.toString(),
+              sessionId: e.ownerSessionId,
+              filePath: e.filePath,
+              patch: e.patch,
+              newContent: e.newContent,
+              reasoning: e.reasoning,
+              status: e.status,
+              createdAt: e.createdAt,
+            })),
+          ),
         );
       } catch (e) {
-        this.logger.error('Failed to load proposals', e);
+        this.logger.error('Failed to load session proposals', e);
       }
     });
 
+    /**
+     * EFFECT 3: Content JIT Loading
+     * If a file has a proposal chain but no base text, fetch it from Github.
+     */
     effect(() => {
       this.overlayMap().forEach((record, filePath) => {
         if (
@@ -163,13 +185,12 @@ export class WorkspaceStateService {
           !record.isContentLoading &&
           record.metadata
         ) {
-          setTimeout(() => this.loadContent(filePath), 0);
+          untracked(() => setTimeout(() => this.loadContent(filePath), 0));
         }
       });
     });
   }
 
-  // ... [Keep loadContent and encodePathForGo methods as they were] ...
   private encodePathForGo(filePath: string): string {
     return btoa(unescape(encodeURIComponent(filePath)))
       .replace(/\+/g, '-')

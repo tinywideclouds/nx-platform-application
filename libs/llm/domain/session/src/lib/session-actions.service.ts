@@ -5,7 +5,7 @@ import {
   ISODateTimeString,
   URN,
 } from '@nx-platform-application/platform-types';
-import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import {
   LlmSession,
   QuickContextFile,
@@ -14,8 +14,6 @@ import {
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { SessionStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 
-const defaultModel = 'gemini-2.5-pro';
-
 @Injectable({ providedIn: 'root' })
 export class LlmSessionActions {
   private readonly logger = inject(Logger);
@@ -23,10 +21,17 @@ export class LlmSessionActions {
   private source = inject(LlmSessionSource);
   private storage = inject(SessionStorageService);
 
+  /**
+   * Valid Google Resource Names for the SDK.
+   * Note: The '-preview' suffix is required for backend calls.
+   */
+  public readonly defaultModel = 'gemini-3-flash-preview';
+  public readonly defaultSecondaryModel = 'gemini-3.1-pro-preview';
+
   async createNewSession(
     title: string,
     target: 'chat' | 'options',
-    model: string = defaultModel,
+    model: string = this.defaultModel,
   ): Promise<void> {
     const newId = URN.create('session', crypto.randomUUID(), 'llm');
     const now = Temporal.Now.instant().toString() as ISODateTimeString;
@@ -34,9 +39,15 @@ export class LlmSessionActions {
     const newSession: LlmSession = {
       id: newId,
       title: title.trim(),
-      llmModel: model,
+      llmModel: model, // Required full string for the backend
       lastModified: now,
-      // Initialize the explicit intent buckets
+      strategy: {
+        primaryModel: model,
+        secondaryModel: this.defaultSecondaryModel,
+        secondaryModelLimit: 3,
+        fallbackStrategy: 'inline',
+        useCacheIfAvailable: true,
+      },
       inlineContexts: [],
       systemContexts: [],
       compiledContext: undefined,
@@ -46,12 +57,11 @@ export class LlmSessionActions {
     await this.storage.saveSession(newSession);
     await this.source.refresh();
 
+    const route = ['/chat', newId.toString()];
     if (target === 'options') {
-      await this.router.navigate(['/chat', newId.toString()], {
-        queryParams: { view: 'details' },
-      });
+      await this.router.navigate(route, { queryParams: { view: 'details' } });
     } else {
-      await this.router.navigate(['/chat', newId.toString()]);
+      await this.router.navigate(route);
     }
   }
 
@@ -61,6 +71,16 @@ export class LlmSessionActions {
 
   async updateSession(session: LlmSession): Promise<void> {
     try {
+      // Repair logic: Ensure legacy sessions get a valid strategy object
+      if (!session.strategy) {
+        session.strategy = {
+          primaryModel: session.llmModel,
+          secondaryModel: this.defaultSecondaryModel,
+          secondaryModelLimit: 3,
+          fallbackStrategy: 'inline',
+          useCacheIfAvailable: true,
+        };
+      }
       await this.storage.saveSession(session);
       await this.source.refresh();
     } catch (e) {
@@ -79,7 +99,7 @@ export class LlmSessionActions {
     }
   }
 
-  // --- NEW CONTEXT INTENT MANAGEMENT ---
+  // --- CONTEXT INTENT MANAGEMENT ---
 
   async attachContext(
     sessionId: URN,
@@ -98,13 +118,12 @@ export class LlmSessionActions {
       };
 
       if (targetBucket === 'compiledContext') {
-        session.compiledContext = attachment; // Only 1 allowed
+        session.compiledContext = attachment;
       } else {
-        session[targetBucket] = [...(session[targetBucket] || []), attachment]; // Append to arrays
+        session[targetBucket] = [...(session[targetBucket] || []), attachment];
       }
 
-      await this.storage.saveSession(session);
-      await this.source.refresh();
+      await this.updateSession(session);
     } catch (e) {
       this.logger.error(`Failed to attach context to ${targetBucket}`, e);
     }
@@ -129,8 +148,7 @@ export class LlmSessionActions {
         );
       }
 
-      await this.storage.saveSession(session);
-      await this.source.refresh();
+      await this.updateSession(session);
     } catch (e) {
       this.logger.error(`Failed to remove context from ${targetBucket}`, e);
     }
@@ -142,12 +160,8 @@ export class LlmSessionActions {
     try {
       const session = await this.storage.getSession(sessionId);
       if (session) {
-        const updatedSession: LlmSession = {
-          ...session,
-          workspaceTarget: targetId,
-        };
-        await this.storage.saveSession(updatedSession);
-        this.source.refresh();
+        session.workspaceTarget = targetId;
+        await this.updateSession(session);
       }
     } catch (e) {
       this.logger.error('Failed to save workspace target', e);
@@ -170,7 +184,6 @@ export class LlmSessionActions {
 
       const currentFiles = session.quickContext || [];
       const filteredFiles = currentFiles.filter((f) => f.name !== file.name);
-
       const combinedFiles = [newFile, ...filteredFiles];
 
       let droppedFile: QuickContextFile | undefined = undefined;
@@ -178,15 +191,8 @@ export class LlmSessionActions {
         droppedFile = combinedFiles[combinedFiles.length - 1];
       }
 
-      const updatedQuickContext = combinedFiles.slice(0, 6);
-
-      const updatedSession: LlmSession = {
-        ...session,
-        quickContext: updatedQuickContext,
-      };
-
-      await this.storage.saveSession(updatedSession);
-      this.source.refresh();
+      session.quickContext = combinedFiles.slice(0, 6);
+      await this.updateSession(session);
 
       return droppedFile;
     } catch (e) {
@@ -196,22 +202,15 @@ export class LlmSessionActions {
   }
 
   async removeQuickFile(sessionId: URN, fileId: URN): Promise<void> {
-    // ... [No changes needed to quick context implementation] ...
     try {
       const session = await this.storage.getSession(sessionId);
       if (!session || !session.quickContext) return;
 
-      const updatedQuickContext = session.quickContext.filter(
+      session.quickContext = session.quickContext.filter(
         (f) => !f.id.equals(fileId),
       );
 
-      const updatedSession: LlmSession = {
-        ...session,
-        quickContext: updatedQuickContext,
-      };
-
-      await this.storage.saveSession(updatedSession);
-      this.source.refresh();
+      await this.updateSession(session);
     } catch (e) {
       this.logger.error('Failed to remove quick context file', e);
     }

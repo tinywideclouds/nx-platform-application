@@ -20,10 +20,8 @@ import {
   TextType,
   FileProposalType,
 } from '@nx-platform-application/llm-types';
-import {
-  LlmScrollSource,
-  LlmSessionSource,
-} from '@nx-platform-application/llm-features-chat';
+import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { LlmContextBuilderService } from './context-builder.service';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
@@ -52,6 +50,11 @@ export class LlmChatActions {
   // State for the UI to bind the Diff Viewer to
   readonly activeProposal = signal<SSEProposalEvent | null>(null);
 
+  // --- NEW: Ephemeral Thought State ---
+  readonly activeThought = signal<string>('');
+
+  //TODO this should eventually be configurable
+  public defaultModel = 'gemini-2.5-pro';
   /**
    * Generates a lightweight preview snippet for the UI pointer
    */
@@ -79,7 +82,11 @@ export class LlmChatActions {
    * 4. Network Stream -> Updates Placeholder (Sink)
    * 5. Stream Complete -> Save final payload (DB)
    */
-  async sendMessage(text: string, sessionId: URN): Promise<void> {
+  async sendMessage(
+    text: string,
+    sessionId: URN,
+    modelToUse?: string,
+  ): Promise<void> {
     const idStr = sessionId.toString();
     const session = this.sessionSource
       .sessions()
@@ -110,7 +117,11 @@ export class LlmChatActions {
 
     // --- STEP 2: ASSEMBLE CONTEXT (PRISTINE DB STATE) ---
     // We build the network request NOW, before the bot placeholder exists in the DB!
-    const assembly = await this.contextBuilder.buildStreamRequest(session);
+    const assembly = await this.contextBuilder.buildStreamRequest(
+      session,
+      modelToUse,
+    );
+    console.log('assembled request', assembly);
     const request = assembly.request;
 
     // DO NOT REMOVE the bot message MUST be later than the user message
@@ -136,11 +147,15 @@ export class LlmChatActions {
     // --- STEP 4: EXECUTE NETWORK STREAM ---
     this.accumulatedText = '';
     this.activeProposal.set(null); // Clear previous proposal
+    this.activeThought.set(''); // Clear previous thoughts
 
     // Ephemeral Architecture: We only pass the serialized request body to the stream
     this.activeSubscription = this.network.generateStream(request).subscribe({
       next: (event) => {
-        if (event.type === 'text') {
+        if (event.type === 'thought') {
+          // --- NEW: Accumulate ephemeral thoughts ---
+          this.activeThought.update((prev) => prev + event.content);
+        } else if (event.type === 'text') {
           if (!this.activeBotId) {
             this.activeBotId = URN.create(
               'message',
@@ -267,6 +282,7 @@ export class LlmChatActions {
     this.activeBotMsg = null;
     this.accumulatedText = '';
     this.activeProposal.set(null);
+    this.activeThought.set(''); // Clear thoughts on cancel
   }
 
   private finalizeGeneration(): void {
@@ -288,6 +304,7 @@ export class LlmChatActions {
     this.activeBotId = null;
     this.activeBotMsg = null;
     this.accumulatedText = '';
+    this.activeThought.set(''); // Clear thoughts on complete
   }
 
   async groupMessages(
@@ -336,7 +353,6 @@ export class LlmChatActions {
 
   async extractToNewSession(
     messageIds: string[],
-    activeSessionId: URN,
     mode: 'copy' | 'move',
   ): Promise<URN> {
     if (!messageIds || messageIds.length === 0)
@@ -345,9 +361,9 @@ export class LlmChatActions {
     const newSessionId = URN.create('session', crypto.randomUUID(), 'llm');
     const now = Temporal.Now.instant().toString() as ISODateTimeString;
 
-    // FIX: Updated to match the strict explicit intent buckets
     const newSession: LlmSession = {
       id: newSessionId,
+      llmModel: this.defaultModel,
       title: mode === 'copy' ? 'Branched Session' : 'Extracted Session',
       lastModified: now,
       inlineContexts: [],
