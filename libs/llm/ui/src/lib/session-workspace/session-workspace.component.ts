@@ -16,7 +16,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 
 // Domain / State
 import { WorkspaceStateService } from '@nx-platform-application/llm-features-workspace';
-import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 
 // Child Components

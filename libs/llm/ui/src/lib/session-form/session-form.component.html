@@ -1,113 +1,254 @@
 <div class="p-4 w-full max-w-4xl mx-auto block">
-  @if (!session()?.inlineContexts?.length && !session()?.compiledContext) {
-    <div
-      class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8 shadow-sm flex items-start gap-4"
-    >
-      <div class="bg-indigo-100 p-3 rounded-full text-indigo-600 shrink-0">
-        <mat-icon>school</mat-icon>
-      </div>
-      <div>
-        <h3 class="text-lg font-bold text-indigo-900 m-0">
-          Welcome to your Context Engine
-        </h3>
-        <p class="text-indigo-800 text-sm mt-2 mb-0 leading-relaxed">
-          LLMs are incredibly smart, but they don't know your codebase until you
-          teach them. Use the settings below to attach synced GitHub
-          repositories or compiled blueprints to this session.
-        </p>
-      </div>
-    </div>
-  }
+  <div class="flex items-center gap-2 mb-8 w-full">
+    @if (isEditingTitle()) {
+      <mat-form-field
+        appearance="outline"
+        class="flex-grow max-w-md m-0"
+        subscriptSizing="dynamic"
+      >
+        <input
+          matInput
+          [value]="editTitleValue()"
+          (input)="onTitleInput($event)"
+          (keyup.enter)="saveTitle()"
+          (keyup.escape)="isEditingTitle.set(false)"
+          placeholder="Session Title"
+          autofocus
+        />
+      </mat-form-field>
+      <button mat-icon-button color="primary" (click)="saveTitle()">
+        <mat-icon>check_circle</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        class="text-gray-400"
+        (click)="isEditingTitle.set(false)"
+      >
+        <mat-icon>cancel</mat-icon>
+      </button>
+    } @else {
+      <h2 class="text-2xl font-bold text-gray-900 m-0">
+        {{ session()?.title || 'Untitled Session' }}
+      </h2>
+      <button
+        mat-icon-button
+        class="text-gray-400 scale-75"
+        (click)="startTitleEdit()"
+        matTooltip="Rename Session"
+      >
+        <mat-icon>edit</mat-icon>
+      </button>
+    }
+  </div>
 
-  <div class="flex flex-col gap-4 w-full">
-    <div class="flex items-center gap-2 mb-2 w-full">
-      @if (isEditingTitle()) {
+  <div class="mt-4 pt-6 border-t border-gray-100 w-full mb-10">
+    <h3
+      class="font-medium text-gray-800 text-base mb-6 flex items-center gap-2"
+    >
+      <mat-icon class="text-indigo-500">settings_input_component</mat-icon>
+      Model Strategy
+    </h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+      <div
+        class="p-5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-4"
+      >
         <mat-form-field
           appearance="outline"
-          class="flex-grow max-w-md m-0 p-0"
+          class="w-full"
           subscriptSizing="dynamic"
         >
-          <input
-            matInput
-            [ngModel]="editTitleValue()"
-            (ngModelChange)="editTitleValue.set($event)"
-            (keyup.enter)="saveTitle()"
-            (keyup.escape)="cancelTitleEdit()"
-            placeholder="Session Title"
-            autofocus
-          />
+          <mat-label>Primary Model (Default)</mat-label>
+          <mat-select
+            [value]="session()?.strategy?.primaryModel"
+            (selectionChange)="updateStrategy('primaryModel', $event.value)"
+          >
+            @for (opt of availableModels; track opt.value) {
+              <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+            }
+          </mat-select>
         </mat-form-field>
-        <button
-          mat-icon-button
-          color="primary"
-          (click)="saveTitle()"
-          matTooltip="Save Title"
-        >
-          <mat-icon>check_circle</mat-icon>
-        </button>
-        <button
-          mat-icon-button
-          class="text-gray-400 hover:text-gray-600"
-          (click)="cancelTitleEdit()"
-          matTooltip="Cancel"
-        >
-          <mat-icon>cancel</mat-icon>
-        </button>
-      } @else {
-        <h2 class="text-2xl font-bold text-gray-900 m-0">
-          {{ session()?.title || 'Untitled Session' }}
-        </h2>
-        <button
-          mat-icon-button
-          class="text-gray-400 hover:text-gray-600 scale-75"
-          (click)="startTitleEdit()"
-          matTooltip="Rename Session"
-        >
-          <mat-icon>edit</mat-icon>
-        </button>
-      }
-    </div>
 
-    <div class="mt-4 pt-6 border-t border-gray-100 w-full">
-      <div class="flex items-center justify-between mb-4">
-        <h3
-          class="font-medium text-gray-800 text-base m-0 flex items-center gap-2"
-        >
-          <mat-icon class="text-gray-400">dataset</mat-icon>
-          Data Sources & Context
-        </h3>
-      </div>
-
-      <div class="flex gap-4 w-full mb-6">
-        <div
-          class="flex-1 p-6 border-2 border-dashed border-indigo-200 rounded-xl flex flex-col items-center justify-center text-indigo-400 bg-indigo-50/50 transition-colors hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
-        >
-          <mat-icon class="mb-2 scale-125">source</mat-icon>
-          <span class="font-medium text-indigo-700">Attach Inline Context</span>
-          <span class="text-xs text-indigo-500 mt-1 text-center"
-            >Standard context for smaller tasks</span
+        <div class="flex items-center min-h-[40px]">
+          <mat-checkbox
+            [checked]="session()?.strategy?.useCacheIfAvailable"
+            (change)="updateStrategy('useCacheIfAvailable', $event.checked)"
+            color="primary"
           >
-        </div>
-
-        <div
-          class="flex-1 p-6 border-2 border-dashed border-teal-200 rounded-xl flex flex-col items-center justify-center text-teal-400 bg-teal-50/50 transition-colors hover:bg-teal-50 hover:border-teal-300 cursor-pointer"
-        >
-          <mat-icon class="mb-2 scale-125">auto_awesome</mat-icon>
-          <span class="font-medium text-teal-700">Attach Compiled Cache</span>
-          <span class="text-xs text-teal-500 mt-1 text-center"
-            >Optimized context for huge codebases</span
-          >
+            <span class="text-sm font-medium text-slate-700"
+              >Use Compiled Cache if available</span
+            >
+          </mat-checkbox>
         </div>
       </div>
 
-      <llm-context-hierarchy
-        [session]="session()"
-        [inlineAttachments]="session()?.inlineContexts || []"
-        [compiledContext]="session()?.compiledContext"
-        (removeInline)="onRemoveAttachment($event, 'inlineContexts')"
-        (removeCompiled)="onRemoveAttachment($event, 'compiledContext')"
-      />
+      <div
+        class="p-5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-4"
+      >
+        <mat-form-field
+          appearance="outline"
+          class="w-full"
+          subscriptSizing="dynamic"
+        >
+          <mat-label>Input Model Option</mat-label>
+          <mat-select
+            [value]="session()?.strategy?.secondaryModel"
+            (selectionChange)="updateStrategy('secondaryModel', $event.value)"
+          >
+            @for (opt of availableModels; track opt.value) {
+              <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <div class="flex flex-col gap-3">
+          <mat-radio-group
+            class="flex flex-col gap-3"
+            [value]="
+              session()?.strategy?.secondaryModelLimit === 1 ? 'flick' : 'alert'
+            "
+            (change)="onOverrideStrategyChange($event.value)"
+          >
+            <mat-radio-button value="flick" color="primary">
+              <span class="text-sm font-medium text-slate-700"
+                >Flick Back (Use for 1 prompt)</span
+              >
+            </mat-radio-button>
+
+            <div class="flex flex-col gap-1">
+              <mat-radio-button value="alert" color="primary">
+                <span class="text-sm font-medium text-slate-700"
+                  >Prompt before alert:</span
+                >
+              </mat-radio-button>
+
+              <div class="pl-8 flex items-center gap-2">
+                <select
+                  aria-label="alert number"
+                  [disabled]="session()?.strategy?.secondaryModelLimit === 1"
+                  [value]="
+                    session()?.strategy?.secondaryModelLimit === 1
+                      ? 2
+                      : session()?.strategy?.secondaryModelLimit || 2
+                  "
+                  (change)="$event.stopPropagation(); onLimitChange($event)"
+                  class="w-16 text-center border border-slate-300 rounded bg-white text-sm py-1 font-bold focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
+                >
+                  <option [value]="2">2</option>
+                  <option [value]="3">3</option>
+                  <option [value]="4">4</option>
+                  <option [value]="5">5</option>
+                  <option [value]="6">6</option>
+                  <option [value]="7">7</option>
+                  <option [value]="8">8</option>
+                  <option [value]="9">9</option>
+                  <option [value]="10">10</option>
+                </select>
+                <span class="text-xs font-medium text-slate-500">turns</span>
+              </div>
+            </div>
+          </mat-radio-group>
+        </div>
+      </div>
     </div>
+
+    <div class="mt-4 p-5 rounded-xl border border-amber-100 bg-amber-50/30">
+      <div class="flex items-center gap-2 mb-3">
+        <mat-icon class="text-amber-600 scale-75">info_outline</mat-icon>
+        <label
+          class="text-[10px] font-bold text-amber-800 uppercase tracking-widest"
+          >Input Option Behavior</label
+        >
+      </div>
+
+      <p class="text-[11px] text-slate-600 mb-4 leading-relaxed">
+        The <strong>Input Model Option</strong> is used for temporary overrides.
+        If a warm cache is not available for that model, choose how the context
+        should be handled:
+      </p>
+
+      <mat-radio-group
+        class="flex flex-col sm:flex-row gap-8"
+        [value]="session()?.strategy?.fallbackStrategy"
+        (change)="updateStrategy('fallbackStrategy', $event.value)"
+      >
+        <mat-radio-button value="inline" color="primary">
+          <div class="flex flex-col">
+            <span class="text-sm font-medium text-slate-700">Full Inline</span>
+            <span class="text-[10px] text-slate-500"
+              >Upload repo files manually (High token usage)</span
+            >
+          </div>
+        </mat-radio-button>
+        <mat-radio-button value="history_only" color="primary">
+          <div class="flex flex-col">
+            <span class="text-sm font-medium text-slate-700">History Only</span>
+            <span class="text-[10px] text-slate-500"
+              >Ignore repositories if cache is cold</span
+            >
+          </div>
+        </mat-radio-button>
+      </mat-radio-group>
+    </div>
+  </div>
+
+  <div class="mt-4 pt-6 border-t border-gray-100 w-full">
+    <div class="flex items-center justify-between mb-4">
+      <h3
+        class="font-medium text-gray-800 text-base m-0 flex items-center gap-2"
+      >
+        <mat-icon class="text-gray-400">dataset</mat-icon>
+        Data Sources & Context
+      </h3>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4 w-full mb-8">
+      <div
+        (click)="onAttachTrigger('inlineContexts')"
+        class="p-6 border-2 border-dashed border-indigo-200 rounded-xl flex flex-col items-center justify-center text-indigo-400 bg-indigo-50/50 transition-colors hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+      >
+        <mat-icon class="mb-2 scale-125">bolt</mat-icon>
+        <span class="font-medium text-indigo-700 text-sm">Inline Context</span>
+        <span class="text-[10px] text-indigo-500 mt-1 text-center leading-tight"
+          >Ephemeral knowledge for this chat</span
+        >
+      </div>
+
+      <div
+        (click)="onAttachTrigger('systemContexts')"
+        class="p-6 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 transition-colors hover:bg-gray-50 hover:border-gray-400 cursor-pointer"
+      >
+        <mat-icon class="mb-2 scale-125">gavel</mat-icon>
+        <span class="font-medium text-gray-700 text-sm"
+          >System Instruction</span
+        >
+        <span class="text-[10px] text-gray-500 mt-1 text-center leading-tight"
+          >Core behavior and persona rules</span
+        >
+      </div>
+
+      <div
+        (click)="onAttachTrigger('compiledContext')"
+        class="p-6 border-2 border-dashed border-teal-200 rounded-xl flex flex-col items-center justify-center text-teal-400 bg-teal-50/50 transition-colors hover:bg-teal-50 hover:border-teal-300 cursor-pointer"
+      >
+        <mat-icon class="mb-2 scale-125">auto_awesome</mat-icon>
+        <span class="font-medium text-teal-700 text-sm">Compiled Cache</span>
+        <span class="text-[10px] text-teal-500 mt-1 text-center leading-tight"
+          >High-speed context for large repos</span
+        >
+      </div>
+    </div>
+
+    <llm-context-hierarchy
+      [session]="session()"
+      [inlineAttachments]="session()?.inlineContexts || []"
+      [systemAttachments]="session()?.systemContexts || []"
+      [compiledContext]="session()?.compiledContext"
+      (requestCompile)="onCompileRequest($event)"
+      (removeInline)="removeAttachment($event, 'inlineContexts')"
+      (removeSystem)="removeAttachment($event, 'systemContexts')"
+      (removeCompiled)="removeAttachment($event, 'compiledContext')"
+    />
   </div>
 
   @if (contextGroupEntries().length > 0) {
@@ -139,7 +280,7 @@
       <div>
         <h4 class="text-red-700 font-medium m-0">Danger Zone</h4>
         <p class="text-red-500 text-sm mt-1 m-0">
-          Deleting this session will remove all associated chat history.
+          Deleting this session will remove all history.
         </p>
       </div>
       <button

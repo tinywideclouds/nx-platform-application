@@ -16,7 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 
-import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
 import { URN } from '@nx-platform-application/platform-types';
 import { DataGroupRequest } from '@nx-platform-application/data-sources-types';
 import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';

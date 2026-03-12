@@ -16,6 +16,13 @@ describe('LlmContextHierarchyComponent', () => {
         branch: 'main',
       },
     ]),
+    dataGroups: signal([
+      {
+        id: URN.parse('urn:data-source:group:blueprint-1'),
+        name: 'My Blueprint',
+        sources: [{}, {}],
+      },
+    ]),
   };
 
   beforeEach(async () => {
@@ -28,7 +35,7 @@ describe('LlmContextHierarchyComponent', () => {
     component = fixture.componentInstance;
   });
 
-  it('should resolve rich data source bundle details if available', () => {
+  it('should resolve rich repository details including the branch', () => {
     const details = component.getDataSourceBundleDetails(
       URN.parse('urn:data-source:repo:test:1'),
     );
@@ -36,22 +43,10 @@ describe('LlmContextHierarchyComponent', () => {
     expect(details?.branch).toBe('main');
   });
 
-  it('should accept and display explicit intent buckets', () => {
-    fixture.componentRef.setInput('session', {
-      id: URN.parse('urn:llm:session:1'),
-    });
-    fixture.componentRef.setInput('inlineAttachments', [
-      {
-        id: URN.parse('urn:llm:attachment:1'),
-        resourceUrn: URN.parse('urn:data-source:repo:test:1'),
-        resourceType: 'source',
-      },
-    ]);
-    fixture.detectChanges();
-
-    expect(component.inlineAttachments().length).toBe(1);
-    expect(component.inlineAttachments()[0].resourceUrn.toString()).toBe(
-      'urn:data-source:repo:test:1',
+  it('should resolve rich blueprint details including the name', () => {
+    const details = component.getDataGroupDetails(
+      URN.parse('urn:data-source:group:blueprint-1'),
     );
+    expect(details?.name).toBe('My Blueprint');
   });
 });

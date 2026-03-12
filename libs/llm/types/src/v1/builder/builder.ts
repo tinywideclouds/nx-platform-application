@@ -31,7 +31,6 @@ export interface NetworkMessage {
  * Uses ContextAttachment (the flattened physical sources).
  */
 export interface BuildCacheRequest {
-  sessionId: URN;
   model: string;
   attachments: ContextAttachment[];
   expiresAtHint?: ISODateTimeString;

@@ -1,0 +1,28 @@
+<div
+  class="bg-indigo-600 text-white px-4 py-2 flex items-center justify-between shadow-md z-20 animate-fade-in"
+>
+  <div class="flex items-center gap-2">
+    <mat-icon class="scale-75">center_focus_strong</mat-icon>
+    <span class="text-sm font-medium">
+      Focused on:
+      <strong class="ml-1">{{ groupName() }}</strong>
+    </span>
+  </div>
+  <div class="flex items-center gap-2">
+    <button
+      type="button"
+      (click)="branch.emit()"
+      class="text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
+    >
+      <mat-icon class="scale-[0.6] -mx-1">call_split</mat-icon> Branch
+    </button>
+    <button
+      type="button"
+      mat-icon-button
+      (click)="clear.emit()"
+      class="scale-75 text-indigo-200 hover:text-white cursor-pointer"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+</div>

@@ -35,6 +35,7 @@ export class LlmSessionSource {
     const fakeSession: DisplaySession = {
       id,
       title: 'New Session',
+      llmModel: 'gemini-2.5-pro',
       lastModified: now.toString() as ISODateTimeString,
       isOptimistic: true,
       inlineContexts: [],

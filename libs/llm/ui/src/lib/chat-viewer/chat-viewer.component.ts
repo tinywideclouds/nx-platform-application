@@ -16,7 +16,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 
 // DOMAIN
-import { LlmSessionSource } from '@nx-platform-application/llm-features-chat';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LlmSession } from '@nx-platform-application/llm-types';
 
 // FEATURE COMPONENTS

@@ -23,5 +23,9 @@
     "src/**/*.test.jsx",
     "src/**/*.spec.jsx"
   ],
-  "include": ["src/**/*.ts", "src/index.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/index.ts",
+    "../../../llm/features/workspace/src/lib/datasource-resolver.ts"
+  ]
 }

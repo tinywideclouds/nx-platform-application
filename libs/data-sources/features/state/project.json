@@ -1,5 +1,5 @@
 {
-  "name": "llm-features-data-sources",
+  "name": "data-sources-features-state",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/data-sources/features/state/src",
   "prefix": "lib",

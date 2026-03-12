@@ -5,7 +5,7 @@ import {
   ProposalRegistryStorageService,
 } from '@nx-platform-application/llm-infrastructure-storage';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-import { DataSourcesService } from '@nx-platform-application/data-sources/features/state';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
 import {
   ISODateTimeString,
   URN,
@@ -194,5 +194,43 @@ describe('LlmContextBuilderService', () => {
     expect(
       assembly.request.inlineAttachments?.[0].dataSourceId.toString(),
     ).toBe('urn:data-source:repo:2');
+  });
+
+  it('should unroll system intent buckets and inject them into the first history message', async () => {
+    const encoder = new TextEncoder();
+    const mockMessages: Partial<LlmMessage>[] = [
+      {
+        id: URN.parse('urn:llm:message:1'),
+        role: 'user',
+        typeId: URN.parse('urn:llm:message-type:text'),
+        payloadBytes: encoder.encode('Hello'),
+        timestamp: '2026-02-27T10:00:00Z' as ISODateTimeString,
+        isExcluded: false,
+      },
+    ];
+    mockMessageStorageService.getSessionMessages.mockResolvedValue(
+      mockMessages,
+    );
+
+    const mockSession: LlmSession = {
+      id: URN.parse('urn:llm:session:123'),
+      title: 'Test',
+      lastModified: '2026-02-27T10:00:00Z' as ISODateTimeString,
+      systemContexts: [
+        {
+          id: URN.parse('urn:llm:attachment:sys-1'),
+          resourceUrn: URN.parse('urn:data-source:repo:behavior-rules'),
+          resourceType: 'source',
+        },
+      ],
+      inlineContexts: [],
+    };
+
+    const assembly = await service.buildStreamRequest(mockSession);
+    const firstMessage = assembly.request.history[0];
+
+    expect(firstMessage.content).toContain('[SYSTEM_INSTRUCTIONS]');
+    expect(firstMessage.content).toContain('behavior-rules');
+    expect(firstMessage.content).toContain('Hello'); // Original text preserved
   });
 });

@@ -13,7 +13,10 @@
 } @else {
   <div class="flex flex-col gap-6 w-full animate-fade-in">
     @if (compiledContext(); as attachment) {
-      <div class="border border-teal-200 rounded-xl overflow-hidden shadow-sm">
+      <div
+        class="border border-teal-200 rounded-xl overflow-hidden shadow-sm"
+        [class.opacity-70]="cacheService.isCompiling()"
+      >
         <div
           class="bg-teal-50 px-4 py-2 border-b border-teal-100 flex items-center justify-between gap-2"
         >
@@ -23,12 +26,70 @@
               >Compiled Context Cache</span
             >
           </div>
-          <span
-            class="text-[10px] uppercase tracking-wider font-bold text-teal-600 bg-white px-2 py-0.5 rounded border border-teal-200"
-          >
-            High Performance
-          </span>
+
+          <div class="flex items-center gap-2">
+            @if (hasWarmCache()) {
+              <span
+                class="text-[10px] uppercase tracking-wider font-bold text-teal-600 bg-white px-2 py-0.5 rounded border border-teal-200"
+                >Warm</span
+              >
+              <button
+                mat-button
+                class="!px-3 !h-7 !leading-7 !text-[10px] uppercase font-bold text-teal-700 hover:bg-teal-100"
+                (click)="
+                  requestCompile.emit({
+                    intent: attachment,
+                    ttl: selectedTtl(),
+                  })
+                "
+              >
+                Recompile
+              </button>
+            } @else if (cacheService.isCompiling()) {
+              <span
+                class="text-[10px] uppercase tracking-wider font-bold text-amber-600 bg-white px-2 py-0.5 rounded border border-amber-200 animate-pulse"
+              >
+                Compiling...
+              </span>
+            } @else {
+              <div
+                class="flex items-center bg-white border border-gray-200 rounded overflow-hidden h-7"
+              >
+                <mat-select
+                  [value]="selectedTtl()"
+                  (selectionChange)="selectedTtl.set($event.value)"
+                  class="text-[10px] px-2 w-16 border-r border-gray-100 h-full flex items-center"
+                  matTooltip="Cache Duration (TTL)"
+                >
+                  @for (opt of ttlOptions; track opt.label) {
+                    <mat-option
+                      [value]="opt.value"
+                      class="!text-[10px] !h-8 !leading-8"
+                      >{{ opt.label }}</mat-option
+                    >
+                  }
+                </mat-select>
+                <button
+                  mat-button
+                  class="!px-3 !h-full !text-[11px] !leading-none uppercase font-bold text-indigo-600 hover:bg-indigo-50"
+                  (click)="
+                    requestCompile.emit({
+                      intent: attachment,
+                      ttl: selectedTtl(),
+                    })
+                  "
+                >
+                  Compile Now
+                </button>
+              </div>
+            }
+          </div>
         </div>
+
+        @if (cacheService.isCompiling()) {
+          <mat-progress-bar mode="indeterminate" class="h-1"></mat-progress-bar>
+        }
+
         <div class="bg-white p-3">
           <ng-container
             *ngTemplateOutlet="
@@ -74,7 +135,7 @@
         <div
           class="bg-gray-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2"
         >
-          <mat-icon class="text-gray-500 scale-75">gavel</mat-icon>
+          <mat-icon class="text-gray-400 scale-75">gavel</mat-icon>
           <span class="font-bold text-gray-700 text-sm"
             >System Instructions</span
           >
@@ -105,21 +166,26 @@
   let-bucket="bucket"
 >
   @let bundle = getDataSourceBundleDetails(attachment.resourceUrn);
+  @let group = getDataGroupDetails(attachment.resourceUrn);
+
   <div
     class="border border-gray-100 rounded-lg p-3 bg-white shadow-sm flex justify-between items-center group w-full hover:border-gray-300 transition-colors"
   >
     <div class="flex flex-col gap-1">
       <p class="font-medium text-gray-800 m-0 text-sm flex items-center gap-2">
         <mat-icon class="text-gray-400 scale-75 m-0 h-5 w-5">
-          {{
-            attachment.resourceType === 'group' ? 'folder_special' : 'source'
-          }}
+          {{ attachment.resourceType === 'group' ? 'account_tree' : 'source' }}
         </mat-icon>
-        {{ bundle ? bundle.repo : attachment.resourceUrn.entityId }}
-        @if (bundle) {
-          <span class="text-xs text-gray-500 font-normal ml-1"
-            >({{ bundle.branch }})</span
-          >
+
+        @if (attachment.resourceType === 'group') {
+          {{ group?.name || attachment.resourceUrn.entityId }}
+        } @else {
+          {{ bundle ? bundle.repo : attachment.resourceUrn.entityId }}
+          @if (bundle) {
+            <span class="text-xs text-gray-500 font-normal ml-1"
+              >({{ bundle.branch }})</span
+            >
+          }
         }
       </p>
 
@@ -134,11 +200,14 @@
           }"
         >
           {{
-            attachment.resourceType === 'group'
-              ? 'Data Group'
-              : 'Raw Repository'
+            attachment.resourceType === 'group' ? 'Blueprint' : 'Raw Repository'
           }}
         </span>
+        @if (attachment.resourceType === 'group' && group) {
+          <span class="text-[10px] text-gray-400 italic"
+            >{{ group.sources.length }} Repositories</span
+          >
+        }
       </div>
     </div>
 

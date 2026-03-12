@@ -1,4 +1,3 @@
-// libs/llm/infrastructure/indexed-db/src/lib/records/session.record.ts
 import { ISODateTimeString } from '@nx-platform-application/platform-types';
 
 export interface WorkspaceAttachmentRecord {
@@ -14,18 +13,25 @@ export interface QuickContextFileRecord {
 }
 
 export interface LlmSessionRecord {
-  id: string; // PK
+  id: string; // Primary Key
   title: string;
   contextGroups?: Record<string, string>;
-
   lastModified: ISODateTimeString;
-  llmModel?: string;
+
+  // REQUIRED: No more optional guards for the model
+  llmModel: string;
   workspaceTarget?: string;
 
-  // THE NEW INTENT BUCKETS
+  // STRATEGY FIELDS (Flattened for IndexedDB)
+  primaryModel: string;
+  secondaryModel?: string;
+  secondaryModelLimit?: number;
+  fallbackStrategy: 'inline' | 'history_only';
+  useCacheIfAvailable: boolean;
+
+  // INTENT BUCKETS
   inlineContexts?: WorkspaceAttachmentRecord[];
   systemContexts?: WorkspaceAttachmentRecord[];
   compiledContext?: WorkspaceAttachmentRecord;
-
   quickContext?: QuickContextFileRecord[];
 }
