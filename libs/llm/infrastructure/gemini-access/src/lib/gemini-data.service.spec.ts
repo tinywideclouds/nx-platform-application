@@ -38,6 +38,41 @@ describe('GeminiDataService', () => {
     });
   });
 
+  describe('Non-Streaming Generation', () => {
+    it('should strictly serialize the request and deserialize the response', async () => {
+      const mockResponseData = `{
+        "content": "This is the generated summary.",
+        "finish_reason": "STOP",
+        "prompt_token_count": 150,
+        "candidate_token_count": 25
+      }`;
+
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockResponseData,
+      });
+
+      const request = {
+        model: 'gemini-3.1-flash',
+        prompt: 'Summarize the log.',
+      };
+
+      const result = await service.generate(request);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/v1/llm/generate',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"prompt":"Summarize the log."'),
+        }),
+      );
+
+      expect(result.content).toBe('This is the generated summary.');
+      expect(result.promptTokenCount).toBe(150);
+      expect(result.candidateTokenCount).toBe(25);
+    });
+  });
+
   describe('SSE Stream Parser', () => {
     it('should multiplex reasoning thoughts, standard text, and proposal_created events seamlessly', (done) => {
       const mockStreamData =

@@ -1,10 +1,4 @@
-import {
-  Component,
-  inject,
-  signal,
-  computed,
-  ChangeDetectorRef,
-} from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { Temporal } from '@js-temporal/polyfill';
@@ -20,19 +14,22 @@ import {
   MarkdownTokensPipe,
 } from '@nx-platform-application/scrollspace-ui';
 
-import { LlmMessage } from '@nx-platform-application/llm-types';
 import { ScrollspaceInputDraft } from '@nx-platform-application/scrollspace-types';
+import {
+  AutoScrollContext,
+  AutoScrollResult,
+} from '@nx-platform-application/scrollspace-ui';
 
 import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
 import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
 
-import { ChatWorkspacePresenter } from './chat-window.presenter'; // NEW
-import { LlmFocusedGroupBannerComponent } from '../chat-group-banner/chat-group-banner.component'; // NEW
+import { ChatWorkspacePresenter } from './chat-window.presenter';
+import { LlmFocusedGroupBannerComponent } from '../chat-group-banner/chat-group-banner.component';
 
 import { LlmContentPipe } from '../pipes/llm-content.pipe';
-import { LlmChatHeaderComponent } from '../chat-header/chat-header.component';
+import { LlmChatWindowHeaderComponent } from '../chat-window-header/chat-window-header.component';
 import { LlmProposalBubbleComponent } from '../proposal-bubble/proposal-bubble.component';
 import { LlmFileLinkBubbleComponent } from '../file-link-bubble/file-link-bubble.component';
 import { LlmTypingIndicatorComponent } from '../typing-indicator/typing-indicator.component';
@@ -51,7 +48,7 @@ import { LlmQuickContextDrawerComponent } from '../quick-context-drawer/quick-co
     MatMenuModule,
     MatButtonModule,
     MarkdownTokensPipe,
-    LlmChatHeaderComponent,
+    LlmChatWindowHeaderComponent,
     LlmFocusedGroupBannerComponent,
     LlmContentPipe,
     LlmProposalBubbleComponent,
@@ -73,6 +70,59 @@ export class LlmChatWindowComponent {
   private cacheService = inject(CompiledCacheService);
 
   copiedMessageId = signal<string | null>(null);
+
+  private activeSessionIdForScroll: string | undefined;
+
+  // Domain-Specific Scroll Strategy
+  chatScrollStrategy = (ctx: AutoScrollContext): AutoScrollResult | void => {
+    const { element, isNearBottom, isSelf } = ctx;
+    const currentSessionId = this.presenter.session()?.id?.toString();
+
+    // 1. INITIAL LOAD BYPASS: Are we looking at a brand new session?
+    if (currentSessionId !== this.activeSessionIdForScroll) {
+      this.activeSessionIdForScroll = currentSessionId;
+
+      // Manually force an instant hard-scroll to the bottom
+      element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
+
+      // Return state updates, but OMIT targetScrollTop so the Viewport doesn't override us with a smooth scroll
+      return { isNearBottom: true, showScrollButton: false };
+    }
+
+    // 2. Always slam to the bottom if the user just typed something
+    if (isSelf) {
+      return {
+        targetScrollTop: element.scrollHeight,
+        isNearBottom: true,
+        showScrollButton: false,
+      };
+    }
+
+    // 3. Don't hijack the scrollbar if they are reading history
+    if (!isNearBottom) {
+      return { isNearBottom: false, showScrollButton: true };
+    }
+
+    // Calculate how much the DOM just grew
+    const { scrollHeight, scrollTop, clientHeight } = element;
+    const distanceToNewBottom = scrollHeight - (scrollTop + clientHeight);
+
+    // 4. POLITE SCROLL: If a massive block arrived (e.g. > 40% of the screen height)
+    if (distanceToNewBottom > clientHeight * 0.4) {
+      return {
+        targetScrollTop: scrollTop + clientHeight * 0.4,
+        isNearBottom: false, // Unpin them!
+        showScrollButton: true,
+      };
+    }
+
+    // 5. NORMAL SCROLL: For small text increments, stay pinned
+    return {
+      targetScrollTop: element.scrollHeight,
+      isNearBottom: true,
+      showScrollButton: false,
+    };
+  };
 
   chatLockState = computed(() => {
     const session = this.presenter.session();
@@ -188,9 +238,21 @@ export class LlmChatWindowComponent {
     });
   });
 
+  lastItemId = computed(() => {
+    const items = this.displayItems();
+    return items.length > 0 ? items[items.length - 1].id : null;
+  });
+
   onOpenDetails() {
     this.router.navigate([], {
       queryParams: { view: 'details' },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  onOpenMemory() {
+    this.router.navigate([], {
+      queryParams: { view: 'memory' },
       queryParamsHandling: 'merge',
     });
   }

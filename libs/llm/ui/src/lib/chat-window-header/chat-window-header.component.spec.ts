@@ -1,19 +1,23 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { LlmChatHeaderComponent } from './chat-header.component';
+import { LlmChatWindowHeaderComponent } from './chat-window-header.component';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { describe, it, expect, beforeEach } from 'vitest';
 
-describe('LlmChatHeaderComponent', () => {
-  let component: LlmChatHeaderComponent;
-  let fixture: ComponentFixture<LlmChatHeaderComponent>;
+describe('LlmChatWindowHeaderComponent', () => {
+  let component: LlmChatWindowHeaderComponent;
+  let fixture: ComponentFixture<LlmChatWindowHeaderComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [LlmChatHeaderComponent, MatDialogModule, MatTooltipModule],
+      imports: [
+        LlmChatWindowHeaderComponent,
+        MatDialogModule,
+        MatTooltipModule,
+      ],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(LlmChatHeaderComponent);
+    fixture = TestBed.createComponent(LlmChatWindowHeaderComponent);
     component = fixture.componentInstance;
   });
 

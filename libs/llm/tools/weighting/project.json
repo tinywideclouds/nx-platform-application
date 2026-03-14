@@ -1,0 +1,30 @@
+{
+  "name": "llm-tools-weighting",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/llm/tools/weighting/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:llm"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/llm/tools/weighting",
+        "configFile": "libs/llm/tools/weighting/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../../coverage/libs/llm/tools/weighting",
+        "configFile": "libs/llm/tools/weighting/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

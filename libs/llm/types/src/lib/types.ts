@@ -61,3 +61,41 @@ export interface LlmMessage {
 
   timestamp: ISODateTimeString;
 }
+
+export interface WeightMetrics {
+  weight: number;
+  unit: 'char' | 'token' | 'hybrid';
+  tokens: number;
+  generator: string;
+}
+
+export interface LlmMemoryItem {
+  id: URN;
+  sessionId: URN;
+  title?: string;
+  description?: string;
+
+  registryEntities: URN[];
+
+  // The LLM-generated summary
+  content: string;
+
+  createdAt: ISODateTimeString;
+}
+
+export interface LlmMemoryDigest extends LlmMemoryItem {
+  // The exact chronological range of messages this digest compresses
+  coveredMessageIds: URN[];
+
+  // If the user edits/deletes a covered message, we log it here
+  // If this gets too long, we re-summarize the digest.
+  editDeltaNotes?: string[];
+}
+
+export interface LlmKnowledgeNode extends LlmMemoryItem {
+  typeId: URN; // <-- The polymorphic key
+  // Graph linkage to other Knowledge Nodes or Memory Digests
+  linkedNodes: URN[];
+  status: 'active' | 'deprecated';
+  updatedAt: ISODateTimeString;
+}

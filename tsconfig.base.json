@@ -95,6 +95,12 @@
       "@nx-platform-application/llm-domain-conversation": [
         "libs/llm/domain/conversation/src/index.ts"
       ],
+      "@nx-platform-application/llm-domain-digest-engine": [
+        "libs/llm/domain/digest-engine/src/index.ts"
+      ],
+      "@nx-platform-application/llm-domain-memory-manager": [
+        "libs/llm/domain/memory-manager/src/index.ts"
+      ],
       "@nx-platform-application/llm-domain-proposals": [
         "libs/llm/domain/proposals/src/index.ts"
       ],
@@ -103,6 +109,9 @@
       ],
       "@nx-platform-application/llm-features-chat": [
         "libs/llm/features/chat/src/index.ts"
+      ],
+      "@nx-platform-application/llm-features-memory": [
+        "libs/llm/features/memory/src/index.ts"
       ],
       "@nx-platform-application/llm-features-session": [
         "libs/llm/features/session/src/index.ts"
@@ -128,6 +137,9 @@
       ],
       "@nx-platform-application/llm-tools-migration": [
         "libs/llm/tools/migration/src/index.ts"
+      ],
+      "@nx-platform-application/llm-tools-weighting": [
+        "libs/llm/tools/weighting/src/index.ts"
       ],
       "@nx-platform-application/llm-types": ["libs/llm/types/src/index.ts"],
       "@nx-platform-application/llm-ui": ["libs/llm/ui/src/index.ts"],

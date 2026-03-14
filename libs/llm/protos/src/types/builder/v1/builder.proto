@@ -22,6 +22,19 @@ message BuildCacheResponsePb {
   string expires_at = 2;
 }
 
+message GenerateRequestPb {
+  string model = 1;
+  string system_prompt = 2;
+  string prompt = 3;
+}
+
+message GenerateResponsePb {
+  string content = 1;
+  string finish_reason = 2;
+  int32 prompt_token_count = 3;
+  int32 candidate_token_count = 4;
+}
+
 message NetworkMessagePb {
   string id = 1;
   string role = 2;

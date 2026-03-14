@@ -10,6 +10,37 @@ import {
 } from './builder';
 
 describe('Protobuf Builder Facade', () => {
+  it('should securely serialize a GenerateRequest to proto3 JSON', () => {
+    const request = {
+      model: 'gemini-3.1-pro',
+      systemPrompt: 'System prompt instructions',
+      prompt: 'Summarize this.',
+    };
+
+    const jsonString = serializeGenerateRequest(request);
+    const parsed = JSON.parse(jsonString);
+
+    expect(parsed.model).toBe('gemini-3.1-pro');
+    // Ensure the wire format honors proto3 camelCase conventions automatically
+    expect(parsed.systemPrompt).toBe('System prompt instructions');
+    expect(parsed.prompt).toBe('Summarize this.');
+  });
+
+  it('should strictly deserialize a GenerateResponse via Protobuf', () => {
+    const rawGoResponse = `{
+      "content": "This is a strictly typed digest response.",
+      "finish_reason": "STOP",
+      "prompt_token_count": 250,
+      "candidate_token_count": 45
+    }`;
+
+    const response = deserializeGenerateResponse(rawGoResponse);
+    expect(response.content).toBe('This is a strictly typed digest response.');
+    expect(response.finishReason).toBe('STOP');
+    expect(response.promptTokenCount).toBe(250);
+    expect(response.candidateTokenCount).toBe(45);
+  });
+
   it('should securely serialize a BuildCacheRequest to proto3 JSON using ContextAttachments', () => {
     const request: BuildCacheRequest = {
       sessionId: URN.parse('urn:llm:session:123'),

@@ -23,14 +23,14 @@ export const appRoutes: Route[] = [
             path: ':sessionId',
             loadComponent: () =>
               import('@nx-platform-application/llm-ui').then(
-                (m) => m.LlmChatViewerComponent,
+                (m) => m.LlmChatShellComponent,
               ),
           },
           {
             path: '',
             loadComponent: () =>
               import('@nx-platform-application/llm-ui').then(
-                (m) => m.LlmChatViewerComponent,
+                (m) => m.LlmChatShellComponent,
               ),
           },
         ],

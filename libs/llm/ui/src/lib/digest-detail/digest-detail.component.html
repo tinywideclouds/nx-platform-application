@@ -1,0 +1,51 @@
+<div class="flex flex-col h-full bg-white relative">
+  @if (activeDigest(); as digest) {
+    <div
+      class="p-6 border-b border-gray-200 bg-slate-50 flex items-center justify-between shrink-0"
+    >
+      <div>
+        <h2 class="text-xl font-bold text-gray-800 m-0 flex items-center gap-2">
+          <mat-icon class="text-indigo-500">receipt_long</mat-icon> Session
+          Digest
+        </h2>
+        <p class="text-sm text-gray-500 m-0 mt-1">
+          Generated {{ digest.createdAt | date: 'medium' }}
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div
+          class="flex items-center gap-1 bg-white border border-gray-200 px-3 py-1 rounded-full shadow-sm"
+        >
+          <mat-icon class="scale-[0.6] text-gray-400 m-0">forum</mat-icon>
+          <span class="text-xs font-bold text-gray-700">{{
+            digest.coveredMessageIds.length
+          }}</span>
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider"
+            >Msgs</span
+          >
+        </div>
+        <div
+          class="flex items-center gap-1 bg-white border border-gray-200 px-3 py-1 rounded-full shadow-sm"
+        >
+          <mat-icon class="scale-[0.6] text-gray-400 m-0">code</mat-icon>
+          <span class="text-xs font-bold text-gray-700">{{
+            digest.registryEntities.length
+          }}</span>
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider"
+            >Edits</span
+          >
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-8 bg-white">
+      <div class="max-w-3xl mx-auto">
+        <scrollspace-markdown-bubble
+          [itemId]="digest.id.toString()"
+          [tokens]="digest.content | markdownTokens"
+        />
+      </div>
+    </div>
+  }
+</div>

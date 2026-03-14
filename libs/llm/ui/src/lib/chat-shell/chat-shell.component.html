@@ -1,0 +1,26 @@
+<div class="w-full h-full flex flex-col bg-gray-50 overflow-hidden">
+  <llm-chat-header
+    [activeView]="viewMode()"
+    [sessionTitle]="activeSession()?.title"
+    (closeView)="closeSubpage()"
+    (switchView)="switchSubpage($event)"
+  />
+
+  <div class="flex-1 w-full h-full relative overflow-hidden">
+    @if (isSubpageOpen()) {
+      @switch (viewMode()) {
+        @case ('details') {
+          <llm-session-page />
+        }
+        @case ('workspace') {
+          <llm-session-workspace />
+        }
+        @case ('memory') {
+          <llm-session-memory />
+        }
+      }
+    } @else {
+      <llm-chat-viewer class="block flex-1 w-full h-full" />
+    }
+  </div>
+</div>

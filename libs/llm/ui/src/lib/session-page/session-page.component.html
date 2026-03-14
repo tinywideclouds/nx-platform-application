@@ -1,21 +1,11 @@
-<div class="h-full flex flex-col bg-white">
-  <llm-session-subpage-header
-    title="Session Settings"
-    icon="tune"
-    [sessionTitle]="session()?.title"
-    (closed)="onClose()"
-  >
-  </llm-session-subpage-header>
-
-  <div class="flex-grow overflow-y-scroll flex justify-center">
-    @if (session(); as data) {
-      <div class="w-full max-w-5xl px-6 py-8 pb-20">
-        <llm-session-form
-          [session]="data"
-          (save)="onSave($event)"
-          (delete)="onDelete()"
-        />
-      </div>
-    }
-  </div>
+<div class="h-full w-full flex justify-center overflow-y-auto bg-gray-50">
+  @if (session(); as data) {
+    <div class="w-full max-w-5xl px-6 py-8 pb-20">
+      <llm-session-form
+        [session]="data"
+        (save)="onSave($event)"
+        (delete)="onDelete()"
+      />
+    </div>
+  }
 </div>

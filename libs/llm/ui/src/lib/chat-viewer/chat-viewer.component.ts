@@ -3,39 +3,34 @@ import {
   ChangeDetectionStrategy,
   inject,
   computed,
-  input,
-  effect,
-  untracked,
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { Temporal } from '@js-temporal/polyfill';
 
 // LAYOUT & UI
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
+import { LlmSessionSidebarComponent } from '../session-sidebar/session-sidebar.component';
+import { LlmChatWindowComponent } from '../chat-window/chat-window.component';
 
 // DOMAIN
 import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
-import { LlmSession } from '@nx-platform-application/llm-types';
-
-// FEATURE COMPONENTS
-import { LlmSessionSidebarComponent } from '../session-sidebar/session-sidebar.component';
-import { LlmChatWindowComponent } from '../chat-window/chat-window.component';
-import { LlmSessionPageComponent } from '../session-page/session-page.component';
-import { LlmSessionWorkspaceComponent } from '../session-workspace/session-workspace.component';
-import { URN } from '@nx-platform-application/platform-types';
+import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
+import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation';
+import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
+import { ChatWorkspacePresenter } from '../chat-window/chat-window.presenter'; // HOISTED
 
 @Component({
   selector: 'llm-chat-viewer',
   standalone: true,
+  providers: [ChatWorkspacePresenter], // THIS ENSURES STATE IS SHARED WITH CHAT-WINDOW
   imports: [
     MatIconModule,
     MatButtonModule,
     MasterDetailLayoutComponent,
     LlmSessionSidebarComponent,
-    LlmSessionPageComponent,
-    LlmSessionWorkspaceComponent,
     LlmChatWindowComponent,
   ],
   templateUrl: './chat-viewer.component.html',
@@ -46,58 +41,79 @@ export class LlmChatViewerComponent {
   private router = inject(Router);
   protected sessionSource = inject(LlmSessionSource);
 
-  // ROUTER INPUTS
-  readonly sessionId = input<string | undefined>(undefined);
-  readonly viewMode = input<string | undefined>(undefined, { alias: 'view' });
+  // Injected for the hoisted header
+  protected source = inject(LlmScrollSource);
+  protected actions = inject(LlmChatActions);
+  protected presenter = inject(ChatWorkspacePresenter);
+  private cacheService = inject(CompiledCacheService);
 
-  // UI State
   isMobile = signal(false);
   showDetail = computed(() => !!this.sessionSource.activeSession());
 
-  constructor() {
-    effect(() => {
-      const currentIdStr = this.sessionId();
+  // Hoisted alert logic
+  chatAlertState = computed(() => {
+    const session = this.presenter.session();
+    if (!session || !this.presenter.activeModelId())
+      return { alert: false, reason: '' };
+    if (this.cacheService.isCompiling())
+      return {
+        alert: true,
+        reason: '⚙️ Compiling context cache... please wait.',
+      };
+    const isUsingOverride = !!this.presenter.temporaryModelOverride();
 
-      if (currentIdStr) {
-        // 1. WE HAVE AN ID IN THE URL. Centralize it!
-        untracked(() => {
-          this.sessionSource.setActiveSession(URN.parse(currentIdStr));
-        });
-      } else {
-        // 2. NO ID IN THE URL. Clear state and try to auto-resume.
-        untracked(() => {
-          this.sessionSource.setActiveSession(null);
-          const allSessions = this.sessionSource.sessions();
-          if (allSessions.length > 0 && !this.isMobile()) {
-            this.resumeLastSession(allSessions);
-          }
-        });
+    if (session.compiledContext) {
+      const activeCache = this.cacheService
+        .activeCaches()
+        .find(
+          (c) =>
+            c.model === this.presenter.activeModelId() &&
+            c.id
+              .toString()
+              .includes(session.compiledContext!.resourceUrn.entityId),
+        );
+      if (activeCache) {
+        if (
+          Temporal.Instant.compare(
+            Temporal.Now.instant(),
+            Temporal.Instant.from(activeCache.expiresAt),
+          ) >= 0
+        ) {
+          return {
+            alert: true,
+            reason: '⏰ Context cache expired. Responses will be slower.',
+          };
+        }
+      } else if (!isUsingOverride && session.strategy?.useCacheIfAvailable) {
+        return {
+          alert: true,
+          reason: '❄️ Context cache is COLD. Response will be slow.',
+        };
       }
+    }
+    return { alert: false, reason: '' };
+  });
+
+  onOpenDetails() {
+    this.router.navigate([], {
+      queryParams: { view: 'details' },
+      queryParamsHandling: 'merge',
     });
   }
-
-  resumeLastSession(sessions: LlmSession[]): void {
-    if (!sessions || sessions.length === 0) return;
-    const lastSession = sessions[0];
-    this.router.navigate(['/chat', lastSession.id.toString()], {
-      queryParamsHandling: 'preserve',
+  onOpenMemory() {
+    this.router.navigate([], {
+      queryParams: { view: 'memory' },
+      queryParamsHandling: 'merge',
     });
   }
-
-  navigateToNew(): void {
-    this.router.navigate(['/chat'], {
-      queryParamsHandling: 'preserve',
+  onOpenWorkspace() {
+    this.router.navigate([], {
+      queryParams: { view: 'workspace' },
+      queryParamsHandling: 'merge',
     });
   }
 
   clearSelection(): void {
-    this.navigateToNew();
-  }
-
-  closeModalView(): void {
-    this.router.navigate([], {
-      queryParams: { view: null, proposal: null },
-      queryParamsHandling: 'merge',
-    });
+    this.router.navigate(['/chat'], { queryParamsHandling: 'preserve' });
   }
 }

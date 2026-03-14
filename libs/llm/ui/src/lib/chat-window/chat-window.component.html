@@ -1,6 +1,5 @@
 <div class="flex flex-col h-full bg-gray-50 relative group-transition">
-  <llm-chat-header
-    [sessionTitle]="presenter.session()?.title"
+  <llm-chat-window-header
     [overrideRemaining]="presenter.overrideRemaining()"
     [activeModelId]="presenter.activeModelId()"
     [activeThought]="actions.activeThought()"
@@ -15,7 +14,6 @@
     (editContext)="presenter.onEditSelected()"
     (deleteContext)="presenter.deleteSelected()"
     (openDetails)="onOpenDetails()"
-    (openFiles)="onOpenWorkspace()"
   />
 
   @if (presenter.focusedGroupUrn(); as focusedUrn) {
@@ -38,6 +36,7 @@
       [gutterTemplate]="gutter"
       [isSelectionMode]="presenter.isSelectionMode()"
       [(selectedIds)]="presenter.selectedIds"
+      [autoScrollStrategy]="chatScrollStrategy"
     />
   </div>
 
@@ -206,43 +205,54 @@
 
         @let payload = message | llmContent;
 
-        @if (payload.type === 'proposal') {
-          <llm-proposal-bubble
-            [event]="payload.event"
-            (accept)="onAcceptProposal($event)"
-            (reject)="onRejectProposal($event, message.id.toString())"
-            [isGrouped]="wrapper.layout.positionInGroup"
-            (openWorkspace)="onOpenWorkspace($event)"
-          />
-        } @else if (payload.type === 'pointer') {
-          <llm-file-link-bubble
-            [pointer]="payload.pointer"
-            (accept)="onAcceptProposal($event)"
-            (reject)="onRejectProposal($event, message.id.toString())"
-            [isGrouped]="wrapper.layout.positionInGroup"
-            (openWorkspace)="onOpenWorkspace($event)"
-          />
-        } @else {
-          @if (message.role === 'model' && payload.content.length === 0) {
-            <llm-typing-indicator />
-          } @else {
-            <scrollspace-markdown-bubble
-              [itemId]="wrapper.id"
-              [class.border-dashed]="message.isExcluded"
-              [tokens]="payload.content | markdownTokens"
+        @switch (payload.type) {
+          @case ('proposal') {
+            <llm-proposal-bubble
+              [event]="payload.event"
+              (accept)="onAcceptProposal($event)"
+              (reject)="onRejectProposal($event, message.id.toString())"
+              [isGrouped]="wrapper.layout.positionInGroup"
+              (openWorkspace)="onOpenWorkspace($event)"
             />
+          }
 
-            <button
-              type="button"
-              (click)="copyMessage(payload.content, message.id.toString())"
-              class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur border border-gray-200 text-gray-500 hover:text-gray-800 p-1 rounded-md shadow-sm flex items-center justify-center cursor-pointer"
-            >
-              <mat-icon class="scale-75 m-0">{{
-                copiedMessageId() === message.id.toString()
-                  ? 'check'
-                  : 'content_copy'
-              }}</mat-icon>
-            </button>
+          @case ('pointer') {
+            <llm-file-link-bubble
+              [pointer]="payload.pointer"
+              (accept)="onAcceptProposal($event)"
+              (reject)="onRejectProposal($event, message.id.toString())"
+              [isGrouped]="wrapper.layout.positionInGroup"
+              (openWorkspace)="onOpenWorkspace($event)"
+            />
+          }
+
+          @default {
+            @if (
+              message.role === 'model' &&
+              payload.content.trim().length === 0 &&
+              wrapper.id === lastItemId() &&
+              source.isGenerating()
+            ) {
+              <llm-typing-indicator />
+            } @else {
+              <scrollspace-markdown-bubble
+                [itemId]="wrapper.id"
+                [class.border-dashed]="message.isExcluded"
+                [tokens]="payload.content | markdownTokens"
+              />
+
+              <button
+                type="button"
+                (click)="copyMessage(payload.content, message.id.toString())"
+                class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur border border-gray-200 text-gray-500 hover:text-gray-800 p-1 rounded-md shadow-sm flex items-center justify-center cursor-pointer"
+              >
+                <mat-icon class="scale-75 m-0">{{
+                  copiedMessageId() === message.id.toString()
+                    ? 'check'
+                    : 'content_copy'
+                }}</mat-icon>
+              </button>
+            }
           }
         }
       </div>

@@ -24,6 +24,19 @@ import {
 } from '@nx-platform-application/scrollspace-types';
 import { ScrollspaceRowComponent } from '../row/row.component';
 
+// Add these interfaces at the top of the file
+export interface AutoScrollContext {
+  element: HTMLElement;
+  isNearBottom: boolean;
+  isSelf: boolean;
+}
+
+export interface AutoScrollResult {
+  targetScrollTop?: number;
+  isNearBottom: boolean;
+  showScrollButton: boolean;
+}
+
 @Component({
   selector: 'scrollspace-viewport',
   standalone: true,
@@ -42,7 +55,10 @@ export class ScrollspaceViewportComponent<T> {
   // --- Inputs ---
   items = input.required<ScrollItem<T>[]>();
   historySpacerHeight = input(0);
-  newItemsLabel = input('New Messages'); // ✅ Consumed by markerTemplate default
+  newItemsLabel = input('New Messages');
+
+  autoScrollStrategy =
+    input<(ctx: AutoScrollContext) => AutoScrollResult | void>();
 
   // Pluggable Templates
   rowTemplate =
@@ -129,8 +145,29 @@ export class ScrollspaceViewportComponent<T> {
     const lastItem = items[items.length - 1];
     const isSelf = lastItem.actor?.isSelf ?? false;
 
+    // 1. Check if the parent provided a custom scroll strategy
+    const strategy = this.autoScrollStrategy();
+    if (strategy) {
+      const result = strategy({
+        element: el,
+        isNearBottom: this.isNearBottom,
+        isSelf,
+      });
+      if (result) {
+        if (result.targetScrollTop !== undefined) {
+          el.scrollTo({ top: result.targetScrollTop, behavior: 'smooth' });
+        }
+        this.isNearBottom = result.isNearBottom;
+        this.showScrollButton.set(result.showScrollButton);
+        return;
+      }
+    }
+
+    // 2. Default Fallback (Dumb Scroll)
     if (this.isNearBottom || isSelf) {
-      this.performSmartScroll(el);
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      this.isNearBottom = true;
+      this.showScrollButton.set(false);
     } else {
       this.showScrollButton.set(true);
     }

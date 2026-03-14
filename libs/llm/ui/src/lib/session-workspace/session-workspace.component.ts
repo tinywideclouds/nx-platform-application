@@ -37,7 +37,6 @@ import { LlmPatchClipboardDialogComponent } from '../patch-clipboard-dialog/patc
     MatIconModule,
     LlmWorkspaceSidebarComponent,
     LlmWorkspaceFileViewerComponent,
-    LlmSessionSubpageHeaderComponent,
   ],
   templateUrl: './session-workspace.component.html',
   styleUrl: './session-workspace.component.scss',

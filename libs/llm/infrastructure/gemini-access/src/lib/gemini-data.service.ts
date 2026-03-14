@@ -5,12 +5,16 @@ import {
   LlmStreamEvent,
 } from '@nx-platform-application/llm-infrastructure-client-access';
 import {
+  GenerateRequest,
+  GenerateResponse,
   GenerateStreamRequest,
   BuildCacheRequest,
   BuildCacheResponse,
   ChangeProposal,
   serializeBuildCacheRequest,
+  deserializeGenerateResponse,
   deserializeBuildCacheResponse,
+  serializeGenerateRequest,
   serializeGenerateStreamRequest,
   deserializeSSEProposalEvent,
   deserializeChangeProposalMap,
@@ -24,6 +28,26 @@ export class GeminiDataService implements LlmNetworkClient {
   private readonly logger = inject(Logger);
   readonly isGenerating = signal(false);
   private readonly baseUrl = '';
+
+  async generate(request: GenerateRequest): Promise<GenerateResponse> {
+    const bodyString = serializeGenerateRequest(request);
+
+    const response = await fetch(`${this.baseUrl}/v1/llm/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: bodyString,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Generation failed: HTTP ${response.status} - ${await response.text()}`,
+      );
+    }
+
+    return deserializeGenerateResponse(await response.text());
+  }
 
   // --- STREAMING INTERCEPTION ---
 

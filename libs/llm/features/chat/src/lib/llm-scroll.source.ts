@@ -1,4 +1,11 @@
-import { Injectable, signal, computed, inject, effect } from '@angular/core';
+import {
+  Injectable,
+  signal,
+  computed,
+  inject,
+  effect,
+  untracked,
+} from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Temporal } from '@js-temporal/polyfill';
 import { URN } from '@nx-platform-application/platform-types';
@@ -9,10 +16,12 @@ import {
   LlmMessage,
 } from '@nx-platform-application/llm-types';
 import { TimeSeries } from '@nx-platform-application/scrollspace-core';
+import { LlmMemoryManagerService } from '@nx-platform-application/llm-domain-memory-manager';
 
 @Injectable({ providedIn: 'root' })
 export class LlmScrollSource {
   private messageStorage = inject(MessageStorageService);
+  private memoryManager = inject(LlmMemoryManagerService); // NEW
 
   // 1. INPUTS
   readonly activeSessionId = signal<URN | null>(null);
@@ -32,10 +41,22 @@ export class LlmScrollSource {
       const history = await this.messageStorage.getSessionMessages(sessionId);
       this._messages.set(history);
     });
+
+    // NEW: Reactive Memory Analysis
+    effect(() => {
+      const messages = this._messages();
+      const isGenerating = this.isGenerating();
+
+      // Only run the heavy analysis when the bot is idle and we have data
+      if (!isGenerating && messages.length > 0) {
+        untracked(() => {
+          // this.memoryManager.analyzeAndCompressDryRun(messages);
+        });
+      }
+    });
   }
 
   // 3. OUTPUT (Visual Transformation)
-  // LlmMessage -> ScrollItem<LlmMessage>
   readonly items = computed(() => {
     const rawItems = TimeSeries.transform(this._messages(), {
       getTimestamp: (m) => Temporal.Instant.from(m.timestamp),
@@ -44,7 +65,6 @@ export class LlmScrollSource {
       timeZone: 'UTC',
     });
 
-    // Map through to determine Proposals and calculate Grouping
     return rawItems.map((item, index, array) => {
       if (item.type !== 'content') return item;
 
@@ -53,11 +73,9 @@ export class LlmScrollSource {
         data.typeId.equals(FileProposalType) ||
         data.typeId.equals(FileLinkType);
 
-      // 2. Grouping Algorithm
       let prevRole: string | null = null;
       let nextRole: string | null = null;
 
-      // Look back for the nearest content item (ignoring date headers)
       for (let i = index - 1; i >= 0; i--) {
         if (array[i].type === 'content') {
           prevRole = (array[i].data as LlmMessage).role;
@@ -65,7 +83,6 @@ export class LlmScrollSource {
         }
       }
 
-      // Look forward for the nearest content item
       for (let i = index + 1; i < array.length; i++) {
         if (array[i].type === 'content') {
           nextRole = (array[i].data as LlmMessage).role;
@@ -89,7 +106,6 @@ export class LlmScrollSource {
         isContinuous = false;
       }
 
-      // 3. Return a safe, immutable clone
       return {
         ...item,
         layout: {

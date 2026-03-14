@@ -1,6 +1,8 @@
 import { InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  GenerateRequest,
+  GenerateResponse,
   GenerateStreamRequest,
   BuildCacheRequest,
   BuildCacheResponse,
@@ -14,6 +16,9 @@ export type LlmStreamEvent =
   | { type: 'proposal'; event: SSEProposalEvent };
 
 export interface LlmNetworkClient {
+  // Non-Streaming (Background Tasks/Summarization)
+  generate(request: GenerateRequest): Promise<GenerateResponse>;
+
   // Streaming
   generateStream(request: GenerateStreamRequest): Observable<LlmStreamEvent>;
 

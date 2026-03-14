@@ -1,59 +1,63 @@
-<div class="h-full flex flex-col bg-white">
-  <llm-session-subpage-header
-    title="Workspace Review"
-    icon="code"
-    iconColor="text-indigo-600"
-    [sessionTitle]="activeSession()?.title"
-    (closed)="onClose()"
+<div class="h-full w-full flex flex-row bg-white overflow-hidden">
+  <div
+    class="h-full flex flex-col w-72 shrink-0 border-r border-gray-200 bg-gray-50"
   >
-    @if (hasPendingChanges()) {
-      <button
-        type="button"
-        actions
-        mat-stroked-button
-        class="mr-2"
-        (click)="onStageAll()"
-      >
-        Stage All
-      </button>
-    }
-
-    @if (hasStagedChanges()) {
-      <button
-        type="button"
-        actions
-        mat-stroked-button
-        color="warn"
-        class="mr-2"
-        (click)="onUnstageAll()"
-      >
-        Unstage All
-      </button>
-    }
-    <button
-      type="button"
-      actions
-      mat-stroked-button
-      color="accent"
-      class="mr-2"
-      [disabled]="!hasStagedChanges()"
-      (click)="viewStagedPatch()"
+    <div
+      class="px-2 py-2 flex items-center justify-between border-b border-gray-200 bg-white shrink-0"
     >
-      <mat-icon>integration_instructions</mat-icon>
-      View Staged Patch
-    </button>
-  </llm-session-subpage-header>
+      <span
+        class="text-xs font-bold text-gray-500 uppercase tracking-wider pl-2"
+        >Files</span
+      >
+      <div class="flex items-center gap-1">
+        @if (hasPendingChanges()) {
+          <button
+            type="button"
+            mat-icon-button
+            color="primary"
+            class="scale-[0.85]"
+            matTooltip="Stage All"
+            (click)="onStageAll()"
+          >
+            <mat-icon>checklist</mat-icon>
+          </button>
+        }
+        @if (hasStagedChanges()) {
+          <button
+            type="button"
+            mat-icon-button
+            color="warn"
+            class="scale-[0.85]"
+            matTooltip="Unstage All"
+            (click)="onUnstageAll()"
+          >
+            <mat-icon>remove_done</mat-icon>
+          </button>
+          <button
+            type="button"
+            mat-icon-button
+            color="accent"
+            class="scale-[0.85]"
+            matTooltip="View Staged Patch"
+            (click)="viewStagedPatch()"
+          >
+            <mat-icon>integration_instructions</mat-icon>
+          </button>
+        }
+      </div>
+    </div>
 
-  <div class="flex-grow overflow-hidden flex flex-row">
     <llm-workspace-sidebar
-      class="h-full shrink-0"
+      class="flex-1 overflow-hidden"
       [files]="sidebarFiles()"
       [selectedFilePath]="selectedFilePath()"
       (fileSelected)="onSelectFile($event)"
     />
+  </div>
 
+  <div class="flex-1 h-full min-w-0 bg-white">
     <llm-workspace-file-viewer
-      class="flex-1 h-full min-w-0"
+      class="w-full h-full block"
       [filePath]="selectedFilePath()"
       [isLoading]="activeRecord()?.isContentLoading ?? false"
       [hasBaseContent]="activeRecord()?.baseContent !== null"

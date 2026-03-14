@@ -6,8 +6,11 @@ import {
   BuildCacheResponsePbSchema,
   NetworkMessagePbSchema,
   NetworkMessagePb,
+  GenerateRequestPb,
+  GenerateRequestPbSchema,
   GenerateStreamRequestPbSchema,
   GenerateStreamRequestPb,
+  GenerateResponsePbSchema,
 } from '@nx-platform-application/llm-protos/builder/v1/builder_pb';
 import { create, fromJsonString, toJsonString } from '@bufbuild/protobuf';
 import {
@@ -55,7 +58,45 @@ export interface GenerateStreamRequest {
   inlineAttachments?: ContextAttachment[];
 }
 
+function generateRequestToProto(k: GenerateRequest): GenerateRequestPb {
+  return create(GenerateRequestPbSchema, {
+    model: k.model,
+    systemPrompt: k.systemPrompt,
+    prompt: k.prompt,
+  });
+}
+
+export function serializeGenerateRequest(request: GenerateRequest): string {
+  const proto = generateRequestToProto(request);
+  return toJsonString(GenerateRequestPbSchema, proto);
+}
+
+export function deserializeGenerateResponse(
+  jsonString: string,
+): GenerateResponse {
+  const proto = fromJsonString(GenerateResponsePbSchema, jsonString);
+  return {
+    content: proto.content,
+    finishReason: proto.finishReason,
+    promptTokenCount: proto.promptTokenCount,
+    candidateTokenCount: proto.candidateTokenCount,
+  };
+}
+
 // --- FACADE MAPPERS ---
+
+export interface GenerateResponse {
+  content: string;
+  finishReason: string;
+  promptTokenCount: number;
+  candidateTokenCount: number;
+}
+
+export interface GenerateRequest {
+  model: string;
+  systemPrompt?: string;
+  prompt: string;
+}
 
 /**
  * Maps a single flattened ContextAttachment to its Protobuf wire representation.

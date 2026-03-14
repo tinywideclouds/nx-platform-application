@@ -5,27 +5,39 @@ import { LlmMessageRecord } from './records/message.record';
 import { LlmSessionRecord } from './records/session.record';
 import { ProposalRecord } from './records/proposal.record';
 import { CompiledCacheRecord } from './records/compiled-cache.record';
+import {
+  LlmMemoryDigestRecord,
+  LlmKnowledgeNodeRecord,
+} from './records/memory.record';
 
 @Injectable({ providedIn: 'root' })
 export class LlmDatabase extends PlatformDexieService {
   sessions!: Table<LlmSessionRecord, string>;
   messages!: Table<LlmMessageRecord, string>;
   proposals!: Table<ProposalRecord, string>;
-  compiledCaches!: Table<CompiledCacheRecord, string>; // NEW
+  compiledCaches!: Table<CompiledCacheRecord, string>;
+  digests!: Table<LlmMemoryDigestRecord, string>;
+  knowledgeNodes!: Table<LlmKnowledgeNodeRecord, string>;
 
   constructor() {
     super('llm_client');
 
-    this.version(4).stores({
+    this.version(6).stores({
       sessions: 'id, lastModified',
       messages: 'id, sessionId, timestamp, [sessionId+timestamp], *tags',
       proposals: 'id, ownerSessionId, filePath, [ownerSessionId+filePath]',
-      compiledCaches: 'id, expiresAt', // NEW: Fast lookup for pruning expired caches
+      compiledCaches: 'id, expiresAt',
+      digests:
+        'id, sessionId, createdAt, [sessionId+createdAt], *registryEntities',
+      knowledgeNodes:
+        'id, sessionId, typeId, status, updatedAt, [sessionId+status], *registryEntities, *linkedNodes',
     });
 
     this.sessions = this.table('sessions');
     this.messages = this.table('messages');
     this.proposals = this.table('proposals');
     this.compiledCaches = this.table('compiledCaches');
+    this.digests = this.table('digests');
+    this.knowledgeNodes = this.table('knowledgeNodes');
   }
 }

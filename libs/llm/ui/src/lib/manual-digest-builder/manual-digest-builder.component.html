@@ -1,0 +1,81 @@
+<div class="flex flex-col h-full bg-white relative">
+  <div
+    class="p-6 border-b border-gray-200 bg-slate-50 flex items-center justify-between shrink-0"
+  >
+    <div>
+      <h2 class="text-xl font-bold text-gray-800 m-0 flex items-center gap-2">
+        <mat-icon class="text-indigo-500">science</mat-icon> Manual Digest
+        Builder
+      </h2>
+      <p class="text-sm text-gray-500 m-0 mt-1">
+        Select a continuous range of messages to compress.
+      </p>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <div class="text-right">
+        <p class="text-sm font-bold text-gray-800 m-0">
+          {{ selectedMessages().length }}
+        </p>
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider m-0">
+          Selected
+        </p>
+      </div>
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="selectedMessages().length === 0 || isProcessing()"
+        (click)="generateDigest()"
+      >
+        {{ isProcessing() ? 'Generating...' : 'Generate Digest' }}
+      </button>
+    </div>
+  </div>
+
+  @if (isProcessing()) {
+    <mat-progress-bar
+      mode="indeterminate"
+      class="absolute top-full left-0 right-0 z-10 h-1"
+    ></mat-progress-bar>
+  }
+
+  <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
+    <div class="max-w-3xl mx-auto flex flex-col gap-2 relative">
+      @for (msg of messages(); track msg.id.toString(); let i = $index) {
+        <div
+          class="p-3 rounded border bg-white flex items-start gap-3 cursor-pointer transition-all duration-200 select-none"
+          [class.border-indigo-400]="isMessageSelected(i)"
+          [class.bg-indigo-50]="isMessageSelected(i)"
+          [class.border-gray-200]="!isMessageSelected(i)"
+          [class.opacity-50]="!isMessageSelected(i) && rangeStart() !== null"
+          (click)="onMessageClick(i)"
+        >
+          <div class="mt-1">
+            @if (isMessageSelected(i)) {
+              <mat-icon class="text-indigo-600 scale-75 m-0"
+                >check_circle</mat-icon
+              >
+            } @else {
+              <mat-icon class="text-gray-300 scale-75 m-0"
+                >radio_button_unchecked</mat-icon
+              >
+            }
+          </div>
+          <div class="flex-1 min-w-0">
+            <span
+              class="text-[10px] font-bold uppercase tracking-wider"
+              [ngClass]="
+                msg.role === 'user' ? 'text-blue-600' : 'text-purple-600'
+              "
+            >
+              {{ msg.role }}
+            </span>
+            <p class="text-sm text-gray-700 m-0 mt-1 truncate">
+              {{ getPreview(msg) }}
+            </p>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

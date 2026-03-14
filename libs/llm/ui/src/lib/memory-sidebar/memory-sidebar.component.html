@@ -1,0 +1,53 @@
+<div class="flex flex-col h-full bg-white">
+  <div
+    class="p-4 border-b border-gray-100 flex items-center justify-between bg-slate-50"
+  >
+    <div class="flex items-center gap-2">
+      <button mat-icon-button (click)="closeView.emit()">
+        <mat-icon>close</mat-icon>
+      </button>
+      <h2 class="font-bold text-gray-800 text-sm m-0">Memory Bank</h2>
+    </div>
+    <button
+      mat-flat-button
+      color="primary"
+      class="!rounded-full !text-xs"
+      (click)="openBuilder.emit()"
+    >
+      <mat-icon class="scale-75 -ml-1">science</mat-icon> Manual
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-2">
+    @if (source.digests().length === 0) {
+      <p class="text-xs text-gray-400 text-center mt-8">
+        No memory digests exist yet.
+      </p>
+    } @else {
+      <div class="flex flex-col gap-2">
+        @for (
+          digest of source.digests().slice().reverse();
+          track digest.id.toString()
+        ) {
+          <div
+            class="p-3 rounded-lg border cursor-pointer hover:bg-slate-50 transition-colors"
+            [class.border-indigo-500]="selectedDigestId()?.equals(digest.id)"
+            [class.bg-indigo-50]="selectedDigestId()?.equals(digest.id)"
+            [class.border-gray-200]="!selectedDigestId()?.equals(digest.id)"
+            (click)="selectDigest.emit(digest.id)"
+          >
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-gray-700">Digest Block</span>
+              <span class="text-[10px] text-gray-400">{{
+                digest.createdAt | date: 'shortTime'
+              }}</span>
+            </div>
+            <p class="text-xs text-gray-500 m-0 truncate">
+              {{ digest.coveredMessageIds.length }} messages compressed
+            </p>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

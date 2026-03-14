@@ -351,3 +351,18 @@ nx g @nx/workspace:move --project=data-sources-infrastructure-github-firestore-a
 
 
 nx g @nx/angular:library --name=llm-features-session --directory=libs/llm/features/session --tags="scope:llm"  
+
+
+nx g @nx/angular:library --name=llm-tools-weighting --directory=libs/llm/tools/weighting --tags="scope:llm"  
+
+nx g @nx/angular:library --name=llm-domain-memory-manager --directory=libs/llm/domain/memory-manager --tags="scope:llm"  
+
+
+nx g @nx/angular:library --name=llm-domain-digest-engine --directory=libs/llm/domain/digest-engine --tags="scope:llm"  
+
+
+nx g @nx/angular:library --name=llm-features-digest --directory=libs/llm/features/digest --tags="scope:llm"  
+
+
+
+nx g @nx/workspace:move --project=llm-features-digest --destination=libs/llm/features/memory --importPath=@nx-platform-application/llm-features-memory

@@ -1,0 +1,41 @@
+<platform-master-detail-layout
+  [showDetail]="true"
+  (isNarrowChange)="isMobile.set($event)"
+>
+  <div sidebar class="h-full bg-white border-r border-gray-200">
+    <llm-memory-sidebar
+      (closeView)="closed.emit()"
+      (openBuilder)="activeView.set('builder')"
+      (selectDigest)="onSelectDigest($event)"
+      [selectedDigestId]="activeDigestId()"
+    />
+  </div>
+
+  <div
+    mobile-header
+    class="p-2 bg-white border-b flex items-center gap-2 shadow-sm z-10"
+  >
+    <button type="button" (click)="closed.emit()">
+      <mat-icon>close</mat-icon>
+    </button>
+    <span class="font-medium text-gray-800">Session Memory</span>
+  </div>
+
+  <div main class="flex-1 h-full bg-gray-50 overflow-y-auto">
+    @if (activeView() === 'builder') {
+      <llm-manual-digest-builder (digestCreated)="activeView.set('empty')" />
+    } @else if (activeView() === 'digest' && activeDigestId()) {
+      <llm-digest-detail [digestId]="activeDigestId()" />
+    } @else {
+      <div
+        class="h-full flex flex-col items-center justify-center text-gray-400"
+      >
+        <mat-icon class="text-6xl mb-4 text-gray-300">receipt_long</mat-icon>
+        <p class="text-lg font-medium text-gray-600">Memory Bank</p>
+        <p class="text-sm mt-1">
+          Select a digest or create a new one manually.
+        </p>
+      </div>
+    }
+  </div>
+</platform-master-detail-layout>
