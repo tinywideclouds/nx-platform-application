@@ -1,33 +1,61 @@
 <div class="flex flex-col h-full bg-white relative">
   <div
-    class="p-6 border-b border-gray-200 bg-slate-50 flex items-center justify-between shrink-0"
+    class="p-4 border-b border-gray-200 bg-slate-50 flex items-center justify-between shrink-0"
   >
     <div>
-      <h2 class="text-xl font-bold text-gray-800 m-0 flex items-center gap-2">
+      <h2 class="text-lg font-bold text-gray-800 m-0 flex items-center gap-2">
         <mat-icon class="text-indigo-500">science</mat-icon> Manual Digest
         Builder
       </h2>
-      <p class="text-sm text-gray-500 m-0 mt-1">
-        Select a continuous range of messages to compress.
-      </p>
     </div>
 
-    <div class="flex items-center gap-4">
-      <div class="text-right">
-        <p class="text-sm font-bold text-gray-800 m-0">
-          {{ selectedMessages().length }}
-        </p>
-        <p class="text-[10px] text-gray-500 uppercase tracking-wider m-0">
-          Selected
-        </p>
-      </div>
+    <div class="flex items-center gap-3">
+      <select
+        aria-label="select model"
+        [value]="selectedModel()"
+        (change)="selectedModel.set($any($event.target).value)"
+        class="border border-gray-300 rounded-md px-3 py-1.5 text-xs font-medium bg-white text-gray-700 outline-none focus:border-indigo-500 cursor-pointer"
+        [disabled]="isProcessing()"
+      >
+        @for (opt of availableModels; track opt.value) {
+          <option [value]="opt.value">{{ opt.label }}</option>
+        }
+      </select>
+
+      <button
+        mat-stroked-button
+        class="bg-white"
+        [disabled]="selectedMessages().length === 0 || isProcessing()"
+        (click)="openPreview()"
+      >
+        <mat-icon class="scale-75 -ml-1 text-gray-500">visibility</mat-icon>
+        Preview Context
+      </button>
+
       <button
         mat-flat-button
         color="primary"
-        [disabled]="selectedMessages().length === 0 || isProcessing()"
+        [disabled]="
+          selectedMessages().length === 0 ||
+          isProcessing() ||
+          overlappingDigestCount() > 0
+        "
         (click)="generateDigest()"
       >
-        {{ isProcessing() ? 'Generating...' : 'Generate Digest' }}
+        <mat-icon class="scale-75 -ml-1">auto_awesome</mat-icon>
+        {{ isProcessing() ? 'Compressing...' : 'Generate Digest' }}
+      </button>
+
+      <div class="h-6 w-px bg-gray-300 mx-1"></div>
+      <button
+        mat-icon-button
+        (click)="isSidebarOpen.set(!isSidebarOpen())"
+        matTooltip="Toggle Guide Sidebar"
+        class="text-gray-500 hover:text-indigo-600 transition-colors"
+      >
+        <mat-icon>{{
+          isSidebarOpen() ? 'right_panel_close' : 'right_panel_open'
+        }}</mat-icon>
       </button>
     </div>
   </div>
@@ -39,43 +67,132 @@
     ></mat-progress-bar>
   }
 
-  <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
-    <div class="max-w-3xl mx-auto flex flex-col gap-2 relative">
-      @for (msg of messages(); track msg.id.toString(); let i = $index) {
-        <div
-          class="p-3 rounded border bg-white flex items-start gap-3 cursor-pointer transition-all duration-200 select-none"
-          [class.border-indigo-400]="isMessageSelected(i)"
-          [class.bg-indigo-50]="isMessageSelected(i)"
-          [class.border-gray-200]="!isMessageSelected(i)"
-          [class.opacity-50]="!isMessageSelected(i) && rangeStart() !== null"
-          (click)="onMessageClick(i)"
-        >
-          <div class="mt-1">
-            @if (isMessageSelected(i)) {
-              <mat-icon class="text-indigo-600 scale-75 m-0"
-                >check_circle</mat-icon
-              >
-            } @else {
-              <mat-icon class="text-gray-300 scale-75 m-0"
-                >radio_button_unchecked</mat-icon
-              >
-            }
-          </div>
-          <div class="flex-1 min-w-0">
-            <span
-              class="text-[10px] font-bold uppercase tracking-wider"
-              [ngClass]="
-                msg.role === 'user' ? 'text-blue-600' : 'text-purple-600'
-              "
-            >
-              {{ msg.role }}
-            </span>
-            <p class="text-sm text-gray-700 m-0 mt-1 truncate">
-              {{ getPreview(msg) }}
+  <div class="flex-1 overflow-hidden flex flex-row bg-gray-50">
+    <div class="flex-1 overflow-y-auto p-6 relative">
+      <div class="max-w-3xl mx-auto flex flex-col gap-2 relative">
+        @if (overlappingDigestCount() > 0) {
+          <div
+            class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center gap-3 shadow-sm"
+          >
+            <mat-icon class="text-red-500 shrink-0">warning</mat-icon>
+            <p class="text-sm text-red-800 m-0 font-medium">
+              Selection Invalid: Your selected messages overlap with
+              {{ overlappingDigestCount() }} existing "{{ activePromptName() }}"
+              digest(s). Please adjust your bounds or change the Prompt Style.
             </p>
           </div>
-        </div>
-      }
+        }
+
+        @for (item of feedItems(); track item.id) {
+          @if (item.type === 'digest') {
+            <div
+              class="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 flex items-center justify-between text-indigo-900 my-2 shadow-sm"
+            >
+              <div class="flex items-center gap-3">
+                <div
+                  class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center"
+                >
+                  <mat-icon class="scale-90 text-indigo-600 m-0"
+                    >folder_zip</mat-icon
+                  >
+                </div>
+                <div>
+                  <span class="font-bold text-sm block leading-tight"
+                    >Existing {{ activePromptName() }} Digest</span
+                  >
+                  <span
+                    class="text-[10px] text-indigo-500 uppercase tracking-wider font-semibold"
+                    >Protected Block</span
+                  >
+                </div>
+              </div>
+              <div class="text-right">
+                <span
+                  class="text-xs font-bold bg-white px-2 py-1 rounded border border-indigo-100"
+                  >{{ item.count }}</span
+                >
+                <span class="text-xs text-indigo-600 ml-1"
+                  >msgs compressed</span
+                >
+              </div>
+            </div>
+          } @else {
+            @let i = item.originalIndex;
+            @let msg = item.data;
+
+            <div
+              class="p-3 rounded-lg border flex items-start gap-3 cursor-pointer transition-all duration-200 select-none relative overflow-hidden"
+              [class.border-indigo-400]="
+                isMessageInRange(i) && !isMessageExcluded(i)
+              "
+              [class.bg-indigo-50]="
+                isMessageInRange(i) && !isMessageExcluded(i)
+              "
+              [class.border-red-200]="isMessageExcluded(i)"
+              [class.bg-red-50]="isMessageExcluded(i)"
+              [class.border-gray-200]="
+                !isMessageInRange(i) && !isMessageExcluded(i)
+              "
+              [class.bg-white]="!isMessageInRange(i) && !isMessageExcluded(i)"
+              [class.opacity-40]="
+                (!isMessageInRange(i) && rangeStart() !== null) ||
+                isMessageExcluded(i)
+              "
+              [class.grayscale]="isMessageExcluded(i)"
+              (click)="onMessageClick(i)"
+            >
+              <div class="mt-1 z-10">
+                @if (isMessageExcluded(i)) {
+                  <mat-icon class="text-red-500 scale-75 m-0"
+                    >remove_circle</mat-icon
+                  >
+                } @else if (isMessageInRange(i)) {
+                  <mat-icon class="text-indigo-600 scale-75 m-0"
+                    >check_circle</mat-icon
+                  >
+                } @else {
+                  <mat-icon class="text-gray-300 scale-75 m-0"
+                    >radio_button_unchecked</mat-icon
+                  >
+                }
+              </div>
+
+              <div class="flex-1 min-w-0 z-10">
+                <span
+                  class="text-[10px] font-bold uppercase tracking-wider"
+                  [ngClass]="
+                    msg.role === 'user' ? 'text-blue-600' : 'text-purple-600'
+                  "
+                >
+                  {{ msg.role }}
+                </span>
+                <p
+                  class="text-sm text-gray-700 m-0 mt-1 truncate"
+                  [class.line-through]="isMessageExcluded(i)"
+                >
+                  {{ getPreview(msg) }}
+                </p>
+              </div>
+            </div>
+          }
+        }
+      </div>
     </div>
+
+    @if (isSidebarOpen()) {
+      <div
+        class="w-80 shrink-0 border-l border-gray-200 bg-slate-50 p-6 overflow-y-auto shadow-2xl z-20"
+      >
+        <llm-digest-builder-info
+          [startMsg]="rangeStart() !== null ? messages()[rangeStart()!] : null"
+          [endMsg]="rangeEnd() !== null ? messages()[rangeEnd()!] : null"
+          [selectedCount]="selectedMessages().length"
+          [excludedCount]="excludedIndices().size"
+          [estimatedTokens]="estimatedTokens()"
+          [(includeRawProposals)]="includeRawProposals"
+          [(selectedPrompt)]="selectedPromptText"
+        />
+      </div>
+    }
   </div>
 </div>

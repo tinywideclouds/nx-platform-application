@@ -1,0 +1,125 @@
+<div class="flex flex-col gap-6">
+  <div
+    class="bg-indigo-50/50 rounded-xl border border-indigo-100 p-5 shadow-sm"
+  >
+    <h3 class="font-bold text-indigo-900 text-sm mb-4 flex items-center gap-2">
+      <mat-icon class="text-indigo-500 scale-90">tune</mat-icon> Digest Strategy
+    </h3>
+
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1">
+        <label
+          class="text-[10px] font-bold text-gray-500 uppercase tracking-wider"
+          >Prompt Style</label
+        >
+        <select
+          aria-label="select strategy"
+          [(ngModel)]="selectedPrompt"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs font-medium bg-white text-gray-700 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          @for (strategy of strategyKeys; track strategy) {
+            <option [value]="prompts[strategy]">{{ strategy }} Digest</option>
+          }
+        </select>
+      </div>
+
+      <mat-checkbox
+        [(ngModel)]="includeRawProposals"
+        color="primary"
+        class="scale-90 -ml-2"
+      >
+        <span class="text-xs font-medium text-gray-700"
+          >Include Raw Code Proposals</span
+        >
+      </mat-checkbox>
+
+      <div
+        class="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between"
+      >
+        <div class="flex items-center gap-2 text-gray-600">
+          <mat-icon class="scale-75 m-0 text-amber-500">data_usage</mat-icon>
+          <span class="text-xs font-medium">Est. Context Size</span>
+        </div>
+        <span
+          class="text-sm font-bold"
+          [ngClass]="
+            estimatedTokens() > 8000 ? 'text-red-500' : 'text-indigo-600'
+          "
+        >
+          ~{{ estimatedTokens() | number }} tokens
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm sticky top-6"
+  >
+    <h3 class="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+      <mat-icon class="text-gray-400 scale-90">help_outline</mat-icon> Selection
+      Guide
+    </h3>
+    <div class="flex flex-col gap-4 relative">
+      <div class="flex items-start gap-3" [class.opacity-40]="startMsg()">
+        <div
+          class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+          [ngClass]="
+            startMsg()
+              ? 'bg-indigo-100 text-indigo-600'
+              : 'bg-indigo-600 text-white shadow-sm'
+          "
+        >
+          <mat-icon class="scale-[0.6] m-0">{{
+            startMsg() ? 'check' : 'looks_one'
+          }}</mat-icon>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-gray-800 m-0">Starting Message</p>
+          @if (startMsg(); as msg) {
+            <p class="text-[10px] text-gray-500 m-0 mt-1">
+              {{ msg.timestamp | date: 'medium' }}
+            </p>
+          } @else {
+            <p class="text-[10px] text-gray-500 m-0 mt-1 leading-tight">
+              Click the first message you want to include.
+            </p>
+          }
+        </div>
+      </div>
+
+      <div class="absolute left-3 top-6 bottom-16 w-px bg-gray-200 -z-10"></div>
+
+      <div
+        class="flex items-start gap-3"
+        [class.opacity-40]="endMsg() || !startMsg()"
+      >
+        <div
+          class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+          [ngClass]="
+            endMsg()
+              ? 'bg-indigo-100 text-indigo-600'
+              : startMsg() && !endMsg()
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-400'
+          "
+        >
+          <mat-icon class="scale-[0.6] m-0">{{
+            endMsg() ? 'check' : 'looks_two'
+          }}</mat-icon>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-gray-800 m-0">Ending Message</p>
+          @if (endMsg(); as msg) {
+            <p class="text-[10px] text-gray-500 m-0 mt-1">
+              {{ msg.timestamp | date: 'medium' }}
+            </p>
+          } @else {
+            <p class="text-[10px] text-gray-500 m-0 mt-1 leading-tight">
+              Click the last message to close the range.
+            </p>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

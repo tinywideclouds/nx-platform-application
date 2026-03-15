@@ -1,0 +1,108 @@
+<h2
+  mat-dialog-title
+  class="flex items-center gap-2 border-b border-gray-100 pb-4"
+>
+  <mat-icon class="text-indigo-500">visibility</mat-icon> Digest Context Preview
+</h2>
+<mat-dialog-content class="!p-0 bg-slate-50 relative">
+  <div class="p-6 max-w-4xl mx-auto flex flex-col gap-6 font-mono text-sm">
+    <div
+      class="bg-indigo-50 border border-indigo-100 rounded-lg p-4 text-indigo-900"
+    >
+      <div
+        class="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-2"
+      >
+        System Instruction
+      </div>
+      <p class="whitespace-pre-wrap m-0 leading-relaxed">
+        {{ data.systemPrompt }}
+      </p>
+    </div>
+
+    <div class="flex flex-col gap-4">
+      @for (msg of data.messages; track msg.id.toString()) { @let payload =
+      parsePayload(msg); @let isTool = isToolCall(msg); @let fullCode =
+      resolveCode(payload);
+
+      <div class="flex flex-col gap-1">
+        <span
+          class="text-[10px] font-bold uppercase tracking-wider"
+          [ngClass]="
+            msg.role === 'user' ? 'text-blue-500' : 'text-purple-500'
+          "
+        >
+          {{ msg.role === 'user' ? 'User' : 'Assistant' }}
+        </span>
+
+        @if (isTool) {
+        <details
+          class="group bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden"
+        >
+          <summary
+            class="p-3 bg-gray-50 cursor-pointer flex items-center gap-2 hover:bg-gray-100 transition-colors list-none"
+          >
+            <mat-icon
+              class="scale-75 text-gray-400 group-open:rotate-90 transition-transform"
+              >chevron_right</mat-icon
+            >
+
+            @if (data.includeRawProposals) {
+            <span class="text-xs font-semibold text-gray-700"
+              >Full Code Payload (Included in Context)</span
+            >
+            } @else {
+            <span class="text-xs font-semibold text-indigo-600"
+              >System Semantic Marker: Assistant referenced file "{{
+              payload?.filePath || payload?.proposal?.filePath ||
+              payload?.pointer?.filePath || 'unknown' }}"</span
+            >
+            }
+            <span class="ml-auto text-[10px] text-gray-400"
+              >{{ payload?.proposalId || payload?.pointer?.id }}</span
+            >
+          </summary>
+
+          <div
+            class="p-4 bg-slate-900 text-xs text-slate-300 overflow-x-auto border-t border-gray-100"
+          >
+            @if (!data.includeRawProposals) {
+            <div
+              class="mb-3 text-[10px] text-amber-400 italic font-semibold flex items-center gap-1"
+            >
+              <mat-icon class="scale-50 -ml-1 m-0">info</mat-icon>
+              @if (data.showSnippetWarning) {
+              <span
+                >Snippet included. Select 'Include Raw Code Proposals' for full
+                context.</span
+              >
+              } @else {
+              <span>Snippet:</span>
+              }
+            </div>
+            <pre class="m-0 font-mono text-slate-400">
+{{ payload?.snippet || 'No snippet available.' }}</pre
+            >
+            } @else {
+            <div class="mb-2 pb-2 border-b border-slate-700">
+              <strong class="text-white">Reasoning:</strong> {{
+              payload?.reasoning || 'No reasoning provided.' }}
+            </div>
+            <pre class="m-0 font-mono">{{ fullCode }}</pre>
+            }
+          </div>
+        </details>
+        } @else {
+        <div
+          class="bg-white border border-gray-200 rounded-md p-3 text-gray-800 shadow-sm whitespace-pre-wrap"
+        >
+          {{ payload }}
+        </div>
+        }
+      </div>
+      }
+    </div>
+  </div>
+</mat-dialog-content>
+<mat-dialog-actions align="end" class="border-t border-gray-100 !p-4">
+  <button mat-button mat-dialog-close>Close Preview</button>
+</mat-dialog-actions>

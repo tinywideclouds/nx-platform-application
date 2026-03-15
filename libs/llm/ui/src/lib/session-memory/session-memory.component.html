@@ -1,31 +1,18 @@
-<platform-master-detail-layout
-  [showDetail]="true"
-  (isNarrowChange)="isMobile.set($event)"
->
+<platform-master-detail-layout [showDetail]="true">
   <div sidebar class="h-full bg-white border-r border-gray-200">
     <llm-memory-sidebar
       (closeView)="closed.emit()"
-      (openBuilder)="activeView.set('builder')"
+      (openBuilder)="onOpenBuilder()"
       (selectDigest)="onSelectDigest($event)"
       [selectedDigestId]="activeDigestId()"
     />
   </div>
 
-  <div
-    mobile-header
-    class="p-2 bg-white border-b flex items-center gap-2 shadow-sm z-10"
-  >
-    <button type="button" (click)="closed.emit()">
-      <mat-icon>close</mat-icon>
-    </button>
-    <span class="font-medium text-gray-800">Session Memory</span>
-  </div>
-
   <div main class="flex-1 h-full bg-gray-50 overflow-y-auto">
     @if (activeView() === 'builder') {
-      <llm-manual-digest-builder (digestCreated)="activeView.set('empty')" />
-    } @else if (activeView() === 'digest' && activeDigestId()) {
-      <llm-digest-detail [digestId]="activeDigestId()" />
+      <llm-manual-digest-builder (digestCreated)="onDigestCreated($event)" />
+    } @else if (activeView() === 'digest' && activeDigestId(); as id) {
+      <llm-digest-detail [digestId]="id" (navigate)="onSelectDigest($event)" />
     } @else {
       <div
         class="h-full flex flex-col items-center justify-center text-gray-400"

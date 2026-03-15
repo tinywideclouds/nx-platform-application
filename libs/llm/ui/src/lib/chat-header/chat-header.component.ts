@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   input,
   output,
+  computed,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,72 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
   selector: 'llm-chat-header',
   standalone: true,
   imports: [CommonModule, MatIconModule],
-  template: `
-    <div
-      class="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shadow-sm w-full shrink-0 z-40 h-14"
-    >
-      <div class="flex items-center w-1/3">Chat</div>
-
-      <div class="flex items-center justify-center w-1/3">
-        <span
-          class="font-bold text-gray-900 text-sm truncate max-w-[200px] sm:max-w-xs"
-        >
-          {{ sessionTitle() || 'Untitled Session' }}
-        </span>
-      </div>
-
-      <div class="flex items-center justify-end w-1/3">
-        @if (activeView()) {
-          <div class="flex items-center px-8">
-            <button
-              (click)="closeView.emit()"
-              class="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200 transition-colors cursor-pointer"
-            >
-              <mat-icon class="scale-75 -mx-1">arrow_upward</mat-icon>
-              Chat
-            </button>
-          </div>
-        }
-        <div
-          class="flex items-center bg-gray-50 border border-gray-200 p-1 rounded-xl shadow-inner"
-        >
-          <button
-            (click)="switchView.emit('workspace')"
-            [class.bg-white]="activeView() === 'workspace'"
-            [class.shadow-sm]="activeView() === 'workspace'"
-            [class.text-gray-900]="activeView() === 'workspace'"
-            [class.text-gray-500]="activeView() !== 'workspace'"
-            class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:text-gray-900 cursor-pointer"
-          >
-            <mat-icon class="scale-[0.8] -mx-0.5">folder_open</mat-icon>
-            Workspace
-          </button>
-
-          <button
-            (click)="switchView.emit('memory')"
-            [class.bg-white]="activeView() === 'memory'"
-            [class.shadow-sm]="activeView() === 'memory'"
-            [class.text-gray-900]="activeView() === 'memory'"
-            [class.text-gray-500]="activeView() !== 'memory'"
-            class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:text-gray-900 cursor-pointer"
-          >
-            <mat-icon class="scale-[0.8] -mx-0.5">history</mat-icon> Memory
-          </button>
-
-          <button
-            (click)="switchView.emit('details')"
-            [class.bg-white]="activeView() === 'details'"
-            [class.shadow-sm]="activeView() === 'details'"
-            [class.text-gray-900]="activeView() === 'details'"
-            [class.text-gray-500]="activeView() !== 'details'"
-            class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:text-gray-900 cursor-pointer"
-          >
-            <mat-icon class="scale-[0.8] -mx-0.5">settings</mat-icon> Settings
-          </button>
-        </div>
-      </div>
-    </div>
-  `,
+  templateUrl: 'chat-header.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmChatHeaderComponent {
@@ -85,4 +21,19 @@ export class LlmChatHeaderComponent {
 
   closeView = output<void>();
   switchView = output<string>();
+
+  // Maps the view ID to nice UI labels/icons
+  viewMetadata = computed(() => {
+    const view = this.activeView();
+    switch (view) {
+      case 'workspace':
+        return { label: 'Workspace', icon: 'folder_open' };
+      case 'memory':
+        return { label: 'Session Memory', icon: 'history' };
+      case 'details':
+        return { label: 'Session Settings', icon: 'settings' };
+      default:
+        return null;
+    }
+  });
 }

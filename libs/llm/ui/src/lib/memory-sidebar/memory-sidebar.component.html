@@ -1,50 +1,121 @@
 <div class="flex flex-col h-full bg-white">
   <div
-    class="p-4 border-b border-gray-100 flex items-center justify-between bg-slate-50"
+    class="p-2 border-b border-gray-100 flex items-center justify-between bg-slate-50 min-h-[56px] shrink-0"
   >
     <div class="flex items-center gap-2">
-      <button mat-icon-button (click)="closeView.emit()">
-        <mat-icon>close</mat-icon>
+      <button
+        mat-icon-button
+        color="primary"
+        matTooltip="Create Manual Digest"
+        (click)="openBuilder.emit()"
+        [disabled]="isEditMode()"
+      >
+        <mat-icon>add</mat-icon>
       </button>
-      <h2 class="font-bold text-gray-800 text-sm m-0">Memory Bank</h2>
     </div>
-    <button
-      mat-flat-button
-      color="primary"
-      class="!rounded-full !text-xs"
-      (click)="openBuilder.emit()"
-    >
-      <mat-icon class="scale-75 -ml-1">science</mat-icon> Manual
-    </button>
+
+    <div class="flex items-center">
+      @if (!isEditMode()) {
+        <select
+          aria-label="fiter"
+          [value]="activeFilter()"
+          (change)="activeFilter.set($any($event.target).value)"
+          class="border border-gray-300 rounded-md px-2 py-1 text-xs font-medium bg-white text-gray-700 outline-none focus:border-indigo-500 cursor-pointer max-w-[130px]"
+        >
+          @for (opt of filterOptions; track opt.value) {
+            <option [value]="opt.value">{{ opt.label }}</option>
+          }
+        </select>
+      }
+    </div>
+
+    <div class="flex items-center gap-1">
+      @if (isEditMode()) {
+        <span class="text-xs font-medium text-gray-500 mr-2"
+          >{{ selectedForDeletion().size }} selected</span
+        >
+        <button
+          mat-icon-button
+          color="warn"
+          matTooltip="Delete Selected"
+          [disabled]="selectedForDeletion().size === 0"
+          (click)="confirmDelete()"
+        >
+          <mat-icon class="scale-90">delete</mat-icon>
+        </button>
+        <button mat-icon-button matTooltip="Cancel" (click)="toggleEditMode()">
+          <mat-icon class="scale-90">close</mat-icon>
+        </button>
+      } @else {
+        <button
+          mat-icon-button
+          matTooltip="Edit Digests"
+          (click)="toggleEditMode()"
+          [disabled]="source.digests().length === 0"
+        >
+          <mat-icon class="scale-90 text-gray-500">edit</mat-icon>
+        </button>
+      }
+    </div>
   </div>
 
   <div class="flex-1 overflow-y-auto p-2">
-    @if (source.digests().length === 0) {
+    @if (filteredDigests().length === 0) {
       <p class="text-xs text-gray-400 text-center mt-8">
-        No memory digests exist yet.
+        No memory digests match.
       </p>
     } @else {
       <div class="flex flex-col gap-2">
-        @for (
-          digest of source.digests().slice().reverse();
-          track digest.id.toString()
-        ) {
+        @for (digest of filteredDigests(); track digest.id.toString()) {
           <div
-            class="p-3 rounded-lg border cursor-pointer hover:bg-slate-50 transition-colors"
-            [class.border-indigo-500]="selectedDigestId()?.equals(digest.id)"
-            [class.bg-indigo-50]="selectedDigestId()?.equals(digest.id)"
-            [class.border-gray-200]="!selectedDigestId()?.equals(digest.id)"
-            (click)="selectDigest.emit(digest.id)"
+            class="p-3 rounded-lg border cursor-pointer hover:bg-slate-50 transition-colors flex items-center gap-3"
+            [class.border-indigo-500]="
+              !isEditMode() && selectedDigestId()?.equals(digest.id)
+            "
+            [class.bg-indigo-50]="
+              !isEditMode() && selectedDigestId()?.equals(digest.id)
+            "
+            [class.border-gray-200]="
+              isEditMode() || !selectedDigestId()?.equals(digest.id)
+            "
+            [class.border-red-200]="
+              isEditMode() && selectedForDeletion().has(digest.id.toString())
+            "
+            [class.bg-red-50]="
+              isEditMode() && selectedForDeletion().has(digest.id.toString())
+            "
+            (click)="onDigestClick(digest.id)"
           >
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold text-gray-700">Digest Block</span>
-              <span class="text-[10px] text-gray-400">{{
-                digest.createdAt | date: 'shortTime'
-              }}</span>
+            @if (isEditMode()) {
+              <div class="shrink-0 -ml-1">
+                <mat-checkbox
+                  [checked]="selectedForDeletion().has(digest.id.toString())"
+                  class="pointer-events-none scale-90"
+                ></mat-checkbox>
+              </div>
+            }
+
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between mb-1">
+                <span
+                  class="text-xs font-bold text-gray-700 flex items-center gap-2"
+                >
+                  Digest Block
+                  <span
+                    class="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border"
+                    [ngClass]="getPromptColorClass(digest.typeId)"
+                  >
+                    {{ getPromptDisplayName(digest.typeId) }}
+                  </span>
+                </span>
+                <span class="text-[10px] text-gray-400">{{
+                  digest.createdAt | date: 'shortTime'
+                }}</span>
+              </div>
+              <p class="text-xs text-gray-500 m-0 truncate">
+                {{ digest.coveredMessageIds.length }} messages compressed
+              </p>
             </div>
-            <p class="text-xs text-gray-500 m-0 truncate">
-              {{ digest.coveredMessageIds.length }} messages compressed
-            </p>
           </div>
         }
       </div>

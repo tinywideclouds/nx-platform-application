@@ -17,11 +17,13 @@ import {
 } from '@nx-platform-application/llm-types';
 import { TimeSeries } from '@nx-platform-application/scrollspace-core';
 import { LlmMemoryManagerService } from '@nx-platform-application/llm-domain-memory-manager';
+import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 
 @Injectable({ providedIn: 'root' })
 export class LlmScrollSource {
   private messageStorage = inject(MessageStorageService);
-  private memoryManager = inject(LlmMemoryManagerService); // NEW
+  private memoryManager = inject(LlmMemoryManagerService);
+  private proposalService = inject(LlmProposalService);
 
   // 1. INPUTS
   readonly activeSessionId = signal<URN | null>(null);
@@ -31,9 +33,11 @@ export class LlmScrollSource {
   readonly isGenerating = signal(false);
 
   constructor() {
-    // Reactively load history when Session ID changes
+    // Reactively load history when Session ID changes OR when a proposal mutates!
     effect(async () => {
       const sessionId = this.activeSessionId();
+      this.proposalService.registryMutated(); // The reactive pull
+
       if (!sessionId) {
         this._messages.set([]);
         return;
@@ -42,7 +46,7 @@ export class LlmScrollSource {
       this._messages.set(history);
     });
 
-    // NEW: Reactive Memory Analysis
+    // Reactive Memory Analysis
     effect(() => {
       const messages = this._messages();
       const isGenerating = this.isGenerating();

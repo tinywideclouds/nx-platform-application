@@ -4,6 +4,8 @@ import {
   LlmMessage,
   GenerateRequest,
   LlmMemoryDigest,
+  FileProposalType,
+  FileLinkType,
 } from '@nx-platform-application/llm-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
@@ -13,64 +15,101 @@ import {
 
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
 import { DigestStorageService } from '@nx-platform-application/llm-infrastructure-storage';
-
 import { LlmDigestSource } from '@nx-platform-application/llm-features-memory';
-import { digestSystemMessage } from './prompt';
+import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
+import { Prompts, StandardPrompt } from './prompt';
+
+export interface DigestOptions {
+  includeRawProposals?: boolean;
+  customPrompt?: string;
+  typeId?: URN;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LlmDigestEngineService {
   private network = inject(LLM_NETWORK_CLIENT);
   private digestStorage = inject(DigestStorageService);
   private digestSource = inject(LlmDigestSource);
+  private proposalService = inject(LlmProposalService);
   private logger = inject(Logger);
   private decoder = new TextDecoder();
 
-  /**
-   * Generates a digest from a chunk of messages and saves it to the database.
-   */
   async processChunk(
     sessionId: URN,
     model: string,
     messages: LlmMessage[],
-  ): Promise<void> {
-    if (!messages || messages.length === 0) return;
+    options: DigestOptions = {},
+  ): Promise<URN | undefined> {
+    if (!messages || messages.length === 0) return undefined;
 
     this.logger.debug(
-      `[Digest Engine] Building digest for ${messages.length} messages`,
+      `[Digest Engine] Building digest for ${messages.length} messages (Include Raw: ${!!options.includeRawProposals})`,
     );
 
     let transcript = `<conversation_log>\n`;
-
-    // NEW: Map to deduplicate registry entry URNs extracted from the chunk
     const registryMap = new Map<string, URN>();
 
+    const activeProposals =
+      await this.proposalService.getProposalsForSession(sessionId);
+
     for (const msg of messages) {
-      const text = msg.payloadBytes
-        ? this.decoder.decode(msg.payloadBytes)
-        : '';
+      if (!msg.payloadBytes) continue;
 
-      if (text.trim()) {
-        // Attempt to deterministically extract registry URNs from tool calls/pointers
-        try {
-          const payload = JSON.parse(text);
-          const registryIdStr = payload.proposalId || payload.proposal?.id;
+      const text = this.decoder.decode(msg.payloadBytes).trim();
+      if (!text) continue;
 
-          if (registryIdStr) {
-            const urn = URN.parse(registryIdStr);
-            registryMap.set(urn.toString(), urn);
-          }
-        } catch (e) {
-          // Normal text message, ignore JSON parse failure
+      const actor = msg.role === 'user' ? 'User' : 'Assistant';
+      const isProposal = msg.typeId.equals(FileProposalType);
+      const isPointer = msg.typeId.equals(FileLinkType);
+
+      if (isProposal || isPointer) {
+        const payload = JSON.parse(text);
+        const registryIdStr =
+          payload.proposalId || payload.proposal?.id || payload.pointer?.id;
+        const filePath =
+          payload.filePath ||
+          payload.proposal?.filePath ||
+          payload.pointer?.filePath ||
+          'unknown_file';
+
+        if (registryIdStr) {
+          const urn = URN.parse(registryIdStr);
+          registryMap.set(urn.toString(), urn);
         }
 
-        transcript += `[${msg.role === 'user' ? 'User' : 'Assistant'}]: ${text}\n\n`;
+        if (options.includeRawProposals) {
+          const fullProposal = activeProposals.find(
+            (p) => p.id.toString() === registryIdStr,
+          );
+          const code =
+            fullProposal?.patch ||
+            fullProposal?.newContent ||
+            payload.snippet ||
+            '';
+          const reasoning = fullProposal?.reasoning || payload.reasoning || '';
+
+          transcript += `[${actor}]: [System Context: Assistant proposed a file change]\nFile: ${filePath}\nReasoning: ${reasoning}\nCode/Patch:\n${code}\n\n`;
+        } else {
+          // --- UPDATED: Inject the snippet if available! ---
+          const action = isProposal
+            ? 'proposed a code change to'
+            : 'referenced file';
+          const snippetBlock = payload.snippet
+            ? `\nSnippet:\n${payload.snippet}`
+            : '';
+
+          transcript += `[${actor}]: [System Semantic Marker: Assistant ${action} "${filePath}"]${snippetBlock}\n\n`;
+        }
+      } else {
+        transcript += `[${actor}]: ${text}\n\n`;
       }
     }
+
     transcript += `</conversation_log>`;
 
     const request: GenerateRequest = {
       model: model,
-      systemPrompt: digestSystemMessage,
+      systemPrompt: options.customPrompt || Prompts.Standard,
       prompt: transcript,
     };
 
@@ -81,23 +120,24 @@ export class LlmDigestEngineService {
       );
 
       const digestId = URN.create('digest', crypto.randomUUID(), 'llm');
+      const typeId = options.typeId || StandardPrompt;
 
       const newDigest: LlmMemoryDigest = {
         id: digestId,
+        typeId: typeId,
         sessionId: sessionId,
         coveredMessageIds: messages.map((m) => m.id),
-        // FIXED: Attach the extracted registry URNs to satisfy the compiler
         registryEntities: Array.from(registryMap.values()),
         content: response.content,
         createdAt: Temporal.Now.instant().toString() as ISODateTimeString,
+        startTime: messages[0].timestamp,
+        endTime: messages[messages.length - 1].timestamp,
       };
 
       await this.digestStorage.saveDigest(newDigest);
-      this.logger.debug(
-        `[Digest Engine] Digest saved successfully: ${digestId.toString()}`,
-      );
-      // Tell the UI state to fetch the newly inserted record!
       this.digestSource.refresh();
+
+      return digestId;
     } catch (error) {
       this.logger.error(`[Digest Engine] Failed to generate digest`, error);
       throw error;

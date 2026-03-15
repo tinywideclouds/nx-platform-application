@@ -43,9 +43,7 @@ export class WorkspaceStateService {
   private sessionSource = inject(LlmSessionSource);
   private synClient = inject(GithubSyncClient);
   private proposalService = inject(LlmProposalService);
-  private cacheService = inject(CompiledCacheService);
   private dataSources = inject(DataSourcesService);
-  private resolver = inject(DataSourceResolver);
 
   private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
   private readonly baseContents = signal<Map<string, string>>(new Map());

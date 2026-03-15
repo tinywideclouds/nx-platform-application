@@ -22,13 +22,13 @@ export class LlmDatabase extends PlatformDexieService {
   constructor() {
     super('llm_client');
 
-    this.version(6).stores({
+    this.version(7).stores({
       sessions: 'id, lastModified',
       messages: 'id, sessionId, timestamp, [sessionId+timestamp], *tags',
       proposals: 'id, ownerSessionId, filePath, [ownerSessionId+filePath]',
       compiledCaches: 'id, expiresAt',
       digests:
-        'id, sessionId, createdAt, [sessionId+createdAt], *registryEntities',
+        'id, sessionId, typeId, createdAt, [sessionId+createdAt], *registryEntities',
       knowledgeNodes:
         'id, sessionId, typeId, status, updatedAt, [sessionId+status], *registryEntities, *linkedNodes',
     });

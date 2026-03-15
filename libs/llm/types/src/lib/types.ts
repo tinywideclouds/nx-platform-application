@@ -71,6 +71,7 @@ export interface WeightMetrics {
 
 export interface LlmMemoryItem {
   id: URN;
+  typeId: URN; // <-- The polymorphic key
   sessionId: URN;
   title?: string;
   description?: string;
@@ -90,10 +91,12 @@ export interface LlmMemoryDigest extends LlmMemoryItem {
   // If the user edits/deletes a covered message, we log it here
   // If this gets too long, we re-summarize the digest.
   editDeltaNotes?: string[];
+
+  startTime: ISODateTimeString;
+  endTime: ISODateTimeString;
 }
 
 export interface LlmKnowledgeNode extends LlmMemoryItem {
-  typeId: URN; // <-- The polymorphic key
   // Graph linkage to other Knowledge Nodes or Memory Digests
   linkedNodes: URN[];
   status: 'active' | 'deprecated';
