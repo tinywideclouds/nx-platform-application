@@ -1,7 +1,7 @@
 {
   "name": "llm-domain-digest-engine",
   "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/llm/domain/digest-engine/src",
+  "sourceRoot": "libs/llm/domain/digest/src",
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:llm"],
@@ -11,16 +11,16 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/libs/llm/domain/digest-engine",
-        "configFile": "libs/llm/domain/digest-engine/vite.config.mts"
+        "outputPath": "dist/libs/llm/domain/digest",
+        "configFile": "libs/llm/domain/digest/vite.config.mts"
       }
     },
     "test": {
       "executor": "@nx/vite:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "../../../../coverage/libs/llm/domain/digest-engine",
-        "configFile": "libs/llm/domain/digest-engine/vitest.config.mts"
+        "reportsDirectory": "../../../../coverage/libs/llm/domain/digest",
+        "configFile": "libs/llm/domain/digest/vitest.config.mts"
       }
     },
     "lint": {

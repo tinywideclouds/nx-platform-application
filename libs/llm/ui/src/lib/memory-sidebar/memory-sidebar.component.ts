@@ -16,18 +16,19 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { URN } from '@nx-platform-application/platform-types';
 import { LlmDigestSource } from '@nx-platform-application/llm-features-memory';
-import { DigestStorageService } from '@nx-platform-application/llm-infrastructure-storage';
+
 import {
   ConfirmationDialogComponent,
   ConfirmationData,
 } from '@nx-platform-application/platform-ui-toolkit';
 
 import {
+  LlmDigestService,
   StandardPrompt,
   ArchitecturalPrompt,
   DebugPrompt,
   MinimalPrompt,
-} from '@nx-platform-application/llm-domain-digest-engine';
+} from '@nx-platform-application/llm-domain-digest';
 
 @Component({
   selector: 'llm-memory-sidebar',
@@ -45,7 +46,8 @@ import {
 })
 export class LlmMemorySidebarComponent {
   source = inject(LlmDigestSource);
-  private digestStorage = inject(DigestStorageService);
+  // --- CHANGED: Inject Domain Service ---
+  private digestService = inject(LlmDigestService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
@@ -138,7 +140,8 @@ export class LlmMemorySidebarComponent {
         try {
           const idsToDelete = Array.from(this.selectedForDeletion());
           for (const idStr of idsToDelete) {
-            await this.digestStorage.deleteDigest(URN.parse(idStr));
+            // --- CHANGED: Use Domain Service ---
+            await this.digestService.deleteDigest(URN.parse(idStr));
           }
 
           this.snackBar.open(`Deleted ${count} digest(s)`, 'Close', {

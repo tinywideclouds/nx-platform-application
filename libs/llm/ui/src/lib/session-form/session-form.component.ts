@@ -23,6 +23,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatTabsModule } from '@angular/material/tabs';
 
 import { LlmContextHierarchyComponent } from '../context-hierarchy/context-hierarchy.component';
 
@@ -30,10 +31,12 @@ import {
   LlmSession,
   WorkspaceAttachment,
   LlmModelStrategy,
+  MemoryStrategyProfile,
 } from '@nx-platform-application/llm-types';
 import { URN } from '@nx-platform-application/platform-types';
 import { LlmSessionActions } from '@nx-platform-application/llm-domain-session';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
+import { defaultMemoryProfiles } from '@nx-platform-application/llm-domain-context';
 import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
 import { DataSourceResolver } from '@nx-platform-application/llm-features-workspace';
 
@@ -41,6 +44,8 @@ import {
   ContextPickerDialogComponent,
   ContextPickerResult,
 } from '@nx-platform-application/data-sources-ui';
+
+import { LlmModelRegistryService } from '@nx-platform-application/llm-tools-model-registry';
 
 @Component({
   selector: 'llm-session-form',
@@ -59,6 +64,7 @@ import {
     MatRadioModule,
     MatCheckboxModule,
     MatDialogModule,
+    MatTabsModule,
     LlmContextHierarchyComponent,
   ],
   templateUrl: './session-form.component.html',
@@ -70,6 +76,9 @@ export class LlmSessionFormComponent {
   private readonly cacheService = inject(CompiledCacheService);
   private readonly resolver = inject(DataSourceResolver);
   private readonly dataSources = inject(DataSourcesService);
+
+  private modelRegistry = inject(LlmModelRegistryService);
+
   private readonly dialog = inject(MatDialog);
 
   session = input<LlmSession | null>(null);
@@ -80,11 +89,16 @@ export class LlmSessionFormComponent {
   editTitleValue = signal('');
 
   // UI display masking for technical resource names
-  readonly availableModels = [
-    { label: 'Gemini 3.1 Pro', value: 'gemini-3.1-pro-preview' },
-    { label: 'Gemini 3 Flash', value: 'gemini-3-flash-preview' },
-    { label: 'Gemini 3.1 Flash Lite', value: 'gemini-3.1-flash-lite-preview' },
-  ];
+  readonly availableModels = computed(() => {
+    return this.modelRegistry.profiles().map((p) => ({
+      label: p.displayName,
+      value: p.id,
+    }));
+  });
+
+  activeProfiles = computed(() => {
+    return this.session()?.strategy?.memoryProfiles || defaultMemoryProfiles;
+  });
 
   contextGroupEntries = computed(() => {
     const groups = this.session()?.contextGroups || {};
@@ -109,7 +123,6 @@ export class LlmSessionFormComponent {
 
   /**
    * Updates specific strategy fields while preserving the overall session contract.
-   *
    */
   updateStrategy(field: keyof LlmModelStrategy, value: any) {
     const s = this.session();
@@ -122,6 +135,7 @@ export class LlmSessionFormComponent {
       secondaryModelLimit: 1,
       fallbackStrategy: 'history_only',
       useCacheIfAvailable: true,
+      memoryProfiles: defaultMemoryProfiles,
     };
 
     const updatedSession: LlmSession = {
@@ -138,8 +152,22 @@ export class LlmSessionFormComponent {
   }
 
   /**
+   * Mutates a specific field inside a specific Memory Profile tab
+   */
+  updateProfileStrategy(
+    profileId: string,
+    field: keyof MemoryStrategyProfile,
+    value: any,
+  ) {
+    const currentProfiles = this.activeProfiles();
+    const updatedProfiles = currentProfiles.map((p) =>
+      p.id === profileId ? { ...p, [field]: value } : p,
+    );
+    this.updateStrategy('memoryProfiles', updatedProfiles);
+  }
+
+  /**
    * Handles the radio toggle between "Flick Back" (1 turn) and "Alert" (n turns).
-   *
    */
   onOverrideStrategyChange(type: 'flick' | 'alert') {
     const limit = type === 'flick' ? 1 : 2;
@@ -159,7 +187,6 @@ export class LlmSessionFormComponent {
 
   /**
    * Triggers context compilation using the Primary Model defined in the strategy.
-   *
    */
   async onCompileRequest(event: { intent: WorkspaceAttachment; ttl?: number }) {
     const s = this.session();
@@ -224,6 +251,13 @@ export class LlmSessionFormComponent {
       this.save.emit({ ...s, title: newTitle });
     }
     this.isEditingTitle.set(false);
+  }
+
+  toggleSessionProperty(field: keyof LlmSession, value: any) {
+    const s = this.session();
+    if (s) {
+      this.save.emit({ ...s, [field]: value });
+    }
   }
 
   onDelete(): void {

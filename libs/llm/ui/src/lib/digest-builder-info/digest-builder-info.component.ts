@@ -11,7 +11,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { LlmMessage } from '@nx-platform-application/llm-types';
-import { Prompts } from '@nx-platform-application/llm-domain-digest-engine';
+import { Prompts } from '@nx-platform-application/llm-domain-digest';
 
 @Component({
   selector: 'llm-digest-builder-info',

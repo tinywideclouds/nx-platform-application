@@ -34,4 +34,6 @@ export interface LlmSessionRecord {
   systemContexts?: WorkspaceAttachmentRecord[];
   compiledContext?: WorkspaceAttachmentRecord;
   quickContext?: QuickContextFileRecord[];
+
+  enablePreFlightPreview?: boolean;
 }

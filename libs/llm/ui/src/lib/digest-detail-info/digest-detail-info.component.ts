@@ -14,7 +14,7 @@ import {
   ArchitecturalPrompt,
   DebugPrompt,
   MinimalPrompt,
-} from '@nx-platform-application/llm-domain-digest-engine';
+} from '@nx-platform-application/llm-domain-digest';
 
 @Component({
   selector: 'llm-digest-detail-info',

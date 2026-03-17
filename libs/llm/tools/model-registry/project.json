@@ -1,0 +1,30 @@
+{
+  "name": "llm-tools-model-registry",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/llm/tools/model-registry/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:llm"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/llm/tools/model-registry",
+        "configFile": "libs/llm/tools/model-registry/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../../coverage/libs/llm/tools/model-registry",
+        "configFile": "libs/llm/tools/model-registry/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

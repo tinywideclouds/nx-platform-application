@@ -2,7 +2,6 @@ import {
   Component,
   ChangeDetectionStrategy,
   output,
-  signal,
   inject,
   computed,
 } from '@angular/core';
@@ -10,12 +9,12 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs/operators';
+import { URN } from '@nx-platform-application/platform-types';
+
 import { MasterDetailLayoutComponent } from '@nx-platform-application/platform-ui-layouts';
 import { LlmMemorySidebarComponent } from '../memory-sidebar/memory-sidebar.component';
 import { LlmManualDigestBuilderComponent } from '../manual-digest-builder/manual-digest-builder.component';
 import { LlmDigestDetailComponent } from '../digest-detail/digest-detail.component';
-import { URN } from '@nx-platform-application/platform-types';
 
 @Component({
   selector: 'llm-session-memory',
@@ -34,23 +33,23 @@ import { URN } from '@nx-platform-application/platform-types';
 export class LlmSessionMemoryComponent {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+
   closed = output<void>();
 
-  // Derived from URL: ?view=memory&digest=urn:llm:digest:xxx
-  readonly activeDigestId = toSignal(
-    this.route.queryParamMap.pipe(
-      map((params) => {
-        const id = params.get('digest');
-        return id ? URN.parse(id) : null;
-      }),
-    ),
-    { initialValue: null }, // This forces the type to URN | null
-  );
+  // 1. ONE Reactive source of truth for the URL
+  private queryParams = toSignal(this.route.queryParamMap);
 
-  // Derives view based on URL state
+  // 2. Derive the Digest ID reactively
+  readonly activeDigestId = computed(() => {
+    const params = this.queryParams();
+    const id = params?.get('digest');
+    return id ? URN.parse(id) : null;
+  });
+
+  // 3. Derive the View reactively (no more snapshots!)
   readonly activeView = computed(() => {
-    const params = this.route.snapshot.queryParamMap;
-    if (params.get('builder') === 'true') return 'builder'; // Optional: if builder is also URL-driven
+    const params = this.queryParams();
+    if (params?.get('builder') === 'true') return 'builder';
     return this.activeDigestId() ? 'digest' : 'empty';
   });
 

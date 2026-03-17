@@ -25,9 +25,11 @@ import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
 
-import { ChatWorkspacePresenter } from './chat-window.presenter';
-import { LlmFocusedGroupBannerComponent } from '../chat-group-banner/chat-group-banner.component';
+// INJECT BOTH PRESENTERS
+import { ChatWorkspacePresenter } from './presenters/chat-window.presenter';
+import { ChatSelectionPresenter } from './presenters/chat-selection.presenter';
 
+import { LlmFocusedGroupBannerComponent } from '../chat-group-banner/chat-group-banner.component';
 import { LlmContentPipe } from '../pipes/llm-content.pipe';
 import { LlmChatWindowHeaderComponent } from '../chat-window-header/chat-window-header.component';
 import { LlmProposalBubbleComponent } from '../proposal-bubble/proposal-bubble.component';
@@ -38,7 +40,7 @@ import { LlmQuickContextDrawerComponent } from '../quick-context-drawer/quick-co
 @Component({
   selector: 'llm-chat-window',
   standalone: true,
-  providers: [ChatWorkspacePresenter], // Ties presenter strictly to this component!
+  providers: [ChatWorkspacePresenter, ChatSelectionPresenter],
   imports: [
     CommonModule,
     ScrollspaceViewportComponent,
@@ -62,7 +64,10 @@ import { LlmQuickContextDrawerComponent } from '../quick-context-drawer/quick-co
 export class LlmChatWindowComponent {
   protected source = inject(LlmScrollSource);
   protected actions = inject(LlmChatActions);
+
+  // Expose both to the template
   protected presenter = inject(ChatWorkspacePresenter);
+  protected selection = inject(ChatSelectionPresenter);
 
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);

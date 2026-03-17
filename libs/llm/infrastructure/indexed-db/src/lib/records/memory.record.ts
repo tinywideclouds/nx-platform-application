@@ -12,6 +12,7 @@ export interface LlmMemoryItemRecord {
 export interface LlmMemoryDigestRecord extends LlmMemoryItemRecord {
   coveredMessageIds: string[];
   editDeltaNotes?: string[];
+  includeProposals?: boolean;
   startTime: string;
   endTime: string;
 }

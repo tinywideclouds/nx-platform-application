@@ -92,6 +92,8 @@ export interface LlmMemoryDigest extends LlmMemoryItem {
   // If this gets too long, we re-summarize the digest.
   editDeltaNotes?: string[];
 
+  includeProposals?: boolean;
+
   startTime: ISODateTimeString;
   endTime: ISODateTimeString;
 }

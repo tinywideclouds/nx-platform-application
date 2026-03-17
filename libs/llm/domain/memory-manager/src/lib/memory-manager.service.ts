@@ -4,7 +4,7 @@ import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import { LlmWeightCalculator } from '@nx-platform-application/llm-tools-weighting';
 import { SessionStorageService } from '@nx-platform-application/llm-infrastructure-storage';
-import { LlmDigestEngineService } from '@nx-platform-application/llm-domain-digest-engine';
+import { LlmDigestEngineService } from '@nx-platform-application/llm-domain-digest';
 import { LlmDigestSource } from '@nx-platform-application/llm-features-memory';
 
 @Injectable({ providedIn: 'root' })

@@ -4,25 +4,29 @@ import {
   input,
   output,
   computed,
+  inject, // <-- ADD
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
+import { RouterModule } from '@angular/router';
+import { LlmSessionSource } from '@nx-platform-application/llm-features-session'; // <-- ADD
 
 @Component({
   selector: 'llm-chat-header',
   standalone: true,
-  imports: [CommonModule, MatIconModule],
+  imports: [CommonModule, MatIconModule, RouterModule],
   templateUrl: 'chat-header.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmChatHeaderComponent {
+  private sessionSource = inject(LlmSessionSource); // <-- ADD
+
   activeView = input<string | null>();
   sessionTitle = input<string | undefined>();
 
   closeView = output<void>();
   switchView = output<string>();
 
-  // Maps the view ID to nice UI labels/icons
   viewMetadata = computed(() => {
     const view = this.activeView();
     switch (view) {
@@ -36,4 +40,9 @@ export class LlmChatHeaderComponent {
         return null;
     }
   });
+
+  // --- ADDED ---
+  clearSession() {
+    this.sessionSource.setActiveSession(null);
+  }
 }

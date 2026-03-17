@@ -33,6 +33,7 @@ export class LlmMemoryDigestMapper {
       registryEntities: (record.registryEntities || []).map((id) =>
         URN.parse(id),
       ),
+      includeProposals: record.includeProposals,
       content: record.content,
       editDeltaNotes: record.editDeltaNotes
         ? [...record.editDeltaNotes]
@@ -54,6 +55,7 @@ export class LlmMemoryDigestMapper {
       registryEntities: (domain.registryEntities || []).map((id) =>
         id.toString(),
       ),
+      includeProposals: domain.includeProposals,
       content: domain.content,
       editDeltaNotes: domain.editDeltaNotes
         ? [...domain.editDeltaNotes]

@@ -20,12 +20,10 @@ import { LlmSessionSource } from '@nx-platform-application/llm-features-session'
 import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
 import { LlmChatActions } from '@nx-platform-application/llm-domain-conversation';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-import { ChatWorkspacePresenter } from '../chat-window/chat-window.presenter'; // HOISTED
 
 @Component({
   selector: 'llm-chat-viewer',
   standalone: true,
-  providers: [ChatWorkspacePresenter], // THIS ENSURES STATE IS SHARED WITH CHAT-WINDOW
   imports: [
     MatIconModule,
     MatButtonModule,
@@ -44,55 +42,10 @@ export class LlmChatViewerComponent {
   // Injected for the hoisted header
   protected source = inject(LlmScrollSource);
   protected actions = inject(LlmChatActions);
-  protected presenter = inject(ChatWorkspacePresenter);
   private cacheService = inject(CompiledCacheService);
 
   isMobile = signal(false);
   showDetail = computed(() => !!this.sessionSource.activeSession());
-
-  // Hoisted alert logic
-  chatAlertState = computed(() => {
-    const session = this.presenter.session();
-    if (!session || !this.presenter.activeModelId())
-      return { alert: false, reason: '' };
-    if (this.cacheService.isCompiling())
-      return {
-        alert: true,
-        reason: '⚙️ Compiling context cache... please wait.',
-      };
-    const isUsingOverride = !!this.presenter.temporaryModelOverride();
-
-    if (session.compiledContext) {
-      const activeCache = this.cacheService
-        .activeCaches()
-        .find(
-          (c) =>
-            c.model === this.presenter.activeModelId() &&
-            c.id
-              .toString()
-              .includes(session.compiledContext!.resourceUrn.entityId),
-        );
-      if (activeCache) {
-        if (
-          Temporal.Instant.compare(
-            Temporal.Now.instant(),
-            Temporal.Instant.from(activeCache.expiresAt),
-          ) >= 0
-        ) {
-          return {
-            alert: true,
-            reason: '⏰ Context cache expired. Responses will be slower.',
-          };
-        }
-      } else if (!isUsingOverride && session.strategy?.useCacheIfAvailable) {
-        return {
-          alert: true,
-          reason: '❄️ Context cache is COLD. Response will be slow.',
-        };
-      }
-    }
-    return { alert: false, reason: '' };
-  });
 
   onOpenDetails() {
     this.router.navigate([], {

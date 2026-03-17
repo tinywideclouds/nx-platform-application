@@ -63,7 +63,7 @@
             [value]="session()?.strategy?.primaryModel"
             (selectionChange)="updateStrategy('primaryModel', $event.value)"
           >
-            @for (opt of availableModels; track opt.value) {
+            @for (opt of availableModels(); track opt.value) {
               <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
             }
           </mat-select>
@@ -95,7 +95,7 @@
             [value]="session()?.strategy?.secondaryModel"
             (selectionChange)="updateStrategy('secondaryModel', $event.value)"
           >
-            @for (opt of availableModels; track opt.value) {
+            @for (opt of availableModels(); track opt.value) {
               <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
             }
           </mat-select>
@@ -189,6 +189,112 @@
           </div>
         </mat-radio-button>
       </mat-radio-group>
+    </div>
+  </div>
+
+  <div class="mt-4 pt-6 border-t border-gray-100 w-full mb-10">
+    <div class="flex items-center justify-between mb-6">
+      <h3
+        class="font-medium text-gray-800 text-base m-0 flex items-center gap-2"
+      >
+        <mat-icon class="text-indigo-500">memory</mat-icon>
+        Dynamic Memory Strategy
+      </h3>
+
+      <mat-checkbox
+        [checked]="session()?.enablePreFlightPreview"
+        (change)="
+          toggleSessionProperty('enablePreFlightPreview', $event.checked)
+        "
+        color="primary"
+      >
+        <span class="text-sm font-bold text-indigo-700"
+          >Enable Pre-Flight Context Preview</span
+        >
+      </mat-checkbox>
+    </div>
+
+    <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+      <mat-tab-group animationDuration="0ms" class="bg-white">
+        @for (profile of activeProfiles(); track profile.id) {
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon class="mr-2 scale-75 text-slate-500">{{
+                profile.icon
+              }}</mat-icon>
+              {{ profile.label }}
+            </ng-template>
+
+            <div class="p-6 bg-slate-50 flex flex-col gap-6">
+              <div>
+                <label
+                  class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 block"
+                  >Code Resolution Mode</label
+                >
+                <mat-radio-group
+                  class="flex flex-col gap-3"
+                  [value]="profile.codeResolution"
+                  (change)="
+                    updateProfileStrategy(
+                      profile.id,
+                      'codeResolution',
+                      $event.value
+                    )
+                  "
+                >
+                  <mat-radio-button value="snippets_only" color="primary">
+                    <span class="text-sm font-medium"
+                      >Snippets Only (Fastest)</span
+                    >
+                    <p class="text-xs text-slate-500 m-0 leading-tight mt-1">
+                      Chat history retains minimal pointers. Code state is not
+                      resolved.
+                    </p>
+                  </mat-radio-button>
+
+                  <mat-radio-button value="final_state" color="primary">
+                    <span class="text-sm font-medium"
+                      >Final State (Deep Thinking)</span
+                    >
+                    <p class="text-xs text-slate-500 m-0 leading-tight mt-1">
+                      Top-loads a &lt;system_state&gt; block with fully resolved
+                      code patches.
+                    </p>
+                  </mat-radio-button>
+
+                  <mat-radio-button value="history_patches" color="primary">
+                    <span class="text-sm font-medium"
+                      >History Patches (Audit)</span
+                    >
+                    <p class="text-xs text-slate-500 m-0 leading-tight mt-1">
+                      Injects raw, massive JSON patches chronologically into the
+                      chat flow.
+                    </p>
+                  </mat-radio-button>
+                </mat-radio-group>
+              </div>
+
+              <div class="pt-4 border-t border-slate-200">
+                <mat-checkbox
+                  [checked]="profile.includePendingProposals"
+                  (change)="
+                    updateProfileStrategy(
+                      profile.id,
+                      'includePendingProposals',
+                      $event.checked
+                    )
+                  "
+                  color="primary"
+                >
+                  <span class="text-sm font-medium text-slate-700"
+                    >Include Pending/Unaccepted Ideas in Context</span
+                  >
+                </mat-checkbox>
+              </div>
+            </div>
+          </mat-tab>
+        }
+      </mat-tab-group>
     </div>
   </div>
 

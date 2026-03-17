@@ -15,7 +15,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
-import { LlmDigestEngineService } from '@nx-platform-application/llm-domain-digest-engine';
+import { LlmDigestEngineService } from '@nx-platform-application/llm-domain-digest';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LlmDigestSource } from '@nx-platform-application/llm-features-memory';
@@ -33,7 +33,9 @@ import {
   ArchitecturalPrompt,
   DebugPrompt,
   MinimalPrompt,
-} from '@nx-platform-application/llm-domain-digest-engine';
+} from '@nx-platform-application/llm-domain-digest';
+
+import { LlmModelRegistryService } from '@nx-platform-application/llm-tools-model-registry';
 
 import { LlmDigestBuilderInfoComponent } from '../digest-builder-info/digest-builder-info.component';
 import { LlmDigestPreviewDialogComponent } from '../digest-preview-dialog/digest-preview.dialog';
@@ -58,6 +60,7 @@ export class LlmManualDigestBuilderComponent {
   private digestSource = inject(LlmDigestSource);
   private digestEngine = inject(LlmDigestEngineService);
   private proposalService = inject(LlmProposalService);
+  private modelRegistry = inject(LlmModelRegistryService);
   private dialog = inject(MatDialog);
   private decoder = new TextDecoder();
 
@@ -67,12 +70,15 @@ export class LlmManualDigestBuilderComponent {
   isProcessing = signal(false);
   isSidebarOpen = signal(true);
 
-  availableModels = [
-    { label: 'Gemini 3.1 Pro (Recommended)', value: 'gemini-3.1-pro-preview' },
-    { label: 'Gemini 3 Flash', value: 'gemini-3-flash-preview' },
-  ];
+  availableModels = computed(() => {
+    return this.modelRegistry.profiles().map((p) => ({
+      label: p.displayName,
+      value: p.id, // The stable internal ID
+    }));
+  });
 
-  selectedModel = signal('gemini-3.1-pro-preview');
+  selectedModel = signal('gemini-3-flash-preview');
+
   includeRawProposals = signal(false);
   selectedPromptText = signal(Prompts.Standard);
 

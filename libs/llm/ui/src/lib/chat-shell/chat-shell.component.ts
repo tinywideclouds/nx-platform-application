@@ -64,27 +64,38 @@ export class LlmChatShellComponent {
 
   isMobile = signal(window.innerWidth < 768);
 
+  protected hasInitialized = false;
+
   constructor() {
-    // 1. SHELL TAKES TOTAL OWNERSHIP OF SESSION RESOLUTION
     effect(() => {
       const currentIdStr = this.sessionIdUrlParam();
       if (currentIdStr) {
         untracked(() =>
           this.sessionSource.setActiveSession(URN.parse(currentIdStr)),
         );
+        this.hasInitialized = true; // Mark as initialized
       } else {
         untracked(() => {
           this.sessionSource.setActiveSession(null);
           const allSessions = this.sessionSource.sessions();
-          if (allSessions.length > 0 && !this.isMobile()) {
+
+          // --- CHANGED: Only auto-resume on the very first load! ---
+          if (
+            !this.hasInitialized &&
+            allSessions.length > 0 &&
+            !this.isMobile()
+          ) {
             this.resumeLastSession(allSessions);
           }
+
+          this.hasInitialized = true;
         });
       }
     });
   }
 
   resumeLastSession(sessions: LlmSession[]): void {
+    console.log('resuming session', this.hasInitialized);
     if (!sessions || sessions.length === 0) return;
     this.router.navigate(['/chat', sessions[0].id.toString()], {
       queryParamsHandling: 'preserve',

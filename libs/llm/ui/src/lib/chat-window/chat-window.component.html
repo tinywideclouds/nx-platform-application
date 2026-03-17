@@ -5,14 +5,17 @@
     [activeThought]="actions.activeThought()"
     [alertState]="chatAlertState()"
     [isGenerating]="source.isGenerating()"
-    [isSelectionMode]="presenter.isSelectionMode()"
-    [selectedCount]="presenter.selectedIds().size"
-    (toggleSelection)="presenter.toggleSelectionMode()"
-    (groupContext)="presenter.groupSelected()"
-    (excludeContext)="presenter.excludeSelected(true)"
-    (includeContext)="presenter.excludeSelected(false)"
-    (editContext)="presenter.onEditSelected()"
-    (deleteContext)="presenter.deleteSelected()"
+    [memoryProfiles]="presenter.memoryProfiles()"
+    [activeMemoryProfile]="presenter.activeMemoryProfile()"
+    (profileChange)="presenter.setActiveMemoryProfile($event)"
+    [isSelectionMode]="selection.isSelectionMode()"
+    [selectedCount]="selection.selectedIds().size"
+    (toggleSelection)="selection.toggleSelectionMode()"
+    (groupContext)="selection.groupSelected()"
+    (excludeContext)="selection.excludeSelected(true)"
+    (includeContext)="selection.excludeSelected(false)"
+    (editContext)="selection.onEditSelected()"
+    (deleteContext)="selection.deleteSelected()"
     (openDetails)="onOpenDetails()"
   />
 
@@ -34,8 +37,8 @@
       [items]="$any(displayItems())"
       [rowTemplate]="renderer"
       [gutterTemplate]="gutter"
-      [isSelectionMode]="presenter.isSelectionMode()"
-      [(selectedIds)]="presenter.selectedIds"
+      [isSelectionMode]="selection.isSelectionMode()"
+      [(selectedIds)]="selection.selectedIds"
       [autoScrollStrategy]="chatScrollStrategy"
     />
   </div>
@@ -74,7 +77,7 @@
     <scrollspace-input
       [disabled]="
         source.isGenerating() ||
-        presenter.isSelectionMode() ||
+        selection.isSelectionMode() ||
         chatLockState().locked
       "
       (send)="onSend($event)"

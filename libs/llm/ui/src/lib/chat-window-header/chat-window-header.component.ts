@@ -6,20 +6,30 @@ import {
   inject,
   computed,
   signal,
+  effect,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import {
   ConfirmationDialogComponent,
   ConfirmationData,
 } from '@nx-platform-application/platform-ui-toolkit';
+import { MemoryStrategyProfile } from '@nx-platform-application/llm-types';
 
 @Component({
   selector: 'llm-chat-window-header',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatDialogModule, MatTooltipModule],
+  imports: [
+    CommonModule,
+    MatIconModule,
+    MatDialogModule,
+    MatTooltipModule,
+    MatMenuModule,
+  ],
   templateUrl: './chat-window-header.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -30,13 +40,19 @@ export class LlmChatWindowHeaderComponent {
   isGenerating = input<boolean>(false);
   isSelectionMode = input<boolean>(false);
   selectedCount = input<number>(0);
+  sessionTitle = input<string | undefined>(undefined);
   activeModelId = input<string | undefined>(undefined);
+
   activeThought = input<string>('');
   alertState = input<{ alert: boolean; reason: string }>({
     alert: false,
     reason: '',
   });
   overrideRemaining = input<number | null>(null);
+
+  // Fast Switcher State
+  memoryProfiles = input<MemoryStrategyProfile[]>([]);
+  activeMemoryProfile = input<MemoryStrategyProfile | null>(null);
 
   // Action Outputs
   toggleSelection = output<void>();
@@ -45,10 +61,13 @@ export class LlmChatWindowHeaderComponent {
   includeContext = output<void>();
   deleteContext = output<void>();
   editContext = output<void>();
-  openDetails = output<void>(); // Kept so the alert icon can navigate to Settings
+  openDetails = output<void>();
+  profileChange = output<string>();
 
   // UI State
   showThoughts = signal(false);
+  isStrategyMode = signal(false); // NEW: Controls the Model rollout
+
   isThinking = computed(() => this.activeThought().length > 0);
 
   primaryModelLabel = computed(() => {
@@ -60,8 +79,25 @@ export class LlmChatWindowHeaderComponent {
     return id;
   });
 
+  constructor() {
+    // If external selection mode turns on, close the strategy rollout
+    effect(() => {
+      if (this.isSelectionMode()) {
+        untracked(() => this.isStrategyMode.set(false));
+      }
+    });
+  }
+
   toggleThoughts() {
     this.showThoughts.update((v) => !v);
+  }
+
+  toggleStrategyMode() {
+    // If opening strategy mode, tell parent to close selection mode
+    if (!this.isStrategyMode() && this.isSelectionMode()) {
+      this.toggleSelection.emit();
+    }
+    this.isStrategyMode.update((v) => !v);
   }
 
   confirmDelete(): void {

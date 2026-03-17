@@ -93,18 +93,15 @@ export class ContactGroupFormComponent {
 
   constructor() {
     // 1. Hydrate Form
-    effect(
-      () => {
-        const g = this.group();
-        if (g) {
-          this.name.set(g.name);
-          this.description.set(g.description || '');
-          // [UPDATED] Use memberUrns (V9)
-          this.contactIds.set(g.memberUrns.map((urn) => urn.toString()));
-        }
-      },
-      { allowSignalWrites: true },
-    );
+    effect(() => {
+      const g = this.group();
+      if (g) {
+        this.name.set(g.name);
+        this.description.set(g.description || '');
+        // [UPDATED] Use memberUrns (V9)
+        this.contactIds.set(g.memberUrns.map((urn) => urn.toString()));
+      }
+    });
 
     // 2. Report Errors
     effect(() => {

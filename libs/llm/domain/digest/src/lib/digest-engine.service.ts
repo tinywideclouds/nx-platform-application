@@ -13,10 +13,13 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
+import { LlmModelRegistryService } from '@nx-platform-application/llm-tools-model-registry';
+
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
-import { DigestStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmDigestSource } from '@nx-platform-application/llm-features-memory';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
+
+import { LlmDigestService } from './digest.service';
 import { Prompts, StandardPrompt } from './prompt';
 
 export interface DigestOptions {
@@ -28,15 +31,17 @@ export interface DigestOptions {
 @Injectable({ providedIn: 'root' })
 export class LlmDigestEngineService {
   private network = inject(LLM_NETWORK_CLIENT);
-  private digestStorage = inject(DigestStorageService);
+  private digestService = inject(LlmDigestService);
   private digestSource = inject(LlmDigestSource);
   private proposalService = inject(LlmProposalService);
+
+  private modelRegistry = inject(LlmModelRegistryService);
   private logger = inject(Logger);
   private decoder = new TextDecoder();
 
   async processChunk(
     sessionId: URN,
-    model: string,
+    modelId: string,
     messages: LlmMessage[],
     options: DigestOptions = {},
   ): Promise<URN | undefined> {
@@ -107,8 +112,13 @@ export class LlmDigestEngineService {
 
     transcript += `</conversation_log>`;
 
+    const profile = this.modelRegistry.getProfile(modelId);
+    const apiName =
+      profile?.version.apiName ||
+      this.modelRegistry.getEmergencyFallback().version.apiName;
+
     const request: GenerateRequest = {
-      model: model,
+      model: apiName,
       systemPrompt: options.customPrompt || Prompts.Standard,
       prompt: transcript,
     };
@@ -134,7 +144,7 @@ export class LlmDigestEngineService {
         endTime: messages[messages.length - 1].timestamp,
       };
 
-      await this.digestStorage.saveDigest(newDigest);
+      await this.digestService.saveDigest(newDigest);
       this.digestSource.refresh();
 
       return digestId;

@@ -1,14 +1,14 @@
 import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import { URN } from '@nx-platform-application/platform-types';
-import { DigestStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { LlmMemoryDigest } from '@nx-platform-application/llm-types';
 
-// INJECT THE GLOBAL SESSION STATE
+// INJECT THE NEW DOMAIN SERVICE INSTEAD OF STORAGE
+import { LlmDigestService } from '@nx-platform-application/llm-domain-digest';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 
 @Injectable({ providedIn: 'root' })
 export class LlmDigestSource {
-  private digestStorage = inject(DigestStorageService);
+  private digestService = inject(LlmDigestService); // <-- Updated
   private sessionSource = inject(LlmSessionSource);
 
   // 1. STATE
@@ -26,7 +26,6 @@ export class LlmDigestSource {
   });
 
   constructor() {
-    // Reactively load history whenever the global Session changes
     effect(() => {
       const session = this.sessionSource.activeSession();
       if (session) {
@@ -39,9 +38,10 @@ export class LlmDigestSource {
 
   // --- Actions ---
 
-  // A clean, dedicated method to fetch and sort the data
   private async loadDigests(sessionId: URN) {
-    const history = await this.digestStorage.getSessionDigests(sessionId);
+    // Call the Domain Service
+    const history = await this.digestService.getDigestsForSession(sessionId);
+
     // Sort chronologically (oldest digest first)
     const sorted = history.sort(
       (a, b) =>
@@ -50,7 +50,6 @@ export class LlmDigestSource {
     this._digests.set(sorted);
   }
 
-  // Safely triggers a re-fetch for the currently active session
   refresh() {
     const session = this.sessionSource.activeSession();
     if (session) {

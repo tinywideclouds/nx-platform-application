@@ -18,15 +18,24 @@ import {
   PointerPayload,
   SSEProposalEvent,
   TextType,
-  FileProposalType,
 } from '@nx-platform-application/llm-types';
 import { LlmScrollSource } from '@nx-platform-application/llm-features-chat';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LLM_NETWORK_CLIENT } from '@nx-platform-application/llm-infrastructure-client-access';
-import { LlmContextBuilderService } from './context-builder.service';
+import {
+  LlmContextBuilderService,
+  ContextAssembly,
+} from '@nx-platform-application/llm-domain-context';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
 
 const encoder = new TextEncoder();
+
+export interface SendMessageOptions {
+  modelToUse?: string;
+  onPreflight?: (
+    assembly: ContextAssembly,
+  ) => Promise<{ send: boolean; disableFuture: boolean }>;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LlmChatActions {
@@ -50,14 +59,11 @@ export class LlmChatActions {
   // State for the UI to bind the Diff Viewer to
   readonly activeProposal = signal<SSEProposalEvent | null>(null);
 
-  // --- NEW: Ephemeral Thought State ---
+  // Ephemeral Thought State
   readonly activeThought = signal<string>('');
 
-  //TODO this should eventually be configurable
   public defaultModel = 'gemini-2.5-pro';
-  /**
-   * Generates a lightweight preview snippet for the UI pointer
-   */
+
   private extractCleanSnippet(patch?: string, newContent?: string): string {
     if (patch) {
       const lines = patch
@@ -74,18 +80,10 @@ export class LlmChatActions {
     return 'No preview available';
   }
 
-  /**
-   * The Full "Chat Loop":
-   * 1. User Message (Sink + DB) -> AWAITED!
-   * 2. Bot Placeholder (Sink + DB) -> AWAITED!
-   * 3. Assemble Context (Reads synced DB)
-   * 4. Network Stream -> Updates Placeholder (Sink)
-   * 5. Stream Complete -> Save final payload (DB)
-   */
   async sendMessage(
     text: string,
     sessionId: URN,
-    modelToUse?: string,
+    options?: SendMessageOptions,
   ): Promise<void> {
     const idStr = sessionId.toString();
     const session = this.sessionSource
@@ -115,18 +113,36 @@ export class LlmChatActions {
     await this.messageStorage.saveMessage(userMsg);
     this.sink.addMessage(userMsg);
 
-    // --- STEP 2: ASSEMBLE CONTEXT (PRISTINE DB STATE) ---
-    // We build the network request NOW, before the bot placeholder exists in the DB!
+    // --- STEP 2: ASSEMBLE CONTEXT ---
     const assembly = await this.contextBuilder.buildStreamRequest(
       session,
-      modelToUse,
+      options?.modelToUse,
     );
-    console.log('assembled request', assembly);
-    const request = assembly.request;
 
-    // DO NOT REMOVE the bot message MUST be later than the user message
+    // --- STEP 3: DELEGATED PRE-FLIGHT CHECK ---
+    if (session.enablePreFlightPreview && options?.onPreflight) {
+      const result = await options.onPreflight(assembly);
+
+      if (!result.send) {
+        this.sink.setLoading(false);
+        return; // Halt generation. User message stays in history as an orphaned input.
+      }
+
+      if (result.disableFuture) {
+        const updatedSession: LlmSession = {
+          ...session,
+          strategy: {
+            ...session.strategy!,
+          },
+          enablePreFlightPreview: false,
+        };
+        await this.sessionStorage.saveSession(updatedSession);
+        this.sessionSource.refresh();
+      }
+    }
+
+    // --- STEP 4: BOT PLACEHOLDER ---
     const botTime = now.add({ milliseconds: 1 });
-    // --- STEP 3: BOT PLACEHOLDER (UI STATE) ---
     const botMsgId = URN.create('message', crypto.randomUUID(), 'llm');
     const botMsg: LlmMessage = {
       id: botMsgId,
@@ -144,114 +160,112 @@ export class LlmChatActions {
     await this.messageStorage.saveMessage(botMsg);
     this.sink.addMessage(botMsg);
 
-    // --- STEP 4: EXECUTE NETWORK STREAM ---
+    // --- STEP 5: EXECUTE NETWORK STREAM ---
     this.accumulatedText = '';
-    this.activeProposal.set(null); // Clear previous proposal
-    this.activeThought.set(''); // Clear previous thoughts
+    this.activeProposal.set(null);
+    this.activeThought.set('');
 
-    // Ephemeral Architecture: We only pass the serialized request body to the stream
-    this.activeSubscription = this.network.generateStream(request).subscribe({
-      next: (event) => {
-        if (event.type === 'thought') {
-          // --- NEW: Accumulate ephemeral thoughts ---
-          this.activeThought.update((prev) => prev + event.content);
-        } else if (event.type === 'text') {
-          if (!this.activeBotId) {
-            this.activeBotId = URN.create(
+    this.activeSubscription = this.network
+      .generateStream(assembly.request)
+      .subscribe({
+        next: (event) => {
+          if (event.type === 'thought') {
+            this.activeThought.update((prev) => prev + event.content);
+          } else if (event.type === 'text') {
+            if (!this.activeBotId) {
+              this.activeBotId = URN.create(
+                'message',
+                crypto.randomUUID(),
+                'llm',
+              );
+              this.accumulatedText = '';
+
+              const newTextMsg: LlmMessage = {
+                id: this.activeBotId,
+                typeId: TextType,
+                sessionId: sessionId,
+                role: 'model',
+                timestamp:
+                  Temporal.Now.instant().toString() as ISODateTimeString,
+                payloadBytes: new Uint8Array(),
+                isExcluded: false,
+              };
+
+              this.activeBotMsg = newTextMsg;
+              this.messageStorage.saveMessage(newTextMsg);
+              this.sink.addMessage(newTextMsg);
+            }
+
+            this.accumulatedText += event.content;
+            this.sink.updateMessagePayload(
+              this.activeBotId,
+              encoder.encode(this.accumulatedText),
+            );
+          } else if (event.type === 'proposal') {
+            this.logger.debug(
+              'Received Tool Interception Proposal',
+              event.event,
+            );
+            this.activeProposal.set(event.event);
+
+            if (this.activeBotId && this.activeBotMsg) {
+              const finalMsg: LlmMessage = {
+                ...this.activeBotMsg,
+                payloadBytes: encoder.encode(this.accumulatedText),
+              };
+              this.messageStorage.saveMessage(finalMsg);
+            }
+
+            const sseEvent = event.event as SSEProposalEvent;
+            const p = sseEvent.proposal;
+
+            const proposalUrn = p.id.startsWith('urn:')
+              ? URN.parse(p.id)
+              : URN.create('proposal', p.id, 'llm');
+
+            this.proposalService.saveChangeProposal(session.id, proposalUrn, p);
+
+            const pointer: PointerPayload = {
+              proposalId: proposalUrn,
+              filePath: p.filePath,
+              snippet: p.newContent
+                ? p.newContent.split('\n').slice(0, 12).join('\n')
+                : this.extractCleanSnippet(p.patch),
+              reasoning: p.reasoning,
+            };
+
+            const pointerMsgId = URN.create(
               'message',
               crypto.randomUUID(),
               'llm',
             );
-            this.accumulatedText = '';
 
-            const newTextMsg: LlmMessage = {
-              id: this.activeBotId,
-              typeId: TextType,
+            const pointerMsg: LlmMessage = {
+              id: pointerMsgId,
+              typeId: FileLinkType,
               sessionId: sessionId,
               role: 'model',
               timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
-              payloadBytes: new Uint8Array(),
+              payloadBytes: encoder.encode(JSON.stringify(pointer)),
               isExcluded: false,
             };
 
-            this.activeBotMsg = newTextMsg;
+            this.messageStorage.saveMessage(pointerMsg);
+            this.sink.addMessage(pointerMsg);
 
-            this.messageStorage.saveMessage(newTextMsg);
-            this.sink.addMessage(newTextMsg);
+            this.activeBotId = null;
+            this.activeBotMsg = null;
+            this.accumulatedText = '';
           }
-
-          this.accumulatedText += event.content;
-          this.sink.updateMessagePayload(
-            this.activeBotId,
-            encoder.encode(this.accumulatedText),
-          );
-        } else if (event.type === 'proposal') {
-          this.logger.debug('Received Tool Interception Proposal', event.event);
-          this.activeProposal.set(event.event);
-
-          if (this.activeBotId && this.activeBotMsg) {
-            const finalMsg: LlmMessage = {
-              ...this.activeBotMsg,
-              payloadBytes: encoder.encode(this.accumulatedText),
-            };
-            this.messageStorage.saveMessage(finalMsg);
-          }
-
-          // --- SPLIT WRITE ARCHITECTURE ---
-          const sseEvent = event.event as SSEProposalEvent;
-          const p = sseEvent.proposal;
-
-          // Safely convert raw string IDs from the backend to URNs
-          const proposalUrn = p.id.startsWith('urn:')
-            ? URN.parse(p.id)
-            : URN.create('proposal', p.id, 'llm');
-
-          // Write heavy proposal to Registry DB
-          this.proposalService.saveChangeProposal(session.id, proposalUrn, p);
-
-          // Write lightweight pointer to Chat DB
-          const pointer: PointerPayload = {
-            proposalId: proposalUrn,
-            filePath: p.filePath,
-            snippet: p.newContent
-              ? p.newContent.split('\n').slice(0, 12).join('\n')
-              : this.extractCleanSnippet(p.patch),
-            reasoning: p.reasoning,
-          };
-
-          const pointerMsgId = URN.create(
-            'message',
-            crypto.randomUUID(),
-            'llm',
-          );
-
-          const pointerMsg: LlmMessage = {
-            id: pointerMsgId,
-            typeId: FileLinkType,
-            sessionId: sessionId,
-            role: 'model',
-            timestamp: Temporal.Now.instant().toString() as ISODateTimeString,
-            payloadBytes: encoder.encode(JSON.stringify(pointer)),
-            isExcluded: false,
-          };
-
-          this.messageStorage.saveMessage(pointerMsg);
-          this.sink.addMessage(pointerMsg);
-
-          // Close the text bubble so the next text chunk starts fresh
-          this.activeBotId = null;
-          this.activeBotMsg = null;
-          this.accumulatedText = '';
-        }
-      },
-      error: (err) => {
-        this.logger.error('LLM Generation Failed', err);
-        this.finalizeGeneration();
-      },
-      complete: () => {
-        this.finalizeGeneration();
-      },
-    });
+        },
+        error: (err) => {
+          this.logger.error('LLM Generation Failed', err);
+          this.finalizeGeneration();
+        },
+        complete: () => {
+          this.finalizeGeneration();
+        },
+      });
   }
 
   cancelGeneration(): void {
@@ -282,7 +296,7 @@ export class LlmChatActions {
     this.activeBotMsg = null;
     this.accumulatedText = '';
     this.activeProposal.set(null);
-    this.activeThought.set(''); // Clear thoughts on cancel
+    this.activeThought.set('');
   }
 
   private finalizeGeneration(): void {
@@ -304,7 +318,7 @@ export class LlmChatActions {
     this.activeBotId = null;
     this.activeBotMsg = null;
     this.accumulatedText = '';
-    this.activeThought.set(''); // Clear thoughts on complete
+    this.activeThought.set('');
   }
 
   async groupMessages(
@@ -319,9 +333,6 @@ export class LlmChatActions {
     if (payload.newName) {
       const newUrn = URN.create('tag', crypto.randomUUID(), 'llm');
       targetUrnStr = newUrn.toString();
-
-      // NOTE: session.contextGroups was removed in the schema update.
-      // Message tagging metadata now requires a dedicated entity or storage if names are needed.
       this.logger.warn(
         'Tag name saving is temporarily bypassed due to session schema update.',
       );

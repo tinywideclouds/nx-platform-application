@@ -42,6 +42,7 @@ export class LlmSessionMapper {
       lastModified: record.lastModified,
       llmModel: record.llmModel, // Forced requirement
       contextGroups: record.contextGroups ? { ...record.contextGroups } : {},
+      enablePreFlightPreview: record.enablePreFlightPreview,
 
       // Reconstruct the Strategy object from flattened record fields
       strategy: {
@@ -117,6 +118,7 @@ export class LlmSessionMapper {
       })),
 
       workspaceTarget: domain.workspaceTarget?.toString(),
+      enablePreFlightPreview: domain.enablePreFlightPreview,
     };
   }
 }

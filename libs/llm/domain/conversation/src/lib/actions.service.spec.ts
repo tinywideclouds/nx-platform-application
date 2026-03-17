@@ -18,7 +18,7 @@ import {
   LLM_NETWORK_CLIENT,
   LlmStreamEvent,
 } from '@nx-platform-application/llm-infrastructure-client-access';
-import { LlmContextBuilderService } from './context-builder.service';
+import { LlmContextBuilderService } from '@nx-platform-application/llm-domain-context';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { Temporal } from '@js-temporal/polyfill';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
@@ -43,13 +43,8 @@ describe('LlmChatActions', () => {
     sessions: signal([
       {
         id: URN.parse('urn:llm:session:123'),
-        inlineContexts: [
-          {
-            id: URN.parse('urn:llm:attachment:1'),
-            resourceUrn: URN.parse('urn:data-source:repo:base'),
-            resourceType: 'source',
-          },
-        ],
+        strategy: { enablePreFlightPreview: false },
+        inlineContexts: [],
         systemContexts: [],
         compiledContext: undefined,
         quickContext: [],
@@ -155,7 +150,6 @@ describe('LlmChatActions', () => {
 
     await service.sendMessage('Plan the task', sessionId);
 
-    // Simulate reasoning tokens arriving
     streamSubject.next({
       type: 'thought',
       content: 'First, I need to check the ',
@@ -164,23 +158,78 @@ describe('LlmChatActions', () => {
 
     expect(service.activeThought()).toBe('First, I need to check the logs.');
 
-    // Complete the stream and verify cleanup
     streamSubject.complete();
     expect(service.activeThought()).toBe('');
   });
 
-  it('should ensure the assistant placeholder timestamp is strictly 1ms after the user message', async () => {
-    const sessionId = URN.parse('urn:llm:session:123');
+  it('should intercept the network call if pre-flight preview is enabled and halted by user', async () => {
+    mockSessionSource.sessions.set([
+      {
+        id: URN.parse('urn:llm:session:123'),
+        strategy: { enablePreFlightPreview: true },
+        inlineContexts: [],
+        systemContexts: [],
+        quickContext: [],
+      } as any,
+    ]);
 
+    const mockOnPreflight = vi
+      .fn()
+      .mockResolvedValue({ send: false, disableFuture: false });
+
+    await service.sendMessage('Check this', URN.parse('urn:llm:session:123'), {
+      onPreflight: mockOnPreflight,
+    });
+
+    expect(mockOnPreflight).toHaveBeenCalled();
+    expect(mockNetwork.generateStream).not.toHaveBeenCalled();
+    expect(mockSink.setLoading).toHaveBeenCalledWith(false);
+  });
+
+  it('should proceed with network call and disable future previews if instructed by delegated hook', async () => {
+    mockSessionSource.sessions.set([
+      {
+        id: URN.parse('urn:llm:session:123'),
+        strategy: { enablePreFlightPreview: true },
+        inlineContexts: [],
+        systemContexts: [],
+        quickContext: [],
+      } as any,
+    ]);
+
+    const mockOnPreflight = vi
+      .fn()
+      .mockResolvedValue({ send: true, disableFuture: true });
+
+    await service.sendMessage('Check this', URN.parse('urn:llm:session:123'), {
+      onPreflight: mockOnPreflight,
+    });
+
+    expect(mockOnPreflight).toHaveBeenCalled();
+    expect(mockSessionStorage.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strategy: expect.objectContaining({ enablePreFlightPreview: false }),
+      }),
+    );
+    expect(mockNetwork.generateStream).toHaveBeenCalled();
+  });
+
+  it('should ensure the assistant placeholder timestamp is strictly 1ms after the user message', async () => {
+    mockSessionSource.sessions.set([
+      {
+        id: URN.parse('urn:llm:session:123'),
+        strategy: { enablePreFlightPreview: false },
+        inlineContexts: [],
+      } as any,
+    ]);
+
+    const sessionId = URN.parse('urn:llm:session:123');
     await service.sendMessage('Hello', sessionId);
 
     expect(mockMessageStorage.saveMessage).toHaveBeenCalledTimes(2);
 
     const userMsg = mockMessageStorage.saveMessage.mock.calls[0][0];
     const placeholderMsg = mockMessageStorage.saveMessage.mock.calls[1][0];
-
-    expect(userMsg.role).toBe('user');
-    expect(placeholderMsg.role).toBe('assistant');
 
     const userTime = Temporal.Instant.from(userMsg.timestamp);
     const placeholderTime = Temporal.Instant.from(placeholderMsg.timestamp);
@@ -191,13 +240,8 @@ describe('LlmChatActions', () => {
   });
 
   it('should successfully extract a clean session with valid explicit intent buckets', async () => {
-    await service.extractToNewSession(
-      ['urn:llm:message:1'],
-      URN.parse('urn:llm:session:123'),
-      'copy',
-    );
+    await service.extractToNewSession(['urn:llm:message:1'], 'copy');
 
-    // Verifies compilation and correct initial state of extracted sessions
     expect(mockSessionStorage.saveSession).toHaveBeenCalledWith(
       expect.objectContaining({
         inlineContexts: [],

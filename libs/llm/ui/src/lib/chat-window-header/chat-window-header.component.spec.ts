@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LlmChatWindowHeaderComponent } from './chat-window-header.component';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { describe, it, expect, beforeEach } from 'vitest';
 
 describe('LlmChatWindowHeaderComponent', () => {
@@ -14,6 +15,7 @@ describe('LlmChatWindowHeaderComponent', () => {
         LlmChatWindowHeaderComponent,
         MatDialogModule,
         MatTooltipModule,
+        MatMenuModule,
       ],
     }).compileComponents();
 

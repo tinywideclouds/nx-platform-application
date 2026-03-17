@@ -74,18 +74,15 @@ export class LlmContextHierarchyComponent {
   selectedTtl = signal<number | undefined>(undefined);
 
   constructor() {
-    effect(
-      async () => {
-        const intent = this.compiledContext();
-        if (intent) {
-          const resolved = await this.resolver.resolve(intent);
-          this.currentIntentSources.set(resolved);
-        } else {
-          this.currentIntentSources.set([]);
-        }
-      },
-      { allowSignalWrites: true },
-    );
+    effect(async () => {
+      const intent = this.compiledContext();
+      if (intent) {
+        const resolved = await this.resolver.resolve(intent);
+        this.currentIntentSources.set(resolved);
+      } else {
+        this.currentIntentSources.set([]);
+      }
+    });
   }
 
   getDataSourceBundleDetails(urn: URN): DataSourceBundle | undefined {
