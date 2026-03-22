@@ -5,8 +5,6 @@ import { Temporal } from '@js-temporal/polyfill';
 import { MessageStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { ProposalRegistryStorageService } from '@nx-platform-application/llm-infrastructure-storage';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-
-// INJECT THE NEW DOMAIN SERVICE
 import { LlmDigestService } from '@nx-platform-application/llm-domain-digest';
 
 import {
@@ -64,7 +62,7 @@ export interface ContextAssembly {
 export class LlmContextBuilderService {
   private storage = inject(MessageStorageService);
   private registry = inject(ProposalRegistryStorageService);
-  private digestService = inject(LlmDigestService); // <-- Updated
+  private digestService = inject(LlmDigestService);
   private cacheService = inject(CompiledCacheService);
   private resolver = inject(DataSourceResolver);
 
@@ -83,10 +81,9 @@ export class LlmContextBuilderService {
     const activeProfile =
       profiles.find((p) => p.id === activeProfileId) || profiles[0];
 
-    // --- USE DOMAIN SERVICE HERE ---
     const [fullHistory, allDigests, allProposals] = await Promise.all([
       this.storage.getSessionMessages(session.id),
-      this.digestService.getDigestsForSession(session.id), // <-- Updated
+      this.digestService.getDigestsForSession(session.id),
       this.registry.getProposalsForSession(session.id),
     ]);
 
@@ -240,8 +237,8 @@ export class LlmContextBuilderService {
       for (const intent of session.systemContexts) {
         const physicals = await this.resolver.resolve(intent);
         physicals.forEach(
-          (p) =>
-            (metaContextBlock += `- Reference: ${p.dataSourceId.toString()}\n`),
+          // FIXED: physicals is now a flat array of URNs
+          (p) => (metaContextBlock += `- Reference: ${p.toString()}\n`),
         );
       }
       metaContextBlock += `[/SYSTEM_INSTRUCTIONS]\n\n`;
@@ -285,8 +282,8 @@ export class LlmContextBuilderService {
         physicals.forEach((p) =>
           inlineAttachments.push({
             id: URN.create('attachment', crypto.randomUUID(), 'llm'),
-            dataSourceId: p.dataSourceId,
-            profileId: p.profileId,
+            // FIXED: We pass the URN directly to dataSourceId and omit profileId
+            dataSourceId: p,
           }),
         );
       }

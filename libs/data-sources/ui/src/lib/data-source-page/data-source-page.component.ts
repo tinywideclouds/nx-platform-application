@@ -1,196 +1,151 @@
 import {
   Component,
-  inject,
-  computed,
-  signal,
-  ViewChild,
   ChangeDetectionStrategy,
+  input,
+  output,
+  signal,
+  computed,
+  inject,
+  effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { FormsModule } from '@angular/forms';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
-import { firstValueFrom } from 'rxjs';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 
-import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
-import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
+import {
+  DataSource,
+  DataSourceRequest,
+} from '@nx-platform-application/data-sources-types';
 import { URN } from '@nx-platform-application/platform-types';
-import {
-  DataSourceFormComponent,
-  DataSourceFormPayload,
-} from '../data-source-form/data-source-form.component';
-import {
-  FilterProfilesComponent,
-  ProfileSaveEvent,
-} from '../filter-profiles/filter-profiles.component';
-import { DataSourceAnalysisComponent } from '../data-source-analysis/data-source-analysis.component';
-import { DataSourceHeaderComponent } from '../data-source-header/data-source-header.component';
+import { DataSourceFormComponent } from '../data-source-form/data-source-form.component';
+
+export interface DataSourceSaveEvent {
+  payload: DataSourceRequest;
+  dataSourceId?: URN;
+}
 
 @Component({
-  selector: 'data-sources-page',
+  selector: 'data-sources-list', // Matched to github-ingestion-page selector
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
-    RouterModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule,
-    MatProgressBarModule,
     MatSelectModule,
-    MatDividerModule,
     MatFormFieldModule,
-    MatInputModule,
     DataSourceFormComponent,
-    FilterProfilesComponent,
-    DataSourceAnalysisComponent,
-    DataSourceHeaderComponent,
   ],
   templateUrl: './data-source-page.component.html',
   styleUrl: './data-source-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DataSourcePageComponent {
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
-  private dialog = inject(MatDialog);
+export class DataSourcesComponent {
+  private breakpointObserver = inject(BreakpointObserver);
 
-  state = inject(DataSourcesService);
+  // --- INPUTS & OUTPUTS ---
+  sources = input<DataSource[]>([]);
+  save = output<DataSourceSaveEvent>();
+  delete = output<URN>();
 
-  @ViewChild(DataSourceFormComponent)
-  formComponent!: DataSourceFormComponent;
+  // --- LOCAL SOT ---
+  selectedSourceId = signal<URN | null>(null);
+  isEditing = signal<boolean>(false);
+  isSaving = signal<boolean>(false);
+  saveError = signal<string | null>(null);
 
-  @ViewChild(FilterProfilesComponent)
-  profileManager!: FilterProfilesComponent;
+  // --- RESPONSIVE SOT ---
+  isMobile = toSignal(
+    this.breakpointObserver
+      .observe('(max-width: 767px)')
+      .pipe(map((result) => result.matches)),
+    { initialValue: false },
+  );
 
-  id = toSignal(this.route.paramMap.pipe(map((params) => params.get('id'))));
-  isNew = computed(() => !this.id() || this.id() === 'new');
-
-  formErrorCount = signal<number>(0);
-  ingestionIncludes = signal<string>('**/*');
-  ingestionExcludes = signal<string>('node_modules/**, vendor/**, .git/**');
-
-  availableBranches = computed(() => {
-    const activeRepo = this.state.activeDataSource()?.repo;
-    if (!activeRepo) return [];
-    return this.state.groupedDataSources()[activeRepo] || [];
+  // --- COMPUTED STATE ---
+  activeSource = computed(() => {
+    const id = this.selectedSourceId();
+    if (!id) return null;
+    return this.sources().find((s) => s.id.equals(id)) || null;
   });
 
   constructor() {
-    this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      const routeId = params.get('id');
-      if (!routeId || routeId === 'new') {
-        this.state.clearSelection();
-      } else {
-        try {
-          this.state.selectDataSource(URN.parse(routeId));
-        } catch (e) {
-          this.router.navigate(['/data-sources']);
-        }
+    effect(() => {
+      const id = this.selectedSourceId();
+      const currentSources = this.sources();
+      if (id && !currentSources.some((s) => s.id.equals(id))) {
+        this.selectedSourceId.set(null);
+        this.isEditing.set(false);
       }
     });
   }
 
-  triggerFormSave() {
-    if (this.formComponent) this.formComponent.triggerSave();
+  // --- ACTIONS ---
+
+  selectSource(id: URN) {
+    this.selectedSourceId.set(id);
+    this.isEditing.set(false);
   }
 
-  async onSaveRepo(payload: DataSourceFormPayload) {
-    if (!payload.repo || !payload.branch) return;
-    const newDataSourceId = await this.state.createDataSource({
-      repo: payload.repo,
-      branch: payload.branch,
-    });
-    if (newDataSourceId)
-      this.router.navigate(['/data-sources', newDataSourceId.toString()]);
-  }
-
-  async onBranchChange(value: string) {
+  onMobileSelect(value: URN | 'NEW') {
     if (value === 'NEW') {
-      const repo = this.state.activeDataSource()?.repo;
-      if (!repo) return;
-      const newBranch = prompt(
-        `Enter new branch name to track for ${repo}:`,
-        'main',
-      );
-      if (newBranch) {
-        const newDataSourceId = await this.state.createDataSource({
-          repo,
-          branch: newBranch,
-        });
-        if (newDataSourceId)
-          this.router.navigate(['/data-sources', newDataSourceId.toString()]);
-      }
+      this.createNew();
     } else if (value) {
-      this.router.navigate(['/data-sources', value]);
+      this.selectSource(value);
+    } else {
+      this.selectedSourceId.set(null);
+      this.isEditing.set(false);
     }
   }
 
-  onCancel() {
-    this.router.navigate(['/data-sources']);
+  compareSources(a: URN | 'NEW' | null, b: URN | 'NEW' | null): boolean {
+    if (!a || !b) return a === b;
+    if (a === 'NEW' || b === 'NEW') return a === b;
+    return (a as URN).equals(b as URN);
   }
 
-  async onExecuteSync() {
-    const dataSourceId = this.state.activeDataSourceId();
-    if (!dataSourceId) return;
+  createNew() {
+    this.selectedSourceId.set(null);
+    this.isEditing.set(true);
+  }
 
-    const parse = (str: string) =>
-      str
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-    const rules = {
-      include: parse(this.ingestionIncludes()),
-      exclude: parse(this.ingestionExcludes()),
-    };
+  editSelected(id: URN) {
+    this.selectedSourceId.set(id);
+    this.isEditing.set(true);
+  }
 
-    try {
-      await this.state.executeSync(dataSourceId, rules);
-    } catch (e) {
-      // Errors handled by state service snackbars
+  cancelEdit() {
+    this.isEditing.set(false);
+    if (!this.selectedSourceId()) {
+      const all = this.sources();
+      if (all.length > 0) this.selectedSourceId.set(all[0].id);
     }
   }
 
-  async onSaveProfile(event: ProfileSaveEvent) {
-    this.profileManager.isSaving.set(true);
-    try {
-      // UPDATED TO CALL STATE INSTEAD OF ACTIONS
-      await this.state.saveProfile(event.payload, event.profileId);
-      this.profileManager.saveSuccess();
-    } catch (error) {
-      this.profileManager.isSaving.set(false);
-      const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
-        data: {
-          title: 'Save Failed',
-          message:
-            'Could not connect to the syncing microservice. Would you like to try saving again?',
-          confirmText: 'Retry',
-          confirmColor: 'primary',
-          icon: 'cloud_off',
-        },
-      });
-      const retry = await firstValueFrom(dialogRef.afterClosed());
-      if (retry) {
-        await this.onSaveProfile(event);
-      } else {
-        this.profileManager.cancelEdit();
-      }
-    }
+  onSave(payload: DataSourceRequest) {
+    this.save.emit({
+      payload,
+      dataSourceId: this.selectedSourceId() || undefined,
+    });
+    this.isEditing.set(false);
   }
 
-  async onDeleteProfile(profileId: URN) {
-    // UPDATED TO CALL STATE INSTEAD OF ACTIONS
-    await this.state.deleteProfile(profileId);
+  saveSuccess() {
+    this.isSaving.set(false);
+    this.isEditing.set(false);
+  }
+
+  saveFailed(errorMessage: string) {
+    this.isSaving.set(false);
+    this.saveError.set(errorMessage);
+  }
+
+  onDelete(id: URN) {
+    this.delete.emit(id);
   }
 }

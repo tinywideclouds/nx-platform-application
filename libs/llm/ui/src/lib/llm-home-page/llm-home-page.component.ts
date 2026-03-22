@@ -18,6 +18,8 @@ import {
 } from '../llm-toolbar/llm-toolbar.component';
 import { MatDialog } from '@angular/material/dialog';
 
+import { AppStateService } from '@nx-platform-application/llm-state-app';
+
 @Component({
   selector: 'llm-home-page',
   standalone: true,
@@ -29,6 +31,8 @@ import { MatDialog } from '@angular/material/dialog';
 export class LlmHomePageComponent {
   private router = inject(Router);
   private dialog = inject(MatDialog);
+
+  private appState = inject(AppStateService);
 
   migrationService = inject(LegacyMigrationService);
 
@@ -44,8 +48,8 @@ export class LlmHomePageComponent {
   );
 
   constructor() {
-    // Replaces ngOnInit entirely.
-    // This runs once immediately after the browser paints the initial UI.
+    this.appState.executeBootSequence();
+
     afterNextRender(async () => {
       const count = await this.migrationService.scanForLegacyProposals();
       if (count > 0) {

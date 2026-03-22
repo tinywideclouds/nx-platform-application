@@ -19,9 +19,6 @@ import {
 } from '@nx-platform-application/platform-types';
 import { ContextAttachment } from '../../lib/types';
 
-/**
- * Domain-to-Network message interface for history segments.
- */
 export interface NetworkMessage {
   id: string;
   role: string;
@@ -29,27 +26,17 @@ export interface NetworkMessage {
   timestamp: string;
 }
 
-/**
- * Request payload for the CompiledCache compilation action.
- * Uses ContextAttachment (the flattened physical sources).
- */
 export interface BuildCacheRequest {
   model: string;
   attachments: ContextAttachment[];
   expiresAtHint?: ISODateTimeString;
 }
 
-/**
- * Response payload from the Go backend after successful compilation.
- */
 export interface BuildCacheResponse {
   compiledCacheId: URN;
   expiresAt: ISODateTimeString;
 }
 
-/**
- * The unified request for initiating an LLM stream.
- */
 export interface GenerateStreamRequest {
   sessionId: URN;
   model: string;
@@ -57,6 +44,21 @@ export interface GenerateStreamRequest {
   compiledCacheId?: URN;
   inlineAttachments?: ContextAttachment[];
 }
+
+export interface GenerateResponse {
+  content: string;
+  finishReason: string;
+  promptTokenCount: number;
+  candidateTokenCount: number;
+}
+
+export interface GenerateRequest {
+  model: string;
+  systemPrompt?: string;
+  prompt: string;
+}
+
+// --- FACADE MAPPERS ---
 
 function generateRequestToProto(k: GenerateRequest): GenerateRequestPb {
   return create(GenerateRequestPbSchema, {
@@ -83,38 +85,18 @@ export function deserializeGenerateResponse(
   };
 }
 
-// --- FACADE MAPPERS ---
-
-export interface GenerateResponse {
-  content: string;
-  finishReason: string;
-  promptTokenCount: number;
-  candidateTokenCount: number;
-}
-
-export interface GenerateRequest {
-  model: string;
-  systemPrompt?: string;
-  prompt: string;
-}
-
-/**
- * Maps a single flattened ContextAttachment to its Protobuf wire representation.
- */
 export function contextAttachmentToProto(
   k: ContextAttachment,
 ): NetworkAttachmentPb {
   return create(NetworkAttachmentPbSchema, {
     id: k.id.toString(),
     dataSourceId: k.dataSourceId.toString(),
-    profileId: k.profileId?.toString(),
   });
 }
 
 function buildCacheRequestToProto(k: BuildCacheRequest): BuildCacheRequestPb {
   return create(BuildCacheRequestPbSchema, {
     model: k.model,
-    // Backend expects 'sources' as the field name for BuildCache
     sources: k.attachments.map(contextAttachmentToProto),
     expiresAtHint: k.expiresAtHint,
   });

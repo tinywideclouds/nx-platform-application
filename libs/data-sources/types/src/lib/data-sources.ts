@@ -9,7 +9,35 @@ export interface FileMetadata {
   extension: string;
 }
 
-export interface FilterProfile {
+export interface FilterRules {
+  include: string[];
+  exclude: string[];
+}
+
+export interface DataSourceAnalysis {
+  totalFiles: number;
+  totalSizeBytes: number;
+  extensions: Record<string, number>;
+}
+
+// --- THE LAKE ---
+
+export interface GithubIngestionTarget {
+  id: URN;
+  repo: string;
+  branch: string;
+  commitSha?: string;
+  syncedCommitSha?: string;
+  lastSyncedAt: number;
+  fileCount: number;
+  status: 'unsynced' | 'syncing' | 'ready' | 'failed';
+  analysis?: DataSourceAnalysis;
+  ingestionRules?: FilterRules;
+}
+
+// --- THE STREAM ---
+
+export interface DataSource {
   id: URN;
   name: string;
   rulesYaml: string;
@@ -17,10 +45,19 @@ export interface FilterProfile {
   updatedAt: string;
 }
 
-export interface FilteredDataSource {
-  dataSourceId: URN;
-  profileId?: URN;
+// --- THE BLUEPRINT ---
+
+export interface DataGroup {
+  id: URN;
+  name: string;
+  description?: string;
+  dataSourceIds: URN[]; // Simplified! No more tuples.
+  metadata?: Record<string, string>;
+  createdAt?: ISODateTimeString;
+  updatedAt?: ISODateTimeString;
 }
+
+// --- API Requests & Responses ---
 
 export interface SyncRequest {
   repo: string;
@@ -39,55 +76,14 @@ export interface SyncStreamEvent {
   details: Record<string, any>;
 }
 
-export interface ProfileRequest {
+export interface DataSourceRequest {
   name: string;
   rulesYaml: string;
-}
-
-export interface FilterRules {
-  include: string[];
-  exclude: string[];
-}
-
-export interface DataSourceAnalysis {
-  totalFiles: number;
-  totalSizeBytes: number;
-  extensions: Record<string, number>;
-}
-
-export interface DataSourceBundle {
-  id: URN;
-  repo: string;
-  branch: string;
-  commitSha?: string;
-  syncedCommitSha?: string;
-  lastSyncedAt: number;
-  fileCount: number;
-  status: 'unsynced' | 'syncing' | 'ready' | 'failed';
-  analysis?: DataSourceAnalysis;
-  ingestionRules?: FilterRules;
-}
-
-// --- (Data Groups) ---
-
-export interface DataGroupSource {
-  dataSourceId: URN;
-  profileId?: URN;
-}
-
-export interface DataGroup {
-  id: URN;
-  name: string;
-  description?: string;
-  sources: DataGroupSource[];
-  metadata?: Record<string, string>; // Intentionally generic for mixed domain usage
-  createdAt?: ISODateTimeString;
-  updatedAt?: ISODateTimeString;
 }
 
 export interface DataGroupRequest {
   name: string;
   description?: string;
-  sources: DataGroupSource[];
+  dataSourceIds: URN[];
   metadata?: Record<string, string>;
 }

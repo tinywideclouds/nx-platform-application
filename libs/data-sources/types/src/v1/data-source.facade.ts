@@ -9,26 +9,26 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 import {
-  CreateDataSourceRequestPbSchema,
-  DataSourceMetadataPbSchema,
-  DataSourceMetadataPb,
+  CreateIngestionTargetRequestPbSchema,
+  IngestionTargetPbSchema,
+  IngestionTargetPb,
   SyncRequestPbSchema,
-  ProfileRequestPbSchema,
+  DataSourceRequestPbSchema,
   SyncResponsePbSchema,
   FileMetadataPbSchema,
   FileMetadataPb,
-  ProfilePbSchema,
-  ProfilePb,
+  DataSourcePbSchema,
+  DataSourcePb,
   DataGroupPb,
   DataGroupPbSchema,
   DataGroupRequestPbSchema,
 } from '@nx-platform-application/data-sources-protos/types/v1/data-source_pb';
 import {
-  DataSourceBundle,
+  GithubIngestionTarget,
   SyncResponse,
   FileMetadata,
-  FilterProfile,
-  ProfileRequest,
+  DataSource,
+  DataSourceRequest,
   FilterRules,
   DataGroup,
   DataGroupRequest,
@@ -36,12 +36,12 @@ import {
 
 // --- SERIALIZERS ---
 
-export function serializeCreateDataSourceRequest(
+export function serializeCreateIngestionTargetRequest(
   repo: string,
   branch: string,
 ): string {
-  const proto = create(CreateDataSourceRequestPbSchema, { repo, branch });
-  return toJsonString(CreateDataSourceRequestPbSchema, proto);
+  const proto = create(CreateIngestionTargetRequestPbSchema, { repo, branch });
+  return toJsonString(CreateIngestionTargetRequestPbSchema, proto);
 }
 
 export function serializeSyncRequest(rules: FilterRules): string {
@@ -51,22 +51,19 @@ export function serializeSyncRequest(rules: FilterRules): string {
   return toJsonString(SyncRequestPbSchema, proto);
 }
 
-export function serializeProfileRequest(req: ProfileRequest): string {
-  const proto = create(ProfileRequestPbSchema, {
+export function serializeDataSourceRequest(req: DataSourceRequest): string {
+  const proto = create(DataSourceRequestPbSchema, {
     name: req.name,
     rulesYaml: req.rulesYaml,
   });
-  return toJsonString(ProfileRequestPbSchema, proto);
+  return toJsonString(DataSourceRequestPbSchema, proto);
 }
 
 export function serializeDataGroupRequest(req: DataGroupRequest): string {
   const proto = create(DataGroupRequestPbSchema, {
     name: req.name,
     description: req.description,
-    sources: req.sources.map((s) => ({
-      dataSourceId: s.dataSourceId.toString(),
-      profileId: s.profileId?.toString(),
-    })),
+    dataSourceIds: req.dataSourceIds.map((id) => id.toString()), // Direct array mapping
     metadata: req.metadata || {},
   });
   return toJsonString(DataGroupRequestPbSchema, proto);
@@ -74,13 +71,13 @@ export function serializeDataGroupRequest(req: DataGroupRequest): string {
 
 // --- INTERNAL PROTO MAPPERS ---
 
-function mapDataSourceBundleFromProto(
-  pb: DataSourceMetadataPb,
-): DataSourceBundle {
+function mapIngestionTargetFromProto(
+  pb: IngestionTargetPb,
+): GithubIngestionTarget {
   return {
     id: URN.parse(pb.id),
-    repo: pb.repo,
-    branch: pb.branch,
+    repo: pb.displayName,
+    branch: pb.description,
     syncedCommitSha: pb.syncedCommitSha,
     lastSyncedAt: Number(pb.lastSyncedAt),
     fileCount: pb.fileCount,
@@ -103,7 +100,7 @@ function mapFileMetadataFromProto(pb: FileMetadataPb): FileMetadata {
   };
 }
 
-function mapFilterProfileFromProto(pb: ProfilePb): FilterProfile {
+function mapDataSourceFromProto(pb: DataSourcePb): DataSource {
   return {
     id: URN.parse(pb.id),
     name: pb.name,
@@ -118,43 +115,28 @@ function mapDataGroupFromProto(pb: DataGroupPb): DataGroup {
     id: URN.parse(pb.id),
     name: pb.name,
     description: pb.description,
-    sources: pb.sources.map((s) => ({
-      dataSourceId: URN.parse(s.dataSourceId),
-      profileId: s.profileId ? URN.parse(s.profileId) : undefined,
-    })),
+    dataSourceIds: pb.dataSourceIds.map((idStr) => URN.parse(idStr)), // Direct array mapping
     metadata: pb.metadata,
     createdAt: pb.createdAt as ISODateTimeString | undefined,
     updatedAt: pb.updatedAt as ISODateTimeString | undefined,
   };
 }
 
-export function deserializeDataSourceBundleList(
+export function deserializeIngestionTargetList(
   jsonString: string,
-): DataSourceBundle[] {
+): GithubIngestionTarget[] {
   const raw = JSON.parse(jsonString);
-
-  // The Go backend returns a naked JSON array directly
-  const list = Array.isArray(raw)
-    ? raw
-    : raw.dataSources || raw.datasources || raw.caches;
-
+  const list = Array.isArray(raw) ? raw : raw.targets || raw.dataSources;
   if (!list || !Array.isArray(list)) return [];
-
   return list.map((c: any) =>
-    mapDataSourceBundleFromProto(fromJson(DataSourceMetadataPbSchema, c)),
+    mapIngestionTargetFromProto(fromJson(IngestionTargetPbSchema, c)),
   );
 }
 
 export function deserializeDataGroupList(jsonString: string): DataGroup[] {
   const raw = JSON.parse(jsonString);
-
-  // The Go backend returns a naked JSON array directly
-  const list = Array.isArray(raw)
-    ? raw
-    : raw.dataGroups || raw.datagroups || raw.data_groups;
-
+  const list = Array.isArray(raw) ? raw : raw.dataGroups;
   if (!list || !Array.isArray(list)) return [];
-
   return list.map((g: any) =>
     mapDataGroupFromProto(fromJson(DataGroupPbSchema, g)),
   );
@@ -162,17 +144,17 @@ export function deserializeDataGroupList(jsonString: string): DataGroup[] {
 
 // --- DESERIALIZERS ---
 
-export function deserializeDataSourceBundle(
+export function deserializeIngestionTarget(
   jsonString: string,
-): DataSourceBundle {
-  const pb = fromJsonString(DataSourceMetadataPbSchema, jsonString);
-  return mapDataSourceBundleFromProto(pb);
+): GithubIngestionTarget {
+  const pb = fromJsonString(IngestionTargetPbSchema, jsonString);
+  return mapIngestionTargetFromProto(pb);
 }
 
 export function deserializeSyncResponse(jsonString: string): SyncResponse {
   const pb = fromJsonString(SyncResponsePbSchema, jsonString);
   return {
-    dataSourceId: URN.parse(pb.cacheId) as any,
+    dataSourceId: URN.parse(pb.targetId) as any,
     status: pb.status,
     filesProcessed: pb.filesProcessed,
   };
@@ -188,18 +170,16 @@ export function deserializeFileMetadataList(
   );
 }
 
-export function deserializeFilterProfile(jsonString: string): FilterProfile {
-  const pb = fromJsonString(ProfilePbSchema, jsonString);
-  return mapFilterProfileFromProto(pb);
+export function deserializeDataSource(jsonString: string): DataSource {
+  const pb = fromJsonString(DataSourcePbSchema, jsonString);
+  return mapDataSourceFromProto(pb);
 }
 
-export function deserializeFilterProfileList(
-  jsonString: string,
-): FilterProfile[] {
+export function deserializeDataSourceList(jsonString: string): DataSource[] {
   const raw = JSON.parse(jsonString);
-  if (!raw.profiles) return [];
-  return raw.profiles.map((p: any) =>
-    mapFilterProfileFromProto(fromJson(ProfilePbSchema, p)),
+  const list = raw.dataSources || raw.profiles || [];
+  return list.map((p: any) =>
+    mapDataSourceFromProto(fromJson(DataSourcePbSchema, p)),
   );
 }
 

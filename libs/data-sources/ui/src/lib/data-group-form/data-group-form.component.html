@@ -1,4 +1,7 @@
-<form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-6">
+<form
+  (submit)="$event.preventDefault(); onSubmit()"
+  class="flex flex-col gap-6"
+>
   <div class="flex flex-col sm:flex-row gap-4">
     <mat-form-field
       appearance="outline"
@@ -8,7 +11,8 @@
       <mat-label>Blueprint Name</mat-label>
       <input
         matInput
-        formControlName="name"
+        [value]="name()"
+        (input)="name.set($any($event.target).value)"
         placeholder="e.g. Go Backend Core"
         [readonly]="!isEditing()"
       />
@@ -22,7 +26,8 @@
       <mat-label>Description (Optional)</mat-label>
       <input
         matInput
-        formControlName="description"
+        [value]="description()"
+        (input)="description.set($any($event.target).value)"
         placeholder="What is this context used for?"
         [readonly]="!isEditing()"
       />
@@ -33,11 +38,11 @@
     <div class="flex items-center justify-between mb-4">
       <div>
         <h3 class="text-lg font-bold text-gray-900 m-0">
-          Bundled Repositories
+          Bundled Data Streams
         </h3>
         <p class="text-xs text-gray-500 m-0 mt-1">
-          Combine multiple repositories and apply specific filter profiles to
-          them.
+          Combine multiple specific data streams (filtered repository views)
+          together.
         </p>
       </div>
       @if (isEditing()) {
@@ -47,15 +52,14 @@
           color="primary"
           (click)="addSource()"
         >
-          <mat-icon>add</mat-icon> Add Source
+          <mat-icon>add</mat-icon> Add Stream
         </button>
       }
     </div>
 
-    <div formArrayName="sources" class="flex flex-col gap-3">
-      @for (source of sources.controls; track $index) {
+    <div class="flex flex-col gap-3">
+      @for (source of sources(); track $index) {
         <div
-          [formGroupName]="$index"
           class="flex items-start gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 animate-fade-in"
           [class.opacity-90]="!isEditing()"
         >
@@ -64,16 +68,17 @@
             class="flex-1 m-0 subscript-hidden bg-white"
             [hideRequiredMarker]="!isEditing()"
           >
-            <mat-label>Repository</mat-label>
+            <mat-label>Lake (Repository)</mat-label>
             <mat-select
-              formControlName="dataSourceId"
-              (selectionChange)="onRepoSelected($event.value, $index)"
+              [value]="source.targetId"
+              (selectionChange)="onTargetSelected($event.value, $index)"
+              [disabled]="!isEditing()"
             >
-              @for (repo of availableSources(); track repo.id) {
-                <mat-option [value]="repo.id.toString()">
-                  <span class="font-medium">{{ repo.repo }}</span>
+              @for (target of availableTargets(); track target.id) {
+                <mat-option [value]="target.id.toString()">
+                  <span class="font-medium">{{ target.repo }}</span>
                   <span class="text-gray-400 text-xs ml-2"
-                    >({{ repo.branch }})</span
+                    >({{ target.branch }})</span
                   >
                 </mat-option>
               }
@@ -85,26 +90,22 @@
             class="flex-1 m-0 subscript-hidden bg-white"
             [hideRequiredMarker]="!isEditing()"
           >
-            <mat-label>Filter Profile</mat-label>
-            <mat-select formControlName="profileId">
-              <mat-option [value]="null">
-                <span class="text-gray-500 italic"
-                  >No Filter (Include All Files)</span
-                >
-              </mat-option>
-
-              @if (
-                source.value.dataSourceId &&
-                profileMap()[source.value.dataSourceId]
-              ) {
-                @for (
-                  profile of profileMap()[source.value.dataSourceId];
-                  track profile.id
-                ) {
-                  <mat-option [value]="profile.id.toString()">{{
-                    profile.name
+            <mat-label>Data Source (Stream)</mat-label>
+            <mat-select
+              [value]="source.streamId"
+              (selectionChange)="onStreamSelected($event.value, $index)"
+              [disabled]="!isEditing()"
+            >
+              @if (source.targetId && streamMap()[source.targetId]) {
+                @for (stream of streamMap()[source.targetId]; track stream.id) {
+                  <mat-option [value]="stream.id.toString()">{{
+                    stream.name
                   }}</mat-option>
                 }
+              } @else if (source.streamId) {
+                <mat-option [value]="source.streamId">
+                  {{ source.streamId }}
+                </mat-option>
               }
             </mat-select>
           </mat-form-field>
@@ -123,11 +124,11 @@
         </div>
       }
 
-      @if (sources.length === 0) {
+      @if (sources().length === 0) {
         <div
           class="text-center p-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl bg-white"
         >
-          No repositories bundled yet. Click "Add Source" to start building.
+          No streams bundled yet. Click "Add Stream" to start building.
         </div>
       }
     </div>
@@ -157,7 +158,7 @@
           mat-flat-button
           color="primary"
           class="px-6"
-          [disabled]="form.invalid || sources.length === 0"
+          [disabled]="!isFormValid()"
         >
           {{ group() ? 'Save Changes' : 'Create Context Blueprint' }}
         </button>

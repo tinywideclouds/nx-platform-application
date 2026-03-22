@@ -20,12 +20,13 @@ import {
   LlmSession,
   WorkspaceAttachment,
 } from '@nx-platform-application/llm-types';
+
+// STRICT DOMAIN BOUNDARY
 import {
-  DataSourceBundle,
   DataGroup,
-  FilteredDataSource,
+  DataSource,
 } from '@nx-platform-application/data-sources-types';
-import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
+import { DataSourcesApiFacade } from '@nx-platform-application/data-sources-api';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
 import { DataSourceResolver } from '@nx-platform-application/llm-features-workspace';
 
@@ -45,7 +46,8 @@ import { DataSourceResolver } from '@nx-platform-application/llm-features-worksp
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LlmContextHierarchyComponent {
-  private dataSourcesState = inject(DataSourcesService);
+  // We strictly use the API facade now
+  private apiFacade = inject(DataSourcesApiFacade);
   protected cacheService = inject(CompiledCacheService);
   private readonly resolver = inject(DataSourceResolver);
 
@@ -58,13 +60,10 @@ export class LlmContextHierarchyComponent {
   removeSystem = output<URN>();
   removeCompiled = output<URN>();
 
-  // Updated Output to include TTL
   requestCompile = output<{ intent: WorkspaceAttachment; ttl?: number }>();
 
-  // We need a signal to hold the resolved sources for the current intent
-  private readonly currentIntentSources = signal<FilteredDataSource[]>([]);
+  private readonly currentIntentSources = signal<URN[]>([]);
 
-  // Minor TTL Selection Logic
   readonly ttlOptions = [
     { label: 'Default', value: undefined },
     { label: '1h', value: 1 },
@@ -85,12 +84,12 @@ export class LlmContextHierarchyComponent {
     });
   }
 
-  getDataSourceBundleDetails(urn: URN): DataSourceBundle | undefined {
-    return this.dataSourcesState.bundles().find((c) => c.id.equals(urn));
+  getDataSourceDetails(urn: URN): DataSource | undefined {
+    return this.apiFacade.getDataSourceSnapshot(urn);
   }
 
   getDataGroupDetails(urn: URN): DataGroup | undefined {
-    return this.dataSourcesState.dataGroups().find((g) => g.id.equals(urn));
+    return this.apiFacade.getDataGroupSnapshot(urn);
   }
 
   hasWarmCache = computed(() => {
@@ -99,7 +98,6 @@ export class LlmContextHierarchyComponent {
 
     if (!s?.llmModel || sources.length === 0) return false;
 
-    // Use the service's built-in hashing lookup logic
     return !!this.cacheService.getValidCache(sources, s.llmModel);
   });
 }

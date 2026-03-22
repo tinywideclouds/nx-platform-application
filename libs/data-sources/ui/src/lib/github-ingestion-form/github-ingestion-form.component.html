@@ -1,0 +1,56 @@
+<form
+  class="flex flex-col w-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
+  (submit)="$event.preventDefault()"
+>
+  <div
+    class="flex flex-col gap-4 p-6 bg-gray-50 border-b border-gray-200 w-full shrink-0"
+  >
+    <h3 class="font-medium text-gray-800 m-0">GitHub Connection Details</h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 mt-2">
+      <mat-form-field
+        appearance="outline"
+        class="w-full md:col-span-2 bg-white"
+        [hideRequiredMarker]="!isNew()"
+      >
+        <mat-label>GitHub Repository</mat-label>
+        <input
+          matInput
+          [value]="repo()"
+          (input)="repo.set($any($event.target).value)"
+          (blur)="repoTouched.set(true)"
+          [readonly]="!isNew()"
+          placeholder="e.g., angular/angular"
+        />
+        @if (!isNew()) {
+          <mat-icon matSuffix class="text-gray-400">lock</mat-icon>
+        }
+        @if (repoTouched() && repoError()) {
+          <mat-error>{{ repoError() }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="outline"
+        class="w-full bg-white"
+        [hideRequiredMarker]="!isNew()"
+      >
+        <mat-label>Branch</mat-label>
+        <input
+          matInput
+          [value]="branch()"
+          (input)="branch.set($any($event.target).value)"
+          (blur)="branchTouched.set(true)"
+          [readonly]="!isNew()"
+          placeholder="e.g., main"
+        />
+        @if (!isNew()) {
+          <mat-icon matSuffix class="text-gray-400">lock</mat-icon>
+        }
+        @if (branchTouched() && branchError()) {
+          <mat-error>{{ branchError() }}</mat-error>
+        }
+      </mat-form-field>
+    </div>
+  </div>
+</form>

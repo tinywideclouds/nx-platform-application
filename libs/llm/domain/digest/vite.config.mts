@@ -7,7 +7,7 @@ import path from 'path';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../../../../node_modules/.vite/libs/llm/domain/digest-engine',
+  cacheDir: '../../../../node_modules/.vite/libs/llm/domain/digest',
   plugins: [
     angular({
       tsconfig: path.join(__dirname, 'tsconfig.lib.json'),
@@ -19,7 +19,7 @@ export default defineConfig(() => ({
     emptyOutDir: true,
     lib: {
       entry: 'src/index.ts',
-      name: 'domain/digest-engine',
+      name: 'domain/digest',
       fileName: (format: any) => `index.${format}.js`,
       formats: ['es' as const],
     },

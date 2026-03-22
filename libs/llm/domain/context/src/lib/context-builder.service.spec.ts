@@ -5,7 +5,8 @@ import {
   ProposalRegistryStorageService,
 } from '@nx-platform-application/llm-infrastructure-storage';
 import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
+import { LlmDigestService } from '@nx-platform-application/llm-domain-digest';
+import { DataSourceResolver } from '@nx-platform-application/llm-features-workspace';
 import {
   ISODateTimeString,
   URN,
@@ -23,12 +24,19 @@ describe('LlmContextBuilderService', () => {
   let service: LlmContextBuilderService;
 
   const mockMessageStorageService = { getSessionMessages: vi.fn() };
-  const mockRegistryService = { getProposal: vi.fn() };
+  const mockRegistryService = { getProposalsForSession: vi.fn() };
   const mockCacheService = { getValidCache: vi.fn() };
-  const mockDataSources = { dataGroups: vi.fn().mockReturnValue([]) };
+  const mockDigestService = { getDigestsForSession: vi.fn() };
+  const mockResolver = { resolve: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Default mock returns
+    mockDigestService.getDigestsForSession.mockResolvedValue([]);
+    mockRegistryService.getProposalsForSession.mockResolvedValue([]);
+    mockResolver.resolve.mockResolvedValue([]);
+
     TestBed.configureTestingModule({
       providers: [
         LlmContextBuilderService,
@@ -38,13 +46,13 @@ describe('LlmContextBuilderService', () => {
           useValue: mockRegistryService,
         },
         { provide: CompiledCacheService, useValue: mockCacheService },
-        { provide: DataSourcesService, useValue: mockDataSources },
+        { provide: LlmDigestService, useValue: mockDigestService },
+        { provide: DataSourceResolver, useValue: mockResolver },
       ],
     });
     service = TestBed.inject(LlmContextBuilderService);
   });
 
-  // ... (Keep existing lightweight pointer test exactly the same) ...
   it('should join lightweight pointers with registry status securely', async () => {
     const encoder = new TextEncoder();
 
@@ -81,11 +89,14 @@ describe('LlmContextBuilderService', () => {
       filePath: 'src/main.ts',
       status: 'accepted',
     };
-    mockRegistryService.getProposal.mockResolvedValue(mockRegistryEntry);
+    mockRegistryService.getProposalsForSession.mockResolvedValue([
+      mockRegistryEntry,
+    ]);
 
     const mockSession: LlmSession = {
       id: URN.parse('urn:llm:session:123'),
       title: 'Test',
+      llmModel: 'gemini',
       lastModified: '2026-02-27T10:00:00Z' as ISODateTimeString,
       inlineContexts: [],
       systemContexts: [],
@@ -93,15 +104,14 @@ describe('LlmContextBuilderService', () => {
 
     const assembly = await service.buildStreamRequest(mockSession);
 
-    expect(mockRegistryService.getProposal).toHaveBeenCalledWith(
-      pointer.proposalId,
+    expect(mockRegistryService.getProposalsForSession).toHaveBeenCalledWith(
+      mockSession.id,
     );
     expect(assembly.request.history[1].content).toContain(
-      '[System Note: You proposed a modification for src/main.ts. The user has marked this proposal as: ACCEPTED.]',
+      '[System Note: Assistant proposed a modification for src/main.ts. Status: ACCEPTED.]',
     );
   });
 
-  // ... (Keep Quick Context Window test exactly the same) ...
   it('should successfully inject the Quick Context Drawer payload with XML framing', async () => {
     const encoder = new TextEncoder();
     const mockMessages: Partial<LlmMessage>[] = [
@@ -121,6 +131,7 @@ describe('LlmContextBuilderService', () => {
     const mockSession: LlmSession = {
       id: URN.parse('urn:llm:session:123'),
       title: 'Test',
+      llmModel: 'gemini',
       lastModified: '2026-02-27T10:00:00Z' as ISODateTimeString,
       inlineContexts: [],
       quickContext: [
@@ -164,6 +175,17 @@ describe('LlmContextBuilderService', () => {
       id: URN.parse('urn:gemini:compiled-cache:hit'),
     });
 
+    // Mock the resolver mapping Intents to pure URNs
+    mockResolver.resolve.mockImplementation(async (intent: any) => {
+      if (intent.id.equals(URN.parse('urn:llm:attachment:cache-intent'))) {
+        return [URN.parse('urn:datasource:stream:1')];
+      }
+      if (intent.id.equals(URN.parse('urn:llm:attachment:inline-intent'))) {
+        return [URN.parse('urn:datasource:stream:2')];
+      }
+      return [];
+    });
+
     const mockSession: LlmSession = {
       id: URN.parse('urn:llm:session:123'),
       title: 'Test',
@@ -171,13 +193,13 @@ describe('LlmContextBuilderService', () => {
       llmModel: 'gemini-1.5-pro',
       compiledContext: {
         id: URN.parse('urn:llm:attachment:cache-intent'),
-        resourceUrn: URN.parse('urn:data-source:repo:1'),
-        resourceType: 'source',
+        resourceUrn: URN.parse('urn:datasource:group:group-1'),
+        resourceType: 'group',
       },
       inlineContexts: [
         {
           id: URN.parse('urn:llm:attachment:inline-intent'),
-          resourceUrn: URN.parse('urn:data-source:repo:2'),
+          resourceUrn: URN.parse('urn:datasource:stream:2'),
           resourceType: 'source',
         },
       ],
@@ -191,9 +213,11 @@ describe('LlmContextBuilderService', () => {
       'urn:gemini:compiled-cache:hit',
     );
     expect(assembly.request.inlineAttachments?.length).toBe(1);
+
+    // Now asserts against the pure URN we mapped in the builder
     expect(
       assembly.request.inlineAttachments?.[0].dataSourceId.toString(),
-    ).toBe('urn:data-source:repo:2');
+    ).toBe('urn:datasource:stream:2');
   });
 
   it('should unroll system intent buckets and inject them into the first history message', async () => {
@@ -212,14 +236,19 @@ describe('LlmContextBuilderService', () => {
       mockMessages,
     );
 
+    mockResolver.resolve.mockResolvedValue([
+      URN.parse('urn:datasource:stream:behavior-rules'),
+    ]);
+
     const mockSession: LlmSession = {
       id: URN.parse('urn:llm:session:123'),
       title: 'Test',
+      llmModel: 'gemini',
       lastModified: '2026-02-27T10:00:00Z' as ISODateTimeString,
       systemContexts: [
         {
           id: URN.parse('urn:llm:attachment:sys-1'),
-          resourceUrn: URN.parse('urn:data-source:repo:behavior-rules'),
+          resourceUrn: URN.parse('urn:datasource:stream:behavior-rules'),
           resourceType: 'source',
         },
       ],

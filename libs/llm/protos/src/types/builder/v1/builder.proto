@@ -1,14 +1,11 @@
-// Defines the message contract for the LLM service.
 syntax = "proto3";
 
 package src.types.builder.v1;
 option go_package = "github.com/tinywideclouds/gen-llm/go/types/builder/v1;builder_v1";
 
-// Shared wire format for both inline attachments and data source pointers
 message NetworkAttachmentPb {
   string id = 1;
-  string data_source_id = 2; 
-  optional string profile_id = 3;
+  string data_source_id = 2; // Now points directly to the Filtered Stream (DataSource)
 }
 
 message BuildCacheRequestPb {
@@ -61,13 +58,13 @@ message ChangeProposalPb {
   optional string patch = 3;
   optional string new_content = 4; 
   string reasoning = 5;
-  string created_at = 6; 
+  string created_at = 6;
   string session_id = 7;
 }
 
 message CompiledCachePb {
   string id = 1;
-  string provider = 2;    
+  string provider = 2;
   repeated NetworkAttachmentPb sources = 3; 
   string created_at = 4;
   string expires_at = 5;

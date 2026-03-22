@@ -47,6 +47,12 @@
       "@nx-platform-application/contacts-ui": [
         "libs/contacts/contacts-ui/src/index.ts"
       ],
+      "@nx-platform-application/data-sources-api": [
+        "libs/data-sources/api/src/index.ts"
+      ],
+      "@nx-platform-application/data-sources-domain-registry": [
+        "libs/data-sources/domain/registry/src/index.ts"
+      ],
       "@nx-platform-application/data-sources-features-state": [
         "libs/data-sources/features/state/src/index.ts"
       ],
@@ -92,11 +98,17 @@
       "@nx-platform-application/llm-domain-compiled-cache": [
         "libs/llm/domain/compiled-cache/src/index.ts"
       ],
+      "@nx-platform-application/llm-domain-context": [
+        "libs/llm/domain/context/src/index.ts"
+      ],
       "@nx-platform-application/llm-domain-conversation": [
         "libs/llm/domain/conversation/src/index.ts"
       ],
-      "@nx-platform-application/llm-domain-digest-engine": [
-        "libs/llm/domain/digest-engine/src/index.ts"
+      "@nx-platform-application/llm-domain-data-target": [
+        "libs/llm/domain/data-target/src/index.ts"
+      ],
+      "@nx-platform-application/llm-domain-digest": [
+        "libs/llm/domain/digest/src/index.ts"
       ],
       "@nx-platform-application/llm-domain-memory-manager": [
         "libs/llm/domain/memory-manager/src/index.ts"
@@ -135,8 +147,14 @@
       "@nx-platform-application/llm-protos/*": [
         "libs/llm/protos/dist/ts/src/types/*"
       ],
+      "@nx-platform-application/llm-state-app": [
+        "libs/llm/state/app/src/index.ts"
+      ],
       "@nx-platform-application/llm-tools-migration": [
         "libs/llm/tools/migration/src/index.ts"
+      ],
+      "@nx-platform-application/llm-tools-model-registry": [
+        "libs/llm/tools/model-registry/src/index.ts"
       ],
       "@nx-platform-application/llm-tools-weighting": [
         "libs/llm/tools/weighting/src/index.ts"

@@ -10,6 +10,7 @@ import {
   URN,
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
+import { ProposalStatus } from '../../lib/session_types';
 
 export interface FileState {
   content: string;
@@ -17,19 +18,19 @@ export interface FileState {
 }
 
 export interface ChangeProposal {
-  id: string; // Ephemeral string IDs for proposals
-  sessionId: URN; // Strict URN
+  id: string;
+  sessionId: URN;
   filePath: string;
   patch?: string;
   newContent?: string;
   reasoning: string;
   createdAt: ISODateTimeString;
-  status?: string; // TODO remove after current refactor
+  status?: ProposalStatus;
 }
 
 export interface WorkspaceSession {
-  id: URN; // Strict URN
-  compiledCacheId: URN; // Strict URN
+  id: URN;
+  compiledCacheId: URN;
   updatedAt: string;
 }
 
@@ -78,7 +79,12 @@ export function deserializeChangeProposalMap(
 
   for (const [key, val] of Object.entries(rawObj)) {
     const proto = fromJson(ChangeProposalPbSchema, val as any);
-    result[key] = changeProposalFromProto(proto);
+    const proposal = changeProposalFromProto(proto);
+
+    // Safely extract the frontend-only status field from the raw JSON
+    proposal.status = (val as any).status || 'pending';
+
+    result[key] = proposal;
   }
   return result;
 }
@@ -101,11 +107,14 @@ export function deserializeSSEProposalEvent(
 ): SSEProposalEvent {
   const raw = JSON.parse(jsonString);
 
-  // Safely parse the nested protobuf object
   const protoProposal = fromJson(ChangeProposalPbSchema, raw.proposal);
+  const proposal = changeProposalFromProto(protoProposal);
+
+  // Safely extract the frontend-only status field
+  proposal.status = raw.proposal.status || 'pending';
 
   return {
-    proposal: changeProposalFromProto(protoProposal),
+    proposal,
     originalContent: raw.originalContent || '',
   };
 }

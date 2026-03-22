@@ -7,15 +7,9 @@ import {
   signal,
   effect,
   untracked,
+  computed,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import {
-  FormBuilder,
-  FormGroup,
-  FormArray,
-  Validators,
-  ReactiveFormsModule,
-} from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
 import { MatButtonModule } from '@angular/material/button';
@@ -28,19 +22,22 @@ import { URN } from '@nx-platform-application/platform-types';
 import {
   DataGroup,
   DataGroupRequest,
-  DataSourceBundle,
-  FilterProfile,
+  GithubIngestionTarget,
+  DataSource,
 } from '@nx-platform-application/data-sources-types';
 
-// Inject the specific client to fetch profiles for the dropdowns
-import { FilterProfilesClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
+import { DataSourcesClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
+
+interface GroupSourceEntry {
+  targetId: string | null;
+  streamId: string | null;
+}
 
 @Component({
   selector: 'data-sources-group-form',
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
     MatButtonModule,
     MatIconModule,
     MatFormFieldModule,
@@ -48,22 +45,15 @@ import { FilterProfilesClient } from '@nx-platform-application/data-sources-infr
     MatSelectModule,
   ],
   templateUrl: './data-group-form.component.html',
-  styles: [
-    `
-      .subscript-hidden ::ng-deep .mat-mdc-form-field-subscript-wrapper {
-        display: none;
-      }
-    `,
-  ],
+  styleUrl: './data-group-form.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DataGroupFormComponent {
-  private fb = inject(FormBuilder);
-  private profilesClient = inject(FilterProfilesClient);
+  private dataSourcesClient = inject(DataSourcesClient);
 
   // --- INPUTS & OUTPUTS ---
   group = input<DataGroup | null | undefined>(null);
-  availableSources = input<DataSourceBundle[]>([]);
+  availableTargets = input<GithubIngestionTarget[]>([]);
   isEditing = input.required<boolean>();
 
   save = output<DataGroupRequest>();
@@ -71,105 +61,99 @@ export class DataGroupFormComponent {
   cancel = output<void>();
   requestEdit = output<void>();
 
-  // --- STATE ---
-  // Caches fetched profiles by DataSource ID so dropdowns can read them synchronously
-  profileMap = signal<Record<string, FilterProfile[]>>({});
+  // --- SIGNAL STATE ---
+  name = signal<string>('');
+  description = signal<string>('');
+  sources = signal<GroupSourceEntry[]>([]);
 
-  form = this.fb.group({
-    name: ['', Validators.required],
-    description: [''],
-    sources: this.fb.array([] as FormGroup[]),
+  streamMap = signal<Record<string, DataSource[]>>({});
+
+  isFormValid = computed(() => {
+    if (!this.name().trim()) return false;
+    const currentSources = this.sources();
+    if (currentSources.length === 0) return false;
+    // Every entry must have a selected stream
+    return currentSources.every((s) => !!s.streamId);
   });
 
-  get sources() {
-    return this.form.get('sources') as FormArray;
-  }
-
   constructor() {
-    // Hydrate form when the active group changes
     effect(() => {
       const activeGroup = this.group();
       untracked(() => {
-        this.form.reset({
-          name: activeGroup?.name || '',
-          description: activeGroup?.description || '',
-        });
+        this.name.set(activeGroup?.name || '');
+        this.description.set(activeGroup?.description || '');
 
-        this.sources.clear();
-
-        if (activeGroup && activeGroup.sources.length > 0) {
-          activeGroup.sources.forEach((s) => {
-            this.addSource(s.dataSourceId.toString(), s.profileId?.toString());
-          });
+        if (activeGroup && activeGroup.dataSourceIds.length > 0) {
+          // Hydrate the array from existing URNs
+          const loadedSources = activeGroup.dataSourceIds.map((id) => ({
+            targetId: null, // Unknown at this stage since we only store the flat streamId
+            streamId: id.toString(),
+          }));
+          this.sources.set(loadedSources);
         } else {
+          // Start with one empty slot
+          this.sources.set([]);
           this.addSource();
         }
       });
     });
-
-    // Automatically disable/enable the dropdowns based on edit mode
-    effect(() => {
-      if (this.isEditing()) {
-        this.sources.enable({ emitEvent: false });
-      } else {
-        this.sources.disable({ emitEvent: false });
-      }
-    });
   }
 
-  addSource(dataSourceIdStr?: string, profileIdStr?: string) {
-    const sourceGroup = this.fb.group({
-      dataSourceId: [dataSourceIdStr || null, Validators.required],
-      profileId: [profileIdStr || null],
-    });
+  // --- ACTIONS ---
 
-    this.sources.push(sourceGroup);
-
-    if (dataSourceIdStr) {
-      this.fetchProfilesForSource(dataSourceIdStr);
+  addSource(targetId: string | null = null, streamId: string | null = null) {
+    this.sources.update((s) => [...s, { targetId, streamId }]);
+    if (targetId) {
+      this.fetchStreamsForTarget(targetId);
     }
   }
 
   removeSource(index: number) {
-    this.sources.removeAt(index);
+    this.sources.update((s) => s.filter((_, i) => i !== index));
   }
 
-  onRepoSelected(dataSourceIdStr: string, index: number) {
-    // Reset the profile selection when the repository changes
-    const sourceGroup = this.sources.at(index) as FormGroup;
-    sourceGroup.get('profileId')?.setValue(null);
-
-    this.fetchProfilesForSource(dataSourceIdStr);
+  onTargetSelected(targetId: string, index: number) {
+    this.sources.update((s) => {
+      const copy = [...s];
+      copy[index] = { targetId, streamId: null };
+      return copy;
+    });
+    this.fetchStreamsForTarget(targetId);
   }
 
-  async fetchProfilesForSource(dataSourceIdStr: string) {
-    // Skip if we already fetched profiles for this repo
-    if (this.profileMap()[dataSourceIdStr]) return;
+  onStreamSelected(streamId: string, index: number) {
+    this.sources.update((s) => {
+      const copy = [...s];
+      copy[index] = { ...copy[index], streamId };
+      return copy;
+    });
+  }
+
+  async fetchStreamsForTarget(targetIdStr: string) {
+    if (this.streamMap()[targetIdStr]) return;
 
     try {
-      const profiles = await firstValueFrom(
-        this.profilesClient.listProfiles(URN.parse(dataSourceIdStr)),
+      const streams = await firstValueFrom(
+        this.dataSourcesClient.listDataSources(URN.parse(targetIdStr)),
       );
-      this.profileMap.update((map) => ({
+      this.streamMap.update((map) => ({
         ...map,
-        [dataSourceIdStr]: profiles,
+        [targetIdStr]: streams,
       }));
     } catch (e) {
-      console.error('Failed to fetch profiles for dropdown', e);
+      console.error('Failed to fetch streams for dropdown', e);
     }
   }
 
   onSubmit() {
-    if (this.form.invalid || this.sources.length === 0) return;
+    if (!this.isFormValid()) return;
 
-    const val = this.form.value;
     const request: DataGroupRequest = {
-      name: val.name!,
-      description: val.description || undefined,
-      sources: val.sources!.map((s: any) => ({
-        dataSourceId: URN.parse(s.dataSourceId),
-        profileId: s.profileId ? URN.parse(s.profileId) : undefined,
-      })),
+      name: this.name().trim(),
+      description: this.description().trim() || undefined,
+      dataSourceIds: this.sources()
+        .map((s) => (s.streamId ? URN.parse(s.streamId) : null))
+        .filter(Boolean) as URN[],
     };
 
     this.save.emit(request);

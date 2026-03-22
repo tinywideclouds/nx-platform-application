@@ -1,0 +1,62 @@
+[
+  {
+    "id": "gemini-3.1-pro-preview",
+    "displayName": "Gemini 3.1 Pro",
+    "description": "Complex reasoning, coding, and massive context windows.",
+    "version": {
+      "provider": "gemini",
+      "major": 3,
+      "minor": 1,
+      "tier": "pro",
+      "apiName": "gemini-3.1-pro-preview"
+    },
+    "maxInputTokens": 2000000,
+    "maxOutputTokens": 8192,
+    "features": {
+      "supportsSystemInstructions": true,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "supportsSystemContext": true
+    }
+  },
+  {
+    "id": "gemini-3-flash-preview",
+    "displayName": "Gemini 3 Flash",
+    "description": "Fast and versatile for standard context generation.",
+    "version": {
+      "provider": "gemini",
+      "major": 3,
+      "minor": 0,
+      "tier": "flash",
+      "apiName": "gemini-3-flash-preview"
+    },
+    "maxInputTokens": 2000000,
+    "maxOutputTokens": 8192,
+    "features": {
+      "supportsSystemInstructions": true,
+      "supportsTools": true,
+      "supportsThinking": false,
+      "supportsSystemContext": true
+    }
+  },
+  {
+    "id": "gemini-3-flash-lite-preview",
+    "displayName": "Gemini 3 Flash-Lite",
+    "description": "Cost-effective model for quick, standard chats.",
+    "version": {
+      "provider": "gemini",
+      "major": 3,
+      "minor": 0,
+      "tier": "lite",
+      "apiName": "gemini-3-flash-lite-preview"
+    },
+    "maxInputTokens": 1000000,
+    "maxOutputTokens": 8192,
+    "features": {
+      "supportsSystemInstructions": true,
+      "supportsTools": false,
+      "supportsThinking": false,
+      "supportsSystemContext": false
+    }
+  }
+]

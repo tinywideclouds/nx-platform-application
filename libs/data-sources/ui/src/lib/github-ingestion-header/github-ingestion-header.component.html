@@ -1,0 +1,42 @@
+<div class="flex flex-col">
+  <h1 class="text-xl font-bold text-gray-900 leading-tight m-0">
+    {{ isNew() ? 'New GitHub Repository' : source()?.repo }}
+  </h1>
+
+  @if (!isNew() && source()) {
+    <div class="flex items-center gap-2 mt-1">
+      <span class="text-sm text-gray-500">Branch:</span>
+
+      <mat-form-field
+        appearance="outline"
+        class="text-sm m-0 p-0 page-width"
+        subscriptSizing="dynamic"
+      >
+        <mat-select
+          [value]="source()?.id?.toString()"
+          (selectionChange)="branchChange.emit($event.value)"
+        >
+          @for (branchSource of availableBranches(); track branchSource.id) {
+            <mat-option [value]="branchSource.id.toString()">{{
+              branchSource.branch
+            }}</mat-option>
+          }
+          <mat-divider></mat-divider>
+          <mat-option
+            value="NEW"
+            class="text-indigo-600 font-medium bg-indigo-50/50"
+          >
+            <mat-icon color="primary">add</mat-icon> Track New Branch
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      @if (source()?.status === 'ready') {
+        <span class="text-xs text-gray-400 ml-2 border-l border-gray-300 pl-2">
+          Synced
+          {{ source()?.lastSyncedAt! * 1000 | date: 'short' }}
+        </span>
+      }
+    </div>
+  }
+</div>

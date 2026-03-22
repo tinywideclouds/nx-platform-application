@@ -58,14 +58,14 @@ export const appRoutes: Route[] = [
                 path: 'new',
                 loadComponent: () =>
                   import('@nx-platform-application/data-sources-ui').then(
-                    (m) => m.DataSourcePageComponent,
+                    (m) => m.GithubIngestionPageComponent,
                   ),
               },
               {
                 path: ':id',
                 loadComponent: () =>
                   import('@nx-platform-application/data-sources-ui').then(
-                    (m) => m.DataSourcePageComponent,
+                    (m) => m.GithubIngestionPageComponent,
                   ),
               },
               {

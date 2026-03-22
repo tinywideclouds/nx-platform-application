@@ -1,0 +1,30 @@
+{
+  "name": "llm-state-app",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/llm/state/app/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:llm"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/libs/llm/state/app",
+        "configFile": "libs/llm/state/app/vite.config.mts"
+      }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../../../coverage/libs/llm/state/app",
+        "configFile": "libs/llm/state/app/vitest.config.mts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

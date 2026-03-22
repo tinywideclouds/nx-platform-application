@@ -5,10 +5,10 @@ package src.types.datasources.v1;
 option go_package = "github.com/tinywideclouds/gen-data-sources/go/types/v1;datasources_v1";
 
 message StoreCollectionsPb {
-  string bundle_collection = 1;
+  string targets_collection = 1;
   string files_collection = 2;
-  string profiles_collection = 3;
-  string datagroups_collection = 4; // NEW: Added collection for groups
+  string data_sources_collection = 3;
+  string data_groups_collection = 4;
 }
 
 // --- Domain Models ---
@@ -18,12 +18,14 @@ message FilterRulesPb {
   repeated string exclude = 2;
 }
 
-message ProfilePb {
+// THE STREAM (Formerly ProfilePb)
+message DataSourcePb {
   string id = 1;
-  string name = 2;
-  string rules_yaml = 3;
-  string created_at = 4;
-  string updated_at = 5;
+  string target_id = 2; 
+  string name = 3;
+  string rules_yaml = 4;
+  string created_at = 5;
+  string updated_at = 6;
 }
 
 message DataSourceAnalysisPb {
@@ -32,15 +34,17 @@ message DataSourceAnalysisPb {
   map<string, int32> extensions = 3;
 }
 
-message DataSourceMetadataPb {
+// THE LAKE (Formerly DataSourceMetadataPb)
+message IngestionTargetPb {
   string id = 1;
-  string repo = 2;
-  string branch = 3;
-  string synced_commit_sha = 4;
-  int64 last_synced_at = 5;
-  int32 file_count = 6;
-  string status = 7;
-  DataSourceAnalysisPb analysis = 8;
+  string type = 2;
+  string display_name = 3; 
+  string description = 4;  
+  string synced_commit_sha = 5;
+  int64 last_synced_at = 6;
+  int32 file_count = 7;
+  string status = 8;
+  DataSourceAnalysisPb analysis = 9;
 }
 
 message FileMetadataPb {
@@ -49,26 +53,20 @@ message FileMetadataPb {
   string extension = 3;
 }
 
-// --- NEW: Data Group Models (Context Blueprints) ---
-
-message DataGroupSourcePb {
-  string data_source_id = 1;
-  optional string profile_id = 2;
-}
-
+// THE BLUEPRINT
 message DataGroupPb {
   string id = 1;
   string name = 2;
   optional string description = 3;
-  repeated DataGroupSourcePb sources = 4;
-  map<string, string> metadata = 5; // e.g., for Gemini compiledCacheId and expiry
+  repeated string data_source_ids = 4; // Clean array of strings! No more tuples.
+  map<string, string> metadata = 5;
   optional string created_at = 6;
   optional string updated_at = 7;
 }
 
 // --- API Requests & Responses ---
 
-message CreateDataSourceRequestPb {
+message CreateIngestionTargetRequestPb {
   string repo = 1;
   string branch = 2;
 }
@@ -78,12 +76,12 @@ message SyncRequestPb {
 }
 
 message SyncResponsePb {
-  string cache_id = 1;
+  string target_id = 1;
   string status = 2;
   int32 files_processed = 3;
 }
 
-message ProfileRequestPb {
+message DataSourceRequestPb {
   string name = 1;
   string rules_yaml = 2;
 }
@@ -91,6 +89,6 @@ message ProfileRequestPb {
 message DataGroupRequestPb {
   string name = 1;
   optional string description = 2;
-  repeated DataGroupSourcePb sources = 3;
+  repeated string data_source_ids = 3; // Clean array of strings
   map<string, string> metadata = 4;
 }

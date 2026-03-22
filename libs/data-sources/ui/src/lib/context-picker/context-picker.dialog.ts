@@ -34,8 +34,8 @@ export interface ContextPickerResult {
     MatIconModule,
     MatTabsModule,
   ],
-  templateUrl: './context-picker-dialog.component.html',
-  styleUrl: './context-picker-dialog.component.scss',
+  templateUrl: './context-picker.dialog.html',
+  styleUrl: './context-picker.dialog.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ContextPickerDialogComponent implements OnInit {
@@ -49,15 +49,15 @@ export class ContextPickerDialogComponent implements OnInit {
   private hasSetInitialTab = false;
 
   repoSummaries = computed(() => {
-    const groups = this.state.groupedDataSources();
+    const groups = this.state.groupedTargets();
     return Object.keys(groups).map((repo) => {
-      const bundles = [...groups[repo]];
-      bundles.sort((a, b) => b.lastSyncedAt - a.lastSyncedAt);
-      const primary = bundles[0];
+      const targets = [...groups[repo]];
+      targets.sort((a, b) => b.lastSyncedAt - a.lastSyncedAt);
+      const primary = targets[0];
 
       return {
         repo,
-        primaryDataSourceId: primary.id,
+        primaryTargetId: primary.id,
         primaryBranch: primary.branch,
         status: primary.status,
       };
@@ -65,7 +65,6 @@ export class ContextPickerDialogComponent implements OnInit {
   });
 
   constructor() {
-    // Smart default: If data finishes loading and there are no groups, flip to the Repos tab
     effect(() => {
       const groupsLoading = this.state.isDataGroupsLoading();
       const groups = this.state.dataGroups();
@@ -82,7 +81,7 @@ export class ContextPickerDialogComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.state.loadAllDataSources();
+    this.state.loadAllTargets();
     this.state.loadAllDataGroups();
   }
 

@@ -48,7 +48,6 @@ export class DataGroupPageComponent {
   id = toSignal(this.route.paramMap.pipe(map((params) => params.get('id'))));
   isNew = computed(() => this.id() === 'new');
 
-  // Track the edit modality
   isEditing = signal<boolean>(false);
 
   constructor() {
@@ -56,9 +55,9 @@ export class DataGroupPageComponent {
       const routeId = params.get('id');
       if (!routeId || routeId === 'new') {
         this.state.activeDataGroupId.set(null);
-        this.isEditing.set(true); // Always edit a new blueprint
+        this.isEditing.set(true);
       } else {
-        this.isEditing.set(false); // Default to View Mode
+        this.isEditing.set(false);
         try {
           this.state.activeDataGroupId.set(URN.parse(routeId));
         } catch (e) {
@@ -72,19 +71,13 @@ export class DataGroupPageComponent {
     this.router.navigate(['/data-sources/repos/new']);
   }
 
-  // --- ACTIONS ---
-
   async onSave(req: DataGroupRequest) {
     const active = this.state.activeDataGroup();
-
-    // Preserve the opaque metadata
     if (active && active.metadata) {
       req.metadata = active.metadata;
     }
 
     const newId = await this.state.saveDataGroup(req, active?.id);
-
-    // Drop back into View Mode
     this.isEditing.set(false);
 
     if (newId && this.isNew()) {
@@ -116,7 +109,7 @@ export class DataGroupPageComponent {
     if (this.isNew()) {
       this.router.navigate(['/data-sources/groups']);
     } else {
-      this.isEditing.set(false); // Revert to View Mode
+      this.isEditing.set(false);
     }
   }
 }

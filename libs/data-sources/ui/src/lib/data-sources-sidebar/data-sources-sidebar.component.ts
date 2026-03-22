@@ -38,17 +38,18 @@ export class DataSourcesSidebarComponent {
   );
 
   repoSummaries = computed(() => {
-    const groups = this.state.groupedDataSources();
+    // Calling the newly renamed computed signal on our state service
+    const groups = this.state.groupedTargets();
     return Object.keys(groups).map((repo) => {
-      const bundles = [...groups[repo]];
-      bundles.sort((a, b) => b.lastSyncedAt - a.lastSyncedAt);
-      const primary = bundles[0];
+      const targets = [...groups[repo]];
+      targets.sort((a, b) => b.lastSyncedAt - a.lastSyncedAt);
+      const primary = targets[0];
 
       return {
         repo,
-        primaryDataSourceId: primary.id.toString(),
+        primaryTargetId: primary.id.toString(), // Updated property name
         primaryBranch: primary.branch,
-        branchCount: bundles.length,
+        branchCount: targets.length,
         lastSyncedAt: primary.lastSyncedAt,
         status: primary.status,
       };
@@ -56,7 +57,7 @@ export class DataSourcesSidebarComponent {
   });
 
   constructor() {
-    this.state.loadAllDataSources();
+    this.state.loadAllTargets(); // Updated method name
     this.state.loadAllDataGroups();
   }
 

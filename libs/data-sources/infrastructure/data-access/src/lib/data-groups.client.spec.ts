@@ -61,7 +61,7 @@ describe('DataGroupsClient', () => {
     const requestPayload: DataGroupRequest = {
       name: 'New Group',
       description: 'Test desc',
-      sources: [{ dataSourceId: URN.parse('urn:data-source:bundle:1') }],
+      dataSourceIds: [URN.parse('urn:data-source:bundle:1')],
       metadata: { key: 'value' },
     };
 
@@ -87,13 +87,12 @@ describe('DataGroupsClient', () => {
 
     const result = await promise;
     expect(result.id.equals(groupUrn)).toBe(true);
-    expect(result.sources[0].dataSourceId).toBeInstanceOf(URN);
   });
 
   it('should update a data group via PUT /v1/data/groups/{id}', async () => {
     const requestPayload: DataGroupRequest = {
       name: 'Updated Group',
-      sources: [],
+      dataSourceIds: [],
     };
 
     const promise = firstValueFrom(

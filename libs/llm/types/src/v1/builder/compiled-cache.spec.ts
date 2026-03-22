@@ -16,13 +16,7 @@ describe('CompiledCache Facade', () => {
     provider: 'gemini',
     expiresAt: '2026-02-27T16:00:00Z' as ISODateTimeString,
     createdAt: '2026-02-27T10:00:00Z' as ISODateTimeString,
-    // Using the decoupled physical sources array
-    sources: [
-      {
-        dataSourceId: URN.parse('urn:data-source:repo1'),
-        profileId: URN.parse('urn:profile:prof1'),
-      },
-    ],
+    sources: [URN.parse('urn:data-source:stream1')],
   };
 
   it('should cleanly serialize a CompiledCache to proto3 JSON', () => {
@@ -31,16 +25,14 @@ describe('CompiledCache Facade', () => {
 
     expect(parsed.id).toBe('urn:llm:compiled-cache:123');
     expect(parsed.provider).toBe('urn:llm:provider:gemini');
-    expect(parsed.sources[0].dataSourceId).toBe('urn:data-source:repo1');
-    expect(parsed.sources[0].profileId).toBe('urn:profile:prof1');
+    expect(parsed.sources[0].dataSourceId).toBe('urn:data-source:stream1');
   });
 
   it('should deserialize gracefully from Go-style snake_case JSON', () => {
-    // Simulating the backend response with snake_case keys
     const rawGoJson = `{
       "id": "urn:llm:compiled-cache:123",
       "provider": "urn:llm:provider:gemini",
-      "sources": [{"data_source_id": "urn:data-source:repo1", "profile_id": "urn:profile:prof1"}],
+      "sources": [{"data_source_id": "urn:data-source:stream1"}],
       "created_at": "2026-02-27T10:00:00Z",
       "expires_at": "2026-02-27T16:00:00Z"
     }`;
@@ -48,10 +40,7 @@ describe('CompiledCache Facade', () => {
     const result = deserializeCompiledCache(rawGoJson);
 
     expect(result.id.toString()).toBe('urn:llm:compiled-cache:123');
-    expect(result.sources[0].dataSourceId.toString()).toBe(
-      'urn:data-source:repo1',
-    );
-    expect(result.sources[0].profileId?.toString()).toBe('urn:profile:prof1');
+    expect(result.sources[0].toString()).toBe('urn:data-source:stream1');
     expect(result.expiresAt).toBe('2026-02-27T16:00:00Z');
   });
 });

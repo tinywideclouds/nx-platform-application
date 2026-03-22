@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { URN } from '@nx-platform-application/platform-types';
 import {
-  serializeCreateDataSourceRequest,
+  serializeCreateIngestionTargetRequest,
   serializeSyncRequest,
-  deserializeDataSourceBundle,
-  deserializeFilterProfileList,
+  deserializeIngestionTarget,
+  deserializeDataSourceList,
   serializeDataGroupRequest,
   deserializeDataGroupList,
 } from './data-source.facade';
 
 describe('Protobuf Sync DataSource Facade', () => {
-  it('should serialize CreateDataSourceRequest to camelCase proto3 JSON', () => {
-    const jsonString = serializeCreateDataSourceRequest(
+  it('should serialize CreateIngestionTargetRequest to camelCase proto3 JSON', () => {
+    const jsonString = serializeCreateIngestionTargetRequest(
       'tinywideclouds/go-data-source',
       'main',
     );
@@ -31,70 +31,66 @@ describe('Protobuf Sync DataSource Facade', () => {
     expect(parsed.ingestionRules.include).toContain('**/*.go');
   });
 
-  it('should deserialize DataSourceBundle and strict parse URNs', () => {
+  it('should deserialize IngestionTarget and strict parse URNs', () => {
     const rawGoResponse = `{
-      "id": "urn:data-source:bundle:123",
-      "repo": "test/repo",
+      "id": "urn:ingestiontarget:123",
+      "display_name": "test/repo",
       "status": "ready"
     }`;
 
-    const response = deserializeDataSourceBundle(rawGoResponse);
+    const response = deserializeIngestionTarget(rawGoResponse);
 
     expect(response.id).toBeInstanceOf(URN);
-    expect(response.id.toString()).toBe('urn:data-source:bundle:123');
+    expect(response.id.toString()).toBe('urn:ingestiontarget:123');
     expect(response.repo).toBe('test/repo');
     expect(response.status).toBe('ready');
   });
 
-  it('should deserialize a list of FilterProfiles with strict URNs', () => {
+  it('should deserialize a list of DataSources (Streams) with strict URNs', () => {
     const rawGoResponse = `{
-      "profiles": [
+      "dataSources": [
         {
-          "id": "urn:data-source:profile:abc",
+          "id": "urn:datasource:stream:abc",
           "name": "Backend",
           "rules_yaml": "include: [*.go]"
         }
       ]
     }`;
 
-    const profiles = deserializeFilterProfileList(rawGoResponse);
+    const sources = deserializeDataSourceList(rawGoResponse);
 
-    expect(profiles).toHaveLength(1);
-    expect(profiles[0].id).toBeInstanceOf(URN);
-    expect(profiles[0].id.toString()).toBe('urn:data-source:profile:abc');
-    expect(profiles[0].rulesYaml).toBe('include: [*.go]');
+    expect(sources).toHaveLength(1);
+    expect(sources[0].id).toBeInstanceOf(URN);
+    expect(sources[0].id.toString()).toBe('urn:datasource:stream:abc');
+    expect(sources[0].rulesYaml).toBe('include: [*.go]');
   });
 
   describe('DataGroup Mappers', () => {
-    it('should serialize DataGroupRequest and downgrade URNs to strings', () => {
+    it('should serialize DataGroupRequest with clean flat URN arrays', () => {
       const jsonString = serializeDataGroupRequest({
         name: 'Go Backend',
         description: 'Core API context',
-        sources: [
-          {
-            dataSourceId: URN.parse('urn:data-source:bundle:repo-1'),
-            profileId: URN.parse('urn:data-source:profile:p-1'),
-          },
-        ],
-        metadata: { compiledCacheId: 'urn:gemini:cache:xyz' },
+        dataSourceIds: [URN.parse('urn:datasource:stream-1')],
+        metadata: { compiledCacheId: 'urn:llm:compiled-cache:xyz' },
       });
 
       const parsed = JSON.parse(jsonString);
       expect(parsed.name).toBe('Go Backend');
-      expect(parsed.sources[0].dataSourceId).toBe(
-        'urn:data-source:bundle:repo-1',
+      // Verify clean string array!
+      expect(parsed.dataSourceIds[0]).toBe('urn:datasource:stream-1');
+      expect(parsed.metadata.compiledCacheId).toBe(
+        'urn:llm:compiled-cache:xyz',
       );
-      expect(parsed.metadata.compiledCacheId).toBe('urn:gemini:cache:xyz');
     });
 
     it('should deserialize DataGroupList and upgrade raw strings back to URN objects', () => {
       const rawGoResponse = `{
         "dataGroups": [
           {
-            "id": "urn:data-source:group:1",
+            "id": "urn:datagroup:1",
             "name": "UI Layer",
-            "sources": [
-              { "dataSourceId": "urn:data-source:bundle:ui-repo" }
+            "data_source_ids": [
+              "urn:datasource:stream-1"
             ],
             "metadata": {}
           }
@@ -105,8 +101,11 @@ describe('Protobuf Sync DataSource Facade', () => {
 
       expect(groups).toHaveLength(1);
       expect(groups[0].id).toBeInstanceOf(URN);
-      expect(groups[0].id.toString()).toBe('urn:data-source:group:1');
-      expect(groups[0].sources[0].dataSourceId).toBeInstanceOf(URN);
+      expect(groups[0].id.toString()).toBe('urn:datagroup:1');
+      expect(groups[0].dataSourceIds[0]).toBeInstanceOf(URN);
+      expect(groups[0].dataSourceIds[0].toString()).toBe(
+        'urn:datasource:stream-1',
+      );
     });
   });
 });

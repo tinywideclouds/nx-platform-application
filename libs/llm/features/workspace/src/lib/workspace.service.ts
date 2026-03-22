@@ -6,27 +6,23 @@ import {
   effect,
   untracked,
 } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
 import { applyPatch, createTwoFilesPatch } from 'diff';
 import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 
-import { GithubSyncClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
 import { ChangeProposal } from '@nx-platform-application/llm-types';
-import { FileMetadata } from '@nx-platform-application/data-sources-types';
 import { LlmSessionSource } from '@nx-platform-application/llm-features-session';
 import { LlmProposalService } from '@nx-platform-application/llm-domain-proposals';
-import { CompiledCacheService } from '@nx-platform-application/llm-domain-compiled-cache';
-import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
+
+// We now import the clean adapter contract, NOT the infrastructure!
+import { LlmTargetProvider } from '@nx-platform-application/llm-domain-data-target';
 
 import { healMalformedPatch } from './utils';
-import { DataSourceResolver } from './datasource-resolver';
 
 export interface ModifiedFile {
   filePath: string;
-  metadata?: FileMetadata;
   isContentLoading: boolean;
-  baseContent: string | null;
+  baseContent: string | null; // null means the file doesn't exist in the target (e.g., new file)
   proposalChain: ChangeProposal[];
 }
 
@@ -41,12 +37,11 @@ export interface ChainResolution {
 export class WorkspaceStateService {
   private readonly logger = inject(Logger);
   private sessionSource = inject(LlmSessionSource);
-  private synClient = inject(GithubSyncClient);
   private proposalService = inject(LlmProposalService);
-  private dataSources = inject(DataSourcesService);
+  private targetProvider = inject(LlmTargetProvider);
 
-  private readonly baseMetadata = signal<Map<string, FileMetadata>>(new Map());
-  private readonly baseContents = signal<Map<string, string>>(new Map());
+  // We only store contents for files we are actively proposing edits to
+  private readonly baseContents = signal<Map<string, string | null>>(new Map());
   private readonly loadingSet = signal<Set<string>>(new Set());
   private readonly activeProposals = signal<ChangeProposal[]>([]);
 
@@ -55,44 +50,11 @@ export class WorkspaceStateService {
   );
 
   /**
-   * REFACTORED: Centralized target resolution using the shared unrolling logic.
+   * The destination sandbox where the LLM is writing.
    */
-  readonly availableTargets = computed(() => {
-    const session = this.sessionSource.activeSession();
-    if (!session) return [];
-
-    const targetMap = new Map<string, URN>();
-
-    const allAttachments = [
-      ...(session.inlineContexts || []),
-      ...(session.compiledContext ? [session.compiledContext] : []),
-    ];
-
-    allAttachments.forEach((att) => {
-      if (att.resourceType === 'source') {
-        targetMap.set(att.resourceUrn.toString(), att.resourceUrn);
-      } else {
-        const group = this.dataSources
-          .dataGroups()
-          .find((g) => g.id.equals(att.resourceUrn));
-
-        group?.sources.forEach((s) =>
-          targetMap.set(s.dataSourceId.toString(), s.dataSourceId),
-        );
-      }
-    });
-
-    return Array.from(targetMap.values());
-  });
-
   readonly activeWorkspaceTarget = computed(() => {
     const session = this.sessionSource.activeSession();
-    if (session?.workspaceTarget) return session.workspaceTarget;
-
-    const available = this.availableTargets();
-    if (available.length === 1) return available[0];
-
-    return null;
+    return session?.workspaceTarget || null;
   });
 
   readonly hasStagedChanges = computed(() => {
@@ -106,42 +68,18 @@ export class WorkspaceStateService {
 
   constructor() {
     /**
-     * EFFECT 1: File List Hydration
-     * Automatically fetches repository structure when the active target changes.
-     */
-    effect(async () => {
-      const targetId = this.activeWorkspaceTarget();
-      if (!targetId) {
-        untracked(() => {
-          this.baseMetadata.set(new Map());
-          this.baseContents.set(new Map());
-        });
-        return;
-      }
-
-      try {
-        const metadataList = await firstValueFrom(
-          this.synClient.getFiles(targetId),
-        );
-        const metaMap = new Map<string, FileMetadata>();
-        for (const meta of metadataList) metaMap.set(meta.path, meta);
-        untracked(() => this.baseMetadata.set(metaMap));
-      } catch (err) {
-        this.logger.error(`Failed to fetch metadata for ${targetId}`, err);
-        untracked(() => this.baseMetadata.set(new Map()));
-      }
-    });
-
-    /**
-     * EFFECT 2: Proposal Sync
-     * Keeps the IDE's diff overlays in sync with the current chat session.
+     * EFFECT 1: Proposal Sync
+     * We simply listen for LLM proposals. The UI is driven entirely by this.
      */
     effect(async () => {
       const sessionId = this.activeSessionId();
       this.proposalService.registryMutated();
 
       if (!sessionId) {
-        untracked(() => this.activeProposals.set([]));
+        untracked(() => {
+          this.activeProposals.set([]);
+          this.baseContents.set(new Map());
+        });
         return;
       }
 
@@ -172,49 +110,49 @@ export class WorkspaceStateService {
     });
 
     /**
-     * EFFECT 3: Content JIT Loading
-     * If a file has a proposal chain but no base text, fetch it from Github.
+     * EFFECT 2: JIT Base Content Loading
+     * If a proposal arrives for a file we haven't fetched the base text for, fetch it now.
      */
     effect(() => {
+      const targetId = this.activeWorkspaceTarget();
+      if (!targetId) return;
+
       this.overlayMap().forEach((record, filePath) => {
+        // If the file is NOT in the baseContents map, we haven't attempted to fetch it yet.
         if (
-          record.proposalChain.length > 0 &&
-          record.baseContent === null &&
-          !record.isContentLoading &&
-          record.metadata
+          !this.baseContents().has(filePath) &&
+          !this.loadingSet().has(filePath)
         ) {
-          untracked(() => setTimeout(() => this.loadContent(filePath), 0));
+          untracked(() =>
+            setTimeout(() => this.loadContent(filePath, targetId), 0),
+          );
         }
       });
     });
   }
 
-  private encodePathForGo(filePath: string): string {
-    return btoa(unescape(encodeURIComponent(filePath)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
-  }
-
-  async loadContent(filePath: string): Promise<void> {
-    const targetId = this.activeWorkspaceTarget();
-    if (
-      !targetId ||
-      this.baseContents().has(filePath) ||
-      this.loadingSet().has(filePath)
-    )
+  async loadContent(filePath: string, targetId: URN): Promise<void> {
+    if (this.baseContents().has(filePath) || this.loadingSet().has(filePath))
       return;
 
     this.loadingSet.update((set) => new Set(set).add(filePath));
+
     try {
-      const base64Path = this.encodePathForGo(filePath);
-      const res = await firstValueFrom(
-        this.synClient.getFileContent(targetId, base64Path),
+      // Ask the agnostic provider for the file.
+      // It returns null if it's a 404/New File.
+      const content = await this.targetProvider.getBaseFileContent(
+        targetId,
+        filePath,
       );
-      this.baseContents.update((map) =>
-        new Map(map).set(filePath, res.content),
-      );
+
+      this.baseContents.update((map) => new Map(map).set(filePath, content));
     } catch (err) {
-      this.logger.error(`Failed to load content for ${filePath}`, err);
+      this.logger.error(
+        `Failed to load base content for ${filePath} from target ${targetId}`,
+        err,
+      );
+      // Fallback to null so we don't get stuck in an infinite loading loop
+      this.baseContents.update((map) => new Map(map).set(filePath, null));
     } finally {
       this.loadingSet.update((set) => {
         const newSet = new Set(set);
@@ -224,28 +162,23 @@ export class WorkspaceStateService {
     }
   }
 
+  /**
+   * The list of files the LLM is actively modifying.
+   */
   readonly overlayMap = computed(() => {
     const fileMap = new Map<string, ModifiedFile>();
-    const metaTree = this.baseMetadata();
     const contents = this.baseContents();
     const loading = this.loadingSet();
-
-    metaTree.forEach((meta, filePath) => {
-      fileMap.set(filePath, {
-        filePath,
-        metadata: meta,
-        isContentLoading: loading.has(filePath),
-        baseContent: contents.get(filePath) || null,
-        proposalChain: [],
-      });
-    });
 
     for (const proposal of this.activeProposals()) {
       if (!fileMap.has(proposal.filePath)) {
         fileMap.set(proposal.filePath, {
           filePath: proposal.filePath,
-          isContentLoading: false,
-          baseContent: null,
+          isContentLoading: loading.has(proposal.filePath),
+          // Explicitly check if it exists in the map, otherwise undefined
+          baseContent: contents.has(proposal.filePath)
+            ? (contents.get(proposal.filePath) ?? null)
+            : null,
           proposalChain: [],
         });
       }

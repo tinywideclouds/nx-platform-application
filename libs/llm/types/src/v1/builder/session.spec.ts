@@ -6,7 +6,7 @@ import {
 } from './session';
 
 describe('Session Facade', () => {
-  it('should deserialize a map of Change Proposals to strict URNs', () => {
+  it('should deserialize a map of Change Proposals and capture UI status', () => {
     const rawGoJson = `{
       "prop-1": {
         "id": "prop-1",
@@ -23,6 +23,7 @@ describe('Session Facade', () => {
 
     expect(map['prop-1'].sessionId.toString()).toBe('urn:llm:session:abc');
     expect(map['prop-1'].patch).toBe('@@ -1,3 +1,4 @@');
+    expect(map['prop-1'].status).toBe('pending'); // Verified restored
   });
 
   it('should deserialize a map of File States', () => {
@@ -38,7 +39,7 @@ describe('Session Facade', () => {
     expect(map['main.go'].isDeleted).toBe(false);
   });
 
-  it('should parse the custom SSE proposal_created event payload with strict URNs', () => {
+  it('should parse the custom SSE proposal_created event payload with strict URNs and status', () => {
     const ssePayload = `{
       "originalContent": "old file content",
       "proposal": {
@@ -47,20 +48,18 @@ describe('Session Facade', () => {
         "file_path": "test.txt",
         "new_content": "new file content",
         "reasoning": "testing",
-        "status": "pending",
+        "status": "accepted",
         "created_at": "2026-02-27T16:00:00Z"
       }
     }`;
 
     const event = deserializeSSEProposalEvent(ssePayload);
 
-    // Check root custom field
     expect(event.originalContent).toBe('old file content');
-
-    // Check nested protobuf parsing
     expect(event.proposal.id).toBe('prop-123');
     expect(event.proposal.sessionId.toString()).toBe('urn:llm:session:999');
     expect(event.proposal.filePath).toBe('test.txt');
     expect(event.proposal.newContent).toBe('new file content');
+    expect(event.proposal.status).toBe('accepted'); // Verified restored
   });
 });

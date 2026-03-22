@@ -3,7 +3,7 @@ import { DataSourcesService } from './state.service';
 
 import {
   GithubSyncClient,
-  FilterProfilesClient,
+  DataSourcesClient,
   DataGroupsClient,
 } from '@nx-platform-application/data-sources-infrastructure-data-access';
 
@@ -12,9 +12,9 @@ import { of, throwError } from 'rxjs';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { URN } from '@nx-platform-application/platform-types';
 import {
-  DataSourceBundle,
+  IngestionTarget,
   FileMetadata,
-  FilterProfile,
+  DataSource,
   FilterRules,
   SyncStreamEvent,
   DataGroup,
@@ -23,19 +23,18 @@ import {
 describe('DataSourcesService', () => {
   let service: DataSourcesService;
 
-  // Strict Mocks matching the new split Client contracts
   const mockSyncClient = {
-    listDataSources: vi.fn(),
-    createDataSource: vi.fn(),
+    listIngestionTargets: vi.fn(),
+    createIngestionTarget: vi.fn(),
     executeSyncStream: vi.fn(),
-    getFiles: vi.fn(),
+    getTargetFiles: vi.fn(),
   };
 
-  const mockProfilesClient = {
-    listProfiles: vi.fn(),
-    createProfile: vi.fn(),
-    updateProfile: vi.fn(),
-    deleteProfile: vi.fn(),
+  const mockDataSourcesClient = {
+    listDataSources: vi.fn(),
+    createDataSource: vi.fn(),
+    updateDataSource: vi.fn(),
+    deleteDataSource: vi.fn(),
   };
 
   const mockGroupsClient = {
@@ -54,15 +53,13 @@ describe('DataSourcesService', () => {
       providers: [
         DataSourcesService,
         { provide: GithubSyncClient, useValue: mockSyncClient },
-        { provide: FilterProfilesClient, useValue: mockProfilesClient },
+        { provide: DataSourcesClient, useValue: mockDataSourcesClient },
         { provide: DataGroupsClient, useValue: mockGroupsClient },
         { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     });
 
     service = TestBed.inject(DataSourcesService);
-
-    // Silence expected console errors during failure tests
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -72,38 +69,38 @@ describe('DataSourcesService', () => {
 
   describe('Initial State', () => {
     it('should initialize with empty default signals', () => {
-      expect(service.bundles()).toEqual([]);
-      expect(service.isDataSourcesLoading()).toBe(false);
-      expect(service.activeDataSourceId()).toBeNull();
+      expect(service.targets()).toEqual([]);
+      expect(service.isTargetsLoading()).toBe(false);
+      expect(service.activeTargetId()).toBeNull();
       expect(service.activeFiles()).toEqual([]);
-      expect(service.activeProfiles()).toEqual([]);
+      expect(service.activeSources()).toEqual([]);
       expect(service.syncLogs()).toEqual([]);
       expect(service.dataGroups()).toEqual([]);
       expect(service.activeDataGroupId()).toBeNull();
     });
   });
 
-  describe('Computed: groupedDataSources', () => {
-    it('should correctly group flat bundles by repository', () => {
-      service.bundles.set([
+  describe('Computed: groupedTargets', () => {
+    it('should correctly group flat targets by repository', () => {
+      service.targets.set([
         {
-          id: URN.parse('urn:llm:bundle:1'),
+          id: URN.parse('urn:ingestiontarget:1'),
           repo: 'org/repo-A',
           branch: 'main',
-        } as DataSourceBundle,
+        } as IngestionTarget,
         {
-          id: URN.parse('urn:llm:bundle:2'),
+          id: URN.parse('urn:ingestiontarget:2'),
           repo: 'org/repo-A',
           branch: 'dev',
-        } as DataSourceBundle,
+        } as IngestionTarget,
         {
-          id: URN.parse('urn:llm:bundle:3'),
+          id: URN.parse('urn:ingestiontarget:3'),
           repo: 'org/repo-B',
           branch: 'main',
-        } as DataSourceBundle,
+        } as IngestionTarget,
       ]);
 
-      const grouped = service.groupedDataSources();
+      const grouped = service.groupedTargets();
 
       expect(Object.keys(grouped)).toHaveLength(2);
       expect(grouped['org/repo-A']).toHaveLength(2);
@@ -111,11 +108,11 @@ describe('DataSourcesService', () => {
     });
   });
 
-  describe('loadAllDataSources()', () => {
-    it('should fetch bundles and update the state signal', async () => {
-      const mockDataSources: DataSourceBundle[] = [
+  describe('loadAllTargets()', () => {
+    it('should fetch targets and update the state signal', async () => {
+      const mockTargets: IngestionTarget[] = [
         {
-          id: URN.parse('urn:llm:bundle:1'),
+          id: URN.parse('urn:ingestiontarget:1'),
           repo: 'test/repo',
           branch: 'main',
           lastSyncedAt: 0,
@@ -123,24 +120,24 @@ describe('DataSourcesService', () => {
           status: 'ready',
         },
       ];
-      mockSyncClient.listDataSources.mockReturnValue(of(mockDataSources));
+      mockSyncClient.listIngestionTargets.mockReturnValue(of(mockTargets));
 
-      await service.loadAllDataSources();
+      await service.loadAllTargets();
 
-      expect(mockSyncClient.listDataSources).toHaveBeenCalled();
-      expect(service.bundles()).toEqual(mockDataSources);
-      expect(service.isDataSourcesLoading()).toBe(false);
+      expect(mockSyncClient.listIngestionTargets).toHaveBeenCalled();
+      expect(service.targets()).toEqual(mockTargets);
+      expect(service.isTargetsLoading()).toBe(false);
     });
 
-    it('should clear bundles and show error on failure', async () => {
-      mockSyncClient.listDataSources.mockReturnValue(
+    it('should clear targets and show error on failure', async () => {
+      mockSyncClient.listIngestionTargets.mockReturnValue(
         throwError(() => new Error('API Error')),
       );
 
-      await service.loadAllDataSources();
+      await service.loadAllTargets();
 
-      expect(service.bundles()).toEqual([]);
-      expect(service.isDataSourcesLoading()).toBe(false);
+      expect(service.targets()).toEqual([]);
+      expect(service.isTargetsLoading()).toBe(false);
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'Failed to load repositories from the server.',
         'Close',
@@ -149,26 +146,26 @@ describe('DataSourcesService', () => {
     });
   });
 
-  describe('createDataSource()', () => {
+  describe('createTarget()', () => {
     it('should trigger creation, add to state optimistically, and return the new ID', async () => {
       const req = { repo: 'org/repo', branch: 'main' };
-      const newUrn = URN.parse('urn:llm:bundle:new-123');
-      const mockBundle = {
+      const newUrn = URN.parse('urn:ingestiontarget:new-123');
+      const mockTarget = {
         id: newUrn,
         repo: 'org/repo',
         branch: 'main',
-      } as DataSourceBundle;
+      } as IngestionTarget;
 
-      mockSyncClient.createDataSource.mockResolvedValue(mockBundle);
+      mockSyncClient.createIngestionTarget.mockResolvedValue(mockTarget);
 
-      const result = await service.createDataSource(req);
+      const result = await service.createTarget(req);
 
       expect(result).toBe(newUrn);
-      expect(mockSyncClient.createDataSource).toHaveBeenCalledWith(
+      expect(mockSyncClient.createIngestionTarget).toHaveBeenCalledWith(
         'org/repo',
         'main',
       );
-      expect(service.bundles()).toContainEqual(mockBundle);
+      expect(service.targets()).toContainEqual(mockTarget);
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'Analyzing org/repo...',
         '',
@@ -179,15 +176,15 @@ describe('DataSourcesService', () => {
 
   describe('executeSync() (Streaming)', () => {
     it('should push logs to signal, execute stream, and reload state on completion', async () => {
-      const bundleUrn = URN.parse('urn:llm:bundle:c-1');
-      service.bundles.set([
+      const targetUrn = URN.parse('urn:ingestiontarget:c-1');
+      service.targets.set([
         {
-          id: bundleUrn,
+          id: targetUrn,
           repo: 'org/repo',
           status: 'unsynced',
-        } as DataSourceBundle,
+        } as IngestionTarget,
       ]);
-      service.activeDataSourceId.set(bundleUrn);
+      service.activeTargetId.set(targetUrn);
 
       const mockRules: FilterRules = { include: ['**/*.go'], exclude: [] };
       const mockEvent: SyncStreamEvent = {
@@ -196,39 +193,34 @@ describe('DataSourcesService', () => {
       };
 
       mockSyncClient.executeSyncStream.mockReturnValue(of(mockEvent));
-      mockSyncClient.listDataSources.mockReturnValue(of([]));
-      mockSyncClient.getFiles.mockReturnValue(of([]));
+      mockSyncClient.listIngestionTargets.mockReturnValue(of([]));
+      mockSyncClient.getTargetFiles.mockReturnValue(of([]));
 
-      const promise = service.executeSync(bundleUrn, mockRules);
+      const promise = service.executeSync(targetUrn, mockRules);
 
-      expect(service.bundles()[0].status).toBe('syncing');
+      expect(service.targets()[0].status).toBe('syncing');
 
       await promise;
 
       expect(service.syncLogs()).toContainEqual(mockEvent);
       expect(mockSyncClient.executeSyncStream).toHaveBeenCalledWith(
-        bundleUrn,
+        targetUrn,
         mockRules,
       );
-      expect(mockSyncClient.listDataSources).toHaveBeenCalled();
-      expect(mockSyncClient.getFiles).toHaveBeenCalledWith(bundleUrn);
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'Sync completed successfully.',
-        'Close',
-        expect.any(Object),
-      );
+      expect(mockSyncClient.listIngestionTargets).toHaveBeenCalled();
+      expect(mockSyncClient.getTargetFiles).toHaveBeenCalledWith(targetUrn);
     });
   });
 
-  describe('selectDataSource()', () => {
-    it('should clear logs and fetch files and profiles concurrently', async () => {
-      const bundleUrn = URN.parse('urn:llm:bundle:bundle-123');
+  describe('selectTarget()', () => {
+    it('should clear logs and fetch files and streams concurrently', async () => {
+      const targetUrn = URN.parse('urn:ingestiontarget:123');
       const mockFiles: FileMetadata[] = [
         { path: 'main.go', sizeBytes: 100, extension: '.go' },
       ];
-      const mockProfiles: FilterProfile[] = [
+      const mockSources: DataSource[] = [
         {
-          id: URN.parse('urn:llm:profile:p1'),
+          id: URN.parse('urn:datasource:stream:1'),
           name: 'Go',
           rulesYaml: '',
           createdAt: '',
@@ -238,101 +230,107 @@ describe('DataSourcesService', () => {
 
       service.syncLogs.set([{ stage: 'old', details: {} }]);
 
-      mockSyncClient.getFiles.mockReturnValue(of(mockFiles));
-      mockProfilesClient.listProfiles.mockReturnValue(of(mockProfiles));
+      mockSyncClient.getTargetFiles.mockReturnValue(of(mockFiles));
+      mockDataSourcesClient.listDataSources.mockReturnValue(of(mockSources));
 
-      await service.selectDataSource(bundleUrn);
+      await service.selectTarget(targetUrn);
 
       expect(service.syncLogs()).toEqual([]);
-      expect(service.activeDataSourceId()).toBe(bundleUrn);
+      expect(service.activeTargetId()).toBe(targetUrn);
       expect(service.activeFiles()).toEqual(mockFiles);
-      expect(service.activeProfiles()).toEqual(mockProfiles);
-      expect(service.isActiveDataSourceLoading()).toBe(false);
-      expect(mockSyncClient.getFiles).toHaveBeenCalledWith(bundleUrn);
-      expect(mockProfilesClient.listProfiles).toHaveBeenCalledWith(bundleUrn);
+      expect(service.activeSources()).toEqual(mockSources);
+      expect(service.isActiveTargetLoading()).toBe(false);
+      expect(mockSyncClient.getTargetFiles).toHaveBeenCalledWith(targetUrn);
+      expect(mockDataSourcesClient.listDataSources).toHaveBeenCalledWith(
+        targetUrn,
+      );
     });
   });
 
-  describe('Profile Management', () => {
-    const activeCacheUrn = URN.parse('urn:llm:bundle:test-bundle');
+  describe('Stream (DataSource) Management', () => {
+    const activeTargetUrn = URN.parse('urn:ingestiontarget:test-bundle');
 
     beforeEach(() => {
-      service.activeDataSourceId.set(activeCacheUrn);
+      service.activeTargetId.set(activeTargetUrn);
     });
 
-    it('should create a new profile and append it to local state', async () => {
-      const newProfile: FilterProfile = {
-        id: URN.parse('urn:llm:profile:p-new'),
+    it('should create a new stream and append it to local state', async () => {
+      const newStream: DataSource = {
+        id: URN.parse('urn:datasource:stream:new'),
         name: 'Test',
         rulesYaml: 'include: *',
         createdAt: '',
         updatedAt: '',
       };
-      mockProfilesClient.createProfile.mockReturnValue(of(newProfile));
+      mockDataSourcesClient.createDataSource.mockReturnValue(of(newStream));
 
-      await service.saveProfile({ name: 'Test', rulesYaml: 'include: *' });
+      await service.saveDataSource({ name: 'Test', rulesYaml: 'include: *' });
 
-      expect(mockProfilesClient.createProfile).toHaveBeenCalledWith(
-        activeCacheUrn,
+      expect(mockDataSourcesClient.createDataSource).toHaveBeenCalledWith(
+        activeTargetUrn,
         {
           name: 'Test',
           rulesYaml: 'include: *',
         },
       );
-      expect(service.activeProfiles()).toContainEqual(newProfile);
+      expect(service.activeSources()).toContainEqual(newStream);
     });
 
-    it('should update an existing profile and mutate local state', async () => {
-      const profileUrn = URN.parse('urn:llm:profile:p-1');
-      const existingProfile: FilterProfile = {
-        id: profileUrn,
+    it('should update an existing stream and mutate local state', async () => {
+      const streamUrn = URN.parse('urn:datasource:stream:1');
+      const existingStream: DataSource = {
+        id: streamUrn,
         name: 'Old',
         rulesYaml: '',
         createdAt: '',
         updatedAt: '',
       };
-      service.activeProfiles.set([existingProfile]);
+      service.activeSources.set([existingStream]);
 
-      const updatedProfile: FilterProfile = { ...existingProfile, name: 'New' };
-      mockProfilesClient.updateProfile.mockReturnValue(of(updatedProfile));
+      const updatedStream: DataSource = { ...existingStream, name: 'New' };
+      mockDataSourcesClient.updateDataSource.mockReturnValue(of(updatedStream));
 
-      await service.saveProfile({ name: 'New', rulesYaml: '' }, profileUrn);
+      await service.saveDataSource({ name: 'New', rulesYaml: '' }, streamUrn);
 
-      expect(mockProfilesClient.updateProfile).toHaveBeenCalledWith(
-        activeCacheUrn,
-        profileUrn,
+      expect(mockDataSourcesClient.updateDataSource).toHaveBeenCalledWith(
+        activeTargetUrn,
+        streamUrn,
         { name: 'New', rulesYaml: '' },
       );
-      expect(service.activeProfiles()[0].name).toBe('New');
+      expect(service.activeSources()[0].name).toBe('New');
     });
 
-    it('should delete a profile and remove it from local state', async () => {
-      const p1Urn = URN.parse('urn:llm:profile:p-1');
-      const p1: FilterProfile = {
-        id: p1Urn,
+    it('should delete a stream and remove it from local state', async () => {
+      const s1Urn = URN.parse('urn:datasource:stream:1');
+      const s1: DataSource = {
+        id: s1Urn,
         name: 'A',
         rulesYaml: '',
         createdAt: '',
         updatedAt: '',
       };
-      service.activeProfiles.set([p1]);
+      service.activeSources.set([s1]);
 
-      mockProfilesClient.deleteProfile.mockReturnValue(of(undefined));
+      mockDataSourcesClient.deleteDataSource.mockReturnValue(of(undefined));
 
-      await service.deleteProfile(p1Urn);
+      await service.deleteDataSource(s1Urn);
 
-      expect(mockProfilesClient.deleteProfile).toHaveBeenCalledWith(
-        activeCacheUrn,
-        p1Urn,
+      expect(mockDataSourcesClient.deleteDataSource).toHaveBeenCalledWith(
+        activeTargetUrn,
+        s1Urn,
       );
-      expect(service.activeProfiles()).toEqual([]);
+      expect(service.activeSources()).toEqual([]);
     });
   });
 
   describe('Data Group Management', () => {
     it('should load all data groups', async () => {
       const mockGroups: DataGroup[] = [
-        { id: URN.parse('urn:group:1'), name: 'Group 1', sources: [] },
+        {
+          id: URN.parse('urn:datagroup:1'),
+          name: 'Group 1',
+          dataSourceIds: [],
+        },
       ];
       mockGroupsClient.listDataGroups.mockReturnValue(of(mockGroups));
 
@@ -344,8 +342,8 @@ describe('DataSourcesService', () => {
     });
 
     it('should create a new data group', async () => {
-      const req = { name: 'New', sources: [] };
-      const newGroup: DataGroup = { id: URN.parse('urn:group:2'), ...req };
+      const req = { name: 'New', dataSourceIds: [] };
+      const newGroup: DataGroup = { id: URN.parse('urn:datagroup:2'), ...req };
       mockGroupsClient.createDataGroup.mockReturnValue(of(newGroup));
 
       const result = await service.saveDataGroup(req);
@@ -356,15 +354,15 @@ describe('DataSourcesService', () => {
     });
 
     it('should update an existing data group', async () => {
-      const groupUrn = URN.parse('urn:group:1');
+      const groupUrn = URN.parse('urn:datagroup:1');
       const existingGroup: DataGroup = {
         id: groupUrn,
         name: 'Old',
-        sources: [],
+        dataSourceIds: [],
       };
       service.dataGroups.set([existingGroup]);
 
-      const req = { name: 'Updated', sources: [] };
+      const req = { name: 'Updated', dataSourceIds: [] };
       const updatedGroup: DataGroup = { id: groupUrn, ...req };
       mockGroupsClient.updateDataGroup.mockReturnValue(of(updatedGroup));
 
@@ -379,8 +377,8 @@ describe('DataSourcesService', () => {
     });
 
     it('should delete a data group and clear active selection if it matches', async () => {
-      const groupUrn = URN.parse('urn:group:1');
-      service.dataGroups.set([{ id: groupUrn, name: 'G1', sources: [] }]);
+      const groupUrn = URN.parse('urn:datagroup:1');
+      service.dataGroups.set([{ id: groupUrn, name: 'G1', dataSourceIds: [] }]);
       service.activeDataGroupId.set(groupUrn);
 
       mockGroupsClient.deleteDataGroup.mockReturnValue(of(undefined));

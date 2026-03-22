@@ -48,11 +48,11 @@
 
   <div class="flex-grow overflow-y-auto p-2">
     @if (activeView() === 'repos') {
-      @if (state.isDataSourcesLoading()) {
+      @if (state.isTargetsLoading()) {
         <div class="p-4 text-center text-gray-500 text-sm animate-pulse">
           Loading repositories...
         </div>
-      } @else if (state.bundles().length === 0) {
+      } @else if (state.githubTargets().length === 0) {
         <div class="p-4 text-center text-gray-500 text-sm">
           No repositories added yet.
         </div>
@@ -60,21 +60,16 @@
         <div class="flex flex-col gap-1 animate-fade-in">
           @for (summary of repoSummaries(); track summary.repo) {
             <a
-              [routerLink]="[
-                '/data-sources/repos',
-                summary.primaryDataSourceId,
-              ]"
-              [class.bg-indigo-50]="
-                state.activeDataSource()?.repo === summary.repo
-              "
+              [routerLink]="['/data-sources/repos', summary.primaryTargetId]"
+              [class.bg-indigo-50]="state.activeTarget()?.repo === summary.repo"
               [class.border-indigo-200]="
-                state.activeDataSource()?.repo === summary.repo
+                state.activeTarget()?.repo === summary.repo
               "
               [class.text-indigo-700]="
-                state.activeDataSource()?.repo === summary.repo
+                state.activeTarget()?.repo === summary.repo
               "
               [class.border-transparent]="
-                state.activeDataSource()?.repo !== summary.repo
+                state.activeTarget()?.repo !== summary.repo
               "
               class="flex flex-col px-3 py-2 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer text-gray-700"
             >
@@ -153,7 +148,7 @@
                   <mat-icon class="text-[10px] h-2.5 w-2.5 m-0 p-0"
                     >folder</mat-icon
                   >
-                  {{ group.sources.length }}
+                  {{ group.dataSourceIds.length }}
                 </span>
               </div>
             </a>

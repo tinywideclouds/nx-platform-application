@@ -108,7 +108,7 @@ export class LlmSessionFormComponent {
   constructor() {
     effect(() => {
       untracked(() => {
-        this.dataSources.loadAllDataSources();
+        this.dataSources.loadAllTargets();
         this.dataSources.loadAllDataGroups();
       });
     });

@@ -1,5 +1,5 @@
 <div class="h-full flex flex-col bg-gray-50 overflow-hidden relative">
-  @if (state.isDataSourcesLoading() || state.isDataGroupsLoading()) {
+  @if (state.isTargetsLoading() || state.isDataGroupsLoading()) {
     <div
       class="absolute inset-0 flex items-center justify-center bg-gray-50 z-10"
     >
@@ -8,7 +8,7 @@
         <span>Loading Context Blueprints...</span>
       </div>
     </div>
-  } @else if (state.bundles().length === 0) {
+  } @else if (state.githubTargets().length === 0) {
     <div
       class="flex-grow flex flex-col items-center justify-center p-8 text-center animate-fade-in"
     >
@@ -19,9 +19,8 @@
         You need raw materials first
       </h2>
       <p class="text-gray-500 max-w-md mb-8 leading-relaxed">
-        Context Groups (Blueprints) are built by combining multiple repositories
-        and filter profiles together. Sync at least one GitHub repository to get
-        started.
+        Context Groups (Blueprints) are built by combining multiple streams
+        together. Sync at least one repository to get started.
       </p>
       <button
         type="button"
@@ -43,7 +42,7 @@
       </h2>
       <p class="max-w-sm">
         Choose a group from the sidebar to view its details or create a new one
-        to bundle your repositories.
+        to bundle your data streams.
       </p>
       <button
         type="button"
@@ -80,7 +79,7 @@
 
           <data-sources-group-form
             [group]="state.activeDataGroup()"
-            [availableSources]="state.bundles()"
+            [availableTargets]="state.githubTargets()"
             [isEditing]="isEditing()"
             (requestEdit)="isEditing.set(true)"
             (save)="onSave($event)"

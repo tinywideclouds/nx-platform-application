@@ -2,68 +2,79 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
-// NEW IMPORTS
-import { GithubSyncClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
-import { FilterProfilesClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
-import { DataGroupsClient } from '@nx-platform-application/data-sources-infrastructure-data-access';
+import {
+  GithubSyncClient,
+  DataSourcesClient,
+  DataGroupsClient,
+} from '@nx-platform-application/data-sources-infrastructure-data-access';
 
 import {
-  DataSourceBundle,
+  GithubIngestionTarget,
   FileMetadata,
-  FilterProfile,
+  DataSource,
   FilterRules,
-  ProfileRequest,
+  DataSourceRequest,
   SyncStreamEvent,
   DataGroup,
   DataGroupRequest,
 } from '@nx-platform-application/data-sources-types';
 import { URN } from '@nx-platform-application/platform-types';
 
+// INJECT THE PURE DOMAIN DICTIONARY
+import { DataSourcesRegistryService } from '@nx-platform-application/data-sources-domain-registry';
+
 @Injectable({ providedIn: 'root' })
 export class DataSourcesService {
-  // SPLIT INJECTIONS
   private syncClient = inject(GithubSyncClient);
-  private profilesClient = inject(FilterProfilesClient);
+  private dataSourcesClient = inject(DataSourcesClient);
   private groupsClient = inject(DataGroupsClient);
   private snackBar = inject(MatSnackBar);
+  private registry = inject(DataSourcesRegistryService);
 
-  // --- STATE SIGNALS ---
-  bundles = signal<DataSourceBundle[]>([]);
-  isDataSourcesLoading = signal<boolean>(false);
+  // --- ALIAS SIGNALS FROM REGISTRY (Source of Truth) ---
+  readonly githubTargets = this.registry.githubTargets;
+  readonly dataGroups = this.registry.dataGroups;
 
-  dataGroups = signal<DataGroup[]>([]);
+  // --- UI STATE SIGNALS ---
+  isTargetsLoading = signal<boolean>(false);
   isDataGroupsLoading = signal<boolean>(false);
 
-  activeDataSourceId = signal<URN | null>(null);
-  activeFiles = signal<FileMetadata[]>([]);
-  activeProfiles = signal<FilterProfile[]>([]);
-  isActiveDataSourceLoading = signal<boolean>(false);
-
   activeDataGroupId = signal<URN | null>(null);
-
+  activeTargetId = signal<URN | null>(null);
+  activeFiles = signal<FileMetadata[]>([]);
+  isActiveTargetLoading = signal<boolean>(false);
   syncLogs = signal<SyncStreamEvent[]>([]);
 
   // --- COMPUTED STATE ---
-  bundlesById = computed(() => {
-    const map = new Map<string, DataSourceBundle>();
-    for (const bundle of this.bundles()) {
-      map.set(bundle.id.toString(), bundle);
+
+  // Streams are now instantly derived from the global registry! No HTTP call needed.
+  activeSources = computed(() => {
+    const targetId = this.activeTargetId();
+    if (!targetId) return [];
+    return this.registry.dataSources().filter((s) => s.id.equals(targetId));
+  });
+
+  targetsById = computed(() => {
+    const map = new Map<string, GithubIngestionTarget>();
+    for (const target of this.githubTargets()) {
+      map.set(target.id.toString(), target);
     }
     return map;
   });
 
-  activeDataSource = computed(() => {
-    const id = this.activeDataSourceId();
+  activeTarget = computed(() => {
+    const id = this.activeTargetId();
     if (!id) return null;
-    return this.bundlesById().get(id.toString()) || null;
+    return this.targetsById().get(id.toString()) || null;
   });
 
-  groupedDataSources = computed(() => {
-    const list = this.bundles();
-    const groups: Record<string, DataSourceBundle[]> = {};
-    for (const bundle of list) {
-      if (!groups[bundle.repo]) groups[bundle.repo] = [];
-      groups[bundle.repo].push(bundle);
+  groupedTargets = computed(() => {
+    const list = this.githubTargets();
+    const groups: Record<string, GithubIngestionTarget[]> = {};
+    for (const target of list) {
+      const groupKey = target.branch;
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(target);
     }
     return groups;
   });
@@ -75,6 +86,7 @@ export class DataSourcesService {
   });
 
   // --- HELPERS ---
+
   private showError(message: string) {
     this.snackBar.open(message, 'Close', {
       duration: 5000,
@@ -83,48 +95,33 @@ export class DataSourcesService {
   }
 
   clearSelection() {
-    this.activeDataSourceId.set(null);
+    this.activeTargetId.set(null);
     this.activeFiles.set([]);
-    this.activeProfiles.set([]);
   }
 
-  // --- DATA LOADING ---
-  async loadAllDataSources(): Promise<void> {
-    this.isDataSourcesLoading.set(true);
-    try {
-      const data = await firstValueFrom(this.syncClient.listDataSources());
-      console.log('got data source bundles', data);
-      this.bundles.set(data);
-    } catch (error) {
-      console.error('Failed to load bundles', error);
-      this.showError('Failed to load repositories from the server.');
-      this.bundles.set([]);
-    } finally {
-      this.isDataSourcesLoading.set(false);
-    }
+  // --- DATA LOADING DELEGATED TO REGISTRY ---
+
+  async loadAllTargets(): Promise<void> {
+    this.isTargetsLoading.set(true);
+    await this.registry.hydrate();
+    this.isTargetsLoading.set(false);
   }
 
   async loadAllDataGroups(): Promise<void> {
     this.isDataGroupsLoading.set(true);
-    try {
-      const groups = await firstValueFrom(this.groupsClient.listDataGroups());
-      this.dataGroups.set(groups);
-    } catch (error) {
-      console.error('Failed to load data groups', error);
-      this.showError('Failed to load data groups.');
-      this.dataGroups.set([]);
-    } finally {
-      this.isDataGroupsLoading.set(false);
-    }
+    await this.registry.hydrate();
+    this.isDataGroupsLoading.set(false);
   }
 
-  async loadFilesForDataSource(bundleId: URN): Promise<void> {
+  async loadFilesForTarget(targetId: URN): Promise<void> {
     try {
-      const files = await firstValueFrom(this.syncClient.getFiles(bundleId));
+      const files = await firstValueFrom(
+        this.syncClient.getTargetFiles(targetId),
+      );
       this.activeFiles.set(files);
     } catch (e) {
       console.error(
-        `Failed to load files for bundle ${bundleId.toString()}`,
+        `Failed to load files for target ${targetId.toString()}`,
         e,
       );
       this.activeFiles.set([]);
@@ -132,30 +129,26 @@ export class DataSourcesService {
     }
   }
 
-  async selectDataSource(bundleId: URN): Promise<void> {
-    this.activeDataSourceId.set(bundleId);
-    this.isActiveDataSourceLoading.set(true);
+  async selectTarget(targetId: URN): Promise<void> {
+    this.activeTargetId.set(targetId);
+    this.isActiveTargetLoading.set(true);
     this.syncLogs.set([]);
 
     try {
-      await Promise.all([
-        this.loadFilesForDataSource(bundleId),
-        firstValueFrom(this.profilesClient.listProfiles(bundleId)).then((p) =>
-          this.activeProfiles.set(p),
-        ),
-      ]);
+      // We only fetch files now! The activeSources are computed instantly from the registry.
+      await this.loadFilesForTarget(targetId);
     } catch (e) {
-      console.error('Failed to load bundle details', e);
+      console.error('Failed to load target details', e);
       this.showError('Failed to load repository details.');
       this.activeFiles.set([]);
-      this.activeProfiles.set([]);
     } finally {
-      this.isActiveDataSourceLoading.set(false);
+      this.isActiveTargetLoading.set(false);
     }
   }
 
-  // --- REPOSITORY LIFECYCLE ACTIONS ---
-  async createDataSource(payload: {
+  // --- MUTATION ACTIONS (Update API, then update Registry) ---
+
+  async createGithubTarget(payload: {
     repo: string;
     branch: string;
   }): Promise<URN | null> {
@@ -163,114 +156,126 @@ export class DataSourcesService {
       this.snackBar.open(`Analyzing ${payload.repo}...`, '', {
         duration: 2000,
       });
-      const newDataSource = await this.syncClient.createDataSource(
+      const newGithubTarget = await this.syncClient.createIngestionTarget(
         payload.repo,
         payload.branch,
       );
-      this.bundles.update((c) => [...c, newDataSource]);
-      return newDataSource.id;
+      // Mutate the registry directly for optimistic UI
+      this.registry.githubTargets.update((c) => [...c, newGithubTarget]);
+      return newGithubTarget.id;
     } catch (error) {
-      console.error('Failed to create bundle skeleton', error);
+      console.error('Failed to create target skeleton', error);
       this.showError(`Failed to analyze repository ${payload.repo}.`);
       return null;
     }
   }
 
-  executeSync(bundleId: URN, ingestionRules: FilterRules): Promise<void> {
+  executeSync(githubTargetId: URN, ingestionRules: FilterRules): Promise<void> {
     this.syncLogs.set([]);
-    this.bundles.update((bundles) =>
-      bundles.map((c) =>
-        c.id.equals(bundleId) ? { ...c, status: 'syncing' } : c,
+    this.registry.githubTargets.update((targets) =>
+      targets.map((c) =>
+        c.id.equals(githubTargetId) ? { ...c, status: 'syncing' } : c,
       ),
     );
 
     return new Promise<void>((resolve, reject) => {
-      this.syncClient.executeSyncStream(bundleId, ingestionRules).subscribe({
-        next: (event: SyncStreamEvent) => {
-          this.syncLogs.update((logs) => [...logs, event]);
-        },
-        error: (error) => {
-          this.bundles.update((bundles) =>
-            bundles.map((c) =>
-              c.id.equals(bundleId) ? { ...c, status: 'failed' } : c,
-            ),
-          );
-          console.error('Failed to execute sync stream', error);
-          this.showError('Repository sync failed. Please try again.');
-          reject(error);
-        },
-        complete: async () => {
-          try {
-            this.snackBar.open('Sync completed successfully.', 'Close', {
-              duration: 3000,
-            });
-            await this.loadAllDataSources();
-            if (this.activeDataSourceId()?.equals(bundleId)) {
-              await this.loadFilesForDataSource(bundleId);
+      this.syncClient
+        .executeSyncStream(githubTargetId, ingestionRules)
+        .subscribe({
+          next: (event: SyncStreamEvent) => {
+            this.syncLogs.update((logs) => [...logs, event]);
+          },
+          error: (error) => {
+            this.registry.githubTargets.update((targets) =>
+              targets.map((c) =>
+                c.id.equals(githubTargetId) ? { ...c, status: 'failed' } : c,
+              ),
+            );
+            console.error('Failed to execute sync stream', error);
+            this.showError('Repository sync failed. Please try again.');
+            reject(error);
+          },
+          complete: async () => {
+            try {
+              this.snackBar.open('Sync completed successfully.', 'Close', {
+                duration: 3000,
+              });
+              await this.registry.hydrate(); // Full refresh ensures everything is perfectly consistent
+              if (this.activeTargetId()?.equals(githubTargetId)) {
+                await this.loadFilesForTarget(githubTargetId);
+              }
+              resolve();
+            } catch (e) {
+              reject(e);
             }
-            resolve();
-          } catch (e) {
-            reject(e);
-          }
-        },
-      });
+          },
+        });
     });
   }
 
-  // --- FILTER PROFILES ---
-  async saveProfile(req: ProfileRequest, profileId?: URN): Promise<void> {
-    const bundleId = this.activeDataSourceId();
-    if (!bundleId)
-      throw new Error('Cannot save a profile without an active bundle ID.');
+  // --- STREAM (DATA SOURCE) MANAGEMENT ---
+
+  async saveDataSource(req: DataSourceRequest, sourceId?: URN): Promise<void> {
+    const targetId = this.activeTargetId();
+    if (!targetId)
+      throw new Error(
+        'Cannot save a data source stream without an active target ID.',
+      );
 
     try {
-      let savedProfile: FilterProfile;
-      if (profileId) {
-        savedProfile = await firstValueFrom(
-          this.profilesClient.updateProfile(bundleId, profileId, req),
+      let savedSource: DataSource;
+      if (sourceId) {
+        savedSource = await firstValueFrom(
+          this.dataSourcesClient.updateDataSource(targetId, sourceId, req),
         );
       } else {
-        savedProfile = await firstValueFrom(
-          this.profilesClient.createProfile(bundleId, req),
+        savedSource = await firstValueFrom(
+          this.dataSourcesClient.createDataSource(targetId, req),
         );
       }
 
-      this.activeProfiles.update((profiles) => {
-        const idx = profiles.findIndex((p) => p.id.equals(savedProfile.id));
+      // Update the global registry
+      this.registry.dataSources.update((sources) => {
+        const idx = sources.findIndex((p) => p.id.equals(savedSource.id));
         if (idx >= 0) {
-          const updated = [...profiles];
-          updated[idx] = savedProfile;
+          const updated = [...sources];
+          updated[idx] = savedSource;
           return updated;
         }
-        return [...profiles, savedProfile];
+        return [...sources, savedSource];
       });
 
-      this.snackBar.open('Filter profile saved', 'Close', { duration: 3000 });
+      this.snackBar.open('Data Source stream saved', 'Close', {
+        duration: 3000,
+      });
     } catch (e) {
-      console.error('Failed to save profile', e);
+      console.error('Failed to save data source stream', e);
       throw e;
     }
   }
 
-  async deleteProfile(profileId: URN): Promise<void> {
-    const bundleId = this.activeDataSourceId();
-    if (!bundleId) return;
+  async deleteDataSource(sourceId: URN): Promise<void> {
+    const targetId = this.activeTargetId();
+    if (!targetId) return;
 
     try {
       await firstValueFrom(
-        this.profilesClient.deleteProfile(bundleId, profileId),
+        this.dataSourcesClient.deleteDataSource(targetId, sourceId),
       );
-      this.activeProfiles.update((profiles) =>
-        profiles.filter((p) => !p.id.equals(profileId)),
+      this.registry.dataSources.update((sources) =>
+        sources.filter((p) => !p.id.equals(sourceId)),
       );
-      this.snackBar.open('Filter profile deleted', 'Close', { duration: 3000 });
+      this.snackBar.open('Data Source stream deleted', 'Close', {
+        duration: 3000,
+      });
     } catch (e) {
-      console.error('Failed to delete profile', e);
-      this.showError('Failed to delete profile.');
+      console.error('Failed to delete data source stream', e);
+      this.showError('Failed to delete data source stream.');
     }
   }
 
-  // --- DATA GROUPS ---
+  // --- BLUEPRINT (DATA GROUP) MANAGEMENT ---
+
   async saveDataGroup(
     req: DataGroupRequest,
     groupId?: URN,
@@ -287,7 +292,7 @@ export class DataSourcesService {
         );
       }
 
-      this.dataGroups.update((groups) => {
+      this.registry.dataGroups.update((groups) => {
         const idx = groups.findIndex((g) => g.id.equals(savedGroup.id));
         if (idx >= 0) {
           const updated = [...groups];
@@ -309,7 +314,7 @@ export class DataSourcesService {
   async deleteDataGroup(groupId: URN): Promise<void> {
     try {
       await firstValueFrom(this.groupsClient.deleteDataGroup(groupId));
-      this.dataGroups.update((groups) =>
+      this.registry.dataGroups.update((groups) =>
         groups.filter((g) => !g.id.equals(groupId)),
       );
       if (this.activeDataGroupId()?.equals(groupId)) {

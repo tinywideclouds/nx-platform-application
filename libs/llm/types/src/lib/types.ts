@@ -3,8 +3,6 @@ import {
   ISODateTimeString,
 } from '@nx-platform-application/platform-types';
 
-import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
-
 export const TextType: URN = URN.parse('urn:llm:message-type:text');
 export const FileProposalType: URN = URN.parse(
   'urn:llm:message-type:fileProposal',
@@ -37,7 +35,7 @@ export interface CompiledCache {
   model: string;
   provider?: CompiledCacheProvider;
   expiresAt: ISODateTimeString;
-  sources: FilteredDataSource[];
+  sources: URN[];
   createdAt: ISODateTimeString;
 }
 

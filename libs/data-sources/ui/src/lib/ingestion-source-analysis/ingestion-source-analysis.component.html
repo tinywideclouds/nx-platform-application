@@ -1,0 +1,28 @@
+<div class="flex items-start gap-4">
+  <mat-icon class="text-indigo-500 text-4xl mt-1">
+    {{ status() === 'unsynced' ? 'cloud_download' : 'analytics' }}
+  </mat-icon>
+  <div class="flex-grow">
+    <h3 class="m-0 text-lg font-semibold text-indigo-900">
+      {{ status() === 'unsynced' ? 'Ready for First Sync' : 'Analysis' }}
+    </h3>
+    <p class="m-0 text-indigo-700 mt-1">
+      This source contains
+      <strong>{{ analysis().totalFiles | number }} text files</strong> totaling
+      roughly <strong>{{ formatBytes(analysis().totalSizeBytes) }}</strong
+      >.
+    </p>
+
+    @if (analysis().extensions) {
+      <div class="flex flex-wrap gap-2 mt-3">
+        @for (ext of analysis().extensions | keyvalue; track ext.key) {
+          <span
+            class="text-xs bg-indigo-100/50 border border-indigo-200 text-indigo-800 px-2 py-1 rounded-md font-medium"
+          >
+            {{ ext.key }}: {{ ext.value }}
+          </span>
+        }
+      </div>
+    }
+  </div>
+</div>

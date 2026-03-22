@@ -2,116 +2,132 @@ import {
   Component,
   input,
   output,
-  effect,
   signal,
-  computed,
+  effect,
+  inject,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-
-// MATERIAL
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule, MatChipInputEvent } from '@angular/material/chips';
+import { ENTER, COMMA } from '@angular/cdk/keycodes';
 
-// TYPES
-import { DataSourceBundle } from '@nx-platform-application/data-sources-types';
-
-export interface DataSourceFormPayload {
-  repo: string;
-  branch: string;
-}
+import {
+  DataSource,
+  DataSourceRequest,
+} from '@nx-platform-application/data-sources-types';
+import { YamlRulesService } from '@nx-platform-application/data-sources-features-state';
+import { URN } from '@nx-platform-application/platform-types';
 
 @Component({
-  selector: 'data-sources-form',
+  selector: 'data-source-form',
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
     MatFormFieldModule,
     MatInputModule,
+    MatButtonModule,
     MatIconModule,
+    MatChipsModule,
   ],
   templateUrl: './data-source-form.component.html',
   styleUrl: './data-source-form.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DataSourceFormComponent {
-  // --- INPUTS ---
-  cache = input<DataSourceBundle | null>(null);
-  isNew = input<boolean>(false);
+  private yamlParser = inject(YamlRulesService);
 
-  // --- OUTPUTS ---
-  errorsChange = output<number>();
-  saveRepo = output<DataSourceFormPayload>();
+  // Inputs
+  activeSource = input<DataSource | null>(null);
+  isEditing = input<boolean>(false);
+  isSaving = input<boolean>(false);
 
-  // --- LOCAL DRAFT STATE ---
-  repo = signal<string>('');
-  repoTouched = signal<boolean>(false);
+  // Outputs
+  save = output<DataSourceRequest>();
+  cancel = output<void>();
 
-  branch = signal<string>('main');
-  branchTouched = signal<boolean>(false);
+  editRequested = output<URN>();
+  deleteRequested = output<URN>();
+
+  // Local Transient State
+  draftName = signal<string>('');
+  draftIncludes = signal<string[]>([]);
+  draftExcludes = signal<string[]>([]);
+
+  readonly separatorKeysCodes = [ENTER, COMMA] as const;
 
   constructor() {
-    // Sync external state to local draft
     effect(() => {
-      const cacheData = this.cache();
-      const isNewSource = this.isNew();
+      const source = this.activeSource();
+      const editing = this.isEditing();
 
-      if (isNewSource) {
-        this.repo.set('');
-        this.branch.set('main');
-        this.repoTouched.set(false);
-        this.branchTouched.set(false);
-      } else if (cacheData) {
-        this.repo.set(cacheData.repo);
-        this.branch.set(cacheData.branch);
+      if (editing) {
+        this.draftName.set(source?.name || '');
+
+        const yaml =
+          source?.rulesYaml ||
+          'include:\n  - "**/*"\nexclude:\n  - "node_modules/**"';
+        const parsed = this.yamlParser.parse(yaml);
+
+        this.draftIncludes.set(parsed.include);
+        this.draftExcludes.set(parsed.exclude);
       }
-    });
-
-    // Bubble up error count to the parent page (for toolbar button disabling)
-    effect(() => {
-      this.errorsChange.emit(this.totalErrors());
     });
   }
 
-  // --- VALIDATION (Computed) ---
+  // --- Chip Interaction Logic ---
 
-  repoError = computed(() => {
-    const val = this.repo().trim();
-    if (!val) return 'Repository is required';
-    if (!val.includes('/')) return 'Must be in owner/repo format';
-    return null;
-  });
+  addInclude(event: MatChipInputEvent): void {
+    const value = (event.value || '').trim();
+    if (value) this.draftIncludes.update((arr) => [...arr, value]);
+    event.chipInput!.clear();
+  }
 
-  branchError = computed(() => {
-    if (!this.branch().trim()) return 'Branch is required';
-    return null;
-  });
+  removeInclude(pattern: string): void {
+    this.draftIncludes.update((arr) => arr.filter((p) => p !== pattern));
+  }
 
-  totalErrors = computed(() => {
-    let count = 0;
-    // We only care about form validation errors if we are creating a new record
-    if (this.isNew()) {
-      if (this.repoError()) count++;
-      if (this.branchError()) count++;
-    }
-    return count;
-  });
+  addExclude(event: MatChipInputEvent): void {
+    const value = (event.value || '').trim();
+    if (value) this.draftExcludes.update((arr) => [...arr, value]);
+    event.chipInput!.clear();
+  }
 
-  // --- ACTIONS ---
+  removeExclude(pattern: string): void {
+    this.draftExcludes.update((arr) => arr.filter((p) => p !== pattern));
+  }
 
-  // Exposed publicly for the Smart Page @ViewChild to call
-  triggerSave() {
-    this.repoTouched.set(true);
-    this.branchTouched.set(true);
+  // --- Actions ---
 
-    if (this.totalErrors() === 0 && this.isNew()) {
-      this.saveRepo.emit({
-        repo: this.repo().trim(),
-        branch: this.branch().trim(),
-      });
-    }
+  onSave() {
+    if (!this.draftName()) return;
+
+    // Convert the arrays back into YAML for the backend payload
+    const finalYaml = this.yamlParser.stringify({
+      include: this.draftIncludes(),
+      exclude: this.draftExcludes(),
+    });
+
+    this.save.emit({
+      name: this.draftName(),
+      rulesYaml: finalYaml,
+    });
+  }
+
+  onCancel() {
+    this.cancel.emit();
+  }
+
+  onEdit() {
+    const source = this.activeSource();
+    if (source) this.editRequested.emit(source.id);
+  }
+
+  onDelete() {
+    const source = this.activeSource();
+    if (source) this.deleteRequested.emit(source.id);
   }
 }

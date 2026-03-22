@@ -169,7 +169,19 @@ export class LlmSessionWorkspaceComponent {
   onSelectFile(path: string): void {
     this.selectedFilePath.set(path);
     this.selectedProposalId.set(null);
-    this.workspaceState.loadContent(path);
+
+    // We now fetch the targetId from the workspace state and pass it down
+    const targetId = this.workspaceState.activeWorkspaceTarget();
+    if (targetId) {
+      this.workspaceState.loadContent(path, targetId);
+    } else {
+      // Fallback or warning if there is no active target
+      this.snackBar.open(
+        'Cannot load file: No active workspace target set for this session.',
+        'Close',
+        { duration: 3000 },
+      );
+    }
   }
 
   onPreviewSelected(proposalId: string | null): void {

@@ -13,10 +13,9 @@ import {
   CompiledCache,
   ContextAttachment,
 } from '@nx-platform-application/llm-types';
-import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
 
 export interface CompileCachePayload {
-  sources: FilteredDataSource[]; // THE PHYSICAL FILES (Unrolled by the Builder)
+  sources: URN[]; // Flat array of DataSource Stream URNs
   model: string;
   ttlHours?: number;
 }
@@ -39,9 +38,6 @@ export class CompiledCacheService {
 
   // --- QUERIES ---
 
-  /**
-   * Reloads the active caches from IndexedDB and passively purges expired ones.
-   */
   async refresh(): Promise<void> {
     try {
       const allCaches = await this.cacheStorage.getAllCaches();
@@ -65,25 +61,17 @@ export class CompiledCacheService {
   }
 
   /**
-   * Helper to generate a deterministic string hash from an array of sources.
-   * This allows us to mathematically compare two source arrays regardless of order.
+   * Helper to generate a deterministic string hash from an array of URNs.
    */
-  private hashSources(sources: FilteredDataSource[]): string {
+  private hashSources(sources: URN[]): string {
     return sources
-      .map(
-        (s) =>
-          `${s.dataSourceId.toString()}|${s.profileId?.toString() || 'none'}`,
-      )
+      .map((s) => s.toString())
       .sort()
       .join('::');
   }
 
-  /**
-   * THE MAGIC LOOKUP: Checks if we already have a warm cache for this exact
-   * combination of physical files and this specific LLM model.
-   */
   getValidCache(
-    requestedSources: FilteredDataSource[],
+    requestedSources: URN[],
     model: string,
   ): CompiledCache | undefined {
     if (requestedSources.length === 0) return undefined;
@@ -93,14 +81,11 @@ export class CompiledCacheService {
     const requestedHash = this.hashSources(requestedSources);
 
     return caches.find((cache) => {
-      // 1. Must match the exact LLM model
       if (cache.model !== model) return false;
 
-      // 2. Must match the exact physical files
       const cacheHash = this.hashSources(cache.sources);
       if (cacheHash !== requestedHash) return false;
 
-      // 3. Must not be expired
       const expiry = Temporal.Instant.from(cache.expiresAt);
       return Temporal.Instant.compare(expiry, now) > 0;
     });
@@ -122,12 +107,12 @@ export class CompiledCacheService {
             .toString() as ISODateTimeString)
         : undefined;
 
-      // Map physical domain sources to network attachments
+      // Note: Depending on your LLM_NETWORK_CLIENT's expected shape,
+      // ContextAttachment may need updating to just hold the URN instead of dataSourceId/profileId.
       const mappedAttachments: ContextAttachment[] = payload.sources.map(
-        (s) => ({
+        (urn) => ({
           id: URN.create('attachment', crypto.randomUUID(), 'llm'),
-          dataSourceId: s.dataSourceId,
-          profileId: s.profileId,
+          dataSourceId: urn,
         }),
       );
 
@@ -146,10 +131,7 @@ export class CompiledCacheService {
         sources: payload.sources,
       };
 
-      const savedURN = await this.cacheStorage.saveCache(newCache);
-
-      console.log('got good response', response, savedURN);
-
+      await this.cacheStorage.saveCache(newCache);
       await this.refresh();
 
       this.snackBar.open('Context cache compiled successfully!', 'Close', {

@@ -1,75 +1,110 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DataSourceFormComponent } from './data-source-form.component';
+import { YamlRulesService } from '@nx-platform-application/data-sources-features-state';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { URN } from '@nx-platform-application/platform-types';
-import { DataSourceBundle } from '@nx-platform-application/data-sources-types';
+import { DataSource } from '@nx-platform-application/data-sources-types';
 
 describe('DataSourceFormComponent', () => {
   let component: DataSourceFormComponent;
   let fixture: ComponentFixture<DataSourceFormComponent>;
 
+  const mockYamlService = {
+    parse: vi
+      .fn()
+      .mockReturnValue({ include: ['**/*.ts'], exclude: ['vendor/**'] }),
+    stringify: vi.fn().mockReturnValue('include:\n  - "**/*.ts"'),
+  };
+
+  const mockSource: DataSource = {
+    id: URN.parse('urn:datasource:1'),
+    name: 'Frontend Types',
+    rulesYaml: 'mock yaml',
+    createdAt: '2026-03-09T10:00:00Z',
+    updatedAt: '2026-03-09T10:00:00Z',
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [DataSourceFormComponent, BrowserAnimationsModule],
+      providers: [{ provide: YamlRulesService, useValue: mockYamlService }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(DataSourceFormComponent);
     component = fixture.componentInstance;
   });
 
-  it('should enforce validation rules when creating a new data source', () => {
-    fixture.componentRef.setInput('isNew', true);
+  it('should initialize draft state when editing an active source', () => {
+    fixture.componentRef.setInput('activeSource', mockSource);
+    fixture.componentRef.setInput('isEditing', true);
     fixture.detectChanges();
 
-    // Initial state: empty repo, branch defaults to 'main'
-    expect(component.totalErrors()).toBe(1);
-    expect(component.repoError()).toBe('Repository is required');
-
-    // Invalid repo format
-    component.repo.set('angular');
-    expect(component.repoError()).toBe('Must be in owner/repo format');
-
-    // Valid repo format
-    component.repo.set('angular/angular');
-    expect(component.repoError()).toBeNull();
-    expect(component.totalErrors()).toBe(0);
-
-    // Invalid branch
-    component.branch.set('   ');
-    expect(component.branchError()).toBe('Branch is required');
+    expect(component.draftName()).toBe('Frontend Types');
+    expect(mockYamlService.parse).toHaveBeenCalledWith('mock yaml');
+    expect(component.draftIncludes()).toEqual(['**/*.ts']);
+    expect(component.draftExcludes()).toEqual(['vendor/**']);
   });
 
-  it('should emit saveRepo when triggerSave is called and the form is valid', () => {
-    fixture.componentRef.setInput('isNew', true);
-    component.repo.set('test/repo');
-    component.branch.set('main');
+  it('should correctly add and remove chips from draft state', () => {
+    fixture.componentRef.setInput('isEditing', true);
     fixture.detectChanges();
 
-    const emitSpy = vi.spyOn(component.saveRepo, 'emit');
-    component.triggerSave();
+    // Add Include
+    component.addInclude({
+      value: 'src/**/*.go',
+      chipInput: { clear: vi.fn() },
+    } as any);
+    expect(component.draftIncludes()).toContain('src/**/*.go');
 
-    expect(emitSpy).toHaveBeenCalledWith({ repo: 'test/repo', branch: 'main' });
+    // Remove Include
+    component.removeInclude('**/*.ts');
+    expect(component.draftIncludes()).not.toContain('**/*.ts');
+
+    // Add Exclude
+    component.addExclude({
+      value: '.git/**',
+      chipInput: { clear: vi.fn() },
+    } as any);
+    expect(component.draftExcludes()).toContain('.git/**');
+
+    // Remove Exclude
+    component.removeExclude('vendor/**');
+    expect(component.draftExcludes()).not.toContain('vendor/**');
   });
 
-  it('should populate draft state when an existing data source is provided and ignore validation', () => {
-    const mockSource: DataSourceBundle = {
-      id: URN.parse('urn:data-source:1'),
-      repo: 'existing/repo',
-      branch: 'dev',
-      lastSyncedAt: 0,
-      fileCount: 0,
-      status: 'ready',
-    };
-
-    fixture.componentRef.setInput('isNew', false);
-    fixture.componentRef.setInput('cache', mockSource);
+  it('should emit the stringified payload when saving', () => {
+    fixture.componentRef.setInput('isEditing', true);
+    component.draftName.set('New Name');
     fixture.detectChanges();
 
-    expect(component.repo()).toBe('existing/repo');
-    expect(component.branch()).toBe('dev');
+    const emitSpy = vi.spyOn(component.save, 'emit');
 
-    // Existing sources shouldn't bubble up validation errors to block the UI
-    expect(component.totalErrors()).toBe(0);
+    component.onSave();
+
+    expect(mockYamlService.stringify).toHaveBeenCalledWith({
+      include: component.draftIncludes(),
+      exclude: component.draftExcludes(),
+    });
+
+    expect(emitSpy).toHaveBeenCalledWith({
+      name: 'New Name',
+      rulesYaml: 'include:\n  - "**/*.ts"', // From our stringify mock
+    });
+  });
+
+  it('should emit URNs for edit and delete actions', () => {
+    fixture.componentRef.setInput('activeSource', mockSource);
+    fixture.componentRef.setInput('isEditing', false);
+    fixture.detectChanges();
+
+    const editSpy = vi.spyOn(component.editRequested, 'emit');
+    const deleteSpy = vi.spyOn(component.deleteRequested, 'emit');
+
+    component.onEdit();
+    expect(editSpy).toHaveBeenCalledWith(mockSource.id);
+
+    component.onDelete();
+    expect(deleteSpy).toHaveBeenCalledWith(mockSource.id);
   });
 });

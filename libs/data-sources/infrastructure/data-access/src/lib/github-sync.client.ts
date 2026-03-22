@@ -1,19 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { firstValueFrom, Observable } from 'rxjs';
+import { Observable, Subscriber } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import {
-  DataSourceBundle,
+  GithubIngestionTarget,
   FileMetadata,
-  SyncResponse,
-  SyncStreamEvent,
   FilterRules,
-  serializeCreateDataSourceRequest,
+  SyncStreamEvent,
+  serializeCreateIngestionTargetRequest,
   serializeSyncRequest,
-  deserializeDataSourceBundle,
-  deserializeDataSourceBundleList,
-  deserializeSyncResponse,
+  deserializeIngestionTarget,
+  deserializeIngestionTargetList,
   deserializeFileMetadataList,
 } from '@nx-platform-application/data-sources-types';
 
@@ -22,120 +20,106 @@ export class GithubSyncClient {
   private http = inject(HttpClient);
   private readonly baseUrl = '';
 
-  async createDataSource(
+  listIngestionTargets(): Observable<GithubIngestionTarget[]> {
+    return this.http
+      .get(`${this.baseUrl}/v1/data/targets`, { responseType: 'text' })
+      .pipe(map(deserializeIngestionTargetList));
+  }
+
+  createIngestionTarget(
     repo: string,
     branch: string,
-  ): Promise<DataSourceBundle> {
-    const bodyString = serializeCreateDataSourceRequest(repo, branch);
-    const rawResponse = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/v1/data/sources`, bodyString, {
-        headers: { 'Content-Type': 'application/json' },
-        responseType: 'text',
-      }),
-    );
-    return deserializeDataSourceBundle(rawResponse);
-  }
-
-  async executeSync(
-    dataSourceId: URN,
-    ingestionRules: FilterRules,
-  ): Promise<SyncResponse> {
-    const syncUrl = `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/sync`;
-    const bodyString = serializeSyncRequest(ingestionRules);
-
-    const rawResponse = await firstValueFrom(
-      this.http.post(syncUrl, bodyString, {
-        headers: { 'Content-Type': 'application/json' },
-        responseType: 'text',
-      }),
-    );
-    return deserializeSyncResponse(rawResponse);
-  }
-
-  executeSyncStream(
-    dataSourceId: URN,
-    ingestionRules: FilterRules,
-  ): Observable<SyncStreamEvent> {
-    const syncUrl = `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/sync`;
-    const bodyString = serializeSyncRequest(ingestionRules);
-
-    return new Observable<SyncStreamEvent>((subscriber) => {
-      const controller = new AbortController();
-
-      fetch(syncUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-        },
-        body: bodyString,
-        signal: controller.signal,
-      })
-        .then(async (response) => {
-          if (!response.ok)
-            throw new Error(`Sync failed with status: ${response.status}`);
-          const reader = response.body?.getReader();
-          if (!reader)
-            throw new Error('ReadableStream not supported by browser');
-
-          const decoder = new TextDecoder('utf-8');
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data: SyncStreamEvent = JSON.parse(line.substring(6));
-                  subscriber.next(data);
-                  if (data.stage === 'error') {
-                    subscriber.error(
-                      new Error(
-                        data.details?.['message'] || 'Sync stream error',
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  console.error('Failed to parse SSE line', line, e);
-                }
-              }
-            }
-          }
-          subscriber.complete();
+  ): Promise<GithubIngestionTarget> {
+    const bodyString = serializeCreateIngestionTargetRequest(repo, branch);
+    return new Promise((resolve, reject) => {
+      this.http
+        .post(`${this.baseUrl}/v1/data/targets`, bodyString, {
+          headers: { 'Content-Type': 'application/json' },
+          responseType: 'text',
         })
-        .catch((err) => subscriber.error(err));
-
-      return () => controller.abort();
+        .subscribe({
+          next: (res) => resolve(deserializeIngestionTarget(res)),
+          error: (err) => reject(err),
+        });
     });
   }
 
-  listDataSources(): Observable<DataSourceBundle[]> {
-    return this.http
-      .get(`${this.baseUrl}/v1/data/sources`, { responseType: 'text' })
-      .pipe(map(deserializeDataSourceBundleList));
+  executeSyncStream(
+    targetId: URN,
+    rules: FilterRules,
+  ): Observable<SyncStreamEvent> {
+    return new Observable<SyncStreamEvent>(
+      (subscriber: Subscriber<SyncStreamEvent>) => {
+        const bodyString = serializeSyncRequest(rules);
+        const url = `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/sync`;
+
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: bodyString,
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`Sync failed with status: ${response.status}`);
+            }
+            if (!response.body) {
+              throw new Error('ReadableStream not supported in this browser.');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const dataStr = line.substring(6).trim();
+                    if (dataStr) {
+                      const eventPayload = JSON.parse(dataStr);
+                      // Directly emit without NgZone
+                      subscriber.next(eventPayload);
+                    }
+                  }
+                }
+              }
+              // Complete without NgZone
+              subscriber.complete();
+            } catch (err) {
+              subscriber.error(err);
+            } finally {
+              reader.releaseLock();
+            }
+          })
+          .catch((err) => {
+            subscriber.error(err);
+          });
+      },
+    );
   }
 
-  getFiles(dataSourceId: URN): Observable<FileMetadata[]> {
+  getTargetFiles(targetId: URN): Observable<FileMetadata[]> {
     return this.http
       .get(
-        `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/files`,
+        `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/files`,
         { responseType: 'text' },
       )
       .pipe(map(deserializeFileMetadataList));
   }
 
-  getFileContent(
-    dataSourceId: URN,
+  getTargetFileContent(
+    targetId: URN,
     base64Path: string,
   ): Observable<{ content: string }> {
     return this.http.get<{ content: string }>(
-      `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}/files/${base64Path}/content`,
+      `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/files/${base64Path}/content`,
     );
   }
 }

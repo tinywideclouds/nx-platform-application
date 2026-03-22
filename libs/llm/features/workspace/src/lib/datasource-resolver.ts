@@ -1,51 +1,40 @@
-import { Injectable, inject } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
-import { filter, firstValueFrom } from 'rxjs';
-import { MatSnackBar } from '@angular/material/snack-bar';
+// libs/llm/features/workspace/src/lib/datasource-resolver.ts
 
+import { Injectable, inject } from '@angular/core';
 import { WorkspaceAttachment } from '@nx-platform-application/llm-types';
-import { FilteredDataSource } from '@nx-platform-application/data-sources-types';
-import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
+import { URN } from '@nx-platform-application/platform-types';
+
+// We strictly import from the API contract!
+import { DataSourcesApiFacade } from '@nx-platform-application/data-sources-api';
 
 @Injectable({ providedIn: 'root' })
 export class DataSourceResolver {
-  private readonly dataSources = inject(DataSourcesService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly apiFacade = inject(DataSourcesApiFacade);
 
   /**
-   * Translates a high-level UI intent (Blueprint or Repo) into the
-   * flat array of physical sources required by infrastructure.
+   * Translates a high-level UI intent (Blueprint or Single Source) into the
+   * flat array of physical DataSource URNs required by the workspace.
    */
-  async resolve(intent: WorkspaceAttachment): Promise<FilteredDataSource[]> {
-    // 1. Wait for hydration if it's a blueprint
-    if (
-      intent.resourceType === 'group' &&
-      this.dataSources.isDataGroupsLoading()
-    ) {
-      this.snackBar.open('... waiting for blueprints to load', undefined, {
-        duration: 1500,
-      });
-      await firstValueFrom(
-        toObservable(this.dataSources.isDataGroupsLoading).pipe(
-          filter((l) => !l),
-        ),
-      );
-    }
-
-    // 2. Unroll
+  async resolve(intent: WorkspaceAttachment): Promise<URN[]> {
+    // 1. Unroll Single Source
     if (intent.resourceType === 'source') {
-      return [{ dataSourceId: intent.resourceUrn }];
+      return [intent.resourceUrn];
     }
 
-    const group = this.dataSources
-      .dataGroups()
-      .find((g) => g.id.equals(intent.resourceUrn));
-    if (!group) {
-      throw new Error(
-        `Data Group ${intent.resourceUrn} not found for resolution.`,
-      );
+    // 2. Unroll Data Group (Blueprint) using the Facade
+    if (intent.resourceType === 'group') {
+      const group = await this.apiFacade.getDataGroup(intent.resourceUrn);
+
+      if (!group) {
+        throw new Error(
+          `Data Group ${intent.resourceUrn} not found for resolution.`,
+        );
+      }
+
+      // Return the pure flattened array of DataSource URNs
+      return group.dataSourceIds;
     }
 
-    return group.sources;
+    return [];
   }
 }

@@ -366,3 +366,24 @@ nx g @nx/angular:library --name=llm-features-digest --directory=libs/llm/feature
 
 
 nx g @nx/workspace:move --project=llm-features-digest --destination=libs/llm/features/memory --importPath=@nx-platform-application/llm-features-memory
+
+
+nx g @nx/angular:library --name=llm-tools-domain-context --directory=libs/llm/domain/context --tags="scope:llm"  
+
+
+nx g @nx/workspace:move --project=llm-domain-digest-engine --destination=libs/llm/domain/digest --importPath=@nx-platform-application/llm-domain-digest
+
+nx g @nx/angular:library --name=llm-state-app --directory=libs/llm/state/app --tags="scope:llm"  
+
+
+
+
+nx g @nx/angular:library --name=data-sources-api --directory=libs/data-sources/api --tags="scope:data-sources"
+
+
+nx g @nx/angular:library --name=llm-domain-data-target --directory=libs/llm/domain/data-target --tags="scope:llm"  
+
+
+nx g @nx/angular:library --name=data-sources-domain-registry --directory=libs/data-sources/domain/registry --tags="scope:data-sources"
+
+
