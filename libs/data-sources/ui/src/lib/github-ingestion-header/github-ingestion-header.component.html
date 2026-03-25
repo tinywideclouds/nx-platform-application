@@ -34,7 +34,7 @@
       @if (source()?.status === 'ready') {
         <span class="text-xs text-gray-400 ml-2 border-l border-gray-300 pl-2">
           Synced
-          {{ source()?.lastSyncedAt! * 1000 | date: 'short' }}
+          {{ source()?.lastSyncedAt! | date: 'short' }}
         </span>
       }
     </div>

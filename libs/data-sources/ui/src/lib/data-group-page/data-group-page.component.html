@@ -5,31 +5,31 @@
     >
       <div class="flex flex-col items-center gap-4 text-gray-400">
         <mat-spinner diameter="40"></mat-spinner>
-        <span>Loading Context Blueprints...</span>
+        <span>Loading Groups...</span>
       </div>
     </div>
-  } @else if (state.githubTargets().length === 0) {
+  } @else if (state.dataSources().length === 0) {
     <div
       class="flex-grow flex flex-col items-center justify-center p-8 text-center animate-fade-in"
     >
       <div class="bg-indigo-50 p-6 rounded-full text-indigo-500 mb-6 shadow-sm">
-        <mat-icon class="text-6xl scale-150 m-0">inventory_2</mat-icon>
+        <mat-icon class="text-6xl scale-150 m-0">bolt</mat-icon>
       </div>
       <h2 class="text-2xl font-bold text-gray-900 mb-3">
-        You need raw materials first
+        You need Data Streams first
       </h2>
       <p class="text-gray-500 max-w-md mb-8 leading-relaxed">
-        Context Groups (Blueprints) are built by combining multiple streams
-        together. Sync at least one repository to get started.
+        Data Groups are built by bundling multiple Data Streams together. Create
+        at least one Stream to get started.
       </p>
       <button
         type="button"
         mat-flat-button
         color="primary"
         class="px-8 py-6 text-lg"
-        (click)="goToNewRepo()"
+        (click)="goToNewStream()"
       >
-        <mat-icon>add</mat-icon> Add a Repository
+        <mat-icon>add</mat-icon> Create a Stream
       </button>
     </div>
   } @else if (!isNew() && !state.activeDataGroup()) {
@@ -62,11 +62,7 @@
         >
           <div>
             <h2 class="text-2xl font-bold text-gray-900 m-0">
-              {{
-                isNew()
-                  ? 'Create Context Blueprint'
-                  : state.activeDataGroup()?.name
-              }}
+              {{ isNew() ? 'Create Group' : state.activeDataGroup()?.name }}
             </h2>
             <p class="text-sm text-gray-500 mt-1">
               {{
@@ -79,7 +75,7 @@
 
           <data-sources-group-form
             [group]="state.activeDataGroup()"
-            [availableTargets]="state.githubTargets()"
+            [availableStreams]="state.dataSources()"
             [isEditing]="isEditing()"
             (requestEdit)="isEditing.set(true)"
             (save)="onSave($event)"

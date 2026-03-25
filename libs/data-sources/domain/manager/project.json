@@ -1,0 +1,13 @@
+{
+  "name": "data-sources-domain-manager",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/data-sources/domain/manager/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:data-sources"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

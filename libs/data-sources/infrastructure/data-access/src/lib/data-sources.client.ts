@@ -16,12 +16,9 @@ export class DataSourcesClient {
   private http = inject(HttpClient);
   private readonly baseUrl = '';
 
-  listDataSources(targetId: URN): Observable<DataSource[]> {
+  listDataSources(): Observable<DataSource[]> {
     return this.http
-      .get(
-        `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/sources`,
-        { responseType: 'text' },
-      )
+      .get(`${this.baseUrl}/v1/data/sources`, { responseType: 'text' })
       .pipe(map(deserializeDataSourceList));
   }
 
@@ -43,14 +40,13 @@ export class DataSourcesClient {
   }
 
   updateDataSource(
-    targetId: URN,
     dataSourceId: URN,
     req: DataSourceRequest,
   ): Observable<DataSource> {
     const bodyString = serializeDataSourceRequest(req);
     return this.http
       .put(
-        `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/sources/${encodeURIComponent(dataSourceId.toString())}`,
+        `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}`,
         bodyString,
         {
           headers: { 'Content-Type': 'application/json' },
@@ -60,9 +56,9 @@ export class DataSourcesClient {
       .pipe(map(deserializeDataSource));
   }
 
-  deleteDataSource(targetId: URN, dataSourceId: URN): Observable<void> {
+  deleteDataSource(dataSourceId: URN): Observable<void> {
     return this.http.delete<void>(
-      `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/sources/${encodeURIComponent(dataSourceId.toString())}`,
+      `${this.baseUrl}/v1/data/sources/${encodeURIComponent(dataSourceId.toString())}`,
     );
   }
 }

@@ -1,0 +1,112 @@
+<div
+  class="border rounded-xl shadow-sm overflow-hidden flex flex-col w-full"
+  [ngClass]="{
+    'bg-slate-50 border-slate-200': colorTheme() === 'slate',
+    'bg-white border-green-200': colorTheme() === 'green',
+    'bg-white border-indigo-200': colorTheme() === 'indigo',
+  }"
+>
+  <div
+    class="px-5 py-4 border-b flex items-center justify-between"
+    [ngClass]="{
+      'bg-slate-100/50 border-slate-200': colorTheme() === 'slate',
+      'bg-green-50/50 border-green-100': colorTheme() === 'green',
+      'bg-indigo-50/50 border-indigo-100': colorTheme() === 'indigo',
+    }"
+  >
+    <div class="flex items-center gap-3">
+      <mat-icon
+        class="m-0"
+        [ngClass]="{
+          'text-slate-500': colorTheme() === 'slate',
+          'text-green-600': colorTheme() === 'green',
+          'text-indigo-500': colorTheme() === 'indigo',
+        }"
+        >{{ icon() }}</mat-icon
+      >
+      <h3
+        class="font-semibold m-0 text-base tracking-tight"
+        [ngClass]="{
+          'text-slate-700': colorTheme() === 'slate',
+          'text-green-900': colorTheme() === 'green',
+          'text-indigo-900': colorTheme() === 'indigo',
+        }"
+      >
+        {{ title() }}
+      </h3>
+    </div>
+    @if (subtitle()) {
+      <span
+        class="text-xs font-medium"
+        [ngClass]="{
+          'text-slate-500': colorTheme() === 'slate',
+          'text-green-700': colorTheme() === 'green',
+          'text-indigo-700': colorTheme() === 'indigo',
+        }"
+      >
+        {{ subtitle() }}
+      </span>
+    }
+  </div>
+
+  <div class="p-5 flex flex-col gap-5">
+    <div class="flex flex-wrap gap-8 md:gap-12 items-center">
+      <div>
+        <p
+          class="text-xs text-gray-500 uppercase tracking-wider m-0 mb-1 font-medium"
+        >
+          Total Files
+        </p>
+        <p class="text-3xl font-light text-gray-900 m-0 leading-none">
+          {{ analysis()?.totalFiles || fallbackFileCount() | number }}
+        </p>
+      </div>
+
+      @if (analysis()?.totalSizeBytes) {
+        <div>
+          <p
+            class="text-xs text-gray-500 uppercase tracking-wider m-0 mb-1 font-medium"
+          >
+            Total Volume
+          </p>
+          <p class="text-3xl font-light text-gray-900 m-0 leading-none">
+            {{ analysis()!.totalSizeBytes / 1024 / 1024 | number: '1.2-2' }}
+            <span class="text-lg text-gray-400">MB</span>
+          </p>
+        </div>
+      }
+
+      @if (topExtensions().length > 0) {
+        <div class="flex-grow">
+          <p
+            class="text-xs text-gray-500 uppercase tracking-wider m-0 mb-1.5 font-medium"
+          >
+            Top File Types
+          </p>
+          <div class="flex flex-wrap gap-2">
+            @for (ext of topExtensions(); track ext.ext) {
+              <span
+                class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded border border-gray-200 shadow-sm flex items-center gap-1.5"
+              >
+                {{ ext.ext }}
+                <span
+                  class="bg-white text-gray-500 px-1 rounded-sm border border-gray-100 font-mono text-[10px]"
+                  >{{ ext.count }}</span
+                >
+              </span>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (warningMessage()) {
+      <div
+        class="text-xs text-amber-800 flex items-center gap-1.5 mt-1 bg-amber-50/70 p-2.5 rounded border border-amber-200 font-medium"
+      >
+        <mat-icon class="scale-75 m-0 h-5 w-5 text-amber-600">warning</mat-icon>
+        {{ warningMessage() }}
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,16 @@
+.mat-tree {
+  background: transparent;
+}
+
+/* Override default mat-icon-button sizing for a tighter tree */
+.mat-tree-node button.mat-mdc-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  .mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+  }
+}

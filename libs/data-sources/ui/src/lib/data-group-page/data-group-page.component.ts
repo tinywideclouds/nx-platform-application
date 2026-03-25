@@ -67,8 +67,8 @@ export class DataGroupPageComponent {
     });
   }
 
-  goToNewRepo() {
-    this.router.navigate(['/data-sources/repos/new']);
+  goToNewStream() {
+    this.router.navigate(['/data-sources/sources/new']);
   }
 
   async onSave(req: DataGroupRequest) {
@@ -89,10 +89,10 @@ export class DataGroupPageComponent {
     const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
       width: '450px',
       data: {
-        title: 'Delete Context Blueprint',
+        title: 'Delete Context Group',
         message:
-          'Are you sure you want to delete this blueprint? This will NOT delete the underlying repositories or their files.',
-        confirmText: 'Delete Blueprint',
+          'Are you sure you want to delete this group? This will NOT delete the underlying streams or repositories.',
+        confirmText: 'Delete Group',
         confirmColor: 'warn',
         icon: 'warning',
       },

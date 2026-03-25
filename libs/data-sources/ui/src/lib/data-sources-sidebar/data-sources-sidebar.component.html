@@ -4,157 +4,194 @@
   <div
     class="p-4 flex flex-col gap-4 border-b border-gray-200 bg-white shrink-0"
   >
-    <div class="flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-gray-800 m-0">Data Context</h2>
-      <a
-        mat-icon-button
-        color="primary"
-        [routerLink]="
-          activeView() === 'repos'
-            ? '/data-sources/repos/new'
-            : '/data-sources/groups/new'
-        "
-        [aria-label]="activeView() === 'repos' ? 'Add Repository' : 'Add Group'"
+    @if (showIngestion()) {
+      <div
+        class="bg-gray-100 p-1 rounded-lg flex w-full border border-gray-200"
       >
-        <mat-icon>add</mat-icon>
-      </a>
-    </div>
+        <button
+          type="button"
+          (click)="switchPillar('sources')"
+          [class.bg-white]="activePillar() === 'sources'"
+          [class.shadow-sm]="activePillar() === 'sources'"
+          [class.text-gray-900]="activePillar() === 'sources'"
+          [class.text-gray-500]="activePillar() !== 'sources'"
+          class="flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-1"
+        >
+          <mat-icon class="scale-75 m-0 h-5 w-5">output</mat-icon> Sources
+        </button>
 
-    <div class="bg-gray-100 p-1 rounded-lg flex w-full border border-gray-200">
-      <button
-        type="button"
-        (click)="switchView('repos')"
-        [class.bg-white]="activeView() === 'repos'"
-        [class.shadow-sm]="activeView() === 'repos'"
-        [class.text-gray-900]="activeView() === 'repos'"
-        [class.text-gray-500]="activeView() !== 'repos'"
-        class="flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer text-center"
-      >
-        Repositories
-      </button>
-      <button
-        type="button"
-        (click)="switchView('groups')"
-        [class.bg-white]="activeView() === 'groups'"
-        [class.shadow-sm]="activeView() === 'groups'"
-        [class.text-gray-900]="activeView() === 'groups'"
-        [class.text-gray-500]="activeView() !== 'groups'"
-        class="flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer text-center"
-      >
-        Context Groups
-      </button>
-    </div>
-  </div>
-
-  <div class="flex-grow overflow-y-auto p-2">
-    @if (activeView() === 'repos') {
-      @if (state.isTargetsLoading()) {
-        <div class="p-4 text-center text-gray-500 text-sm animate-pulse">
-          Loading repositories...
-        </div>
-      } @else if (state.githubTargets().length === 0) {
-        <div class="p-4 text-center text-gray-500 text-sm">
-          No repositories added yet.
-        </div>
-      } @else {
-        <div class="flex flex-col gap-1 animate-fade-in">
-          @for (summary of repoSummaries(); track summary.repo) {
-            <a
-              [routerLink]="['/data-sources/repos', summary.primaryTargetId]"
-              [class.bg-indigo-50]="state.activeTarget()?.repo === summary.repo"
-              [class.border-indigo-200]="
-                state.activeTarget()?.repo === summary.repo
-              "
-              [class.text-indigo-700]="
-                state.activeTarget()?.repo === summary.repo
-              "
-              [class.border-transparent]="
-                state.activeTarget()?.repo !== summary.repo
-              "
-              class="flex flex-col px-3 py-2 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer text-gray-700"
-            >
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-sm truncate pr-2">{{
-                  summary.repo
-                }}</span>
-                @if (summary.branchCount > 1) {
-                  <span
-                    class="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0 font-medium"
-                    >{{ summary.branchCount }} branches</span
-                  >
-                } @else {
-                  <span
-                    class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded shrink-0"
-                    >{{ summary.primaryBranch }}</span
-                  >
-                }
-              </div>
-              <div
-                class="flex items-center justify-between mt-1 text-xs text-gray-500"
-              >
-                <span class="capitalize">{{ summary.status }}</span>
-                @if (summary.lastSyncedAt > 0) {
-                  <span>{{
-                    summary.lastSyncedAt * 1000 | date: 'shortDate'
-                  }}</span>
-                } @else {
-                  <span>Awaiting Sync</span>
-                }
-              </div>
-            </a>
-          }
-        </div>
-      }
+        <button
+          type="button"
+          (click)="switchPillar('ingestion')"
+          [class.bg-white]="activePillar() === 'ingestion'"
+          [class.shadow-sm]="activePillar() === 'ingestion'"
+          [class.text-gray-900]="activePillar() === 'ingestion'"
+          [class.text-gray-500]="activePillar() !== 'ingestion'"
+          class="flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-1"
+        >
+          <mat-icon class="scale-75 m-0 h-5 w-5">input</mat-icon> Ingestion
+        </button>
+      </div>
     }
 
-    @if (activeView() === 'groups') {
-      @if (state.isDataGroupsLoading()) {
-        <div class="p-4 text-center text-gray-500 text-sm animate-pulse">
-          Loading groups...
+    @if (activePillar() === 'sources') {
+      <div class="flex items-center justify-between">
+        <div class="flex gap-4 text-sm font-semibold text-gray-500">
+          <button
+            (click)="switchSourcesTab('streams')"
+            [class.text-indigo-600]="activeSourcesTab() === 'streams'"
+            [class.border-b-2]="activeSourcesTab() === 'streams'"
+            [class.border-indigo-600]="activeSourcesTab() === 'streams'"
+            class="pb-1 hover:text-gray-800 transition-colors"
+          >
+            Streams
+          </button>
+          <button
+            (click)="switchSourcesTab('groups')"
+            [class.text-teal-600]="activeSourcesTab() === 'groups'"
+            [class.border-b-2]="activeSourcesTab() === 'groups'"
+            [class.border-teal-600]="activeSourcesTab() === 'groups'"
+            class="pb-1 hover:text-gray-800 transition-colors"
+          >
+            Groups
+          </button>
         </div>
-      } @else if (state.dataGroups().length === 0) {
-        <div class="p-4 text-center text-gray-500 text-sm">
-          No context groups created yet.
-        </div>
-      } @else {
-        <div class="flex flex-col gap-1 animate-fade-in">
-          @for (group of state.dataGroups(); track group.id) {
-            <a
-              [routerLink]="['/data-sources/groups', group.id.toString()]"
-              [class.bg-teal-50]="state.activeDataGroupId()?.equals(group.id)"
-              [class.border-teal-200]="
-                state.activeDataGroupId()?.equals(group.id)
-              "
-              [class.text-teal-800]="
-                state.activeDataGroupId()?.equals(group.id)
-              "
-              [class.border-transparent]="
-                !state.activeDataGroupId()?.equals(group.id)
-              "
-              class="flex flex-col px-3 py-2 rounded-md border hover:bg-gray-100 transition-colors cursor-pointer text-gray-700"
+        <a
+          mat-icon-button
+          color="primary"
+          [disabled]="!hasTargets()"
+          [matTooltip]="
+            !hasTargets() ? 'Connect an Ingestion Target first' : ''
+          "
+          [routerLink]="
+            activeSourcesTab() === 'streams'
+              ? '/data-sources/sources/new'
+              : '/data-sources/groups/new'
+          "
+        >
+          <mat-icon>add</mat-icon>
+        </a>
+      </div>
+    }
+  </div>
+
+  <div class="flex-grow overflow-y-auto">
+    @if (activePillar() === 'sources') {
+      <div class="p-2 h-full">
+        @if (!hasTargets()) {
+          <div
+            class="p-6 text-center flex flex-col gap-3 items-center justify-center h-full text-gray-500 animate-fade-in"
+          >
+            <mat-icon class="text-4xl text-gray-300">link_off</mat-icon>
+            <p class="text-sm">
+              You must connect an Ingestion Target before you can create any
+              Sources.
+            </p>
+            <button
+              mat-stroked-button
+              color="primary"
+              (click)="switchPillar('ingestion')"
             >
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-sm truncate pr-2">{{
-                  group.name
-                }}</span>
+              Go to Ingestion
+            </button>
+          </div>
+        } @else {
+          @if (activeSourcesTab() === 'streams') {
+            @if (groupedSources().length === 0) {
+              <div class="p-4 text-center text-gray-500 text-sm">
+                No streams configured yet.
               </div>
-              <div class="flex items-center justify-between mt-1">
-                <span class="text-xs text-gray-500 truncate max-w-[180px]">{{
-                  group.description || 'No description'
-                }}</span>
-                <span
-                  class="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full shrink-0 font-medium ml-2 flex items-center gap-1"
-                >
-                  <mat-icon class="text-[10px] h-2.5 w-2.5 m-0 p-0"
-                    >folder</mat-icon
-                  >
-                  {{ group.dataSourceIds.length }}
-                </span>
+            } @else {
+              <div class="flex flex-col gap-4 animate-fade-in p-1">
+                @for (group of groupedSources(); track group.targetId) {
+                  <div>
+                    <div
+                      class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1 flex items-center gap-1"
+                    >
+                      <mat-icon class="scale-[0.6] m-0 h-4 w-4"
+                        >folder</mat-icon
+                      >
+                      {{ group.repo }}
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      @for (source of group.sources; track source.id) {
+                        <a
+                          [routerLink]="[
+                            '/data-sources/sources',
+                            source.id.toString(),
+                          ]"
+                          [class.bg-indigo-50]="
+                            isActiveSource(source.id.toString())
+                          "
+                          [class.border-indigo-200]="
+                            isActiveSource(source.id.toString())
+                          "
+                          [class.text-indigo-800]="
+                            isActiveSource(source.id.toString())
+                          "
+                          class="flex items-center gap-2 px-3 py-2 rounded-md border border-transparent hover:bg-gray-100 transition-colors cursor-pointer text-gray-700 text-sm font-medium"
+                        >
+                          <mat-icon class="text-indigo-400 scale-75 m-0"
+                            >bolt</mat-icon
+                          >
+                          <span class="truncate">{{ source.name }}</span>
+                        </a>
+                      }
+                    </div>
+                  </div>
+                }
               </div>
-            </a>
+            }
           }
-        </div>
-      }
+
+          @if (activeSourcesTab() === 'groups') {
+            @if (state.dataGroups().length === 0) {
+              <div class="p-4 text-center text-gray-500 text-sm">
+                No groups created yet.
+              </div>
+            } @else {
+              <div class="flex flex-col gap-1 animate-fade-in">
+                @for (group of state.dataGroups(); track group.id) {
+                  <a
+                    [routerLink]="['/data-sources/groups', group.id.toString()]"
+                    [class.bg-teal-50]="
+                      state.activeDataGroupId()?.equals(group.id)
+                    "
+                    [class.border-teal-200]="
+                      state.activeDataGroupId()?.equals(group.id)
+                    "
+                    [class.text-teal-800]="
+                      state.activeDataGroupId()?.equals(group.id)
+                    "
+                    class="flex flex-col px-3 py-2 rounded-md border border-transparent hover:bg-gray-100 transition-colors cursor-pointer text-gray-700"
+                  >
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-sm truncate pr-2">{{
+                        group.name
+                      }}</span>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                      <span class="text-xs text-gray-500 truncate">{{
+                        group.description || 'No description'
+                      }}</span>
+                      <span
+                        class="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full shrink-0 font-medium ml-2 flex items-center gap-1"
+                      >
+                        <mat-icon class="text-[10px] h-2.5 w-2.5 m-0 p-0"
+                          >bolt</mat-icon
+                        >
+                        {{ group.dataSourceIds.length }}
+                      </span>
+                    </div>
+                  </a>
+                }
+              </div>
+            }
+          }
+        }
+      </div>
+    } @else {
+      <ingestion-sidebar class="block h-full" />
     }
   </div>
 </div>

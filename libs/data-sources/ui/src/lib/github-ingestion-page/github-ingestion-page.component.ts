@@ -10,30 +10,28 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
-import { firstValueFrom } from 'rxjs';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
-import { ConfirmationDialogComponent } from '@nx-platform-application/platform-ui-toolkit';
 import { URN } from '@nx-platform-application/platform-types';
+import {
+  FilterRules,
+  RemoteTrackingState,
+} from '@nx-platform-application/data-sources-types';
 
-// Child Components
 import {
   GithubIngestionFormComponent,
   GithubIngestionFormPayload,
 } from '../github-ingestion-form/github-ingestion-form.component';
 import { GithubIngestionHeaderComponent } from '../github-ingestion-header/github-ingestion-header.component';
-import { IngestionSourceAnalysisComponent } from '../ingestion-source-analysis/ingestion-source-analysis.component';
-import {
-  DataSourcesComponent,
-  DataSourceSaveEvent,
-} from '../data-source-page/data-source-page.component';
+import { VisualTreeFilterComponent } from '../visual-tree-filter/visual-tree-filter.component';
+import { FileAnalysisSummaryComponent } from '../file-analysis-summary/file-analysis-summary.component';
 
 @Component({
   selector: 'github-ingestion-page',
@@ -48,32 +46,32 @@ import {
     MatInputModule,
     GithubIngestionFormComponent,
     GithubIngestionHeaderComponent,
-    IngestionSourceAnalysisComponent,
-    DataSourcesComponent,
+    VisualTreeFilterComponent,
+    FileAnalysisSummaryComponent,
   ],
   templateUrl: './github-ingestion-page.component.html',
+  styleUrl: './github-ingestion-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class GithubIngestionPageComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
 
   state = inject(DataSourcesService);
 
   @ViewChild(GithubIngestionFormComponent)
   formComponent!: GithubIngestionFormComponent;
 
-  @ViewChild(DataSourcesComponent)
-  dataSourcesManager!: DataSourcesComponent;
-
   id = toSignal(this.route.paramMap.pipe(map((params) => params.get('id'))));
   isNew = computed(() => !this.id() || this.id() === 'new');
 
   formErrorCount = signal<number>(0);
 
-  ingestionIncludes = signal<string>('**/*');
-  ingestionExcludes = signal<string>('node_modules/**, vendor/**, .git/**');
+  // Tracking Update UI State
+  isCheckingRemote = signal<boolean>(false);
+  isUpdatingTracking = signal<boolean>(false);
+  pendingRemoteState = signal<RemoteTrackingState | null>(null);
 
   availableBranches = computed(() => {
     const activeRepo = this.state.activeTarget()?.repo;
@@ -81,9 +79,14 @@ export class GithubIngestionPageComponent {
     return this.state.groupedTargets()[activeRepo] || [];
   });
 
+  visualRules = signal<FilterRules>({ include: ['**/*'], exclude: [] });
+  manualIncludes = signal<string>('');
+  manualExcludes = signal<string>('');
+
   constructor() {
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const routeId = params.get('id');
+      this.pendingRemoteState.set(null); // Reset pending updates on navigation
       if (!routeId || routeId === 'new') {
         this.state.clearSelection();
       } else {
@@ -138,55 +141,78 @@ export class GithubIngestionPageComponent {
     this.router.navigate(['/data-sources/repos']);
   }
 
+  async onCheckForUpdates() {
+    const targetId = this.state.activeTargetId();
+    const currentTarget = this.state.activeTarget();
+    if (!targetId || !currentTarget) return;
+
+    this.isCheckingRemote.set(true);
+    try {
+      const remoteState = await this.state.checkRemoteTrackingState(targetId);
+      if (remoteState) {
+        if (remoteState.commitSha !== currentTarget.commitSha) {
+          this.pendingRemoteState.set(remoteState); // Trigger comparison UI
+        } else {
+          this.snackBar.open('Tracking is up to date with GitHub.', 'Close', {
+            duration: 3000,
+          });
+          this.pendingRemoteState.set(null);
+        }
+      }
+    } finally {
+      this.isCheckingRemote.set(false);
+    }
+  }
+
+  async onUpdateTrackingState() {
+    const targetId = this.state.activeTargetId();
+    const pending = this.pendingRemoteState();
+    if (!targetId || !pending) return;
+
+    this.isUpdatingTracking.set(true);
+    try {
+      const success = await this.state.updateTrackingState(
+        targetId,
+        pending.commitSha,
+      );
+      if (success) {
+        this.pendingRemoteState.set(null); // Close comparison UI on success
+      }
+    } finally {
+      this.isUpdatingTracking.set(false);
+    }
+  }
+
   async onExecuteSync() {
     const targetId = this.state.activeTargetId();
     if (!targetId) return;
 
-    const parse = (str: string) =>
+    const parseGlobs = (str: string) =>
       str
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
 
-    const rules = {
-      include: parse(this.ingestionIncludes()),
-      exclude: parse(this.ingestionExcludes()),
+    const vRules = this.visualRules();
+    const mIncludes = parseGlobs(this.manualIncludes());
+    const mExcludes = parseGlobs(this.manualExcludes());
+
+    const combinedIncludes = Array.from(
+      new Set([...vRules.include, ...mIncludes]),
+    );
+    const combinedExcludes = Array.from(
+      new Set([...vRules.exclude, ...mExcludes]),
+    );
+
+    const finalRules: FilterRules = {
+      include: combinedIncludes.length ? combinedIncludes : ['**/*'],
+      exclude: combinedExcludes,
     };
 
     try {
-      await this.state.executeSync(targetId, rules);
+      await this.state.executeSync(targetId, finalRules);
     } catch (e) {
-      // Errors handled by state service snackbars
+      // Handled by state service snackbar
     }
-  }
-
-  async onSaveDataSource(event: DataSourceSaveEvent) {
-    this.dataSourcesManager.isSaving.set(true);
-    try {
-      await this.state.saveDataSource(event.payload, event.dataSourceId);
-      this.dataSourcesManager.saveSuccess();
-    } catch (error) {
-      this.dataSourcesManager.isSaving.set(false);
-      const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
-        data: {
-          title: 'Save Failed',
-          message:
-            'Could not connect to the syncing microservice. Would you like to try saving again?',
-          confirmText: 'Retry',
-          confirmColor: 'primary',
-          icon: 'cloud_off',
-        },
-      });
-      const retry = await firstValueFrom(dialogRef.afterClosed());
-      if (retry) {
-        await this.onSaveDataSource(event);
-      } else {
-        this.dataSourcesManager.cancelEdit();
-      }
-    }
-  }
-
-  async onDeleteDataSource(sourceId: URN) {
-    await this.state.deleteDataSource(sourceId);
   }
 }

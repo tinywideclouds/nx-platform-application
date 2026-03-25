@@ -44,28 +44,25 @@ export const appRoutes: Route[] = [
             (m) => m.DataSourcesLayoutComponent,
           ),
         children: [
+          // INVERSION: We default to the Consumption pillar now!
           {
             path: '',
-            redirectTo: 'repos',
+            redirectTo: 'sources',
             pathMatch: 'full',
           },
 
-          // LAYER 3a: Repositories (Raw Data)
+          // --- PILLAR: CONSUMPTION ---
+
+          // LAYER 3a: Sources (Data Streams)
           {
-            path: 'repos',
+            path: 'sources',
             children: [
-              {
-                path: 'new',
-                loadComponent: () =>
-                  import('@nx-platform-application/data-sources-ui').then(
-                    (m) => m.GithubIngestionPageComponent,
-                  ),
-              },
+              // FIXED: Removed explicit 'new' path. ':id' will catch 'new' and pass it to the component.
               {
                 path: ':id',
                 loadComponent: () =>
                   import('@nx-platform-application/data-sources-ui').then(
-                    (m) => m.GithubIngestionPageComponent,
+                    (m) => m.DataSourcePageComponent,
                   ),
               },
               {
@@ -79,10 +76,18 @@ export const appRoutes: Route[] = [
             ],
           },
 
+          // Alias to catch the UI terminology from the sidebar tabs
+          {
+            path: 'streams',
+            redirectTo: 'sources',
+            pathMatch: 'full',
+          },
+
           // LAYER 3b: Context Groups (Blueprints)
           {
             path: 'groups',
             children: [
+              // FIXED: Removed explicit 'new' path.
               {
                 path: ':id',
                 loadComponent: () =>
@@ -94,7 +99,32 @@ export const appRoutes: Route[] = [
                 path: '',
                 loadComponent: () =>
                   import('@nx-platform-application/data-sources-ui').then(
-                    (m) => m.DataGroupPageComponent,
+                    (m) => m.DataSourcesPlaceholderComponent,
+                  ),
+                pathMatch: 'full',
+              },
+            ],
+          },
+
+          // --- PILLAR: INGESTION ---
+
+          // LAYER 3c: Repositories (Raw Data Lakes)
+          {
+            path: 'repos',
+            children: [
+              // FIXED: Removed explicit 'new' path.
+              {
+                path: ':id',
+                loadComponent: () =>
+                  import('@nx-platform-application/data-sources-ui').then(
+                    (m) => m.GithubIngestionPageComponent,
+                  ),
+              },
+              {
+                path: '',
+                loadComponent: () =>
+                  import('@nx-platform-application/data-sources-ui').then(
+                    (m) => m.DataSourcesPlaceholderComponent,
                   ),
                 pathMatch: 'full',
               },

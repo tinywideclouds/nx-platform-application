@@ -54,7 +54,7 @@ describe('GithubSyncClient', () => {
         repo: 'org/repo',
       };
 
-      const promise = client.createIngestionTarget('org/repo', 'main');
+      const promise = client.createGithubIngestionTarget('org/repo', 'main');
 
       const req = httpMock.expectOne('/v1/data/targets');
       expect(req.request.method).toBe('POST');
@@ -76,7 +76,7 @@ describe('GithubSyncClient', () => {
         ],
       };
 
-      const promise = firstValueFrom(client.listIngestionTargets());
+      const promise = firstValueFrom(client.listGithubIngestionTargets());
       const req = httpMock.expectOne('/v1/data/targets');
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
@@ -84,6 +84,42 @@ describe('GithubSyncClient', () => {
       const result = await promise;
       expect(result).toHaveLength(1);
       expect(result[0].id).toBeInstanceOf(URN);
+    });
+  });
+
+  describe('Tracking and Rescan', () => {
+    const targetId = URN.parse('urn:ingestiontarget:123');
+
+    it('should check tracking state via GET /rescan', async () => {
+      const mockResponse = {
+        commitSha: 'new-sha',
+        analysis: { totalFiles: 42, totalSizeBytes: 100, extensions: {} },
+      };
+
+      const promise = client.checkRemoteTrackingState(targetId);
+
+      const req = httpMock.expectOne(
+        `/v1/data/targets/urn%3Aingestiontarget%3A123/rescan`,
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+
+      const result = await promise;
+      expect(result.commitSha).toBe('new-sha');
+      expect(result.analysis.totalFiles).toBe(42);
+    });
+
+    it('should explicitly update tracking state via POST /tracking', async () => {
+      const promise = client.updateTrackingState(targetId, 'expected-sha');
+
+      const req = httpMock.expectOne(
+        `/v1/data/targets/urn%3Aingestiontarget%3A123/tracking`,
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toContain('expected-sha');
+      req.flush(null, { status: 204, statusText: 'No Content' });
+
+      await expect(promise).resolves.toBeUndefined();
     });
   });
 

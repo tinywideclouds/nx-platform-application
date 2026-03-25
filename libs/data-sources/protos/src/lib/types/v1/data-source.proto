@@ -1,8 +1,16 @@
-// Defines the message contract for the Data Sources service.
 syntax = "proto3";
 
 package src.types.datasources.v1;
 option go_package = "github.com/tinywideclouds/gen-data-sources/go/types/v1;datasources_v1";
+
+message IdRequestPb {
+  string id = 1;
+}
+
+message CommitInfoPb {
+  string id = 1;
+  string commitSha = 2;
+}
 
 message StoreCollectionsPb {
   string targets_collection = 1;
@@ -18,7 +26,6 @@ message FilterRulesPb {
   repeated string exclude = 2;
 }
 
-// THE STREAM (Formerly ProfilePb)
 message DataSourcePb {
   string id = 1;
   string target_id = 2; 
@@ -26,25 +33,16 @@ message DataSourcePb {
   string rules_yaml = 4;
   string created_at = 5;
   string updated_at = 6;
+
+  string description = 7;
+  FileAnalysisPb analysis = 8;
 }
 
-message DataSourceAnalysisPb {
+message FileAnalysisPb {
   int32 total_files = 1;
   int32 total_size_bytes = 2;
   map<string, int32> extensions = 3;
-}
-
-// THE LAKE (Formerly DataSourceMetadataPb)
-message IngestionTargetPb {
-  string id = 1;
-  string type = 2;
-  string display_name = 3; 
-  string description = 4;  
-  string synced_commit_sha = 5;
-  int64 last_synced_at = 6;
-  int32 file_count = 7;
-  string status = 8;
-  DataSourceAnalysisPb analysis = 9;
+  repeated string directories = 4;
 }
 
 message FileMetadataPb {
@@ -53,12 +51,29 @@ message FileMetadataPb {
   string extension = 3;
 }
 
-// THE BLUEPRINT
+message GithubIngestionTargetPb {
+  string id = 1;
+  string type = 2;
+  string display_name = 3; 
+  string description = 4;  
+  string synced_commit_sha = 5;
+  string last_synced_at = 6;
+  int32 file_count = 7;
+  string status = 8;
+  FileAnalysisPb analysis = 9;
+  
+  string repo = 10;
+  string branch = 11;
+  string commit_sha = 12;
+
+  FileAnalysisPb lake_analysis = 13;
+}
+
 message DataGroupPb {
   string id = 1;
   string name = 2;
   optional string description = 3;
-  repeated string data_source_ids = 4; // Clean array of strings! No more tuples.
+  repeated string data_source_ids = 4;
   map<string, string> metadata = 5;
   optional string created_at = 6;
   optional string updated_at = 7;
@@ -66,7 +81,7 @@ message DataGroupPb {
 
 // --- API Requests & Responses ---
 
-message CreateIngestionTargetRequestPb {
+message CreateGithubIngestionTargetRequestPb {
   string repo = 1;
   string branch = 2;
 }
@@ -84,11 +99,12 @@ message SyncResponsePb {
 message DataSourceRequestPb {
   string name = 1;
   string rules_yaml = 2;
+  string description = 3;
 }
 
 message DataGroupRequestPb {
   string name = 1;
   optional string description = 2;
-  repeated string data_source_ids = 3; // Clean array of strings
+  repeated string data_source_ids = 3;
   map<string, string> metadata = 4;
 }

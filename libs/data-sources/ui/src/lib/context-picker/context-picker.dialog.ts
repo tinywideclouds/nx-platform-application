@@ -52,7 +52,8 @@ export class ContextPickerDialogComponent implements OnInit {
     const groups = this.state.groupedTargets();
     return Object.keys(groups).map((repo) => {
       const targets = [...groups[repo]];
-      targets.sort((a, b) => b.lastSyncedAt - a.lastSyncedAt);
+      // these are dates - we should use dates
+      targets.sort((a, b) => b.lastSyncedAt.localeCompare(a.lastSyncedAt));
       const primary = targets[0];
 
       return {

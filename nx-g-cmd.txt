@@ -387,3 +387,6 @@ nx g @nx/angular:library --name=llm-domain-data-target --directory=libs/llm/doma
 nx g @nx/angular:library --name=data-sources-domain-registry --directory=libs/data-sources/domain/registry --tags="scope:data-sources"
 
 
+nx g @nx/angular:library --name=data-sources-domain-manager --directory=libs/data-sources/domain/manager --tags="scope:data-sources"
+
+

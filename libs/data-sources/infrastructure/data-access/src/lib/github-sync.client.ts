@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, Subscriber } from 'rxjs';
+import { Observable, Subscriber, firstValueFrom } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { URN } from '@nx-platform-application/platform-types';
 import {
@@ -8,11 +8,14 @@ import {
   FileMetadata,
   FilterRules,
   SyncStreamEvent,
-  serializeCreateIngestionTargetRequest,
+  RemoteTrackingState,
+  serializeCreateGithubIngestionTargetRequest,
   serializeSyncRequest,
-  deserializeIngestionTarget,
-  deserializeIngestionTargetList,
+  serializeCommitInfoRequest,
+  deserializeGithubIngestionTarget,
+  deserializeGithubIngestionTargetList,
   deserializeFileMetadataList,
+  deserializeRemoteTrackingState,
 } from '@nx-platform-application/data-sources-types';
 
 @Injectable({ providedIn: 'root' })
@@ -20,17 +23,20 @@ export class GithubSyncClient {
   private http = inject(HttpClient);
   private readonly baseUrl = '';
 
-  listIngestionTargets(): Observable<GithubIngestionTarget[]> {
+  listGithubIngestionTargets(): Observable<GithubIngestionTarget[]> {
     return this.http
       .get(`${this.baseUrl}/v1/data/targets`, { responseType: 'text' })
-      .pipe(map(deserializeIngestionTargetList));
+      .pipe(map(deserializeGithubIngestionTargetList));
   }
 
-  createIngestionTarget(
+  createGithubIngestionTarget(
     repo: string,
     branch: string,
   ): Promise<GithubIngestionTarget> {
-    const bodyString = serializeCreateIngestionTargetRequest(repo, branch);
+    const bodyString = serializeCreateGithubIngestionTargetRequest(
+      repo,
+      branch,
+    );
     return new Promise((resolve, reject) => {
       this.http
         .post(`${this.baseUrl}/v1/data/targets`, bodyString, {
@@ -38,10 +44,39 @@ export class GithubSyncClient {
           responseType: 'text',
         })
         .subscribe({
-          next: (res) => resolve(deserializeIngestionTarget(res)),
+          next: (res) => resolve(deserializeGithubIngestionTarget(res)),
           error: (err) => reject(err),
         });
     });
+  }
+
+  // NEW: Read-only check for GitHub updates
+  checkRemoteTrackingState(targetId: URN): Promise<RemoteTrackingState> {
+    return new Promise((resolve, reject) => {
+      this.http
+        .get(
+          `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/rescan`,
+          {
+            responseType: 'text',
+          },
+        )
+        .subscribe({
+          next: (res) => resolve(deserializeRemoteTrackingState(res)),
+          error: (err) => reject(err),
+        });
+    });
+  }
+
+  // NEW: Explicit mutation to overwrite the RemoteStateDoc
+  updateTrackingState(targetId: URN, expectedCommitSha: string): Promise<void> {
+    const bodyString = serializeCommitInfoRequest(targetId, expectedCommitSha);
+    return firstValueFrom(
+      this.http.post<void>(
+        `${this.baseUrl}/v1/data/targets/${encodeURIComponent(targetId.toString())}/tracking`,
+        bodyString,
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
   }
 
   executeSyncStream(

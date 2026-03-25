@@ -1,120 +1,55 @@
-<div
-  class="flex flex-col w-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
->
-  <div
-    class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0"
-  >
-    <h3 class="font-medium text-gray-800 m-0">Filtered Data Sources</h3>
-
-    @if (!isMobile()) {
-      <button
-        mat-stroked-button
-        color="primary"
-        (click)="createNew()"
-        [disabled]="isEditing() && !selectedSourceId()"
-      >
-        <mat-icon>add</mat-icon> Add Data Source
-      </button>
-    }
-  </div>
-
-  <div class="flex flex-col md:flex-row min-h-[400px]">
+<div class="h-full flex flex-col bg-white">
+  @if (state.isTargetsLoading()) {
     <div
-      class="w-full md:w-1/3 md:max-w-xs md:border-r border-gray-200 bg-gray-50/50 flex flex-col shrink-0"
+      class="flex-grow flex flex-col items-center justify-center pt-32 gap-4 text-gray-400"
     >
-      @if (isMobile()) {
-        @if (!isEditing()) {
-          <div class="p-4 border-b border-gray-200 bg-white">
-            <mat-form-field appearance="outline" class="w-full m-0 pb-0">
-              <mat-label>Select Data Source</mat-label>
-              <mat-select
-                [value]="selectedSourceId()"
-                (selectionChange)="onMobileSelect($event.value)"
-              >
-                <mat-option
-                  value="NEW"
-                  class="text-indigo-600 font-medium border-b border-gray-100"
-                >
-                  <mat-icon color="primary">add</mat-icon> Create New Stream
-                </mat-option>
-                @for (s of sources(); track s.id) {
-                  <mat-option [value]="s.id">{{ s.name }}</mat-option>
-                }
-              </mat-select>
-            </mat-form-field>
-          </div>
-        }
-      } @else {
-        <div class="flex-grow overflow-y-auto p-3 flex flex-col gap-1">
-          @for (s of sources(); track s.id) {
-            <button
-              type="button"
-              (click)="selectSource(s.id)"
-              class="flex flex-col items-start w-full text-left px-4 py-3 rounded-lg border transition-all"
-              [class.bg-indigo-50]="selectedSourceId() === s.id && !isEditing()"
-              [class.border-indigo-200]="
-                selectedSourceId() === s.id && !isEditing()
-              "
-              [class.border-transparent]="
-                selectedSourceId() !== s.id || isEditing()
-              "
-              [class.hover:bg-gray-100]="selectedSourceId() !== s.id"
-            >
-              <span class="font-medium text-sm text-gray-900 truncate w-full">{{
-                s.name
-              }}</span>
-              <span class="text-xs text-gray-500"
-                >Updated {{ s.updatedAt | date: 'shortDate' }}</span
-              >
-            </button>
-          } @empty {
-            <div class="text-center p-4 text-gray-400 text-sm mt-4">
-              No streams found.
-            </div>
-          }
-        </div>
-      }
+      <mat-spinner diameter="40"></mat-spinner>
+      <span>Loading streams...</span>
     </div>
-
-    <div class="w-full flex-grow p-4 md:p-6 bg-white relative">
-      @if (sources().length === 0 && !isEditing()) {
-        <div
-          class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-white z-10"
-        >
-          <mat-icon class="text-6xl text-gray-300 mb-4">filter_alt</mat-icon>
-          <h3 class="text-lg font-medium text-gray-800 mb-2">
-            No Streams Configured
-          </h3>
-          <p class="text-gray-500 max-w-sm mb-6">
-            Without creating a specific Data Source stream, you won't be able to
-            selectively pass subsets of this Lake to the LLM.
-          </p>
-          <button mat-flat-button color="primary" (click)="createNew()">
-            <mat-icon>add</mat-icon> Create First Stream
-          </button>
-        </div>
-      } @else if (!selectedSourceId() && !isEditing()) {
-        <div
-          class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-white z-10 text-gray-400"
-        >
-          <mat-icon class="text-4xl mb-2 opacity-50">touch_app</mat-icon>
-          <p>Select a data source from the list to view its filter rules.</p>
-        </div>
-      }
-
-      @if (selectedSourceId() || isEditing()) {
-        <div class="w-full max-w-2xl mx-auto">
-          <data-source-form
-            [activeSource]="activeSource()"
-            [isSaving]="isSaving()"
-            [isEditing]="isEditing()"
-            (save)="onSave($event)"
-            (cancel)="cancelEdit()"
-            (editRequested)="editSelected($event)"
-            (deleteRequested)="onDelete($event)"
-          />
-        </div>
-      }
+  } @else if (sources().length === 0 && !isEditing()) {
+    <div
+      class="flex-grow flex flex-col items-center justify-center p-8 text-center bg-gray-50 animate-fade-in"
+    >
+      <mat-icon class="text-6xl text-gray-300 mb-4">filter_alt</mat-icon>
+      <h3 class="text-lg font-medium text-gray-800 mb-2">
+        No Streams Configured
+      </h3>
+      <p class="text-gray-500 max-w-sm mb-6">
+        Without creating a specific Data Source stream, you won't be able to
+        selectively pass subsets of this Lake to the LLM.
+      </p>
+      <button
+        mat-flat-button
+        color="primary"
+        routerLink="/data-sources/sources/new"
+      >
+        <mat-icon>add</mat-icon> Create First Stream
+      </button>
     </div>
-  </div>
+  } @else if (!selectedSourceId() && !isEditing()) {
+    <div
+      class="flex-grow flex flex-col items-center justify-center p-8 text-center bg-gray-50 text-gray-400 animate-fade-in"
+    >
+      <mat-icon class="text-4xl mb-2 opacity-50">arrow_back</mat-icon>
+      <p>
+        Select a data source from the sidebar to view or edit its filter rules.
+      </p>
+    </div>
+  } @else {
+    <div
+      class="flex-grow overflow-y-auto bg-gray-50 p-4 md:p-8 flex justify-center"
+    >
+      <div class="w-full max-w-3xl animate-fade-in">
+        <data-source-form
+          [activeSource]="activeSource()"
+          [isSaving]="isSaving()"
+          [isEditing]="isEditing()"
+          (save)="onSave($event)"
+          (cancel)="cancelEdit()"
+          (editRequested)="editSelected()"
+          (deleteRequested)="onDelete($event)"
+        />
+      </div>
+    </div>
+  }
 </div>

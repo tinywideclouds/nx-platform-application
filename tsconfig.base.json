@@ -50,6 +50,9 @@
       "@nx-platform-application/data-sources-api": [
         "libs/data-sources/api/src/index.ts"
       ],
+      "@nx-platform-application/data-sources-domain-manager": [
+        "libs/data-sources/domain/manager/src/index.ts"
+      ],
       "@nx-platform-application/data-sources-domain-registry": [
         "libs/data-sources/domain/registry/src/index.ts"
       ],

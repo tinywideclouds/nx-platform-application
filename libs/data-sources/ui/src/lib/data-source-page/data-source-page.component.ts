@@ -1,73 +1,65 @@
 import {
   Component,
   ChangeDetectionStrategy,
-  input,
-  output,
   signal,
   computed,
   inject,
   effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { map } from 'rxjs/operators';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import {
-  DataSource,
-  DataSourceRequest,
-} from '@nx-platform-application/data-sources-types';
+import { DataSourceRequest } from '@nx-platform-application/data-sources-types';
 import { URN } from '@nx-platform-application/platform-types';
+import { DataSourcesService } from '@nx-platform-application/data-sources-features-state';
+
 import { DataSourceFormComponent } from '../data-source-form/data-source-form.component';
 
-export interface DataSourceSaveEvent {
-  payload: DataSourceRequest;
-  dataSourceId?: URN;
-}
-
 @Component({
-  selector: 'data-sources-list', // Matched to github-ingestion-page selector
+  selector: 'data-sources-list',
   standalone: true,
   imports: [
     CommonModule,
+    RouterModule,
     MatButtonModule,
     MatIconModule,
-    MatSelectModule,
-    MatFormFieldModule,
+    MatProgressSpinnerModule,
     DataSourceFormComponent,
   ],
   templateUrl: './data-source-page.component.html',
   styleUrl: './data-source-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DataSourcesComponent {
-  private breakpointObserver = inject(BreakpointObserver);
+export class DataSourcePageComponent {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  state = inject(DataSourcesService);
 
-  // --- INPUTS & OUTPUTS ---
-  sources = input<DataSource[]>([]);
-  save = output<DataSourceSaveEvent>();
-  delete = output<URN>();
+  // --- STATE ---
+  sources = this.state.dataSources;
 
-  // --- LOCAL SOT ---
-  selectedSourceId = signal<URN | null>(null);
-  isEditing = signal<boolean>(false);
   isSaving = signal<boolean>(false);
-  saveError = signal<string | null>(null);
+  isEditing = signal<boolean>(false);
 
-  // --- RESPONSIVE SOT ---
-  isMobile = toSignal(
-    this.breakpointObserver
-      .observe('(max-width: 767px)')
-      .pipe(map((result) => result.matches)),
-    { initialValue: false },
-  );
+  // --- ROUTER STATE ---
+  idParam = toSignal(this.route.paramMap.pipe(map((p) => p.get('id'))));
 
-  // --- COMPUTED STATE ---
+  selectedSourceId = computed(() => {
+    const id = this.idParam();
+    if (!id || id === 'new') return null;
+    try {
+      return URN.parse(id);
+    } catch {
+      return null;
+    }
+  });
+
   activeSource = computed(() => {
     const id = this.selectedSourceId();
     if (!id) return null;
@@ -76,10 +68,9 @@ export class DataSourcesComponent {
 
   constructor() {
     effect(() => {
-      const id = this.selectedSourceId();
-      const currentSources = this.sources();
-      if (id && !currentSources.some((s) => s.id.equals(id))) {
-        this.selectedSourceId.set(null);
+      if (this.idParam() === 'new') {
+        this.isEditing.set(true);
+      } else {
         this.isEditing.set(false);
       }
     });
@@ -87,65 +78,40 @@ export class DataSourcesComponent {
 
   // --- ACTIONS ---
 
-  selectSource(id: URN) {
-    this.selectedSourceId.set(id);
-    this.isEditing.set(false);
-  }
-
-  onMobileSelect(value: URN | 'NEW') {
-    if (value === 'NEW') {
-      this.createNew();
-    } else if (value) {
-      this.selectSource(value);
-    } else {
-      this.selectedSourceId.set(null);
-      this.isEditing.set(false);
-    }
-  }
-
-  compareSources(a: URN | 'NEW' | null, b: URN | 'NEW' | null): boolean {
-    if (!a || !b) return a === b;
-    if (a === 'NEW' || b === 'NEW') return a === b;
-    return (a as URN).equals(b as URN);
-  }
-
-  createNew() {
-    this.selectedSourceId.set(null);
-    this.isEditing.set(true);
-  }
-
-  editSelected(id: URN) {
-    this.selectedSourceId.set(id);
+  editSelected() {
     this.isEditing.set(true);
   }
 
   cancelEdit() {
-    this.isEditing.set(false);
-    if (!this.selectedSourceId()) {
-      const all = this.sources();
-      if (all.length > 0) this.selectedSourceId.set(all[0].id);
+    if (this.idParam() === 'new') {
+      this.router.navigate(['/data-sources/sources']);
+    } else {
+      this.isEditing.set(false);
     }
   }
 
-  onSave(payload: DataSourceRequest) {
-    this.save.emit({
-      payload,
-      dataSourceId: this.selectedSourceId() || undefined,
-    });
-    this.isEditing.set(false);
-  }
+  async onSave(event: { targetId: URN; payload: DataSourceRequest }) {
+    this.isSaving.set(true);
 
-  saveSuccess() {
+    const savedId = await this.state.saveDataSource(
+      event.payload,
+      event.targetId,
+      this.selectedSourceId() || undefined,
+    );
+
     this.isSaving.set(false);
-    this.isEditing.set(false);
+
+    if (savedId) {
+      this.isEditing.set(false);
+      this.router.navigate(['/data-sources/sources', savedId.toString()]);
+    }
   }
 
-  saveFailed(errorMessage: string) {
-    this.isSaving.set(false);
-    this.saveError.set(errorMessage);
-  }
+  async onDelete(id: URN) {
+    const source = this.activeSource();
+    if (!source) return;
 
-  onDelete(id: URN) {
-    this.delete.emit(id);
+    await this.state.deleteDataSource(id);
+    this.router.navigate(['/data-sources/sources']);
   }
 }

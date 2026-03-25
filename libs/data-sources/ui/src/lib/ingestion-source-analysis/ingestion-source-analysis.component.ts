@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
-import { DataSourceAnalysis } from '@nx-platform-application/data-sources-types';
+import { FileAnalysis } from '@nx-platform-application/data-sources-types';
 
 @Component({
   selector: 'ingestion-source-analysis',
@@ -11,7 +11,7 @@ import { DataSourceAnalysis } from '@nx-platform-application/data-sources-types'
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IngestionSourceAnalysisComponent {
-  analysis = input.required<DataSourceAnalysis>();
+  analysis = input.required<FileAnalysis>();
   status = input.required<string>();
 
   formatBytes(bytes: number): string {

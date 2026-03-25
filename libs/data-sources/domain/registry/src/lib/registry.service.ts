@@ -1,7 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-import { URN } from '@nx-platform-application/platform-types';
 import { Logger } from '@nx-platform-application/platform-tools-console-logger';
 import {
   GithubIngestionTarget,
@@ -21,12 +20,9 @@ export class DataSourcesRegistryService {
   private groupsClient = inject(DataGroupsClient);
   private logger = inject(Logger);
 
-  // --- RAW SIGNALS ---
   readonly githubTargets = signal<GithubIngestionTarget[]>([]);
   readonly dataSources = signal<DataSource[]>([]);
   readonly dataGroups = signal<DataGroup[]>([]);
-
-  // --- OPTIMIZED O(1) LOOKUP DICTIONARIES ---
 
   readonly githubTargetMap = computed(() => {
     const map = new Map<string, GithubIngestionTarget>();
@@ -46,39 +42,27 @@ export class DataSourcesRegistryService {
     return map;
   });
 
-  // --- HYDRATION ---
-
-  /**
-   * Fetches all domain entities to populate the reference dictionaries.
-   * Call this once during app initialization or user login.
-   */
   async hydrate(): Promise<void> {
     try {
-      // 1. Fetch Lakes (Targets) and Blueprints (Groups) in parallel
-      const [fetchedTargets, fetchedGroups] = await Promise.all([
-        firstValueFrom(this.syncClient.listIngestionTargets()),
-        firstValueFrom(this.groupsClient.listDataGroups()),
-      ]);
+      // FIXED: All three domains can now be fetched cleanly in parallel!
+      const [fetchedTargets, fetchedGroups, fetchedSources] = await Promise.all(
+        [
+          firstValueFrom(this.syncClient.listGithubIngestionTargets()),
+          firstValueFrom(this.groupsClient.listDataGroups()),
+          firstValueFrom(this.sourcesClient.listDataSources()),
+        ],
+      );
+
+      console.log('got sources', fetchedSources);
 
       this.githubTargets.set(fetchedTargets);
       this.dataGroups.set(fetchedGroups);
-
-      // 2. Fetch all Streams (Sources) across all Targets
-      // Since the API requires a Target ID to list sources, we fetch them concurrently
-      const sourcePromises = fetchedTargets.map((target) =>
-        firstValueFrom(this.sourcesClient.listDataSources(target.id)).catch(
-          () => [],
-        ),
-      );
-
-      const nestedSources = await Promise.all(sourcePromises);
-      this.dataSources.set(nestedSources.flat());
+      this.dataSources.set(fetchedSources);
     } catch (error) {
       this.logger.error(
         'Failed to hydrate Data Sources Domain Registry',
         error,
       );
-      // Fail gracefully so the app doesn't crash, lookups will just return undefined
     }
   }
 }

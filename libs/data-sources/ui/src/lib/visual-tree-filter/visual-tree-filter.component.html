@@ -1,0 +1,68 @@
+<div
+  class="bg-white border border-gray-200 rounded-lg p-2 shadow-sm max-h-[400px] overflow-y-auto"
+>
+  <mat-tree [dataSource]="dataSource" [treeControl]="treeControl">
+    <mat-tree-node *matTreeNodeDef="let node" matTreeNodePadding>
+      <div class="mat-tree-node flex items-center min-h-[40px]">
+        <button
+          aria-label="folder"
+          type="button"
+          mat-icon-button
+          disabled
+          class="invisible shrink-0"
+        ></button>
+        <mat-checkbox
+          class="ml-2"
+          color="primary"
+          [checked]="checklistSelection.isSelected(node)"
+          (change)="todoItemSelectionToggle(node)"
+        >
+          <div class="flex items-center gap-2 text-gray-700 text-sm font-mono">
+            <mat-icon class="text-gray-400 scale-75 m-0">folder</mat-icon>
+            {{ node.name }}
+          </div>
+        </mat-checkbox>
+      </div>
+    </mat-tree-node>
+
+    <mat-tree-node
+      *matTreeNodeDef="let node; when: hasChild"
+      matTreeNodePadding
+    >
+      <div class="mat-tree-node flex items-center min-h-[40px]">
+        <button
+          mat-icon-button
+          matTreeNodeToggle
+          [attr.aria-label]="'Toggle ' + node.name"
+          class="text-gray-500 hover:bg-gray-100 rounded-full shrink-0"
+        >
+          <mat-icon class="mat-icon-rtl-mirror m-0">
+            {{ treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right' }}
+          </mat-icon>
+        </button>
+
+        <mat-checkbox
+          color="primary"
+          [checked]="descendantsAllSelected(node)"
+          [indeterminate]="descendantsPartiallySelected(node)"
+          (change)="todoItemSelectionToggle(node)"
+        >
+          <div
+            class="flex items-center gap-2 text-gray-800 font-semibold text-sm font-mono"
+          >
+            <mat-icon class="text-indigo-400 scale-75 m-0">
+              {{ treeControl.isExpanded(node) ? 'folder_open' : 'folder' }}
+            </mat-icon>
+            {{ node.name }}
+          </div>
+        </mat-checkbox>
+      </div>
+    </mat-tree-node>
+  </mat-tree>
+
+  @if (directories().length === 0) {
+    <div class="p-6 text-center text-gray-500 text-sm">
+      No directory structure found.
+    </div>
+  }
+</div>

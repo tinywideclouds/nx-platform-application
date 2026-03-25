@@ -4,19 +4,71 @@
       (submit)="$event.preventDefault(); onSave()"
       class="flex flex-col gap-4 bg-white p-4 border border-indigo-100 rounded-lg shadow-sm"
     >
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Parent Ingestion Target (Lake)</mat-label>
+          <mat-select
+            [value]="draftTargetId()?.toString()"
+            (selectionChange)="setTargetId($event.value)"
+            [disabled]="!!activeSource()"
+            required
+          >
+            @for (t of state.githubTargets(); track t.id) {
+              <mat-option [value]="t.id.toString()">
+                {{ t.repo }} ({{ t.branch }})
+              </mat-option>
+            }
+          </mat-select>
+          <mat-hint>The repository this stream will filter.</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Data Source Name</mat-label>
+          <input
+            matInput
+            [value]="draftName()"
+            (input)="draftName.set($any($event.target).value)"
+            placeholder="e.g., Backend Go Files"
+            name="sourceName"
+            required
+          />
+        </mat-form-field>
+      </div>
+
       <mat-form-field appearance="outline" class="w-full">
-        <mat-label>Data Source Name</mat-label>
+        <mat-label>Description (Optional)</mat-label>
         <input
           matInput
-          [value]="draftName()"
-          (input)="draftName.set($any($event.target).value)"
-          placeholder="e.g., Backend Go Files"
-          name="sourceName"
-          required
+          [value]="draftDescription()"
+          (input)="draftDescription.set($any($event.target).value)"
+          placeholder="e.g., Only includes business logic and API routes, excludes tests."
+          name="sourceDescription"
         />
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="w-full">
+      @if (selectedTargetDetails(); as target) {
+        <div class="mb-2 animate-fade-in">
+          <file-analysis-summary
+            [analysis]="target.lakeAnalysis"
+            [fallbackFileCount]="target.fileCount"
+            title="Selected Lake Overview"
+            icon="dns"
+            colorTheme="slate"
+            [subtitle]="
+              target.lastSyncedAt
+                ? 'Last synced: ' + (target.lastSyncedAt | date: 'short')
+                : null
+            "
+            [warningMessage]="
+              target.status === 'unsynced'
+                ? 'This repository has never been synced. Your stream will be empty until the lake is populated.'
+                : null
+            "
+          />
+        </div>
+      }
+
+      <mat-form-field appearance="outline" class="w-full mt-2">
         <mat-label>Include Patterns</mat-label>
         <mat-chip-grid #includeGrid aria-label="Include patterns">
           @for (pattern of draftIncludes(); track pattern) {
@@ -80,6 +132,7 @@
           color="primary"
           [disabled]="
             !draftName() ||
+            !draftTargetId() ||
             (draftIncludes().length === 0 && draftExcludes().length === 0) ||
             isSaving()
           "
@@ -90,14 +143,33 @@
     </form>
   } @else if (activeSource(); as source) {
     <div
-      class="flex flex-col gap-3 bg-white p-4 border border-gray-200 rounded-lg"
+      class="flex flex-col gap-4 bg-white p-5 border border-gray-200 rounded-lg"
     >
       <div class="flex items-start justify-between">
         <div>
-          <h4 class="font-semibold text-gray-800 m-0">{{ source.name }}</h4>
-          <span class="text-xs text-gray-500"
-            >Updated {{ source.updatedAt | date: 'short' }}</span
-          >
+          <h4 class="font-semibold text-gray-800 m-0 text-lg">
+            {{ source.name }}
+          </h4>
+
+          @if (source.description) {
+            <p class="text-sm text-gray-600 mt-1 mb-0">
+              {{ source.description }}
+            </p>
+          }
+
+          <div class="flex items-center gap-3 mt-2">
+            <span class="text-xs text-gray-500"
+              >Updated {{ source.updatedAt | date: 'short' }}</span
+            >
+            @if (activeTargetDetails(); as target) {
+              <span
+                class="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 flex items-center gap-1"
+              >
+                <mat-icon class="scale-[0.6] m-0 h-4 w-4">dns</mat-icon>
+                {{ target.repo }} ({{ target.branch }})
+              </span>
+            }
+          </div>
         </div>
         <div class="flex gap-1">
           <button
@@ -119,9 +191,47 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
+        @if (activeTargetDetails(); as target) {
+          <file-analysis-summary
+            [analysis]="target.lakeAnalysis"
+            [fallbackFileCount]="target.fileCount"
+            title="Original Lake"
+            icon="dns"
+            colorTheme="slate"
+            class="h-full"
+          />
+        }
+
+        @if (source.analysis) {
+          <file-analysis-summary
+            [analysis]="source.analysis"
+            title="Filtered Stream"
+            icon="filter_alt"
+            colorTheme="indigo"
+            class="h-full"
+          />
+        } @else {
+          <div
+            class="border border-indigo-100 bg-indigo-50/30 rounded-xl p-6 flex flex-col items-center justify-center text-indigo-400 text-sm text-center h-full"
+          >
+            <mat-icon class="mb-2 opacity-50">analytics</mat-icon>
+            <span
+              >Stream analysis will be generated<br />the next time you
+              save.</span
+            >
+          </div>
+        }
+      </div>
+
       <div
-        class="bg-gray-50 p-3 rounded border border-gray-100 overflow-x-auto"
+        class="bg-gray-50 p-4 rounded-xl border border-gray-200 overflow-x-auto mt-2"
       >
+        <p
+          class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 m-0"
+        >
+          Filter Rules Applied
+        </p>
         <pre class="text-xs font-mono text-gray-700 m-0 whitespace-pre-wrap">{{
           source.rulesYaml
         }}</pre>

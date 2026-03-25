@@ -8,7 +8,7 @@
       class="flex-1"
       [hideRequiredMarker]="!isEditing()"
     >
-      <mat-label>Blueprint Name</mat-label>
+      <mat-label>Name</mat-label>
       <input
         matInput
         [value]="name()"
@@ -58,7 +58,7 @@
     </div>
 
     <div class="flex flex-col gap-3">
-      @for (source of sources(); track $index) {
+      @for (sourceId of sources(); track $index) {
         <div
           class="flex items-start gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 animate-fade-in"
           [class.opacity-90]="!isEditing()"
@@ -68,43 +68,15 @@
             class="flex-1 m-0 subscript-hidden bg-white"
             [hideRequiredMarker]="!isEditing()"
           >
-            <mat-label>Lake (Repository)</mat-label>
-            <mat-select
-              [value]="source.targetId"
-              (selectionChange)="onTargetSelected($event.value, $index)"
-              [disabled]="!isEditing()"
-            >
-              @for (target of availableTargets(); track target.id) {
-                <mat-option [value]="target.id.toString()">
-                  <span class="font-medium">{{ target.repo }}</span>
-                  <span class="text-gray-400 text-xs ml-2"
-                    >({{ target.branch }})</span
-                  >
-                </mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-
-          <mat-form-field
-            appearance="outline"
-            class="flex-1 m-0 subscript-hidden bg-white"
-            [hideRequiredMarker]="!isEditing()"
-          >
             <mat-label>Data Source (Stream)</mat-label>
             <mat-select
-              [value]="source.streamId"
+              [value]="sourceId"
               (selectionChange)="onStreamSelected($event.value, $index)"
               [disabled]="!isEditing()"
             >
-              @if (source.targetId && streamMap()[source.targetId]) {
-                @for (stream of streamMap()[source.targetId]; track stream.id) {
-                  <mat-option [value]="stream.id.toString()">{{
-                    stream.name
-                  }}</mat-option>
-                }
-              } @else if (source.streamId) {
-                <mat-option [value]="source.streamId">
-                  {{ source.streamId }}
+              @for (stream of availableStreams(); track stream.id) {
+                <mat-option [value]="stream.id.toString()">
+                  {{ stream.name }}
                 </mat-option>
               }
             </mat-select>
@@ -131,6 +103,17 @@
           No streams bundled yet. Click "Add Stream" to start building.
         </div>
       }
+
+      @if (aggregatedAnalysis(); as analysis) {
+        <div class="mt-4 pt-4 border-t border-gray-200 animate-fade-in">
+          <file-analysis-summary
+            [analysis]="analysis"
+            title="Total Group Payload"
+            icon="data_usage"
+            colorTheme="indigo"
+          />
+        </div>
+      }
     </div>
   </div>
 
@@ -145,7 +128,7 @@
           color="warn"
           (click)="delete.emit(group()!.id)"
         >
-          <mat-icon>delete</mat-icon> Delete Blueprint
+          <mat-icon>delete</mat-icon> Delete Group
         </button>
       }
     </div>
@@ -160,7 +143,7 @@
           class="px-6"
           [disabled]="!isFormValid()"
         >
-          {{ group() ? 'Save Changes' : 'Create Context Blueprint' }}
+          {{ group() ? 'Save Changes' : 'Create Group' }}
         </button>
       } @else {
         <button
@@ -170,7 +153,7 @@
           class="px-6"
           (click)="requestEdit.emit()"
         >
-          <mat-icon>edit</mat-icon> Edit Blueprint
+          <mat-icon>edit</mat-icon> Edit Group
         </button>
       }
     </div>
